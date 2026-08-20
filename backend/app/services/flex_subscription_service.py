@@ -21,7 +21,7 @@ from app.models.subscription import Subscription
 
 BASE_PRICE_RUB = 39
 LEVEL_STEP_RUB = 10
-MAX_LEVEL = 44
+MAX_LEVEL = 48
 MIN_LEVEL = 1
 PERIOD_DAYS = 30
 YEARLY_DAYS = 365
@@ -55,6 +55,7 @@ DEFAULT_BLOCKS = (
     {"key": "I", "title": "Премиум", "min_level": 33, "max_level": 36, "sort_order": 9},
     {"key": "J", "title": "Ещё+", "min_level": 37, "max_level": 40, "sort_order": 10},
     {"key": "K", "title": "Сторис+", "min_level": 41, "max_level": 44, "sort_order": 11},
+    {"key": "L", "title": "Входящие+", "min_level": 45, "max_level": 48, "sort_order": 12},
 )
 
 DEFAULT_PRESETS = (
@@ -69,6 +70,7 @@ DEFAULT_PRESETS = (
     {"key": "premium", "title": "Премиум", "level": 36},
     {"key": "moreplus", "title": "Ещё+", "level": 40},
     {"key": "storiesplus", "title": "Сторис+", "level": 44},
+    {"key": "inboxplus", "title": "Входящие+", "level": 48},
 )
 
 DEFAULT_FEATURES = (
@@ -643,6 +645,58 @@ DEFAULT_FEATURES = (
         "movable": True,
         "required": False,
         "block_key": "K",
+    },
+    {
+        "slug": "extra_pinned_chats",
+        "title": "Больше закрепов в ленте",
+        "description": "До 20 закреплённых чатов во входящих вместо пяти.",
+        "icon": "push_pin",
+        "default_level": 45,
+        "min_level": 45,
+        "max_level": 48,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "L",
+    },
+    {
+        "slug": "story_download",
+        "title": "Сохранить сторис",
+        "description": "Скачать сторис в галерею, как в Telegram Premium.",
+        "icon": "download",
+        "default_level": 46,
+        "min_level": 45,
+        "max_level": 48,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "L",
+    },
+    {
+        "slug": "auto_translate",
+        "title": "Автоперевод чата",
+        "description": "Сразу переводить входящие сообщения в выбранном чате.",
+        "icon": "translate",
+        "default_level": 47,
+        "min_level": 45,
+        "max_level": 48,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "L",
+    },
+    {
+        "slug": "chat_tags",
+        "title": "Метки чатов",
+        "description": "Цветные метки на чатах и фильтр входящих, как в Telegram Premium.",
+        "icon": "label",
+        "default_level": 48,
+        "min_level": 45,
+        "max_level": 48,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "L",
     },
 )
 

@@ -58,6 +58,10 @@ CATALOG_FEATURE_SLUGS = (
     "longer_stories",
     "premium_stickers",
     "call_privacy",
+    "extra_pinned_chats",
+    "story_download",
+    "auto_translate",
+    "chat_tags",
 )
 
 EXCLUSIVE_CHAT_REACTIONS = frozenset({"🔥", "🥰", "🎉", "✨", "⚡️", "💯"})

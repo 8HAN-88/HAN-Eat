@@ -609,6 +609,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   ChatBubbleAccent _bubbleAccent = ChatBubbleAccent.defaultStyle;
   String? _wallpaperCustomPath;
   ImageProvider? _wallpaperImage;
+  final Map<int, String> _autoTranslations = {};
   String? _pendingMediaAutoRetryClientMessageId;
   String? _pendingMediaAutoRetryReason;
 
@@ -1337,6 +1338,55 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
+    }
+  }
+
+  Future<void> _toggleAutoTranslate() async {
+    final enabled = !_conversation.autoTranslate;
+    if (enabled && !_hasFlexFeature('auto_translate')) {
+      await showCreatorUpsell(context);
+      return;
+    }
+    final previous = _conversation;
+    setState(() {
+      _conversation = _conversation.copyWith(autoTranslate: enabled);
+    });
+    try {
+      await ChatService.setAutoTranslate(
+        conversationId: widget.conversationId,
+        enabled: enabled,
+      );
+      if (enabled) unawaited(_runAutoTranslate());
+      if (!enabled && mounted) {
+        setState(() => _autoTranslations.clear());
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _conversation = previous);
+      if (offerFlexIfRequired(context, e)) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _runAutoTranslate() async {
+    if (!(_conversation.autoTranslate) || !_hasFlexFeature('auto_translate')) {
+      return;
+    }
+    for (final msg in List<ChatMessage>.from(_messages)) {
+      if (msg.isMine || msg.id <= 0 || msg.type != 'text') continue;
+      if (_autoTranslations.containsKey(msg.id)) continue;
+      final source = _copyableText(msg).trim();
+      if (source.isEmpty) continue;
+      try {
+        final translated = await ChatService.translateText(text: source);
+        if (!mounted) return;
+        if (translated.trim().isEmpty || translated.trim() == source) continue;
+        setState(() => _autoTranslations[msg.id] = translated);
+      } catch (_) {
+        break;
+      }
     }
   }
 
@@ -6016,6 +6066,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           onTap: () => unawaited(_showWallpaperPicker()),
         ),
         TelegramActionSheetAction(
+          icon: _conversation.autoTranslate
+              ? Icons.translate
+              : Icons.translate_outlined,
+          title: _conversation.autoTranslate
+              ? 'Автоперевод включён'
+              : 'Автоперевод чата',
+          onTap: () => unawaited(_toggleAutoTranslate()),
+        ),
+        TelegramActionSheetAction(
           icon: Icons.chat_bubble_outline_rounded,
           title: 'Цвет пузырей',
           onTap: () => unawaited(_showBubbleAccentPicker()),
@@ -8021,6 +8080,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             ChatInboxOptimistic.applyPin(_conversation, pinned: !next);
       });
       _bumpChatsHub();
+      if (offerFlexIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -10209,6 +10269,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final isPending = msg.isMine && msg.id < 0 && !isFailed;
     return _Bubble(
       message: msg,
+      translation: _autoTranslations[msg.id],
       scheme: scheme,
       isPending: isPending,
       isFailed: isFailed,
@@ -11724,6 +11785,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _loadError = null;
       });
       unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
+      unawaited(_runAutoTranslate());
       _tryRestorePendingDraftReply();
       if (refresh) {
         unawaited(_refreshScheduledPendingCount());
@@ -17083,9 +17145,11 @@ class _Bubble extends StatelessWidget {
     this.spoilerRevealed = false,
     this.onRevealSpoiler,
     this.onStopLiveLocation,
+    this.translation,
   });
 
   final ChatMessage message;
+  final String? translation;
   final ColorScheme scheme;
   final Color? outgoingBubbleColor;
   final VoidCallback? onUnlockPaidMedia;
@@ -18304,16 +18368,40 @@ class _Bubble extends StatelessWidget {
           : extractFirstHttpUrl(message.content);
       final hasLinkPreview = previewUrl != null;
       final textStyle = TextStyle(color: fg, height: 1.22, fontSize: 15.5);
+      final translated = (translation ?? '').trim();
       final textChild = HighlightedText(
         text: message.content,
         query: highlightQuery,
         style: textStyle,
-        trailingReserveWidth: hasLinkPreview ? null : _metaReserveWidth(mine),
+        trailingReserveWidth: hasLinkPreview || translated.isNotEmpty
+            ? null
+            : _metaReserveWidth(mine),
         highlightMentions: true,
         parseMarkup: true,
         onMentionTap: onMentionTap,
         mentionLabels: mentionLabels,
       );
+      final textWithTranslation = translated.isEmpty
+          ? textChild
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                textChild,
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    translated,
+                    style: TextStyle(
+                      color: fg.withValues(alpha: 0.78),
+                      height: 1.22,
+                      fontSize: 14.5,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
+              ],
+            );
       if (hasLinkPreview) {
         mainContent = _withBottomMeta(
           fg: fg,
@@ -18322,7 +18410,7 @@ class _Bubble extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              textChild,
+              textWithTranslation,
               Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: ChatLinkPreview(
@@ -18339,8 +18427,8 @@ class _Bubble extends StatelessWidget {
         mainContent = _withBottomMeta(
           fg: fg,
           mine: mine,
-          inlineMeta: true,
-          child: textChild,
+          inlineMeta: translated.isEmpty,
+          child: textWithTranslation,
         );
       }
     } else {

@@ -688,6 +688,8 @@ class ChatConversation {
     this.amISendRestrictionReason,
     this.peerBlockedByMe = false,
     this.replyKeyboard,
+    this.autoTranslate = false,
+    this.tagIds = const [],
   });
 
   final int id;
@@ -734,6 +736,8 @@ class ChatConversation {
   final String? amISendRestrictionReason;
   final bool peerBlockedByMe;
   final ChatReplyKeyboard? replyKeyboard;
+  final bool autoTranslate;
+  final List<int> tagIds;
 
   bool get isGroup => type == 'group';
 
@@ -838,6 +842,11 @@ class ChatConversation {
       amISendRestrictionReason: json['am_i_send_restriction_reason'] as String?,
       peerBlockedByMe: json['peer_blocked_by_me'] as bool? ?? false,
       replyKeyboard: ChatReplyKeyboard.tryParse(json),
+      autoTranslate: json['auto_translate'] as bool? ?? false,
+      tagIds: [
+        for (final raw in json['tag_ids'] as List<dynamic>? ?? const [])
+          if (raw is num) raw.toInt(),
+      ],
     );
   }
 
@@ -887,6 +896,8 @@ class ChatConversation {
     bool clearReplyKeyboard = false,
     ChatMessage? lastMessage,
     DateTime? updatedAt,
+    bool? autoTranslate,
+    List<int>? tagIds,
   }) {
     return ChatConversation(
       id: id,
@@ -949,6 +960,8 @@ class ChatConversation {
       replyKeyboard: clearReplyKeyboard
           ? null
           : (replyKeyboard ?? this.replyKeyboard),
+      autoTranslate: autoTranslate ?? this.autoTranslate,
+      tagIds: tagIds ?? this.tagIds,
     );
   }
 }

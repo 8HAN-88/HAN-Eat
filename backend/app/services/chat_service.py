@@ -858,6 +858,10 @@ class ChatService:
         )
         reaction_map = {row.conversation_id: int(row.cnt) for row in reaction_rows}
 
+        from app.services.chat_tag_service import tag_ids_by_conversation
+
+        tag_map = tag_ids_by_conversation(self.db, user_id, conv_ids)
+
         results = []
         for conv in convs:
             member = member_map[conv.id]
@@ -928,6 +932,7 @@ class ChatService:
                     ),
                     "member_count": member_count,
                     "members_preview": members_preview,
+                    "tag_ids": tag_map.get(conv.id, []),
                 }
             )
 
@@ -1040,6 +1045,8 @@ class ChatService:
             peer = self.db.query(User).filter(User.id == peer_id).first()
             member_count = 2 if peer else 0
         is_muted = self._expire_mute_if_needed(member)
+        from app.services.chat_tag_service import tag_ids_for_conversation
+
         return {
             "conversation": conv,
             "peer": peer,
@@ -1068,6 +1075,7 @@ class ChatService:
             ),
             "member_count": member_count,
             "members_preview": members_preview,
+            "tag_ids": tag_ids_for_conversation(self.db, user_id, conv.id),
         }
 
     _WALLPAPER_STYLES = frozenset(
@@ -1236,7 +1244,38 @@ class ChatService:
         )
         if not member:
             raise ValueError("forbidden")
+        if pinned and not bool(member.pinned):
+            count = (
+                self.db.query(func.count(ConversationMember.id))
+                .filter(
+                    ConversationMember.user_id == user_id,
+                    ConversationMember.pinned.is_(True),
+                )
+                .scalar()
+            )
+            if int(count or 0) >= self._pinned_chat_limit_for(user_id):
+                raise ValueError("pinned_chat_limit")
         member.pinned = pinned
+
+    def set_auto_translate(
+        self, conversation_id: int, user_id: int, enabled: bool
+    ) -> None:
+        if not self._is_member(conversation_id, user_id):
+            raise ValueError("forbidden")
+        member = (
+            self.db.query(ConversationMember)
+            .filter(
+                ConversationMember.conversation_id == conversation_id,
+                ConversationMember.user_id == user_id,
+            )
+            .first()
+        )
+        if not member:
+            raise ValueError("forbidden")
+        next_enabled = bool(enabled)
+        if next_enabled and not self._has_feature(user_id, "auto_translate"):
+            raise ValueError("auto_translate_required")
+        member.auto_translate = next_enabled
 
     _NOTIFY_MODES = frozenset({"all", "mentions", "none"})
 
@@ -4189,6 +4228,8 @@ class ChatService:
     PIN_LIMIT_PLUS = 20
     FOLDER_LIMIT = 10
     FOLDER_LIMIT_PLUS = 50
+    PINNED_CHAT_LIMIT = 5
+    PINNED_CHAT_LIMIT_PLUS = 20
 
     def _has_feature(self, user_id: int, slug: str) -> bool:
         try:
@@ -4206,6 +4247,13 @@ class ChatService:
             self.FOLDER_LIMIT_PLUS
             if self._has_feature(user_id, "extra_folders")
             else self.FOLDER_LIMIT
+        )
+
+    def _pinned_chat_limit_for(self, user_id: int) -> int:
+        return (
+            self.PINNED_CHAT_LIMIT_PLUS
+            if self._has_feature(user_id, "extra_pinned_chats")
+            else self.PINNED_CHAT_LIMIT
         )
 
     def _normalize_send_effect(self, effect_id: Optional[str], sender_id: int) -> Optional[str]:
