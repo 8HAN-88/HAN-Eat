@@ -1267,6 +1267,7 @@ class User {
   final int? defaultFolderId;
   final bool storyStealth;
   final String callPrivacy;
+  final String groupAddPrivacy;
 
   // Геттер для совместимости с Firebase Auth
   String get uid => id.toString();
@@ -1300,6 +1301,7 @@ class User {
     this.defaultFolderId,
     this.storyStealth = false,
     this.callPrivacy = 'everybody',
+    this.groupAddPrivacy = 'everybody',
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -1339,6 +1341,7 @@ class User {
       defaultFolderId: (json['default_folder_id'] as num?)?.toInt(),
       storyStealth: json['story_stealth'] as bool? ?? false,
       callPrivacy: json['call_privacy'] as String? ?? 'everybody',
+      groupAddPrivacy: json['group_add_privacy'] as String? ?? 'everybody',
     );
   }
 
@@ -1373,6 +1376,7 @@ class User {
       if (defaultFolderId != null) 'default_folder_id': defaultFolderId,
       'story_stealth': storyStealth,
       'call_privacy': callPrivacy,
+      'group_add_privacy': groupAddPrivacy,
     };
   }
 
@@ -1398,6 +1402,7 @@ class User {
     bool clearDefaultFolder = false,
     bool? storyStealth,
     String? callPrivacy,
+    String? groupAddPrivacy,
   }) {
     return User(
       id: id,
@@ -1432,6 +1437,7 @@ class User {
           : (defaultFolderId ?? this.defaultFolderId),
       storyStealth: storyStealth ?? this.storyStealth,
       callPrivacy: callPrivacy ?? this.callPrivacy,
+      groupAddPrivacy: groupAddPrivacy ?? this.groupAddPrivacy,
     );
   }
 }

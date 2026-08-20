@@ -63,17 +63,16 @@ class ChatHubFolderBar extends StatelessWidget {
               onCreateFolder();
             },
           ),
-          if (folders.isNotEmpty)
-            IconButton(
-              tooltip: 'Порядок папок',
-              visualDensity: VisualDensity.compact,
-              icon: Icon(
-                Icons.tune_rounded,
-                size: 18,
-                color: scheme.onSurfaceVariant,
-              ),
-              onPressed: onManageFolders,
+          IconButton(
+            tooltip: 'Папки',
+            visualDensity: VisualDensity.compact,
+            icon: Icon(
+              Icons.tune_rounded,
+              size: 18,
+              color: scheme.onSurfaceVariant,
             ),
+            onPressed: onManageFolders,
+          ),
         ],
       ),
     );

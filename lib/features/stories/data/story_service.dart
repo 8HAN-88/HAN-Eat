@@ -21,6 +21,18 @@ class StoryService {
         .toList();
   }
 
+  static Future<List<StoryDto>> fetchArchive() async {
+    final response = await http.get(
+      ApiService.uri('/stories/archive'),
+      headers: await ApiService.authHeaders(),
+    );
+    ApiService.ensureSuccess(response);
+    final data = jsonDecode(response.body) as List<dynamic>;
+    return data
+        .map((item) => StoryDto.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
   static Future<List<StoryDto>> fetchMyStories() async {
     final response = await http.get(
       ApiService.uri('/stories/mine'),
@@ -131,14 +143,21 @@ class StoryService {
   }
 
   static List<StoryGroup> groupByAuthor(List<StoryDto> stories) {
+    final order = <int>[];
     final map = <int, List<StoryDto>>{};
     for (final story in stories) {
-      map.putIfAbsent(story.userId, () => []).add(story);
+      map.putIfAbsent(story.userId, () {
+        order.add(story.userId);
+        return <StoryDto>[];
+      }).add(story);
     }
-    return map.values.map((items) {
-      items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      return StoryGroup(author: items.first.author, stories: items);
-    }).toList()
-      ..sort((a, b) => b.latest.createdAt.compareTo(a.latest.createdAt));
+    return [
+      for (final userId in order)
+        StoryGroup(
+          author: map[userId]!.first.author,
+          stories: (map[userId]!
+            ..sort((a, b) => b.createdAt.compareTo(a.createdAt))),
+        ),
+    ];
   }
 }

@@ -96,6 +96,7 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
       }
     } catch (e) {
       if (mounted) {
+        if (offerFlexIfRequired(context, e)) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content: Text(userVisibleError(e,

@@ -4,6 +4,10 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
+
+import '../features/subscription/creator_upsell.dart';
+import 'api_service.dart';
 import 'auth_service.dart';
 import 'media_upload_service.dart';
 import 'profile_cache_service.dart';
@@ -41,20 +45,51 @@ class UserService {
     }
   }
 
-  /// Выбрать изображение аватара
+  static bool _looksLikeGif(String? name, String? path, String? mime) {
+    final hint = '${name ?? ''} ${path ?? ''} ${mime ?? ''}'.toLowerCase();
+    return hint.contains('.gif') || hint.contains('image/gif');
+  }
+
+  /// Выбрать изображение аватара. GIF не сжимаем — иначе пропадает анимация.
   Future<XFile?> pickAvatarImage() async {
+    if (hasFlexFeature('animated_avatar')) {
+      try {
+        final result = await FilePicker.platform.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'gif'],
+          withData: kIsWeb,
+        );
+        if (result == null || result.files.isEmpty) return null;
+        final file = result.files.first;
+        final path = file.path;
+        if (path != null && path.isNotEmpty) {
+          return XFile(path, name: file.name, mimeType: file.extension == 'gif'
+              ? 'image/gif'
+              : null);
+        }
+        final bytes = file.bytes;
+        if (bytes != null) {
+          return XFile.fromData(
+            bytes,
+            name: file.name,
+            mimeType: file.extension == 'gif' ? 'image/gif' : 'image/jpeg',
+          );
+        }
+      } catch (_) {
+        return null;
+      }
+      return null;
+    }
     final ImagePicker picker = ImagePicker();
     try {
-      // На веб доступна только галерея, на мобильных можно выбрать источник
       final XFile? image = await picker.pickImage(
-        source: kIsWeb ? ImageSource.gallery : ImageSource.gallery,
+        source: ImageSource.gallery,
         maxWidth: 800,
         maxHeight: 800,
         imageQuality: 85,
       );
       return image;
     } catch (e) {
-      // Игнорируем ошибки (пользователь отменил выбор и т.д.)
       return null;
     }
   }
@@ -67,6 +102,12 @@ class UserService {
     }
     if (xFile is! XFile) {
       throw ArgumentError.value(xFile, 'xFile', 'Expected XFile');
+    }
+    if (_looksLikeGif(xFile.name, xFile.path, xFile.mimeType) &&
+        !hasFlexFeature('animated_avatar')) {
+      throw const HanPlusRequiredException(
+        'Анимированный аватар доступен с уровня 59',
+      );
     }
     final complete = await MediaUploadService.uploadMediaFile(
       file: xFile,
@@ -453,6 +494,7 @@ class UserService {
     int? defaultFolderId,
     bool? storyStealth,
     String? callPrivacy,
+    String? groupAddPrivacy,
     String? fcmToken,
     String? voipToken,
   }) async {
@@ -475,6 +517,7 @@ class UserService {
       if (defaultFolderId != null) 'default_folder_id': defaultFolderId,
       if (storyStealth != null) 'story_stealth': storyStealth,
       if (callPrivacy != null) 'call_privacy': callPrivacy,
+      if (groupAddPrivacy != null) 'group_add_privacy': groupAddPrivacy,
       if (fcmToken != null) 'fcm_token': fcmToken,
       if (voipToken != null) 'voip_token': voipToken,
     };

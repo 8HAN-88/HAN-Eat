@@ -2558,4 +2558,79 @@ class ChatService {
         .map(ChatFolder.fromJson)
         .toList();
   }
+
+  static Future<({String token, String name})> shareFolder({
+    required int folderId,
+  }) async {
+    final uri = Uri.parse('$_base/chats/folders/$folderId/share');
+    final response = await _post(uri, body: jsonEncode({}));
+    _ensureOk(response, 'Не удалось поделиться папкой');
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return (
+      token: data['token'] as String? ?? '',
+      name: data['name'] as String? ?? '',
+    );
+  }
+
+  static Future<ChatFolder> importSharedFolder({required String token}) async {
+    final uri = Uri.parse('$_base/chats/folders/import');
+    final response = await _post(
+      uri,
+      body: jsonEncode({'token': token.trim()}),
+    );
+    return _folderFromResponse(response, 'Не удалось импортировать папку');
+  }
+
+  static Future<List<ChatQuickReply>> listQuickReplies() async {
+    final uri = Uri.parse('$_base/chats/quick-replies');
+    final response = await _get(uri);
+    _ensureOk(response, 'Не удалось загрузить быстрые ответы');
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final items = data['items'] as List<dynamic>? ?? [];
+    return items
+        .whereType<Map<String, dynamic>>()
+        .map(ChatQuickReply.fromJson)
+        .toList();
+  }
+
+  static Future<ChatQuickReply> createQuickReply({
+    required String title,
+    required String text,
+  }) async {
+    final uri = Uri.parse('$_base/chats/quick-replies');
+    final response = await _post(
+      uri,
+      body: jsonEncode({'title': title, 'text': text}),
+    );
+    _ensureOk(response, 'Не удалось сохранить быстрый ответ');
+    return ChatQuickReply.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<void> deleteQuickReply({required int replyId}) async {
+    final uri = Uri.parse('$_base/chats/quick-replies/$replyId');
+    final response = await _delete(uri);
+    _ensureOk(response, 'Не удалось удалить быстрый ответ');
+  }
+}
+
+class ChatQuickReply {
+  const ChatQuickReply({
+    required this.id,
+    required this.title,
+    required this.text,
+  });
+
+  final int id;
+  final String title;
+  final String text;
+
+  factory ChatQuickReply.fromJson(Map<String, dynamic> json) {
+    return ChatQuickReply(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      title: json['title'] as String? ?? '',
+      text: json['text'] as String? ?? '',
+    );
+  }
 }

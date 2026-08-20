@@ -21,7 +21,7 @@ from app.models.subscription import Subscription
 
 BASE_PRICE_RUB = 39
 LEVEL_STEP_RUB = 10
-MAX_LEVEL = 52
+MAX_LEVEL = 60
 MIN_LEVEL = 1
 PERIOD_DAYS = 30
 YEARLY_DAYS = 365
@@ -57,6 +57,8 @@ DEFAULT_BLOCKS = (
     {"key": "K", "title": "Сторис+", "min_level": 41, "max_level": 44, "sort_order": 11},
     {"key": "L", "title": "Входящие+", "min_level": 45, "max_level": 48, "sort_order": 12},
     {"key": "M", "title": "Контроль", "min_level": 49, "max_level": 52, "sort_order": 13},
+    {"key": "N", "title": "Premium+", "min_level": 53, "max_level": 56, "sort_order": 14},
+    {"key": "O", "title": "Ещё Premium", "min_level": 57, "max_level": 60, "sort_order": 15},
 )
 
 DEFAULT_PRESETS = (
@@ -73,6 +75,8 @@ DEFAULT_PRESETS = (
     {"key": "storiesplus", "title": "Сторис+", "level": 44},
     {"key": "inboxplus", "title": "Входящие+", "level": 48},
     {"key": "control", "title": "Контроль", "level": 52},
+    {"key": "premiumplus", "title": "Premium+", "level": 56},
+    {"key": "premiummore", "title": "Ещё Premium", "level": 60},
 )
 
 DEFAULT_FEATURES = (
@@ -751,6 +755,110 @@ DEFAULT_FEATURES = (
         "movable": True,
         "required": False,
         "block_key": "M",
+    },
+    {
+        "slug": "gif_favorites",
+        "title": "Избранные GIF",
+        "description": "Сохранять GIF в облако и вставлять их с любого устройства.",
+        "icon": "favorite",
+        "default_level": 53,
+        "min_level": 53,
+        "max_level": 56,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "N",
+    },
+    {
+        "slug": "story_archive",
+        "title": "Архив сторис",
+        "description": "Свои истёкшие сторис остаются в архиве, а не исчезают.",
+        "icon": "inventory_2",
+        "default_level": 54,
+        "min_level": 53,
+        "max_level": 56,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "N",
+    },
+    {
+        "slug": "story_tray_priority",
+        "title": "Приоритет сторис",
+        "description": "Ваши сторис показываются выше в ленте у других.",
+        "icon": "trending_up",
+        "default_level": 55,
+        "min_level": 53,
+        "max_level": 56,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "N",
+    },
+    {
+        "slug": "group_add_privacy",
+        "title": "Кто добавляет в группы",
+        "description": "Ограничить, кто может добавлять вас в группы: все, контакты или никто.",
+        "icon": "group_off",
+        "default_level": 56,
+        "min_level": 53,
+        "max_level": 56,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "N",
+    },
+    {
+        "slug": "folder_share",
+        "title": "Поделиться папкой",
+        "description": "Отправить ссылку на папку чатов — получатель импортирует её себе.",
+        "icon": "share",
+        "default_level": 57,
+        "min_level": 57,
+        "max_level": 60,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "O",
+    },
+    {
+        "slug": "story_caption_plus",
+        "title": "Длинные подписи сторис",
+        "description": "Подпись к сторис до 1000 символов вместо 500.",
+        "icon": "notes",
+        "default_level": 58,
+        "min_level": 57,
+        "max_level": 60,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "O",
+    },
+    {
+        "slug": "animated_avatar",
+        "title": "Анимированный аватар",
+        "description": "Поставить GIF как фото профиля — оно будет двигаться.",
+        "icon": "gif",
+        "default_level": 59,
+        "min_level": 57,
+        "max_level": 60,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "O",
+    },
+    {
+        "slug": "quick_replies",
+        "title": "Быстрые ответы",
+        "description": "Заготовки текста над полем ввода — вставить одним нажатием.",
+        "icon": "quickreply",
+        "default_level": 60,
+        "min_level": 57,
+        "max_level": 60,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "O",
     },
 )
 

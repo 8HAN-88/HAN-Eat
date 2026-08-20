@@ -193,6 +193,10 @@ def _raise_flex_gate(code: str) -> None:
             "edit_history",
             "История правок доступна с уровня 52",
         ),
+        "folder_share_required": (
+            "folder_share",
+            "Общие папки доступны с уровня 57",
+        ),
     }
     item = mapping.get(code)
     if not item:
@@ -1406,6 +1410,122 @@ async def delete_chat_folder(
     return {"ok": True}
 
 
+@router.post("/chats/folders/{folder_id}/share")
+async def share_chat_folder(
+    folder_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        row = svc.share_folder(current_user.id, folder_id)
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        code = str(exc)
+        if code == "folder_share_required":
+            _raise_flex_gate(code)
+        if code == "folder_not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Folder not found")
+        raise
+    return row
+
+
+@router.post("/chats/folders/import", response_model=ChatFolderResponse)
+async def import_chat_folder(
+    body: dict,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        row = svc.import_shared_folder(
+            current_user.id, str(body.get("token") or "")
+        )
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        code = str(exc)
+        if code == "folder_share_required":
+            _raise_flex_gate(code)
+        if code == "folder_share_not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Share not found")
+        _raise_flex_gate(code)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+    return ChatFolderResponse(**row)
+
+
+@router.get("/chats/quick-replies")
+async def list_quick_replies(
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.services.quick_reply_service import list_replies
+
+    return {
+        "items": [
+            {
+                "id": row.id,
+                "title": row.title,
+                "text": row.text,
+                "sort_order": int(row.sort_order or 0),
+            }
+            for row in list_replies(db, current_user.id)
+        ]
+    }
+
+
+@router.post("/chats/quick-replies")
+async def create_quick_reply(
+    body: dict,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.services.quick_reply_service import QuickReplyError, create_reply
+    from app.services.subscription_service import SubscriptionService
+
+    SubscriptionService(db).require_feature(
+        current_user.id,
+        "quick_replies",
+        "Быстрые ответы доступны с уровня 60",
+    )
+    try:
+        row = create_reply(
+            db,
+            current_user.id,
+            str(body.get("title") or ""),
+            str(body.get("text") or ""),
+        )
+        db.commit()
+        db.refresh(row)
+    except QuickReplyError as exc:
+        db.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    return {
+        "id": row.id,
+        "title": row.title,
+        "text": row.text,
+        "sort_order": int(row.sort_order or 0),
+    }
+
+
+@router.delete("/chats/quick-replies/{reply_id}")
+async def delete_quick_reply(
+    reply_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.services.quick_reply_service import QuickReplyError, delete_reply
+
+    try:
+        delete_reply(db, current_user.id, reply_id)
+        db.commit()
+    except QuickReplyError as exc:
+        db.rollback()
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc))
+    return {"ok": True}
+
+
 @router.post("/chats/folders/{folder_id}/items", response_model=ChatFolderResponse)
 async def add_chat_folder_item(
     folder_id: int,
@@ -1524,6 +1644,11 @@ async def create_group_chat(
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code == "user_blocked":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "User blocked")
+        if code == "group_add_privacy_denied":
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Этот пользователь запретил добавлять себя в группы",
+            )
         raise
     row = svc.get_conversation_row(conv.id, current_user.id)
     item = _conversation_response(row, svc, db, current_user) if row else None
@@ -5197,6 +5322,11 @@ async def add_group_members(
             raise HTTPException(status.HTTP_403_FORBIDDEN, "User blocked")
         if code == "group_member_banned":
             raise HTTPException(status.HTTP_403_FORBIDDEN, code)
+        if code == "group_add_privacy_denied":
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Этот пользователь запретил добавлять себя в группы",
+            )
         if code in ("forbidden", "not_group"):
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
         raise

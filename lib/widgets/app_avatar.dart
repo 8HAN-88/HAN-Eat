@@ -35,41 +35,73 @@ class AppUserAvatar extends StatelessWidget {
   final Widget? child;
   final bool decorated;
 
+  bool get _isAnimatedGif {
+    final path = (imageUrl ?? '').split('?').first.toLowerCase();
+    return path.endsWith('.gif');
+  }
+
+  Widget _fallbackAvatar({
+    required ColorScheme scheme,
+    required String initial,
+  }) {
+    return Container(
+      width: radius * 2,
+      height: radius * 2,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            scheme.primary,
+            scheme.primary.withValues(alpha: 0.72),
+          ],
+        ),
+      ),
+      alignment: Alignment.center,
+      child: child ??
+          Text(
+            initial,
+            style: TextStyle(
+              fontSize: fontSize ?? radius * 0.85,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+            ),
+          ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final decodeWidth = (radius * 4).round().clamp(48, 256);
-    final background = resolvedAvatarImage(imageUrl, decodeWidth: decodeWidth);
+    final background = _isAnimatedGif
+        ? null
+        : resolvedAvatarImage(imageUrl, decodeWidth: decodeWidth);
     final name = displayName.trim();
     final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
     final scheme = Theme.of(context).colorScheme;
+    final raw = imageUrl?.trim();
+    final gifUrl = _isAnimatedGif && raw != null && raw.isNotEmpty
+        ? ServerConfig.resolvePublisherAvatarUrl(raw)
+        : null;
 
-    final avatar = background != null
-        ? CircleAvatar(radius: radius, backgroundImage: background)
-        : Container(
-            width: radius * 2,
-            height: radius * 2,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  scheme.primary,
-                  scheme.primary.withValues(alpha: 0.72),
-                ],
+    final avatar = gifUrl != null
+        ? ClipOval(
+            child: Image.network(
+              gifUrl,
+              width: radius * 2,
+              height: radius * 2,
+              fit: BoxFit.cover,
+              gaplessPlayback: true,
+              errorBuilder: (_, __, ___) => _fallbackAvatar(
+                scheme: scheme,
+                initial: initial,
               ),
             ),
-            alignment: Alignment.center,
-            child: child ??
-                Text(
-                  initial,
-                  style: TextStyle(
-                    fontSize: fontSize ?? radius * 0.85,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                  ),
-                ),
-          );
+          )
+        : background != null
+            ? CircleAvatar(radius: radius, backgroundImage: background)
+            : _fallbackAvatar(scheme: scheme, initial: initial);
 
     Widget out = avatar;
     if (decorated) {

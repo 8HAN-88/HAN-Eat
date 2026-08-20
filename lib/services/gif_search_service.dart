@@ -85,4 +85,55 @@ class GifSearchService {
     );
     return _getPage(uri, 'Не удалось загрузить GIF');
   }
+
+  static Future<List<GifCatalogItem>> listFavorites() async {
+    final uri = Uri.parse('$_base/gifs/favorites');
+    final headers = await _headers();
+    final response = await HanEatHttpClient.withShared(
+      (client) => client.get(uri, headers: headers),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _throwError(response, 'Не удалось загрузить избранные GIF');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final raw = body['items'] as List<dynamic>? ?? const [];
+    return raw.whereType<Map<String, dynamic>>().map((item) {
+      final url = (item['media_url'] as String?)?.trim() ??
+          (item['url'] as String?)?.trim() ??
+          '';
+      final preview = (item['preview_url'] as String?)?.trim() ?? url;
+      return GifCatalogItem(
+        id: '${item['id'] ?? url}',
+        previewUrl: preview,
+        url: url,
+        title: item['title'] as String? ?? '',
+      );
+    }).where((e) => e.url.isNotEmpty).toList();
+  }
+
+  static Future<bool> toggleFavorite({
+    required String mediaUrl,
+    String? previewUrl,
+    String? title,
+  }) async {
+    final uri = Uri.parse('$_base/gifs/favorites/toggle');
+    final headers = await _headers();
+    final response = await HanEatHttpClient.withShared(
+      (client) => client.post(
+        uri,
+        headers: headers,
+        body: jsonEncode({
+          'media_url': mediaUrl.trim(),
+          if (previewUrl != null && previewUrl.trim().isNotEmpty)
+            'preview_url': previewUrl.trim(),
+          if (title != null && title.trim().isNotEmpty) 'title': title.trim(),
+        }),
+      ),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _throwError(response, 'Не удалось обновить избранные GIF');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return body['favorited'] as bool? ?? false;
+  }
 }

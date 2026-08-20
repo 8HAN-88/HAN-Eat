@@ -38,6 +38,65 @@ async def search_gifs(
         ) from exc
 
 
+@router.get("/gifs/favorites")
+async def list_gif_favorites(
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.services.gif_favorite_service import list_favorites
+
+    return {
+        "items": [
+            {
+                "id": row.id,
+                "media_url": row.media_url,
+                "preview_url": row.preview_url or row.media_url,
+                "title": row.title,
+            }
+            for row in list_favorites(db, current_user.id)
+        ]
+    }
+
+
+@router.post("/gifs/favorites/toggle")
+async def toggle_gif_favorite(
+    body: dict,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.services.gif_favorite_service import GifFavoriteError, toggle_favorite
+
+    SubscriptionService(db).require_feature(
+        current_user.id,
+        "gif_favorites",
+        "Избранные GIF доступны с уровня 53",
+    )
+    try:
+        row, added = toggle_favorite(
+            db,
+            current_user.id,
+            str(body.get("media_url") or ""),
+            preview_url=body.get("preview_url"),
+            title=body.get("title"),
+        )
+        db.commit()
+    except GifFavoriteError as exc:
+        db.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    return {
+        "ok": True,
+        "favorited": added,
+        "item": None
+        if row is None
+        else {
+            "id": row.id,
+            "media_url": row.media_url,
+            "preview_url": row.preview_url or row.media_url,
+            "title": row.title,
+        },
+    }
+
+
 @router.get("/gifs/featured", response_model=GifSearchResponse)
 async def featured_gifs(
     limit: int = Query(24, ge=1, le=50),
