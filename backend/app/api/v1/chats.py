@@ -185,6 +185,14 @@ def _raise_flex_gate(code: str) -> None:
             "chat_tags",
             "Метки чатов доступны с уровня 48",
         ),
+        "hide_forward_required": (
+            "hide_forward",
+            "Пересылка без автора доступна с уровня 50",
+        ),
+        "edit_history_required": (
+            "edit_history",
+            "История правок доступна с уровня 52",
+        ),
     }
     item = mapping.get(code)
     if not item:
@@ -658,6 +666,29 @@ def _peer_last_read_id(
     return member.last_read_message_id if member else None
 
 
+def _peer_last_read_at(
+    db: Session, svc: ChatService, conv, current_user_id: int
+):
+    if conv.type != "direct":
+        return None
+    from app.services.subscription_service import SubscriptionService
+
+    if not SubscriptionService(db).has_feature(current_user_id, "read_timestamps"):
+        return None
+    if _peer_last_read_id(db, svc, conv, current_user_id) is None:
+        return None
+    peer_id = svc.peer_user_id(conv, current_user_id)
+    member = (
+        db.query(ConversationMember)
+        .filter(
+            ConversationMember.conversation_id == conv.id,
+            ConversationMember.user_id == peer_id,
+        )
+        .first()
+    )
+    return getattr(member, "last_read_at", None) if member else None
+
+
 def _peer_last_delivered_id(
     db: Session, svc: ChatService, conv, current_user_id: int
 ) -> Optional[int]:
@@ -1081,6 +1112,7 @@ def _conversation_response(
         peer_blocked_by_me=peer_blocked_by_me,
         auto_translate=bool(getattr(member, "auto_translate", False)) if member else False,
         tag_ids=list(row.get("tag_ids") or _conversation_tag_ids(db, current_user.id, conv.id)),
+        peer_read_at=_peer_last_read_at(db, svc, conv, current_user.id),
         **_reply_keyboard_fields(member),
     )
 
@@ -2392,6 +2424,8 @@ async def forward_message(
     except ValueError as e:
         db.rollback()
         code = str(e)
+        if code == "hide_forward_required":
+            _raise_flex_gate(code)
         if code == "forbidden":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
         if code == "not_found":
@@ -3733,6 +3767,13 @@ async def list_message_edits(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    from app.services.subscription_service import SubscriptionService
+
+    SubscriptionService(db).require_feature(
+        current_user.id,
+        "edit_history",
+        "История правок доступна с уровня 52",
+    )
     svc = ChatService(db)
     try:
         msg, rows = svc.list_message_edit_history(
@@ -4221,7 +4262,7 @@ async def list_message_readers(
     )
     svc = ChatService(db)
     try:
-        users, other_count = svc.message_readers(
+        users, other_count, read_at_by_user = svc.message_readers(
             conversation_id, message_id, current_user.id
         )
     except ValueError as e:
@@ -4229,10 +4270,14 @@ async def list_message_readers(
         if code == "not_found":
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+    show_times = SubscriptionService(db).has_feature(
+        current_user.id, "read_timestamps"
+    )
     return MessageReadersResponse(
         items=[
             MessageReaderItem(
-                user=_brief(u, viewer_id=current_user.id, db=db)
+                user=_brief(u, viewer_id=current_user.id, db=db),
+                read_at=read_at_by_user.get(int(u.id)) if show_times else None,
             )
             for u in users
         ],

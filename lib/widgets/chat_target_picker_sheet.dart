@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../features/subscription/creator_upsell.dart';
 import '../models/chat_models.dart';
 import 'app_avatar.dart';
 
@@ -179,11 +180,25 @@ class _ChatTargetPickerSheetState extends State<_ChatTargetPickerSheet> {
               const SizedBox(height: 4),
               SwitchListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-                secondary: const Icon(Icons.content_copy_outlined),
+                secondary: Icon(
+                  hasFlexFeature('hide_forward')
+                      ? Icons.content_copy_outlined
+                      : Icons.lock_outline,
+                ),
                 title: const Text('Переслать как копию'),
-                subtitle: const Text('Без подписи «Переслано от…»'),
+                subtitle: Text(
+                  hasFlexFeature('hide_forward')
+                      ? 'Без подписи «Переслано от…»'
+                      : 'Доступно с уровня 50',
+                ),
                 value: _asCopy,
-                onChanged: (v) => setState(() => _asCopy = v),
+                onChanged: (v) {
+                  if (v && !hasFlexFeature('hide_forward')) {
+                    showCreatorUpsell(context);
+                    return;
+                  }
+                  setState(() => _asCopy = v);
+                },
               ),
             ],
             const SizedBox(height: 6),

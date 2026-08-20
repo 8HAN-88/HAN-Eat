@@ -21,7 +21,7 @@ from app.models.subscription import Subscription
 
 BASE_PRICE_RUB = 39
 LEVEL_STEP_RUB = 10
-MAX_LEVEL = 48
+MAX_LEVEL = 52
 MIN_LEVEL = 1
 PERIOD_DAYS = 30
 YEARLY_DAYS = 365
@@ -56,6 +56,7 @@ DEFAULT_BLOCKS = (
     {"key": "J", "title": "Ещё+", "min_level": 37, "max_level": 40, "sort_order": 10},
     {"key": "K", "title": "Сторис+", "min_level": 41, "max_level": 44, "sort_order": 11},
     {"key": "L", "title": "Входящие+", "min_level": 45, "max_level": 48, "sort_order": 12},
+    {"key": "M", "title": "Контроль", "min_level": 49, "max_level": 52, "sort_order": 13},
 )
 
 DEFAULT_PRESETS = (
@@ -71,6 +72,7 @@ DEFAULT_PRESETS = (
     {"key": "moreplus", "title": "Ещё+", "level": 40},
     {"key": "storiesplus", "title": "Сторис+", "level": 44},
     {"key": "inboxplus", "title": "Входящие+", "level": 48},
+    {"key": "control", "title": "Контроль", "level": 52},
 )
 
 DEFAULT_FEATURES = (
@@ -697,6 +699,58 @@ DEFAULT_FEATURES = (
         "movable": True,
         "required": False,
         "block_key": "L",
+    },
+    {
+        "slug": "default_folder",
+        "title": "Папка при запуске",
+        "description": "Сразу открывать выбранную папку вместо общего списка чатов.",
+        "icon": "folder_special",
+        "default_level": 49,
+        "min_level": 49,
+        "max_level": 52,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "M",
+    },
+    {
+        "slug": "hide_forward",
+        "title": "Пересылка без автора",
+        "description": "Переслать сообщение как копию — без подписи «Переслано от…».",
+        "icon": "content_copy",
+        "default_level": 50,
+        "min_level": 49,
+        "max_level": 52,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "M",
+    },
+    {
+        "slug": "read_timestamps",
+        "title": "Время прочтения",
+        "description": "Точное время, когда собеседник прочитал ваши сообщения.",
+        "icon": "schedule",
+        "default_level": 51,
+        "min_level": 49,
+        "max_level": 52,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "M",
+    },
+    {
+        "slug": "edit_history",
+        "title": "История правок",
+        "description": "Посмотреть предыдущие версии изменённого сообщения.",
+        "icon": "history",
+        "default_level": 52,
+        "min_level": 49,
+        "max_level": 52,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "M",
     },
 )
 

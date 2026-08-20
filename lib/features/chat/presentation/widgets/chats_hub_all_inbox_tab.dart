@@ -127,7 +127,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     final lastSelected = results[0] as int?;
     final defaultId = AuthService.instance.currentUser?.defaultFolderId;
     final useDefault =
-        defaultId != null && hasFlexFeature('any_emoji_reactions');
+        defaultId != null && hasFlexFeature('default_folder');
     setState(() {
       _selectedFolderId = useDefault ? defaultId : lastSelected;
       _showGesturesHint = !(results[1] as bool);

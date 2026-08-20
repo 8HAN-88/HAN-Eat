@@ -93,6 +93,7 @@ class ForwardMessageRequest(BaseModel):
 
 class MessageReaderItem(BaseModel):
     user: ChatUserBrief
+    read_at: Optional[datetime] = None
 
 
 class MessageReadersResponse(BaseModel):
@@ -169,6 +170,7 @@ class ConversationResponse(BaseModel):
     reply_keyboard_placeholder: Optional[str] = None
     auto_translate: bool = False
     tag_ids: List[int] = []
+    peer_read_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

@@ -573,6 +573,16 @@ class ChatSavedTag {
   }
 }
 
+class ChatMessageReader {
+  const ChatMessageReader({
+    required this.user,
+    this.readAt,
+  });
+
+  final ChatUserBrief user;
+  final DateTime? readAt;
+}
+
 class ChatMessageReadersResult {
   const ChatMessageReadersResult({
     required this.readers,
@@ -580,7 +590,7 @@ class ChatMessageReadersResult {
     this.otherMemberCount = 0,
   });
 
-  final List<ChatUserBrief> readers;
+  final List<ChatMessageReader> readers;
   final int readerCount;
   final int otherMemberCount;
 }
@@ -690,6 +700,7 @@ class ChatConversation {
     this.replyKeyboard,
     this.autoTranslate = false,
     this.tagIds = const [],
+    this.peerReadAt,
   });
 
   final int id;
@@ -738,6 +749,7 @@ class ChatConversation {
   final ChatReplyKeyboard? replyKeyboard;
   final bool autoTranslate;
   final List<int> tagIds;
+  final DateTime? peerReadAt;
 
   bool get isGroup => type == 'group';
 
@@ -847,6 +859,9 @@ class ChatConversation {
         for (final raw in json['tag_ids'] as List<dynamic>? ?? const [])
           if (raw is num) raw.toInt(),
       ],
+      peerReadAt: json['peer_read_at'] is String
+          ? DateTime.tryParse(json['peer_read_at'] as String)
+          : null,
     );
   }
 
@@ -898,6 +913,8 @@ class ChatConversation {
     DateTime? updatedAt,
     bool? autoTranslate,
     List<int>? tagIds,
+    DateTime? peerReadAt,
+    bool clearPeerReadAt = false,
   }) {
     return ChatConversation(
       id: id,
@@ -962,6 +979,7 @@ class ChatConversation {
           : (replyKeyboard ?? this.replyKeyboard),
       autoTranslate: autoTranslate ?? this.autoTranslate,
       tagIds: tagIds ?? this.tagIds,
+      peerReadAt: clearPeerReadAt ? null : (peerReadAt ?? this.peerReadAt),
     );
   }
 }

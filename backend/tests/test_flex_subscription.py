@@ -83,6 +83,7 @@ def test_price_formula():
     assert price_for_level(40) == 429
     assert price_for_level(44) == 469
     assert price_for_level(48) == 509
+    assert price_for_level(52) == 549
     assert price_for_plan(1, "yearly") == 390
     assert price_for_plan(6, "yearly") == 890
     assert price_for_plan(10, "yearly") == 1290
@@ -95,13 +96,14 @@ def test_price_formula():
     assert price_for_plan(40, "yearly") == 4290
     assert price_for_plan(44, "yearly") == 4690
     assert price_for_plan(48, "yearly") == 5090
+    assert price_for_plan(52, "yearly") == 5490
 
 
 def test_catalog_seed_and_default_layout(db_session):
     _user(db_session)
     svc = FlexSubscriptionService(db_session)
     layout = svc.resolved_layout(1)
-    assert len(layout) == 48
+    assert len(layout) == 52
     assert layout[0]["feature"].slug == "ad_free"
     assert layout[0]["level"] == 1
     assert layout[9]["feature"].slug == "priority_support"
@@ -122,8 +124,8 @@ def test_catalog_seed_and_default_layout(db_session):
     assert layout[39]["level"] == 40
     assert layout[43]["feature"].slug == "call_privacy"
     assert layout[43]["level"] == 44
-    assert layout[-1]["feature"].slug == "chat_tags"
-    assert layout[-1]["level"] == 48
+    assert layout[-1]["feature"].slug == "edit_history"
+    assert layout[-1]["level"] == 52
 
 
 def test_cannot_move_fixed_feature(db_session):
@@ -389,6 +391,7 @@ def test_has_feature_follows_level_not_bundle(db_session):
     assert billing.has_feature(1, "call_privacy") is True
     assert billing.has_feature(1, "extra_pinned_chats") is False
     assert billing.has_feature(1, "chat_tags") is False
+    assert billing.has_feature(1, "edit_history") is False
 
     svc.activate(1, 48)
     db_session.commit()
@@ -396,6 +399,15 @@ def test_has_feature_follows_level_not_bundle(db_session):
     assert billing.has_feature(1, "story_download") is True
     assert billing.has_feature(1, "auto_translate") is True
     assert billing.has_feature(1, "chat_tags") is True
+    assert billing.has_feature(1, "default_folder") is False
+    assert billing.has_feature(1, "edit_history") is False
+
+    svc.activate(1, 52)
+    db_session.commit()
+    assert billing.has_feature(1, "default_folder") is True
+    assert billing.has_feature(1, "hide_forward") is True
+    assert billing.has_feature(1, "read_timestamps") is True
+    assert billing.has_feature(1, "edit_history") is True
 
 
 def test_expire_and_refund_deactivate_flex(db_session):
@@ -587,7 +599,7 @@ def test_ensure_catalog_appends_missing_block_d(db_session):
         SubscriptionFeature.default_level >= 11
     ).delete(synchronize_session=False)
     db_session.query(SubscriptionFeatureBlock).filter(
-        SubscriptionFeatureBlock.key.in_(("D", "E", "F", "G", "H", "I", "J", "K", "L"))
+        SubscriptionFeatureBlock.key.in_(("D", "E", "F", "G", "H", "I", "J", "K", "L", "M"))
     ).delete(synchronize_session=False)
     db_session.commit()
     assert db_session.query(SubscriptionFeature).count() == 10
@@ -612,6 +624,8 @@ def test_ensure_catalog_appends_missing_block_d(db_session):
     assert "call_privacy" in slugs
     assert "extra_pinned_chats" in slugs
     assert "chat_tags" in slugs
+    assert "default_folder" in slugs
+    assert "edit_history" in slugs
     assert {b.key for b in svc.list_blocks()} == {
         "A",
         "B",
@@ -625,9 +639,10 @@ def test_ensure_catalog_appends_missing_block_d(db_session):
         "J",
         "K",
         "L",
+        "M",
     }
     me = svc.me_payload(1)
-    assert me["max_level"] == 48
+    assert me["max_level"] == 52
     assert any(p["level"] == 16 for p in me["presets"])
     assert any(p["level"] == 20 for p in me["presets"])
     assert any(p["level"] == 24 for p in me["presets"])
@@ -637,6 +652,7 @@ def test_ensure_catalog_appends_missing_block_d(db_session):
     assert any(p["level"] == 40 for p in me["presets"])
     assert any(p["level"] == 44 for p in me["presets"])
     assert any(p["level"] == 48 for p in me["presets"])
+    assert any(p["level"] == 52 for p in me["presets"])
 
 
 def test_privacy_plus_lets_hidden_viewer_see_last_seen(db_session):
