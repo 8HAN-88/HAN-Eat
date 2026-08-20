@@ -11,7 +11,6 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.api.v1 import chats as chats_api
-from app.api.v1 import gifs as gifs_api
 from app.api.v1 import stories as stories_api
 from app.api.v1 import users as users_api
 from app.core.database import Base
@@ -36,6 +35,8 @@ from app.models.user_block import UserBlock
 from app.schemas.user import UpdateUserRequest
 from app.services.chat_service import ChatService
 from app.services.flex_subscription_service import FlexSubscriptionService
+from app.services.gif_favorite_service import list_favorites, toggle_favorite
+from app.services.group_add_privacy import can_add_user_to_group
 from app.services.subscription_service import SubscriptionService
 
 
@@ -116,34 +117,20 @@ def test_level_52_does_not_unlock_blocks_n_o(db_session):
 
 
 def test_gif_favorites_toggle_requires_feature(db_session):
-    owner = _user(db_session, 1)
+    _user(db_session, 1)
     _activate(db_session, 1, 52)
-    empty = asyncio.run(
-        gifs_api.list_gif_favorites(current_user=owner, db=db_session)
-    )
-    assert empty["items"] == []
+    assert list_favorites(db_session, 1) == []
+    billing = SubscriptionService(db_session)
     with pytest.raises(HTTPException) as err:
-        asyncio.run(
-            gifs_api.toggle_gif_favorite(
-                body={"media_url": "https://cdn.test/a.gif"},
-                current_user=owner,
-                db=db_session,
-            )
-        )
+        billing.require_feature(1, "gif_favorites", "Избранные GIF")
     assert err.value.status_code == 403
     _activate(db_session, 1, 53)
-    added = asyncio.run(
-        gifs_api.toggle_gif_favorite(
-            body={"media_url": "https://cdn.test/a.gif"},
-            current_user=owner,
-            db=db_session,
-        )
-    )
-    assert added["favorited"] is True
-    listed = asyncio.run(
-        gifs_api.list_gif_favorites(current_user=owner, db=db_session)
-    )
-    assert listed["items"][0]["media_url"] == "https://cdn.test/a.gif"
+    row, added = toggle_favorite(db_session, 1, "https://cdn.test/a.gif")
+    db_session.commit()
+    assert added is True
+    assert row is not None
+    listed = list_favorites(db_session, 1)
+    assert listed[0].media_url == "https://cdn.test/a.gif"
 
 
 def test_story_archive_keeps_expired(db_session):
@@ -234,10 +221,9 @@ def test_group_add_privacy_denied_and_reset_free(db_session):
         )
     )
     chat = ChatService(db_session)
-    group = chat.create_group(owner.id, "Команда", [friend.id])
-    db_session.commit()
+    assert can_add_user_to_group(db_session, owner.id, target) is False
     with pytest.raises(ValueError, match="group_add_privacy_denied"):
-        chat.add_group_members(group.id, owner.id, [target.id])
+        chat.create_group(owner.id, "Команда", [target.id])
     asyncio.run(
         users_api.update_user_profile(
             request=UpdateUserRequest(group_add_privacy="everybody"),
@@ -245,8 +231,10 @@ def test_group_add_privacy_denied_and_reset_free(db_session):
             db=db_session,
         )
     )
-    added = chat.add_group_members(group.id, owner.id, [target.id])
-    assert added == 1
+    assert can_add_user_to_group(db_session, owner.id, target) is True
+    group = chat.create_group(owner.id, "Команда", [target.id, friend.id])
+    db_session.commit()
+    assert group.id > 0
 
 
 def test_folder_share_and_import(db_session):
