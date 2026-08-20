@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../models/chat_models.dart';
 import '../../../services/auth_service.dart';
@@ -285,6 +286,43 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
     }
   }
 
+  Future<void> _shareFolder() async {
+    final folder = widget.folder;
+    if (folder == null) return;
+    if (!hasFlexFeature('folder_share')) {
+      await showCreatorUpsell(context);
+      return;
+    }
+    try {
+      final shared = await ChatFolderStore.shareFolder(folder.id);
+      if (!mounted) return;
+      await Clipboard.setData(ClipboardData(text: shared.token));
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Ссылка на папку'),
+          content: Text(
+            'Токен скопирован. Другой человек с функцией «Папки» может '
+            'импортировать «${shared.name}» по этому коду:\n\n${shared.token}',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Закрыть'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
   Future<void> _deleteFolder() async {
     final folder = widget.folder;
     if (folder == null) return;
@@ -342,6 +380,12 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
       appBar: AppBar(
         title: Text(_isEdit ? 'Папка' : 'Новая папка'),
         actions: [
+          if (_isEdit)
+            IconButton(
+              tooltip: 'Поделиться папкой',
+              icon: const Icon(Icons.ios_share_outlined),
+              onPressed: _saving ? null : _shareFolder,
+            ),
           if (_isEdit)
             IconButton(
               tooltip: 'Удалить папку',

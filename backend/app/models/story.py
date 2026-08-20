@@ -30,6 +30,7 @@ class Story(Base):
     visibility = Column(String(20), default="public", nullable=False)
     views_count = Column(Integer, default=0, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False, index=True)
+    keep_in_archive = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, server_default=func.now(), index=True)
     expires_at = Column(DateTime, nullable=False, index=True)
     deleted_at = Column(DateTime, nullable=True, index=True)

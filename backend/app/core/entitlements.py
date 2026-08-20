@@ -66,6 +66,14 @@ CATALOG_FEATURE_SLUGS = (
     "hide_forward",
     "read_timestamps",
     "edit_history",
+    "gif_favorites",
+    "story_archive",
+    "story_tray_priority",
+    "group_add_privacy",
+    "folder_share",
+    "story_caption_plus",
+    "animated_avatar",
+    "quick_replies",
 )
 
 EXCLUSIVE_CHAT_REACTIONS = frozenset({"🔥", "🥰", "🎉", "✨", "⚡️", "💯"})

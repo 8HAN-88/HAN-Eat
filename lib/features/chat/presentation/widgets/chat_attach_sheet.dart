@@ -1374,6 +1374,7 @@ class _GifPickPanelState extends State<_GifPickPanel> {
   final _searchController = TextEditingController();
   Timer? _searchDebounce;
   List<String> _recentUrls = const [];
+  List<GifCatalogItem> _favoriteItems = const [];
   List<GifCatalogItem> _catalogItems = const [];
   String? _catalogNext;
   bool _recentLoading = true;
@@ -1393,6 +1394,7 @@ class _GifPickPanelState extends State<_GifPickPanel> {
   void initState() {
     super.initState();
     unawaited(_loadRecent());
+    unawaited(_loadFavorites());
     unawaited(_loadCatalog());
     _searchController.addListener(_onSearchChanged);
   }
@@ -1441,6 +1443,38 @@ class _GifPickPanelState extends State<_GifPickPanel> {
       _recentUrls = urls.take(36).toList();
       _recentLoading = false;
     });
+  }
+
+  Future<void> _loadFavorites() async {
+    try {
+      final items = await GifSearchService.listFavorites();
+      if (!mounted) return;
+      setState(() => _favoriteItems = items);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _favoriteItems = const []);
+    }
+  }
+
+  Future<void> _toggleFavoriteGif(String sendUrl, {String? previewUrl}) async {
+    if (!hasFlexFeature('gif_favorites')) {
+      await showCreatorUpsell(context);
+      return;
+    }
+    try {
+      await GifSearchService.toggleFavorite(
+        mediaUrl: sendUrl,
+        previewUrl: previewUrl,
+      );
+      if (!mounted) return;
+      await _loadFavorites();
+    } catch (e) {
+      if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось обновить избранные GIF')),
+      );
+    }
   }
 
   Future<void> _loadCatalog({String? query, bool more = false}) async {
@@ -1528,6 +1562,9 @@ class _GifPickPanelState extends State<_GifPickPanel> {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => widget.onPickRecent(sendUrl),
+        onLongPress: () => unawaited(
+          _toggleFavoriteGif(sendUrl, previewUrl: previewUrl),
+        ),
         child: ChatStickerTile(
           mediaUrl: ServerConfig.resolveMediaUrl(display),
           animated: true,
@@ -1619,6 +1656,27 @@ class _GifPickPanelState extends State<_GifPickPanel> {
           label: const Text('Выбрать GIF с устройства'),
         ),
         const SizedBox(height: 16),
+        if (!searching) ...[
+          _sectionTitle(context, 'Избранные GIF'),
+          const SizedBox(height: 8),
+          if (_favoriteItems.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                hasFlexFeature('gif_favorites')
+                    ? 'Удерживайте GIF, чтобы сохранить в избранное.'
+                    : 'Избранные GIF доступны с уровня 53. Удерживайте GIF, чтобы открыть подписку.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: _gifCatalogGrid(context, _favoriteItems),
+            ),
+        ],
         _sectionTitle(
           context,
           searching ? 'Результаты' : 'Популярные',

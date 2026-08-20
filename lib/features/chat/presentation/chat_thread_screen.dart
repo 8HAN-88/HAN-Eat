@@ -406,6 +406,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   bool _videoNoteComposerMode = false;
   bool _stickerPanelOpen = false;
   bool _hasText = false;
+  List<ChatQuickReply> _quickReplies = const [];
   String? _composerLinkPreviewUrl;
   String? _composerLinkPreviewDismissedUrl;
   Timer? _composerLinkDebounce;
@@ -620,6 +621,111 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   bool _hasFlexFeature(String slug) =>
       SubscriptionStatusCache.peek()?.hasFeature(slug) == true;
 
+  Future<void> _loadQuickReplies() async {
+    try {
+      final items = await ChatService.listQuickReplies();
+      if (!mounted) return;
+      setState(() => _quickReplies = items);
+    } catch (_) {}
+  }
+
+  Future<void> _insertQuickReply(ChatQuickReply reply) async {
+    final next = reply.text;
+    _controller.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: next.length),
+    );
+    _inputFocusNode.requestFocus();
+  }
+
+  Future<void> _createQuickReply() async {
+    if (!_hasFlexFeature('quick_replies')) {
+      await showCreatorUpsell(context);
+      return;
+    }
+    final titleCtl = TextEditingController();
+    final textCtl = TextEditingController(text: _controller.text.trim());
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Быстрый ответ'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleCtl,
+              decoration: const InputDecoration(labelText: 'Название'),
+              textCapitalization: TextCapitalization.sentences,
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: textCtl,
+              decoration: const InputDecoration(labelText: 'Текст'),
+              minLines: 2,
+              maxLines: 4,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await ChatService.createQuickReply(
+        title: titleCtl.text.trim(),
+        text: textCtl.text.trim(),
+      );
+      if (!mounted) return;
+      await _loadQuickReplies();
+    } catch (e) {
+      if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _deleteQuickReply(ChatQuickReply reply) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Удалить быстрый ответ?'),
+        content: Text(reply.title.isEmpty ? reply.text : reply.title),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await ChatService.deleteQuickReply(replyId: reply.id);
+      if (!mounted) return;
+      await _loadQuickReplies();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
   List<String> get _overlayReactions {
     final unlocked =
         SubscriptionStatusCache.peek()?.hasFeature('exclusive_reactions') == true;
@@ -737,6 +843,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     unawaited(_loadSlowModeUiPrefs());
     unawaited(_restoreDraft());
     unawaited(AuthService.getAccessTokenForApi());
+    unawaited(_loadQuickReplies());
     unawaited(_loadMyBots());
     unawaited(_loadBotCommands());
     unawaited(_refreshScheduledPendingCount());
@@ -16483,6 +16590,46 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                     setState(() => _sendAnonymously = v),
                                 visualDensity: VisualDensity.compact,
                               ),
+                            ),
+                          ),
+                        if (!_recording &&
+                            (_quickReplies.isNotEmpty ||
+                                _hasFlexFeature('quick_replies')))
+                          SizedBox(
+                            height: 40,
+                            child: ListView(
+                              scrollDirection: Axis.horizontal,
+                              padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+                              children: [
+                                for (final reply in _quickReplies)
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 6),
+                                    child: InputChip(
+                                      label: Text(
+                                        reply.title.isNotEmpty
+                                            ? reply.title
+                                            : reply.text,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      onPressed: () =>
+                                          unawaited(_insertQuickReply(reply)),
+                                      onDeleted: () =>
+                                          unawaited(_deleteQuickReply(reply)),
+                                    ),
+                                  ),
+                                ActionChip(
+                                  avatar: Icon(
+                                    _hasFlexFeature('quick_replies')
+                                        ? Icons.add
+                                        : Icons.lock_outline,
+                                    size: 16,
+                                  ),
+                                  label: const Text('Ответ'),
+                                  onPressed: () =>
+                                      unawaited(_createQuickReply()),
+                                ),
+                              ],
                             ),
                           ),
                         SafeArea(

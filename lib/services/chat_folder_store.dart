@@ -171,4 +171,18 @@ class ChatFolderStore {
       return ordered;
     }
   }
+
+  static Future<({String token, String name})> shareFolder(int folderId) {
+    return ChatService.shareFolder(folderId: folderId);
+  }
+
+  static Future<ChatFolder> importSharedFolder(String token) async {
+    final folder = await ChatService.importSharedFolder(token: token);
+    final remote = await ChatService.listFolders();
+    await saveLocal(remote);
+    return remote.firstWhere(
+      (f) => f.id == folder.id,
+      orElse: () => folder,
+    );
+  }
 }

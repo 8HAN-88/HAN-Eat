@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
 import '../../../services/server_config.dart';
+import '../../../utils/api_error_parser.dart';
 import '../../subscription/creator_upsell.dart';
 import '../data/story_models.dart';
 import '../data/story_service.dart';
@@ -44,6 +47,36 @@ class _StoriesHubScreenState extends State<StoriesHubScreen> {
       setState(() => _error = e);
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _openArchive() async {
+    if (!hasFlexFeature('story_archive')) {
+      await showCreatorUpsell(context);
+      return;
+    }
+    try {
+      final stories = await StoryService.fetchArchive();
+      if (!mounted) return;
+      if (stories.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Архив пока пуст')),
+        );
+        return;
+      }
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => StoryViewerScreen(
+            stories: stories.map(_toViewerItem).toList(),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
     }
   }
 
@@ -92,6 +125,11 @@ class _StoriesHubScreenState extends State<StoriesHubScreen> {
       appBar: AppBar(
         title: const Text('Моменты'),
         actions: [
+          IconButton(
+            tooltip: 'Архив сторис',
+            icon: const Icon(Icons.inventory_2_outlined),
+            onPressed: () => unawaited(_openArchive()),
+          ),
           IconButton(
             tooltip: 'Близкие друзья',
             icon: const Icon(Icons.favorite_outline),

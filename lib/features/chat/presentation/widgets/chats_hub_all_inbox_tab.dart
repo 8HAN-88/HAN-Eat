@@ -266,7 +266,6 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
   }
 
   Future<void> _openManageFolders() async {
-    if (_folders.isEmpty) return;
     final result = await showModalBottomSheet<List<ChatFolder>>(
       context: context,
       isScrollControlled: true,

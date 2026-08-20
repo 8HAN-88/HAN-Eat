@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../models/chat_models.dart';
 import '../../../services/chat_folder_store.dart';
+import '../../../utils/api_error_parser.dart';
+import '../../subscription/creator_upsell.dart';
 
 /// Перетаскивание папок для изменения порядка вкладок.
 class ChatFoldersManageSheet extends StatefulWidget {
@@ -24,6 +26,58 @@ class _ChatFoldersManageSheetState extends State<ChatFoldersManageSheet> {
   void initState() {
     super.initState();
     _folders = [...widget.folders];
+  }
+
+  Future<void> _importFolder() async {
+    if (!hasFlexFeature('folder_share')) {
+      await showCreatorUpsell(context);
+      return;
+    }
+    final controller = TextEditingController();
+    final token = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Импорт папки'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: 'Токен папки',
+            hintText: 'Вставьте код из шаринга',
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Импорт'),
+          ),
+        ],
+      ),
+    );
+    if (token == null || token.isEmpty || !mounted) return;
+    setState(() => _saving = true);
+    try {
+      final folder = await ChatFolderStore.importSharedFolder(token);
+      if (!mounted) return;
+      setState(() {
+        _folders = [..._folders, folder];
+        _saving = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Папка «${folder.name}» добавлена')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      if (offerFlexIfRequired(context, e)) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
   }
 
   Future<void> _saveOrder() async {
@@ -57,6 +111,10 @@ class _ChatFoldersManageSheetState extends State<ChatFoldersManageSheet> {
                 TextButton(
                   onPressed: _saving ? null : () => Navigator.pop(context),
                   child: const Text('Отмена'),
+                ),
+                TextButton(
+                  onPressed: _saving ? null : _importFolder,
+                  child: const Text('Импорт'),
                 ),
                 FilledButton(
                   onPressed: _saving ? null : _saveOrder,

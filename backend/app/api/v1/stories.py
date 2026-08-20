@@ -25,7 +25,7 @@ class StoryCreateRequest(BaseModel):
     media_url: str = Field(..., min_length=1, max_length=2000)
     thumbnail_url: Optional[str] = Field(None, max_length=2000)
     media_type: str = Field(..., pattern="^(image|video)$")
-    caption: Optional[str] = Field(None, max_length=500)
+    caption: Optional[str] = Field(None, max_length=1000)
     visibility: str = Field(
         "public",
         pattern="^(public|followers|close_friends|private)$",
@@ -243,9 +243,24 @@ async def list_active_stories(
         _active_story_query(db)
         .filter(visibility_filter)
         .order_by(Story.created_at.desc())
-        .limit(limit)
+        .limit(min(limit * 2, 400))
         .all()
     )
+    from app.services.flex_subscription_service import FlexSubscriptionService
+
+    flex = FlexSubscriptionService(db)
+    priority_ids = {
+        uid
+        for uid in {int(s.user_id) for s in stories}
+        if "story_tray_priority" in flex.unlocked_slugs(uid)
+    }
+    stories.sort(
+        key=lambda s: (
+            0 if int(s.user_id) in priority_ids else 1,
+            -(s.created_at.timestamp() if s.created_at else 0),
+        )
+    )
+    stories = stories[:limit]
     return [_to_response(story, db, viewer_id=current_user.id) for story in stories]
 
 
@@ -258,6 +273,35 @@ async def list_my_stories(
         _active_story_query(db)
         .filter(Story.user_id == current_user.id)
         .order_by(Story.created_at.desc())
+        .all()
+    )
+    return [_to_response(story, db, viewer_id=current_user.id) for story in stories]
+
+
+@router.get("/archive", response_model=List[StoryResponse])
+async def list_story_archive(
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.services.subscription_service import SubscriptionService
+
+    SubscriptionService(db).require_feature(
+        current_user.id,
+        "story_archive",
+        "Архив сторис доступен с уровня 54",
+    )
+    now = datetime.utcnow()
+    stories = (
+        db.query(Story)
+        .options(joinedload(Story.user))
+        .filter(
+            Story.user_id == current_user.id,
+            Story.deleted_at.is_(None),
+            Story.keep_in_archive == True,  # noqa: E712
+            Story.expires_at <= now,
+        )
+        .order_by(Story.created_at.desc())
+        .limit(100)
         .all()
     )
     return [_to_response(story, db, viewer_id=current_user.id) for story in stories]
@@ -283,14 +327,22 @@ async def create_story(
             "Сторис для близких доступны с уровня 20",
         )
     hours = 48 if billing.has_feature(current_user.id, "longer_stories") else 24
+    caption = (payload.caption or "").strip() or None
+    if caption and len(caption) > 500:
+        billing.require_feature(
+            current_user.id,
+            "story_caption_plus",
+            "Подпись длиннее 500 символов доступна с уровня 58",
+        )
     story = Story(
         user_id=current_user.id,
         media_url=payload.media_url,
         thumbnail_url=payload.thumbnail_url,
         media_type=payload.media_type,
-        caption=payload.caption,
+        caption=caption,
         visibility=visibility,
         expires_at=datetime.utcnow() + timedelta(hours=hours),
+        keep_in_archive=billing.has_feature(current_user.id, "story_archive"),
     )
     db.add(story)
     db.commit()

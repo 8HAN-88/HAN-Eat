@@ -92,6 +92,7 @@ class User(Base):
     story_stealth = Column(Boolean, default=False, nullable=False)
     # Telegram Premium: who may call this user.
     call_privacy = Column(String(20), default="everybody", nullable=False)
+    group_add_privacy = Column(String(20), default="everybody", nullable=False)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     deleted_at = Column(DateTime, nullable=True)

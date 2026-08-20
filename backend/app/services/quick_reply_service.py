@@ -1,0 +1,55 @@
+"""Canned replies for the composer."""
+
+from __future__ import annotations
+
+from typing import List
+
+from sqlalchemy.orm import Session
+
+from app.models.quick_reply import QuickReply
+
+MAX_QUICK_REPLIES = 20
+
+
+class QuickReplyError(ValueError):
+    pass
+
+
+def list_replies(db: Session, user_id: int) -> List[QuickReply]:
+    return (
+        db.query(QuickReply)
+        .filter(QuickReply.user_id == user_id)
+        .order_by(QuickReply.sort_order.asc(), QuickReply.id.asc())
+        .all()
+    )
+
+
+def create_reply(db: Session, user_id: int, title: str, text: str) -> QuickReply:
+    heading = (title or "").strip() or (text or "").strip()[:40]
+    body = (text or "").strip()
+    if not body:
+        raise QuickReplyError("reply_text_required")
+    count = db.query(QuickReply).filter(QuickReply.user_id == user_id).count()
+    if count >= MAX_QUICK_REPLIES:
+        raise QuickReplyError("quick_reply_limit")
+    row = QuickReply(
+        user_id=user_id,
+        title=heading[:40],
+        text=body[:400],
+        sort_order=count,
+    )
+    db.add(row)
+    db.flush()
+    return row
+
+
+def delete_reply(db: Session, user_id: int, reply_id: int) -> None:
+    row = (
+        db.query(QuickReply)
+        .filter(QuickReply.id == reply_id, QuickReply.user_id == user_id)
+        .first()
+    )
+    if not row:
+        raise QuickReplyError("reply_not_found")
+    db.delete(row)
+    db.flush()

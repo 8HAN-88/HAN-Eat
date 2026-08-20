@@ -19,6 +19,7 @@ import '../../../widgets/telegram_ui.dart';
 import '../../subscription/creator_upsell.dart';
 import '../application/last_seen_privacy.dart';
 import '../application/call_privacy.dart';
+import '../application/group_add_privacy.dart';
 import '../application/voice_privacy.dart';
 import 'blocked_users_screen.dart';
 import 'paid_message_exceptions_screen.dart';
@@ -41,6 +42,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _archiveNonContacts = false;
   bool _storyStealth = false;
   String _callPrivacy = callPrivacyEverybody;
+  String _groupAddPrivacy = groupAddPrivacyEverybody;
   bool _showReadReceipts = true;
   int _paidMessageStars = 0;
   bool _privacyBusy = false;
@@ -127,6 +129,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _archiveNonContacts = user.archiveNonContacts;
         _storyStealth = user.storyStealth;
         _callPrivacy = normalizeCallPrivacy(user.callPrivacy);
+        _groupAddPrivacy = normalizeGroupAddPrivacy(user.groupAddPrivacy);
         _showReadReceipts = user.showReadReceipts;
         _paidMessageStars = user.paidMessageStars;
       });
@@ -460,6 +463,83 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  Future<void> _pickGroupAddPrivacy() async {
+    if (_privacyBusy) return;
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: Text(
+                  'Кто может добавлять в группы',
+                  style: Theme.of(ctx).textTheme.titleMedium,
+                ),
+              ),
+              for (final value in groupAddPrivacyValues)
+                ListTile(
+                  title: Text(groupAddPrivacyLabel(value)),
+                  subtitle: Text(
+                    switch (value) {
+                      groupAddPrivacyContacts =>
+                        'Только люди из ваших контактов',
+                      groupAddPrivacyNobody =>
+                        'Никто не сможет добавить вас в группу',
+                      _ => 'Все пользователи HanWe',
+                    },
+                  ),
+                  trailing: _groupAddPrivacy == value
+                      ? const Icon(Icons.check)
+                      : (value != groupAddPrivacyEverybody &&
+                              !hasFlexFeature('group_add_privacy')
+                          ? const Icon(Icons.lock_outline)
+                          : null),
+                  onTap: () => Navigator.pop(ctx, value),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+    if (selected == null || !mounted || selected == _groupAddPrivacy) {
+      return;
+    }
+    if (selected != groupAddPrivacyEverybody &&
+        !hasFlexFeature('group_add_privacy')) {
+      await showCreatorUpsell(context);
+      return;
+    }
+    final previous = _groupAddPrivacy;
+    setState(() {
+      _groupAddPrivacy = selected;
+      _privacyBusy = true;
+    });
+    try {
+      final updated =
+          await UserService.updateProfile(groupAddPrivacy: selected);
+      await AuthService.persistUpdatedUser(updated);
+      if (!mounted) return;
+      setState(() {
+        _groupAddPrivacy = normalizeGroupAddPrivacy(updated.groupAddPrivacy);
+        _privacyBusy = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _groupAddPrivacy = previous;
+        _privacyBusy = false;
+      });
+      if (offerFlexIfRequired(context, e)) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
   Future<void> _toggleShowReadReceipts(bool enabled) async {
     if (_privacyBusy) return;
     setState(() {
@@ -731,6 +811,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ? const Icon(Icons.chevron_right_rounded)
                         : const Icon(Icons.lock_outline),
                     onTap: _privacyBusy ? null : _pickCallPrivacy,
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.group_add_outlined),
+                    title: const Text('Кто добавляет в группы'),
+                    subtitle: Text(groupAddPrivacyLabel(_groupAddPrivacy)),
+                    trailing: hasFlexFeature('group_add_privacy')
+                        ? const Icon(Icons.chevron_right_rounded)
+                        : const Icon(Icons.lock_outline),
+                    onTap: _privacyBusy ? null : _pickGroupAddPrivacy,
                   ),
                   const Divider(height: 1),
                   SwitchListTile(

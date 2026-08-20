@@ -418,6 +418,17 @@ async def update_user_profile(
     if request.paid_message_stars is not None:
         current_user.paid_message_stars = max(0, int(request.paid_message_stars))
     if request.avatar_url is not None:
+        from app.services.subscription_service import SubscriptionService
+
+        url = (request.avatar_url or "").strip().lower()
+        if url.endswith(".gif") and not SubscriptionService(db).has_feature(
+            current_user.id, "animated_avatar"
+        ):
+            SubscriptionService(db).require_feature(
+                current_user.id,
+                "animated_avatar",
+                "Анимированный аватар доступен с уровня 59",
+            )
         current_user.avatar_url = request.avatar_url
     if request.emoji_status is not None:
         from app.services.profile_style import normalize_emoji_status
@@ -552,6 +563,29 @@ async def update_user_profile(
                 "Ограничение звонков доступно с уровня 44",
             )
         current_user.call_privacy = next_privacy or PRIVACY_EVERYBODY
+    if request.group_add_privacy is not None:
+        from app.services.group_add_privacy import (
+            PRIVACY_EVERYBODY as GROUP_ADD_EVERYBODY,
+            normalize_group_add_privacy,
+        )
+        from app.services.subscription_service import SubscriptionService
+
+        try:
+            next_privacy = normalize_group_add_privacy(request.group_add_privacy)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="group_add_privacy must be one of: everybody, contacts, nobody",
+            )
+        if next_privacy != GROUP_ADD_EVERYBODY and not SubscriptionService(db).has_feature(
+            current_user.id, "group_add_privacy"
+        ):
+            SubscriptionService(db).require_feature(
+                current_user.id,
+                "group_add_privacy",
+                "Ограничение добавления в группы доступно с уровня 56",
+            )
+        current_user.group_add_privacy = next_privacy or GROUP_ADD_EVERYBODY
     if request.fcm_token is not None:
         current_user.fcm_token = request.fcm_token
     if request.voip_token is not None:

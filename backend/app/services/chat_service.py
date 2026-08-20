@@ -26,6 +26,7 @@ from app.models.conversation import (
 )
 from app.models.forum_topic import ForumTopic
 from app.models.chat_folder import ChatFolder, ChatFolderItem
+from app.models.chat_folder_share import ChatFolderShare
 from app.models.user import User
 from app.models.user_block import UserBlock
 from app.services.notification_service import NotificationService
@@ -354,9 +355,13 @@ class ChatService:
         if not others:
             raise ValueError("need_members")
         for uid in others:
-            self._get_user_or_404(uid)
+            target = self._get_user_or_404(uid)
             if self.has_block_between(creator_id, uid):
                 raise ValueError("user_blocked")
+            from app.services.group_add_privacy import can_add_user_to_group
+
+            if not can_add_user_to_group(self.db, creator_id, target):
+                raise ValueError("group_add_privacy_denied")
 
         conv = Conversation(
             type="group",
@@ -1715,9 +1720,13 @@ class ChatService:
                 continue
             if self._is_group_member_banned(conversation_id, uid):
                 raise ValueError("group_member_banned")
-            self._get_user_or_404(uid)
+            target = self._get_user_or_404(uid)
             if self.has_block_between(actor_id, uid):
                 raise ValueError("user_blocked")
+            from app.services.group_add_privacy import can_add_user_to_group
+
+            if not can_add_user_to_group(self.db, actor_id, target):
+                raise ValueError("group_add_privacy_denied")
             from app.services.paid_features_service import PaidFeaturesService
 
             PaidFeaturesService(self.db).assert_can_join_paid_group(uid, conv)
@@ -5095,3 +5104,64 @@ class ChatService:
             folder.position = pos
         self.db.flush()
         return [self._folder_payload(f) for f in ordered]
+
+    def share_folder(self, user_id: int, folder_id: int) -> dict:
+        if not self._has_feature(user_id, "folder_share"):
+            raise ValueError("folder_share_required")
+        folder = (
+            self.db.query(ChatFolder)
+            .filter(ChatFolder.id == folder_id, ChatFolder.user_id == user_id)
+            .first()
+        )
+        if not folder:
+            raise ValueError("folder_not_found")
+        row = (
+            self.db.query(ChatFolderShare)
+            .filter(
+                ChatFolderShare.folder_id == folder.id,
+                ChatFolderShare.revoked_at.is_(None),
+            )
+            .first()
+        )
+        if row is None:
+            row = ChatFolderShare(
+                token=secrets.token_urlsafe(16),
+                folder_id=folder.id,
+                owner_user_id=user_id,
+            )
+            self.db.add(row)
+            self.db.flush()
+        return {"token": row.token, "name": folder.name}
+
+    def import_shared_folder(self, user_id: int, token: str) -> dict:
+        if not self._has_feature(user_id, "folder_share"):
+            raise ValueError("folder_share_required")
+        key = (token or "").strip()
+        if not key:
+            raise ValueError("folder_share_not_found")
+        row = (
+            self.db.query(ChatFolderShare)
+            .filter(
+                ChatFolderShare.token == key,
+                ChatFolderShare.revoked_at.is_(None),
+            )
+            .first()
+        )
+        if not row:
+            raise ValueError("folder_share_not_found")
+        source = (
+            self.db.query(ChatFolder)
+            .filter(ChatFolder.id == row.folder_id)
+            .first()
+        )
+        if not source:
+            raise ValueError("folder_share_not_found")
+        payload = self._folder_payload(source)
+        return self.create_folder(
+            user_id,
+            payload["name"],
+            payload.get("icon"),
+            payload.get("conversation_ids") or [],
+            payload.get("channel_ids") or [],
+            payload.get("filters") or {},
+        )

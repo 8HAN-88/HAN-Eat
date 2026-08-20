@@ -76,6 +76,7 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Не удалось опубликовать сторис: $e')),
       );
@@ -146,7 +147,7 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
                 TextField(
                   controller: _captionController,
                   enabled: !_isPublishing,
-                  maxLength: 500,
+                  maxLength: hasFlexFeature('story_caption_plus') ? 1000 : 500,
                   style: const TextStyle(color: Colors.white),
                   decoration: const InputDecoration(
                     hintText: 'Добавить подпись',
