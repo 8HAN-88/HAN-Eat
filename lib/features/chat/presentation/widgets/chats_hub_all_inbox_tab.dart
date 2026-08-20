@@ -28,6 +28,7 @@ import '../../../channels/application/channels_list_refresh_provider.dart';
 import '../../../navigation/application/shell_chat_badge_refresh_provider.dart';
 import '../../../navigation/application/shell_tab_visibility.dart';
 import '../../application/chat_inbox_optimistic.dart';
+import '../../application/chat_tag.dart';
 import '../../application/chat_realtime_signals.dart';
 import '../../application/chat_thread_prefetch.dart';
 import '../../application/chats_hub_refresh_provider.dart';
@@ -78,6 +79,8 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
   bool _appPaused = false;
   List<ChatFolder> _folders = [];
   int? _selectedFolderId;
+  final List<ChatInboxTag> _chatTags = [];
+  int? _selectedTagId;
   /// Peer user ids from the Contacts list (for folder contacts/non_contacts).
   Set<int> _contactUserIds = {};
   bool _showGesturesHint = false;
@@ -995,6 +998,14 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
 
     List<ChatConversation> archivedChats = const [];
     try {
+      final rawTags = await ChatService.listChatTags();
+      if (mounted && seq == _loadSeq) {
+        _chatTags
+          ..clear()
+          ..addAll(rawTags.map(ChatInboxTag.fromJson));
+      }
+    } catch (_) {}
+    try {
       chats = await ChatService.listConversations();
       final expired = await _expireTimedMutes(chats);
       if (expired > 0) {
@@ -1383,6 +1394,11 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         .where(
           (e) => !(e is ChatInboxEntry && e.chat.isSaved),
         )
+        .where((e) {
+          final tagId = _selectedTagId;
+          if (tagId == null || e is! ChatInboxEntry) return true;
+          return e.chat.tagIds.contains(tagId);
+        })
         .toList();
     final q = widget.searchQuery.trim().toLowerCase();
     if (q.isEmpty) return base;
@@ -1695,6 +1711,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       if (!mounted) return;
       setState(() => _replaceInboxChat(chat));
       unawaited(ChatCacheService.upsertConversation(chat));
+      if (offerFlexIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -1887,6 +1904,164 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     }
   }
 
+  Future<void> _assignChatTags(ChatConversation chat) async {
+    if (!hasFlexFeature('chat_tags')) {
+      await showCreatorUpsell(context);
+      return;
+    }
+    var selected = {...chat.tagIds};
+    final created = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheet) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Метки «${chat.displayTitle}»',
+                      style: Theme.of(ctx).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    if (_chatTags.isEmpty)
+                      const Text('Пока нет меток. Создайте первую.'),
+                    for (final tag in _chatTags)
+                      CheckboxListTile(
+                        value: selected.contains(tag.id),
+                        onChanged: (v) {
+                          setSheet(() {
+                            if (v == true) {
+                              if (selected.length >= 3) return;
+                              selected.add(tag.id);
+                            } else {
+                              selected.remove(tag.id);
+                            }
+                          });
+                        },
+                        title: Text(tag.title),
+                        secondary: CircleAvatar(
+                          radius: 8,
+                          backgroundColor:
+                              chatTagColor(tag.color, Theme.of(ctx).colorScheme),
+                        ),
+                      ),
+                    TextButton.icon(
+                      onPressed: () async {
+                        final createdTag = await _createChatTag(ctx);
+                        if (createdTag == null) return;
+                        setSheet(() => selected.add(createdTag.id));
+                      },
+                      icon: const Icon(Icons.add),
+                      label: const Text('Новая метка'),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: const Text('Сохранить'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (created != true || !mounted) return;
+    try {
+      final ids = await ChatService.setConversationTags(
+        conversationId: chat.id,
+        tagIds: selected.toList(),
+      );
+      if (!mounted) return;
+      setState(() => _replaceInboxChat(chat.copyWith(tagIds: ids)));
+    } catch (e) {
+      if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<ChatInboxTag?> _createChatTag(BuildContext ctx) async {
+    final titleCtrl = TextEditingController();
+    var color = 'blue';
+    final ok = await showDialog<bool>(
+      context: ctx,
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (dialogCtx, setDialog) {
+            return AlertDialog(
+              title: const Text('Новая метка'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: titleCtrl,
+                    autofocus: true,
+                    maxLength: 40,
+                    decoration: const InputDecoration(labelText: 'Название'),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      for (final key in chatTagColorKeys)
+                        GestureDetector(
+                          onTap: () => setDialog(() => color = key),
+                          child: CircleAvatar(
+                            radius: 12,
+                            backgroundColor:
+                                chatTagColor(key, Theme.of(dialogCtx).colorScheme),
+                            child: color == key
+                                ? const Icon(Icons.check, size: 14, color: Colors.white)
+                                : null,
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogCtx, false),
+                  child: const Text('Отмена'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(dialogCtx, true),
+                  child: const Text('Создать'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    if (ok != true) return null;
+    try {
+      final raw = await ChatService.createChatTag(
+        title: titleCtrl.text.trim(),
+        color: color,
+      );
+      final tag = ChatInboxTag.fromJson(raw);
+      if (mounted) setState(() => _chatTags.add(tag));
+      return tag;
+    } catch (e) {
+      if (!mounted) return null;
+      if (offerFlexIfRequired(context, e)) return null;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+      return null;
+    }
+  }
+
   void _showChatHubActions(ChatConversation chat) {
     showTelegramActionSheet<void>(
       context: context,
@@ -1917,6 +2092,11 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                 icon: chat.pinned ? Icons.push_pin_outlined : Icons.push_pin,
                 title: chat.pinned ? 'Открепить' : 'Закрепить',
                 onTap: () => _togglePinFromHub(chat),
+              ),
+              TelegramActionSheetAction(
+                icon: Icons.label_outline,
+                title: 'Метка',
+                onTap: () => _assignChatTags(chat),
               ),
               TelegramActionSheetAction(
                 icon: Icons.mark_chat_unread_outlined,
@@ -2226,6 +2406,44 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                 onFolderLongPress: _onFolderLongPress,
               ),
             ),
+          if (widget.searchQuery.trim().isEmpty && _chatTags.isNotEmpty)
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: 40,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: FilterChip(
+                        label: const Text('Все метки'),
+                        selected: _selectedTagId == null,
+                        onSelected: (_) => setState(() => _selectedTagId = null),
+                      ),
+                    ),
+                    for (final tag in _chatTags)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: FilterChip(
+                          avatar: CircleAvatar(
+                            backgroundColor: chatTagColor(
+                              tag.color,
+                              Theme.of(context).colorScheme,
+                            ),
+                          ),
+                          label: Text(tag.title),
+                          selected: _selectedTagId == tag.id,
+                          onSelected: (_) => setState(
+                            () => _selectedTagId =
+                                _selectedTagId == tag.id ? null : tag.id,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
           if (_chatsPartialError != null)
             SliverToBoxAdapter(
               child: MaterialBanner(
@@ -2347,6 +2565,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                     chat: _savedChatTile,
                     draftText: _drafts[_savedChatTile.id]?.hubPreview,
                     draftHasReply: _drafts[_savedChatTile.id]?.hasReply ?? false,
+                    inboxTags: _chatTags,
                     onTap: _openSavedChat,
                     onLongPress: () => _showChatHubActions(_savedChatTile),
                   ),
@@ -2379,6 +2598,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                       chat: chat,
                       draftText: _drafts[chat.id]?.hubPreview,
                       draftHasReply: _drafts[chat.id]?.hasReply ?? false,
+                      inboxTags: _chatTags,
                       typingLabel: _typingLabelFor(chat.id),
                       onTap: () async {
                         unawaited(ChatThreadPrefetch.warm(chat.id));

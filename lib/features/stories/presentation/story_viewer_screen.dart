@@ -13,6 +13,7 @@ import '../../../services/auth_service.dart';
 import '../../../services/server_config.dart';
 import '../../../services/user_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../utils/media_download_helper.dart';
 import '../../../services/subscription_status_cache.dart';
 import '../../subscription/creator_upsell.dart';
 import '../../chat/application/chat_open_direct.dart';
@@ -114,6 +115,29 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
       _initVideo();
     } else {
       _startPhotoTimer();
+    }
+  }
+
+  Future<void> _saveCurrentStory() async {
+    if (!hasFlexFeature('story_download')) {
+      await showCreatorUpsell(context);
+      return;
+    }
+    final storyId = int.tryParse(_currentStory.id);
+    if (storyId == null) return;
+    try {
+      final url = await StoryService.requestSaveUrl(storyId);
+      if (!mounted) return;
+      await MediaDownloadHelper.saveMedia(
+        context,
+        rawUrl: url.isNotEmpty ? url : _currentStory.mediaUrl,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
     }
   }
 
@@ -605,6 +629,16 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  IconButton(
+                    tooltip: 'Сохранить',
+                    icon: Icon(
+                      hasFlexFeature('story_download')
+                          ? Icons.download_outlined
+                          : Icons.lock_outline,
+                      color: Colors.white,
+                    ),
+                    onPressed: () => unawaited(_saveCurrentStory()),
+                  ),
                   if (!story.isOwn)
                     IconButton(
                       tooltip: (AuthService.instance.currentUser?.storyStealth ??

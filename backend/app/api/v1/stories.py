@@ -342,6 +342,30 @@ async def mark_story_viewed(
     return _to_response(story, db, viewer_id=current_user.id)
 
 
+@router.post("/{story_id}/save")
+async def save_story(
+    story_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    story = _active_story_query(db).filter(Story.id == story_id).first()
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    _ensure_can_view(story, current_user, db)
+    from app.services.subscription_service import SubscriptionService
+
+    SubscriptionService(db).require_feature(
+        current_user.id,
+        "story_download",
+        "Сохранение сторис доступно с уровня 46",
+    )
+    return {
+        "media_url": story.media_url,
+        "media_type": story.media_type,
+        "thumbnail_url": story.thumbnail_url,
+    }
+
+
 @router.get("/{story_id}/viewers", response_model=StoryViewersResponse)
 async def list_story_viewers(
     story_id: int,

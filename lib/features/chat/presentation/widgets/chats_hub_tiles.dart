@@ -8,6 +8,7 @@ import '../../../../services/channel_service.dart';
 import '../../../../widgets/app_avatar.dart';
 import '../../../../widgets/telegram_ui.dart';
 import '../../../calls/call_message_labels.dart';
+import '../../application/chat_tag.dart';
 import 'chat_contact_bubble.dart';
 import 'chat_location_bubble.dart';
 import 'chat_story_reply_bubble.dart';
@@ -22,6 +23,7 @@ class ChatHubTile extends StatelessWidget {
     this.draftText,
     this.draftHasReply = false,
     this.typingLabel,
+    this.inboxTags = const [],
   });
 
   final ChatConversation chat;
@@ -33,6 +35,8 @@ class ChatHubTile extends StatelessWidget {
   final bool draftHasReply;
   /// Live typing preview from user SSE (`chat.typing`).
   final String? typingLabel;
+  /// Colored inbox tags assigned to this chat.
+  final List<ChatInboxTag> inboxTags;
 
   String _bodyPreview(ChatMessage? msg) =>
       chatHubBodyPreview(msg, isSaved: chat.isSaved);
@@ -177,6 +181,20 @@ class ChatHubTile extends StatelessWidget {
                             ),
                           ),
                         ),
+                        if (chat.tagIds.isNotEmpty)
+                          ...[
+                            for (final tag in inboxTags.where(
+                              (item) => chat.tagIds.contains(item.id),
+                            ).take(3))
+                              Padding(
+                                padding: const EdgeInsets.only(left: 4),
+                                child: CircleAvatar(
+                                  radius: 4,
+                                  backgroundColor:
+                                      chatTagColor(tag.color, scheme),
+                                ),
+                              ),
+                          ],
                         if (showOutgoingTicks) ...[
                           Icon(
                             last.isRead || last.isDelivered

@@ -112,6 +112,16 @@ class StoryService {
     return StoryDto.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
+  static Future<String> requestSaveUrl(int storyId) async {
+    final response = await http.post(
+      ApiService.uri('/stories/$storyId/save'),
+      headers: await ApiService.authHeaders(),
+    );
+    ApiService.ensureSuccess(response);
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return data['media_url'] as String? ?? '';
+  }
+
   static Future<void> deleteStory(int storyId) async {
     final response = await http.delete(
       ApiService.uri('/stories/$storyId'),

@@ -1584,6 +1584,66 @@ class ChatService {
     _ensureOk(response, 'Не удалось удалить контакт');
   }
 
+  static Future<void> setAutoTranslate({
+    required int conversationId,
+    required bool enabled,
+  }) async {
+    final uri = Uri.parse('$_base/chats/$conversationId/auto-translate');
+    final response = await _post(
+      uri,
+      body: jsonEncode({'enabled': enabled}),
+    );
+    _ensureOk(response, 'Не удалось сменить автоперевод');
+  }
+
+  static Future<List<Map<String, dynamic>>> listChatTags() async {
+    final uri = Uri.parse('$_base/chats/tags');
+    final response = await _get(uri);
+    _ensureOk(response, 'Не удалось загрузить метки');
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final items = data['items'] as List<dynamic>? ?? const [];
+    return [
+      for (final raw in items)
+        if (raw is Map<String, dynamic>) raw,
+    ];
+  }
+
+  static Future<Map<String, dynamic>> createChatTag({
+    required String title,
+    String color = 'blue',
+  }) async {
+    final uri = Uri.parse('$_base/chats/tags');
+    final response = await _post(
+      uri,
+      body: jsonEncode({'title': title, 'color': color}),
+    );
+    _ensureOk(response, 'Не удалось создать метку');
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  static Future<void> deleteChatTag(int tagId) async {
+    final uri = Uri.parse('$_base/chats/tags/$tagId');
+    final response = await _delete(uri);
+    _ensureOk(response, 'Не удалось удалить метку');
+  }
+
+  static Future<List<int>> setConversationTags({
+    required int conversationId,
+    required List<int> tagIds,
+  }) async {
+    final uri = Uri.parse('$_base/chats/$conversationId/tags');
+    final response = await _put(
+      uri,
+      body: jsonEncode({'tag_ids': tagIds}),
+    );
+    _ensureOk(response, 'Не удалось сохранить метки');
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return [
+      for (final raw in data['tag_ids'] as List<dynamic>? ?? const [])
+        if (raw is num) raw.toInt(),
+    ];
+  }
+
   static Future<void> setPinned({
     required int conversationId,
     required bool pinned,

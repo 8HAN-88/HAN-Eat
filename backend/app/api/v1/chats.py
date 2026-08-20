@@ -92,6 +92,11 @@ from app.schemas.chat import (
     GroupModerationLogItemResponse,
     GroupModerationLogResponse,
     UpdateChatFolderRequest,
+    AutoTranslateRequest,
+    ChatTagListResponse,
+    ChatTagResponse,
+    CreateChatTagRequest,
+    SetConversationTagsRequest,
     MessageListResponse,
     MessageResponse,
     PhoneContactMatchItem,
@@ -167,6 +172,18 @@ def _raise_flex_gate(code: str) -> None:
         "premium_sticker": (
             "premium_stickers",
             "Премиум-стикеры доступны с уровня 43",
+        ),
+        "pinned_chat_limit": (
+            "extra_pinned_chats",
+            "Больше пяти закреплённых чатов доступно с уровня 45",
+        ),
+        "auto_translate_required": (
+            "auto_translate",
+            "Автоперевод чата доступен с уровня 47",
+        ),
+        "chat_tags_required": (
+            "chat_tags",
+            "Метки чатов доступны с уровня 48",
         ),
     }
     item = mapping.get(code)
@@ -914,6 +931,12 @@ def _reply_keyboard_fields(member) -> dict:
     return keyboard_payload_from_member(member)
 
 
+def _conversation_tag_ids(db: Session, user_id: int, conversation_id: int) -> list[int]:
+    from app.services.chat_tag_service import tag_ids_for_conversation
+
+    return tag_ids_for_conversation(db, user_id, conversation_id)
+
+
 def _conversation_response(
     row: dict,
     svc: ChatService,
@@ -1056,6 +1079,8 @@ def _conversation_response(
         am_i_send_restricted_until=am_i_send_restricted_until,
         am_i_send_restriction_reason=am_i_send_restriction_reason,
         peer_blocked_by_me=peer_blocked_by_me,
+        auto_translate=bool(getattr(member, "auto_translate", False)) if member else False,
+        tag_ids=list(row.get("tag_ids") or _conversation_tag_ids(db, current_user.id, conv.id)),
         **_reply_keyboard_fields(member),
     )
 
@@ -4508,8 +4533,11 @@ async def pin_chat(
     try:
         svc.set_pinned(conversation_id, current_user.id, body.pinned)
         db.commit()
-    except ValueError:
+    except ValueError as exc:
         db.rollback()
+        code = str(exc)
+        if code == "pinned_chat_limit":
+            _raise_flex_gate(code)
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
     publish_user_event(
         current_user.id,
@@ -4520,6 +4548,122 @@ async def pin_chat(
         },
     )
     return {"ok": True, "pinned": body.pinned}
+
+
+@router.post("/chats/{conversation_id}/auto-translate")
+async def set_chat_auto_translate(
+    conversation_id: int,
+    body: AutoTranslateRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        svc.set_auto_translate(conversation_id, current_user.id, body.enabled)
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        code = str(exc)
+        if code == "auto_translate_required":
+            _raise_flex_gate(code)
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+    return {"ok": True, "enabled": bool(body.enabled)}
+
+
+@router.get("/chats/tags", response_model=ChatTagListResponse)
+async def list_chat_tags(
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.services.chat_tag_service import list_tags
+
+    return ChatTagListResponse(
+        items=[
+            ChatTagResponse(
+                id=tag.id,
+                title=tag.title,
+                color=tag.color,
+                sort_order=int(tag.sort_order or 0),
+            )
+            for tag in list_tags(db, current_user.id)
+        ]
+    )
+
+
+@router.post("/chats/tags", response_model=ChatTagResponse)
+async def create_chat_tag(
+    body: CreateChatTagRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.services.chat_tag_service import ChatTagError, create_tag
+    from app.services.subscription_service import SubscriptionService
+
+    SubscriptionService(db).require_feature(
+        current_user.id,
+        "chat_tags",
+        "Метки чатов доступны с уровня 48",
+    )
+    try:
+        tag = create_tag(db, current_user.id, body.title, body.color)
+        db.commit()
+        db.refresh(tag)
+    except ChatTagError as exc:
+        db.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    return ChatTagResponse(
+        id=tag.id,
+        title=tag.title,
+        color=tag.color,
+        sort_order=int(tag.sort_order or 0),
+    )
+
+
+@router.delete("/chats/tags/{tag_id}")
+async def delete_chat_tag(
+    tag_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.services.chat_tag_service import ChatTagError, delete_tag
+
+    try:
+        delete_tag(db, current_user.id, tag_id)
+        db.commit()
+    except ChatTagError as exc:
+        db.rollback()
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc))
+    return {"ok": True}
+
+
+@router.put("/chats/{conversation_id}/tags")
+async def set_chat_tags(
+    conversation_id: int,
+    body: SetConversationTagsRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.services.chat_tag_service import ChatTagError, set_conversation_tags
+    from app.services.subscription_service import SubscriptionService
+
+    svc = ChatService(db)
+    if not svc._is_member(conversation_id, current_user.id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+    if body.tag_ids:
+        SubscriptionService(db).require_feature(
+            current_user.id,
+            "chat_tags",
+            "Метки чатов доступны с уровня 48",
+        )
+    try:
+        ids = set_conversation_tags(
+            db, current_user.id, conversation_id, body.tag_ids
+        )
+        db.commit()
+    except ChatTagError as exc:
+        db.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    return {"ok": True, "tag_ids": ids}
 
 
 @router.post("/chats/{conversation_id}/mute")

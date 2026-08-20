@@ -167,6 +167,8 @@ class ConversationResponse(BaseModel):
     reply_keyboard_one_time: bool = False
     reply_keyboard_resize: bool = True
     reply_keyboard_placeholder: Optional[str] = None
+    auto_translate: bool = False
+    tag_ids: List[int] = []
 
     class Config:
         from_attributes = True
@@ -696,6 +698,33 @@ class ReorderChatFoldersRequest(BaseModel):
 class ChatFolderItemRequest(BaseModel):
     conversation_id: Optional[int] = None
     channel_id: Optional[int] = None
+
+
+class AutoTranslateRequest(BaseModel):
+    enabled: bool = True
+
+
+class ChatTagResponse(BaseModel):
+    id: int
+    title: str
+    color: str
+    sort_order: int = 0
+
+    class Config:
+        from_attributes = True
+
+
+class ChatTagListResponse(BaseModel):
+    items: List[ChatTagResponse]
+
+
+class CreateChatTagRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=40)
+    color: str = Field(default="blue", max_length=16)
+
+
+class SetConversationTagsRequest(BaseModel):
+    tag_ids: List[int] = Field(default_factory=list)
 
 
 MessageResponse.model_rebuild()

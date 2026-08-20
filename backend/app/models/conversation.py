@@ -98,6 +98,7 @@ class ConversationMember(Base):
     reply_keyboard_one_time = Column(Boolean, default=False, nullable=False)
     reply_keyboard_resize = Column(Boolean, default=True, nullable=False)
     reply_keyboard_placeholder = Column(String(64), nullable=True)
+    auto_translate = Column(Boolean, default=False, nullable=False)
     joined_at = Column(DateTime, server_default=func.now())
 
     __table_args__ = (
