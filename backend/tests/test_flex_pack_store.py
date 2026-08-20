@@ -369,3 +369,45 @@ def test_reschedule_requires_custom_emoji_access(db_session):
             user_id=buyer.id,
             content=f"[[e:{item.id}]]",
         )
+
+
+def test_cannot_pin_uninstalled_sticker_pack(db_session):
+    owner = _user(db_session, 1)
+    stranger = _user(db_session, 2)
+    _activate(db_session, 1, 71)
+    stickers = StickerService(db_session)
+    pack = stickers.create_pack(owner.id, "Закреп", True)
+    stickers.add_sticker(
+        user_id=owner.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/pin.webp",
+    )
+    db_session.commit()
+    with pytest.raises(ValueError, match="pack_not_installed"):
+        stickers.toggle_pinned_pack(user_id=stranger.id, pack_id=pack.id)
+    assert stickers.replace_pinned_packs(user_id=stranger.id, pack_ids=[pack.id]) == []
+    stickers.install_pack(stranger.id, pack.id)
+    db_session.commit()
+    ids, pinned = stickers.toggle_pinned_pack(user_id=stranger.id, pack_id=pack.id)
+    assert pinned is True
+    assert pack.id in ids
+
+
+def test_emoji_pack_rename_and_reorder(db_session):
+    owner = _user(db_session, 1)
+    stranger = _user(db_session, 2)
+    _activate(db_session, 1, 70)
+    emoji = EmojiPackService(db_session)
+    pack = emoji.create_pack(owner.id, "Первый")
+    a = emoji.add_emoji(user_id=owner.id, pack_id=pack.id, media_url="https://cdn.test/a.webp")
+    b = emoji.add_emoji(user_id=owner.id, pack_id=pack.id, media_url="https://cdn.test/b.webp")
+    db_session.commit()
+    with pytest.raises(ValueError, match="forbidden"):
+        emoji.update_pack(user_id=stranger.id, pack_id=pack.id, title="Чужой")
+    updated = emoji.update_pack(user_id=owner.id, pack_id=pack.id, title="Второй", is_public=False)
+    assert updated.title == "Второй"
+    assert updated.is_public is False
+    emoji.reorder_emojis(user_id=owner.id, pack_id=pack.id, emoji_ids=[b.id, a.id])
+    db_session.commit()
+    items = emoji.emojis_by_pack_ids([pack.id])[pack.id]
+    assert [row.id for row in items] == [b.id, a.id]

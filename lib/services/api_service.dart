@@ -328,10 +328,10 @@ class ApiService {
         );
       }
       if (resp.statusCode == 402) {
-        throw const ApiClientException(
-          statusCode: 402,
-          code: 'STARS_REQUIRED',
-          message: 'Недостаточно звёзд',
+        throw apiExceptionFromHttpResponse(
+          resp.statusCode,
+          resp.body,
+          fallback: 'Недостаточно звёзд',
         );
       }
       throw Exception('API error ${resp.statusCode}: ${resp.body}');

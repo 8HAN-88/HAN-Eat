@@ -75,6 +75,30 @@ class EmojiPackService:
         self.install_pack(user_id, pack.id, skip_purchase_check=True)
         return pack
 
+    def update_pack(
+        self,
+        *,
+        user_id: int,
+        pack_id: int,
+        title: Optional[str] = None,
+        is_public: Optional[bool] = None,
+    ) -> EmojiPack:
+        pack = self.get_pack(pack_id)
+        if not pack:
+            raise ValueError("pack_not_found")
+        if int(pack.owner_user_id) != int(user_id):
+            raise ValueError("forbidden")
+        if title is not None:
+            clean = title.strip()
+            if len(clean) < 2:
+                raise ValueError("invalid_title")
+            pack.title = clean[:120]
+        if is_public is not None:
+            pack.is_public = bool(is_public)
+        pack.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        self.db.flush()
+        return pack
+
     def add_emoji(
         self,
         *,
@@ -121,6 +145,42 @@ class EmojiPackService:
         if not row:
             raise ValueError("emoji_not_found")
         self.db.delete(row)
+        pack.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        self.db.flush()
+
+    def reorder_emojis(
+        self,
+        *,
+        user_id: int,
+        pack_id: int,
+        emoji_ids: List[int],
+    ) -> None:
+        pack = self.get_pack(pack_id)
+        if not pack:
+            raise ValueError("pack_not_found")
+        if int(pack.owner_user_id) != int(user_id):
+            raise ValueError("forbidden")
+        rows = (
+            self.db.query(CustomEmoji)
+            .filter(CustomEmoji.pack_id == pack_id)
+            .order_by(CustomEmoji.order_index.asc(), CustomEmoji.id.asc())
+            .all()
+        )
+        if not rows:
+            return
+        id_to_row = {row.id: row for row in rows}
+        unique_ids: List[int] = []
+        seen: set[int] = set()
+        for eid in emoji_ids:
+            if eid in id_to_row and eid not in seen:
+                unique_ids.append(eid)
+                seen.add(eid)
+        for row in rows:
+            if row.id not in seen:
+                unique_ids.append(row.id)
+                seen.add(row.id)
+        for idx, eid in enumerate(unique_ids, start=1):
+            id_to_row[eid].order_index = idx
         pack.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         self.db.flush()
 

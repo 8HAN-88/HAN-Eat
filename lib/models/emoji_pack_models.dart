@@ -62,6 +62,31 @@ class EmojiPack {
 
   bool get canUse => isOwned || isPurchased || isInstalled;
 
+  EmojiPack copyWith({
+    String? title,
+    bool? isPublic,
+    bool? isInstalled,
+    List<CustomEmojiItem>? items,
+    int? itemsCount,
+  }) {
+    return EmojiPack(
+      id: id,
+      title: title ?? this.title,
+      slug: slug,
+      ownerUserId: ownerUserId,
+      ownerName: ownerName,
+      isPublic: isPublic ?? this.isPublic,
+      isInstalled: isInstalled ?? this.isInstalled,
+      isOwned: isOwned,
+      isPurchased: isPurchased,
+      priceStars: priceStars,
+      feeStars: feeStars,
+      items: items ?? this.items,
+      itemsCount: itemsCount ?? this.itemsCount,
+      shareLink: shareLink,
+    );
+  }
+
   factory EmojiPack.fromJson(Map<String, dynamic> json) {
     final raw = json['items'] as List<dynamic>? ?? const [];
     return EmojiPack(

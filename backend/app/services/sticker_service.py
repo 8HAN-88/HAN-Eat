@@ -577,6 +577,32 @@ class StickerService:
         )
         return [int(pid) for (pid,) in rows]
 
+    def _can_pin_pack(self, user_id: int, pack_id: int) -> bool:
+        pack = self.db.query(StickerPack).filter(StickerPack.id == pack_id).first()
+        if not pack:
+            return False
+        if int(pack.owner_user_id) == int(user_id):
+            return True
+        installed = (
+            self.db.query(StickerPackInstall.id)
+            .filter(
+                StickerPackInstall.user_id == user_id,
+                StickerPackInstall.pack_id == pack_id,
+            )
+            .first()
+        )
+        if installed is not None:
+            return True
+        bought = (
+            self.db.query(StickerPackPurchase.id)
+            .filter(
+                StickerPackPurchase.user_id == user_id,
+                StickerPackPurchase.pack_id == pack_id,
+            )
+            .first()
+        )
+        return bought is not None
+
     def replace_pinned_packs(
         self, *, user_id: int, pack_ids: List[int]
     ) -> List[int]:
@@ -589,8 +615,7 @@ class StickerService:
                 continue
             if pid <= 0 or pid in seen:
                 continue
-            pack = self.db.query(StickerPack.id).filter(StickerPack.id == pid).first()
-            if not pack:
+            if not self._can_pin_pack(user_id, pid):
                 continue
             unique.append(pid)
             seen.add(pid)
@@ -620,6 +645,8 @@ class StickerService:
             next_ids = [pid for pid in current if pid != pack_id]
             pinned = False
         else:
+            if not self._can_pin_pack(user_id, pack_id):
+                raise ValueError("pack_not_installed")
             next_ids = [pack_id, *current]
             pinned = True
         return self.replace_pinned_packs(user_id=user_id, pack_ids=next_ids), pinned

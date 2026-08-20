@@ -957,9 +957,18 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
   }
 
   Future<void> _togglePinnedPack(int packId) async {
-    await ChatStickerPinnedPacksStore.toggle(packId);
-    await _loadPinnedPacks();
-    await _loadStickerPacks();
+    try {
+      await ChatStickerPinnedPacksStore.toggle(packId);
+      await _loadPinnedPacks();
+      await _loadStickerPacks();
+    } catch (e) {
+      if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
   }
 
   Future<void> _importPackByLink() async {

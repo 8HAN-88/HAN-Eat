@@ -654,5 +654,7 @@ async def toggle_pinned_sticker_pack(
         code = str(e)
         if code == "pack_not_found":
             raise HTTPException(status.HTTP_404_NOT_FOUND, code)
+        if code == "pack_not_installed":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, code)
         raise
     return {"ok": True, "pinned": pinned, "pack_ids": pack_ids}

@@ -59,6 +59,15 @@ class ListPriceIn(BaseModel):
     price_stars: int = Field(0, ge=0, le=25000)
 
 
+class UpdateEmojiPackIn(BaseModel):
+    title: str | None = Field(default=None, min_length=2, max_length=120)
+    is_public: bool | None = None
+
+
+class ReorderEmojisIn(BaseModel):
+    emoji_ids: list[int] = Field(default_factory=list)
+
+
 def _pack_out(
     pack,
     *,
@@ -243,6 +252,34 @@ def create_emoji_pack(
     return _bundle(svc, current_user.id, [pack]).items[0]
 
 
+@router.patch("/emoji/packs/{pack_id}", response_model=EmojiPackOut)
+def update_emoji_pack(
+    pack_id: int,
+    body: UpdateEmojiPackIn,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = EmojiPackService(db)
+    try:
+        pack = svc.update_pack(
+            user_id=current_user.id,
+            pack_id=pack_id,
+            title=body.title,
+            is_public=body.is_public,
+        )
+        db.commit()
+        db.refresh(pack)
+    except ValueError as exc:
+        db.rollback()
+        code = str(exc)
+        if code == "pack_not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, code)
+        if code == "forbidden":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, code)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, code) from exc
+    return _bundle(svc, current_user.id, [pack]).items[0]
+
+
 @router.post("/emoji/packs/{pack_id}/items", response_model=EmojiPackOut)
 def add_custom_emoji(
     pack_id: int,
@@ -295,6 +332,35 @@ def delete_custom_emoji(
             raise HTTPException(status.HTTP_403_FORBIDDEN, code)
         raise
     return {"ok": True}
+
+
+@router.post("/emoji/packs/{pack_id}/items/reorder")
+def reorder_custom_emojis(
+    pack_id: int,
+    body: ReorderEmojisIn,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = EmojiPackService(db)
+    try:
+        svc.reorder_emojis(
+            user_id=current_user.id,
+            pack_id=pack_id,
+            emoji_ids=body.emoji_ids,
+        )
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        code = str(exc)
+        if code == "pack_not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, code)
+        if code == "forbidden":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, code)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, code) from exc
+    pack = svc.get_pack(pack_id)
+    if not pack:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "pack_not_found")
+    return _bundle(svc, current_user.id, [pack]).items[0]
 
 
 @router.post("/emoji/packs/{pack_id}/list")

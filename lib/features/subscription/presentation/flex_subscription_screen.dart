@@ -18,6 +18,7 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
   FlexMe? _me;
   String? _error;
   bool _loading = true;
+  bool _fromCache = false;
   bool _busy = false;
   int? _hoverLevel;
   FlexFeature? _dragging;
@@ -41,10 +42,23 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
       setState(() {
         _me = me;
         _plan = me.plan;
+        _fromCache = false;
+        _error = null;
         _loading = false;
       });
     } catch (e) {
+      final cached = await FlexMeCache.load();
       if (!mounted) return;
+      if (cached != null) {
+        setState(() {
+          _me = cached;
+          _plan = cached.plan;
+          _fromCache = true;
+          _error = null;
+          _loading = false;
+        });
+        return;
+      }
       setState(() {
         _error = userVisibleError(e);
         _loading = false;
@@ -139,6 +153,18 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
 
   List<Widget> _ladder(FlexMe me) {
     final children = <Widget>[
+      if (_fromCache) ...[
+        Material(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+          child: const ListTile(
+            leading: Icon(Icons.wifi_off_outlined),
+            title: Text('Показаны сохранённые данные'),
+            subtitle: Text('Нет связи с сервером. Потяните вниз, чтобы обновить.'),
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
       _HeroCard(me: me),
       const SizedBox(height: 12),
       SegmentedButton<String>(

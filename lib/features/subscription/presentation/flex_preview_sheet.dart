@@ -63,9 +63,14 @@ Future<bool?> showFlexPreviewSheet(
               if (confirmDowngrade)
                 for (final f in preview.disabled)
                   Text('⚠️ ${f.title}')
-              else
-                for (final f in preview.features)
+              else ...[
+                for (final f in _previewGain(preview))
                   Text('✅ ${f.title}'),
+                if (_previewGain(preview).isEmpty)
+                  const Text(
+                    'На этом уровне новых функций нет — меняется только цена или период.',
+                  ),
+              ],
               if (!confirmDowngrade && preview.nextFeature != null) ...[
                 const SizedBox(height: 14),
                 Text(
@@ -109,4 +114,12 @@ Future<bool?> showFlexPreviewSheet(
       );
     },
   );
+}
+
+List<FlexFeature> _previewGain(FlexPreview preview) {
+  if ((preview.kind == 'upgrade' || preview.kind == 'new') &&
+      preview.added.isNotEmpty) {
+    return preview.added;
+  }
+  return preview.features;
 }

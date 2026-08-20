@@ -145,6 +145,44 @@ class EmojiPackService {
     return _parsePack(response, 'Не удалось создать эмодзи-пак');
   }
 
+  static Future<EmojiPack> updatePack({
+    required int packId,
+    String? title,
+    bool? isPublic,
+  }) async {
+    final uri = Uri.parse('$_base/emoji/packs/$packId');
+    final headers = await _headers();
+    final response = await HanEatHttpClient.withShared(
+      (client) => client.patch(
+        uri,
+        headers: headers,
+        body: jsonEncode({
+          if (title != null) 'title': title,
+          if (isPublic != null) 'is_public': isPublic,
+        }),
+      ),
+    );
+    return _parsePack(response, 'Не удалось обновить эмодзи-пак');
+  }
+
+  static Future<void> reorderEmojis({
+    required int packId,
+    required List<int> emojiIds,
+  }) async {
+    final uri = Uri.parse('$_base/emoji/packs/$packId/items/reorder');
+    final headers = await _headers();
+    final response = await HanEatHttpClient.withShared(
+      (client) => client.post(
+        uri,
+        headers: headers,
+        body: jsonEncode({'emoji_ids': emojiIds}),
+      ),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _throwError(response, 'Не удалось изменить порядок');
+    }
+  }
+
   static Future<EmojiPack> addEmoji({
     required int packId,
     required String mediaUrl,

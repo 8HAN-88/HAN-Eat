@@ -229,6 +229,92 @@ class _EmojiPackManageScreenState extends State<EmojiPackManageScreen> {
     }
   }
 
+  Future<void> _editPack() async {
+    final pack = _pack;
+    if (pack == null || !pack.isOwned) return;
+    final titleCtrl = TextEditingController(text: pack.title);
+    var isPublic = pack.isPublic;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setStateDialog) => AlertDialog(
+          title: const Text('Настройки пака'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleCtrl,
+                maxLength: 120,
+                decoration: const InputDecoration(labelText: 'Название'),
+              ),
+              SwitchListTile(
+                value: isPublic,
+                onChanged: (v) => setStateDialog(() => isPublic = v),
+                title: const Text('Публичный'),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Сохранить'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _saving = true);
+    try {
+      final updated = await EmojiPackService.updatePack(
+        packId: pack.id,
+        title: titleCtrl.text.trim(),
+        isPublic: isPublic,
+      );
+      if (!mounted) return;
+      setState(() {
+        _pack = updated;
+        _saving = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      if (offerFlexIfRequired(context, e)) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _onReorder(int oldIndex, int newIndex) async {
+    final pack = _pack;
+    if (pack == null || !pack.isOwned) return;
+    final items = [...pack.items];
+    if (newIndex > oldIndex) newIndex -= 1;
+    final moved = items.removeAt(oldIndex);
+    items.insert(newIndex, moved);
+    setState(() {
+      _pack = pack.copyWith(items: items, itemsCount: items.length);
+    });
+    try {
+      await EmojiPackService.reorderEmojis(
+        packId: pack.id,
+        emojiIds: items.map((e) => e.id).toList(),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+      await _load();
+    }
+  }
+
   Future<void> _uninstall() async {
     final pack = _pack;
     if (pack == null || pack.isOwned || !pack.isInstalled) return;
@@ -264,6 +350,12 @@ class _EmojiPackManageScreenState extends State<EmojiPackManageScreen> {
               onPressed: _saving ? null : _setPrice,
               icon: const Icon(Icons.sell_outlined),
               tooltip: 'Цена',
+            ),
+          if (pack?.isOwned == true)
+            IconButton(
+              onPressed: _saving ? null : _editPack,
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: 'Редактировать',
             ),
         ],
       ),
@@ -327,33 +419,66 @@ class _EmojiPackManageScreenState extends State<EmojiPackManageScreen> {
                         ),
                       ),
                     Expanded(
-                      child: GridView.builder(
-                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 88),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 5,
-                          mainAxisSpacing: 8,
-                          crossAxisSpacing: 8,
-                        ),
-                        itemCount: pack.items.length,
-                        itemBuilder: (_, i) {
-                          final item = pack.items[i];
-                          return InkWell(
-                            onLongPress: pack.isOwned
-                                ? () => _deleteEmoji(item)
-                                : null,
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(10),
-                              child: Image.network(
-                                ServerConfig.resolveMediaUrl(item.mediaUrl),
-                                fit: BoxFit.contain,
-                                errorBuilder: (_, __, ___) =>
-                                    const Icon(Icons.broken_image_outlined),
+                      child: pack.isOwned
+                          ? ReorderableListView.builder(
+                              padding: const EdgeInsets.fromLTRB(12, 8, 12, 88),
+                              itemCount: pack.items.length,
+                              onReorder: _onReorder,
+                              itemBuilder: (context, i) {
+                                final item = pack.items[i];
+                                return ListTile(
+                                  key: ValueKey('emoji_${item.id}'),
+                                  leading: ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.network(
+                                      ServerConfig.resolveMediaUrl(
+                                        item.mediaUrl,
+                                      ),
+                                      width: 48,
+                                      height: 48,
+                                      fit: BoxFit.contain,
+                                      errorBuilder: (_, __, ___) =>
+                                          const Icon(
+                                        Icons.broken_image_outlined,
+                                      ),
+                                    ),
+                                  ),
+                                  title: Text(
+                                    item.shortcode?.isNotEmpty == true
+                                        ? item.shortcode!
+                                        : '#${item.id}',
+                                  ),
+                                  trailing: IconButton(
+                                    onPressed: _saving
+                                        ? null
+                                        : () => _deleteEmoji(item),
+                                    icon: const Icon(Icons.delete_outline),
+                                  ),
+                                );
+                              },
+                            )
+                          : GridView.builder(
+                              padding: const EdgeInsets.fromLTRB(12, 8, 12, 88),
+                              gridDelegate:
+                                  const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 5,
+                                mainAxisSpacing: 8,
+                                crossAxisSpacing: 8,
                               ),
+                              itemCount: pack.items.length,
+                              itemBuilder: (_, i) {
+                                final item = pack.items[i];
+                                return ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Image.network(
+                                    ServerConfig.resolveMediaUrl(item.mediaUrl),
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (_, __, ___) =>
+                                        const Icon(Icons.broken_image_outlined),
+                                  ),
+                                );
+                              },
                             ),
-                          );
-                        },
-                      ),
                     ),
                   ],
                 ),
