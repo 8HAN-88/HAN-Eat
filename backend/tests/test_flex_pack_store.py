@@ -25,7 +25,13 @@ from app.models.conversation import (
     MessageEditHistory,
     ScheduledMessage,
 )
-from app.models.sticker import Sticker, StickerPack, StickerPackInstall, StickerPackPurchase
+from app.models.sticker import (
+    Sticker,
+    StickerPack,
+    StickerPackInstall,
+    StickerPackPin,
+    StickerPackPurchase,
+)
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.services.emoji_pack_service import EmojiPackService
@@ -58,6 +64,7 @@ def db_session():
             StickerPack.__table__,
             Sticker.__table__,
             StickerPackInstall.__table__,
+            StickerPackPin.__table__,
             StickerPackPurchase.__table__,
             EmojiPack.__table__,
             CustomEmoji.__table__,
@@ -288,3 +295,77 @@ def test_resolve_hides_private_emoji(db_session):
     assert priv_item.id not in visible
     assert emoji.can_view_emoji(owner.id, priv_item) is True
     assert emoji.can_use_emoji(stranger.id, pub_item) is False
+    assert emoji.get_public_pack_by_slug(public.slug.upper()) is not None
+
+
+def test_paid_sticker_send_needs_purchase(db_session):
+    seller = _user(db_session, 1)
+    buyer = _user(db_session, 2)
+    _activate(db_session, 1, 71)
+    stickers = StickerService(db_session)
+    pack = stickers.create_pack(seller.id, "Платные", True)
+    item = stickers.add_sticker(
+        user_id=seller.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/paid.webp",
+    )
+    PackMarketplaceService(db_session).list_sticker_pack(seller.id, pack.id, 50)
+    db_session.commit()
+    with pytest.raises(ValueError, match="pack_purchase_required"):
+        stickers.require_sticker_send(buyer.id, item.media_url)
+    PaidFeaturesService(db_session).add_stars(buyer.id, 50, tx_type="admin_adjust")
+    db_session.commit()
+    PackMarketplaceService(db_session).buy_sticker_pack(buyer.id, pack.id)
+    db_session.commit()
+    stickers.require_sticker_send(buyer.id, item.media_url)
+    stickers.uninstall_pack(buyer.id, pack.id)
+    db_session.commit()
+    mine = stickers.list_my_packs(buyer.id)
+    assert any(p.id == pack.id for p in mine)
+    stickers.require_sticker_send(buyer.id, item.media_url)
+
+
+def test_reschedule_requires_custom_emoji_access(db_session):
+    from datetime import datetime, timedelta, timezone
+
+    from app.services.chat_service import ChatService
+
+    seller = _user(db_session, 1)
+    buyer = _user(db_session, 2)
+    _activate(db_session, 1, 70)
+    _activate(db_session, 2, 69)
+    emoji = EmojiPackService(db_session)
+    pack = emoji.create_pack(seller.id, "Отложено")
+    item = emoji.add_emoji(
+        user_id=seller.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/sched.webp",
+    )
+    db_session.commit()
+    conv = Conversation(type="group", title="Чат")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add_all(
+        [
+            ConversationMember(conversation_id=conv.id, user_id=seller.id),
+            ConversationMember(conversation_id=conv.id, user_id=buyer.id),
+        ]
+    )
+    db_session.commit()
+    chat = ChatService(db_session)
+    when = datetime.now(timezone.utc) + timedelta(hours=1)
+    scheduled = chat.schedule_message(
+        conversation_id=conv.id,
+        sender_id=buyer.id,
+        msg_type="text",
+        content="позже",
+        send_at=when,
+    )
+    db_session.commit()
+    with pytest.raises(ValueError, match="custom_emoji_denied"):
+        chat.reschedule_message(
+            conversation_id=conv.id,
+            scheduled_message_id=scheduled.id,
+            user_id=buyer.id,
+            content=f"[[e:{item.id}]]",
+        )

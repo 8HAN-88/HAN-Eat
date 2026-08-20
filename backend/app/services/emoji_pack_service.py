@@ -168,9 +168,18 @@ class EmojiPackService:
             .filter(EmojiPackInstall.user_id == user_id)
             .subquery()
         )
+        purchased = (
+            self.db.query(EmojiPackPurchase.pack_id)
+            .filter(EmojiPackPurchase.user_id == user_id)
+            .subquery()
+        )
         return (
             self.db.query(EmojiPack)
-            .filter((EmojiPack.owner_user_id == user_id) | EmojiPack.id.in_(installed))
+            .filter(
+                (EmojiPack.owner_user_id == user_id)
+                | EmojiPack.id.in_(installed)
+                | EmojiPack.id.in_(purchased)
+            )
             .order_by(EmojiPack.updated_at.desc(), EmojiPack.id.desc())
             .all()
         )
@@ -193,7 +202,7 @@ class EmojiPackService:
         return q.order_by(EmojiPack.updated_at.desc(), EmojiPack.id.desc()).limit(limit).all()
 
     def get_public_pack_by_slug(self, slug: str) -> Optional[EmojiPack]:
-        clean = (slug or "").strip()
+        clean = (slug or "").strip().lower()
         if not clean:
             return None
         return (

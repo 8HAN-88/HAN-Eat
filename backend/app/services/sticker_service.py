@@ -60,11 +60,17 @@ class StickerService:
             .filter(StickerPack.id == sticker.pack_id)
             .first()
         )
-        if not pack or not bool(getattr(pack, "is_premium", False)):
+        if not pack:
             return
         if int(pack.owner_user_id) == int(user_id):
             return
-        self._require_premium_stickers(user_id)
+        if int(getattr(pack, "price_stars", 0) or 0) > 0:
+            from app.services.pack_marketplace_service import PackMarketplaceService
+
+            if not PackMarketplaceService(self.db).has_sticker_access(user_id, pack):
+                raise ValueError("pack_purchase_required")
+        if bool(getattr(pack, "is_premium", False)):
+            self._require_premium_stickers(user_id)
 
     def create_pack(
         self, user_id: int, title: str, is_public: bool, is_premium: bool = False
@@ -305,11 +311,17 @@ class StickerService:
             .filter(StickerPackInstall.user_id == user_id)
             .subquery()
         )
+        purchased_pack_ids = (
+            self.db.query(StickerPackPurchase.pack_id)
+            .filter(StickerPackPurchase.user_id == user_id)
+            .subquery()
+        )
         packs = (
             self.db.query(StickerPack)
             .filter(
                 (StickerPack.owner_user_id == user_id)
                 | StickerPack.id.in_(installed_pack_ids)
+                | StickerPack.id.in_(purchased_pack_ids)
             )
             .order_by(
                 StickerPack.owner_user_id.desc(),

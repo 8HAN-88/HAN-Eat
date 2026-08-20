@@ -265,8 +265,14 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
                               ? item.shortcode!
                               : '#${item.id}',
                         ),
-                        onPressed: () =>
-                            Navigator.pop(ctx, customEmojiReaction(item.id)),
+                        onPressed: () {
+                          if (!hasFlexFeature('custom_emoji')) {
+                            Navigator.pop(ctx);
+                            showCreatorUpsell(context);
+                            return;
+                          }
+                          Navigator.pop(ctx, customEmojiReaction(item.id));
+                        },
                       ),
                     ActionChip(
                       label: const Text('Убрать'),
@@ -469,7 +475,18 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
                               const Text('рядом с именем'),
                             ],
                           ),
-                    onTap: _loading ? null : _pickEmojiStatus,
+                    trailing: hasFlexFeature('emoji_status')
+                        ? null
+                        : const Icon(Icons.lock_outline),
+                    onTap: _loading
+                        ? null
+                        : () {
+                            if (!hasFlexFeature('emoji_status')) {
+                              showCreatorUpsell(context);
+                              return;
+                            }
+                            _pickEmojiStatus();
+                          },
                   ),
                   const SizedBox(height: 8),
                   Text(

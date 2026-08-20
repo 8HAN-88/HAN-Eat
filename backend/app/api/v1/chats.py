@@ -2485,6 +2485,14 @@ async def send_message(
                     "message": "Этот эмодзи недоступен — купите пак",
                 },
             )
+        if code == "pack_purchase_required":
+            raise HTTPException(
+                status.HTTP_402_PAYMENT_REQUIRED,
+                {
+                    "code": "pack_purchase_required",
+                    "message": "Сначала купите пак",
+                },
+            )
         if code == "group_write_restricted":
             raise HTTPException(status.HTTP_403_FORBIDDEN, code)
         if code == "group_user_restricted":
@@ -2518,8 +2526,11 @@ async def send_message(
             )
         if code == "paid_message_fee_failed":
             raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                "paid_message_fee_failed",
+                status.HTTP_402_PAYMENT_REQUIRED,
+                {
+                    "code": "STARS_REQUIRED",
+                    "message": "Недостаточно звёзд для платного сообщения",
+                },
             )
         raise
     except HTTPException:
@@ -2786,6 +2797,14 @@ async def schedule_message(
                     "message": "Этот эмодзи недоступен — купите пак",
                 },
             )
+        if code == "pack_purchase_required":
+            raise HTTPException(
+                status.HTTP_402_PAYMENT_REQUIRED,
+                {
+                    "code": "pack_purchase_required",
+                    "message": "Сначала купите пак",
+                },
+            )
         if code in (
             "empty_message",
             "missing_media",
@@ -2920,6 +2939,23 @@ async def reschedule_scheduled_message(
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code == "online_delivery_locked":
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        if code == "custom_emoji_denied":
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                {
+                    "code": "custom_emoji_denied",
+                    "message": "Этот эмодзи недоступен — купите пак",
+                },
+            )
+        if code == "pack_purchase_required":
+            raise HTTPException(
+                status.HTTP_402_PAYMENT_REQUIRED,
+                {
+                    "code": "pack_purchase_required",
+                    "message": "Сначала купите пак",
+                },
+            )
+        _raise_flex_gate(code)
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
     return _scheduled_message_response(item)
 

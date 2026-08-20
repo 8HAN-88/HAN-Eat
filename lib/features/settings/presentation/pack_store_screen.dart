@@ -96,7 +96,7 @@ class _PackStoreScreenState extends State<PackStoreScreen>
     final me = AuthService.instance.currentUser?.id;
     if (me != null && me == pack.ownerUserId) return;
     if (_busy.contains(_key('s', pack.id))) return;
-    if (pack.priceStars <= 0) {
+    if (pack.priceStars <= 0 || pack.isPurchased) {
       setState(() => _busy.add(_key('s', pack.id)));
       try {
         await StickerService.installPack(pack.id);
@@ -144,7 +144,7 @@ class _PackStoreScreenState extends State<PackStoreScreen>
     final me = AuthService.instance.currentUser?.id;
     if (me != null && me == pack.ownerUserId) return;
     if (_busy.contains(_key('e', pack.id))) return;
-    if (pack.priceStars <= 0) {
+    if (pack.priceStars <= 0 || pack.isPurchased) {
       setState(() => _busy.add(_key('e', pack.id)));
       try {
         await EmojiPackService.installPack(pack.id);
@@ -318,6 +318,13 @@ class _PackStoreScreenState extends State<PackStoreScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('Магазин паков'),
+        actions: [
+          IconButton(
+            tooltip: 'Кошелёк Stars',
+            onPressed: () => context.push(StarsWalletRoute.path),
+            icon: const Icon(Icons.stars_outlined),
+          ),
+        ],
         bottom: TabBar(
           controller: _tabs,
           tabs: const [
@@ -405,7 +412,8 @@ class _PackStoreScreenState extends State<PackStoreScreen>
           priceStars: pack.priceStars,
           feeStars: pack.feeStars,
           thumbs: pack.stickers.map((s) => s.mediaUrl).toList(),
-          owned: mine || pack.isPurchased || pack.isInstalled,
+          owned: mine || pack.isInstalled,
+          reinstall: pack.isPurchased && !pack.isInstalled,
           busy: _busy.contains(_key('s', pack.id)),
           onOpen: () async {
             await context.push(StickerPackPreviewRoute.pathFor(pack.slug));
@@ -444,7 +452,8 @@ class _PackStoreScreenState extends State<PackStoreScreen>
           priceStars: pack.priceStars,
           feeStars: pack.feeStars,
           thumbs: pack.items.map((s) => s.mediaUrl).toList(),
-          owned: mine || pack.isPurchased || pack.isInstalled,
+          owned: mine || pack.isInstalled,
+          reinstall: pack.isPurchased && !pack.isInstalled,
           busy: _busy.contains(_key('e', pack.id)),
           onOpen: () async {
             await context.push(EmojiPackPreviewRoute.pathFor(pack.slug));
@@ -459,8 +468,16 @@ class _PackStoreScreenState extends State<PackStoreScreen>
   Widget _mineList() {
     if (_loading) return _loadingList();
     if (_error != null) return _errorList();
+    final me = AuthService.instance.currentUser?.id ?? -1;
     final ownedStickers =
-        _myStickers.where((p) => p.isOwned || p.ownerUserId == (AuthService.instance.currentUser?.id ?? -1)).toList();
+        _myStickers.where((p) => p.isOwned || p.ownerUserId == me).toList();
+    final boughtStickers = _myStickers
+        .where((p) => !p.isOwned && p.ownerUserId != me && (p.isPurchased || p.isInstalled))
+        .toList();
+    final ownedEmojis = _myEmojis.where((p) => p.isOwned).toList();
+    final boughtEmojis = _myEmojis
+        .where((p) => !p.isOwned && (p.isPurchased || p.isInstalled))
+        .toList();
     final items = <Widget>[
       const ListTile(
         title: Text('Мои стикерпаки'),
@@ -491,9 +508,9 @@ class _PackStoreScreenState extends State<PackStoreScreen>
         title: Text('Мои эмодзи-паки'),
         subtitle: Text('Публикация с уровня 70'),
       ),
-      if (_myEmojis.where((p) => p.isOwned).isEmpty)
+      if (ownedEmojis.isEmpty)
         const ListTile(title: Text('Пока нет своих эмодзи-паков')),
-      for (final pack in _myEmojis.where((p) => p.isOwned))
+      for (final pack in ownedEmojis)
         ListTile(
           leading: const Icon(Icons.emoji_emotions_outlined),
           title: Text(pack.title),
@@ -507,6 +524,45 @@ class _PackStoreScreenState extends State<PackStoreScreen>
             await _load();
           },
         ),
+      if (boughtStickers.isNotEmpty || boughtEmojis.isNotEmpty) ...[
+        const Divider(),
+        const ListTile(
+          title: Text('Купленные'),
+          subtitle: Text('Можно установить снова без повторной оплаты'),
+        ),
+        for (final pack in boughtStickers)
+          ListTile(
+            leading: const Icon(Icons.sticky_note_2_outlined),
+            title: Text(pack.title),
+            subtitle: Text(pack.isInstalled ? 'Установлен' : 'Снят · установить снова'),
+            trailing: pack.isInstalled
+                ? null
+                : TextButton(
+                    onPressed: () => _buySticker(pack),
+                    child: const Text('Установить'),
+                  ),
+            onTap: () async {
+              await context.push(StickerPackPreviewRoute.pathFor(pack.slug));
+              if (mounted) await _load();
+            },
+          ),
+        for (final pack in boughtEmojis)
+          ListTile(
+            leading: const Icon(Icons.emoji_emotions_outlined),
+            title: Text(pack.title),
+            subtitle: Text(pack.isInstalled ? 'Установлен' : 'Снят · установить снова'),
+            trailing: pack.isInstalled
+                ? null
+                : TextButton(
+                    onPressed: () => _buyEmoji(pack),
+                    child: const Text('Установить'),
+                  ),
+            onTap: () async {
+              await context.push(EmojiPackPreviewRoute.pathFor(pack.slug));
+              if (mounted) await _load();
+            },
+          ),
+      ],
     ];
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -561,6 +617,7 @@ class _PackCard extends StatelessWidget {
     required this.feeStars,
     required this.thumbs,
     required this.owned,
+    this.reinstall = false,
     required this.busy,
     required this.onOpen,
     this.onBuy,
@@ -573,6 +630,7 @@ class _PackCard extends StatelessWidget {
   final int feeStars;
   final List<String> thumbs;
   final bool owned;
+  final bool reinstall;
   final bool busy;
   final VoidCallback onOpen;
   final VoidCallback? onBuy;
@@ -644,9 +702,11 @@ class _PackCard extends StatelessWidget {
                   child: Text(
                     owned
                         ? 'Установлен'
-                        : (priceStars > 0
-                            ? 'Купить $priceStars ★'
-                            : 'Установить'),
+                        : (reinstall
+                            ? 'Установить'
+                            : (priceStars > 0
+                                ? 'Купить $priceStars ★'
+                                : 'Установить')),
                   ),
                 ),
               ),

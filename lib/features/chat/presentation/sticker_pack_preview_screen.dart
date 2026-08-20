@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../models/sticker_models.dart';
 import '../../../services/server_config.dart';
@@ -89,12 +90,38 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
     }
   }
 
+  Future<void> _uninstall() async {
+    final pack = _pack;
+    if (pack == null || pack.isOwned || !pack.isInstalled) return;
+    setState(() => _busy = true);
+    try {
+      await StickerService.uninstallPack(pack.id);
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final pack = _pack;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Предпросмотр пака'),
+        actions: [
+          if (pack?.shareLink != null)
+            IconButton(
+              onPressed: () => Share.share(pack!.shareLink!),
+              icon: const Icon(Icons.share_outlined),
+              tooltip: 'Поделиться паком',
+            ),
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -161,18 +188,27 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
                         child: SizedBox(
                           width: double.infinity,
                           child: FilledButton.icon(
-                            onPressed:
-                                _busy || pack.isInstalled ? null : _install,
-                            icon:
-                                const Icon(Icons.download_for_offline_outlined),
+                            onPressed: _busy
+                                ? null
+                                : (pack.isOwned
+                                    ? null
+                                    : pack.isInstalled
+                                        ? _uninstall
+                                        : _install),
+                            icon: Icon(
+                              pack.isInstalled && !pack.isOwned
+                                  ? Icons.remove_circle_outline
+                                  : Icons.download_for_offline_outlined,
+                            ),
                             label: Text(
-                              pack.isInstalled
-                                  ? 'Уже установлен'
-                                  : (pack.priceStars > 0 &&
-                                          !pack.isOwned &&
-                                          !pack.isPurchased)
-                                      ? 'Купить ${pack.priceStars} ★'
-                                      : 'Добавить стикерпак',
+                              pack.isOwned
+                                  ? 'Ваш пак'
+                                  : pack.isInstalled
+                                      ? 'Удалить из своих'
+                                      : (pack.priceStars > 0 &&
+                                              !pack.isPurchased)
+                                          ? 'Купить ${pack.priceStars} ★'
+                                          : 'Добавить стикерпак',
                             ),
                           ),
                         ),

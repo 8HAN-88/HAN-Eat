@@ -35,6 +35,7 @@ import '../../../../widgets/chat_sticker_tile.dart';
 import '../../../../services/auth_service.dart';
 import '../sticker_pack_manage_screen.dart';
 import '../sticker_pack_preview_screen.dart';
+import '../../../settings/presentation/emoji_pack_preview_screen.dart';
 import '../../../settings/presentation/pack_store_screen.dart';
 import 'chat_location_bubble.dart';
 import 'chat_poll_form_panel.dart';
@@ -987,34 +988,60 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
       ),
     );
     if (!mounted || input == null || input.trim().isEmpty) return;
-    final slug = _extractStickerSlug(input.trim());
-    if (slug.isEmpty) {
+    final parsed = _extractPackLink(input.trim());
+    if (parsed == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Не удалось распознать ссылку на пак')),
       );
       return;
     }
-    final installed = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => StickerPackPreviewScreen(slug: slug),
-      ),
-    );
+    final installed = parsed.kind == 'emoji'
+        ? await Navigator.of(context).push<bool>(
+            MaterialPageRoute(
+              builder: (_) => EmojiPackPreviewScreen(slug: parsed.slug),
+            ),
+          )
+        : await Navigator.of(context).push<bool>(
+            MaterialPageRoute(
+              builder: (_) => StickerPackPreviewScreen(slug: parsed.slug),
+            ),
+          );
     if (installed == true && mounted) {
       await _loadStickerPacks();
     }
   }
 
-  String _extractStickerSlug(String raw) {
+  ({String kind, String slug})? _extractPackLink(String raw) {
     final text = raw.trim();
-    if (!text.contains('/')) return text.toLowerCase();
-    final uri = Uri.tryParse(text);
-    if (uri == null) return '';
-    if (uri.pathSegments.isEmpty) return '';
-    final idx = uri.pathSegments.indexOf('stickers');
-    if (idx >= 0 && idx + 1 < uri.pathSegments.length) {
-      return uri.pathSegments[idx + 1].toLowerCase();
+    if (text.isEmpty) return null;
+    if (!text.contains('/')) {
+      return (kind: 'sticker', slug: text.toLowerCase());
     }
-    return uri.pathSegments.last.toLowerCase();
+    final uri = Uri.tryParse(text);
+    if (uri == null) return null;
+    final host = uri.host.toLowerCase();
+    if (host == 'emoji' && uri.pathSegments.isNotEmpty) {
+      return (kind: 'emoji', slug: uri.pathSegments.first.toLowerCase());
+    }
+    if (host == 'stickers' && uri.pathSegments.isNotEmpty) {
+      return (kind: 'sticker', slug: uri.pathSegments.first.toLowerCase());
+    }
+    if (uri.pathSegments.isEmpty) return null;
+    final emojiIdx = uri.pathSegments.indexOf('emoji');
+    if (emojiIdx >= 0 && emojiIdx + 1 < uri.pathSegments.length) {
+      return (
+        kind: 'emoji',
+        slug: uri.pathSegments[emojiIdx + 1].toLowerCase(),
+      );
+    }
+    final stickerIdx = uri.pathSegments.indexOf('stickers');
+    if (stickerIdx >= 0 && stickerIdx + 1 < uri.pathSegments.length) {
+      return (
+        kind: 'sticker',
+        slug: uri.pathSegments[stickerIdx + 1].toLowerCase(),
+      );
+    }
+    return (kind: 'sticker', slug: uri.pathSegments.last.toLowerCase());
   }
 
   void _selectStickerView(String view) {

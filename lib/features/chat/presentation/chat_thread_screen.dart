@@ -8429,22 +8429,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           hideName: draft.hideName,
           idempotencyKey: idem,
         );
-        if (mounted) unawaited(_pollNew());
+        if (!mounted) return;
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              draft.hideName
+                  ? 'Подарок ${gift.emoji} отправлен анонимно'
+                  : 'Подарок ${gift.emoji} отправлен',
+            ),
+          ),
+        );
+        unawaited(_pollNew());
       } catch (e) {
         if (mounted) await showStarsRequiredSnack(context, e);
       } finally {
         if (mounted) setState(() => _sendingStarGift = false);
       }
     }());
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          draft.hideName
-              ? 'Подарок ${gift.emoji} отправлен анонимно'
-              : 'Подарок ${gift.emoji} отправлен',
-        ),
-      ),
-    );
   }
 
   int? _userGiftIdFromMessage(ChatMessage msg) {
@@ -8514,11 +8515,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (ok != true || !mounted) return;
     setState(() => _giftActionMessageIds.add(msg.id));
     _patchLocalGiftStatus(msg, 'converted');
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('+$stars ★ на балансе')),
-    );
     try {
       await PaidFeaturesService.convertGift(giftId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('+$stars ★ на балансе')),
+      );
     } catch (e) {
       if (!mounted) return;
       final idx = _messages.indexWhere((m) => m.id == msg.id);
@@ -8584,11 +8586,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (ok != true || !mounted) return;
     setState(() => _giftActionMessageIds.add(msg.id));
     _patchLocalGiftStatus(msg, 'refunded');
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('+$stars ★ возвращены')),
-    );
     try {
       await PaidFeaturesService.refundGift(giftId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('+$stars ★ возвращены')),
+      );
     } catch (e) {
       if (!mounted) return;
       final idx = _messages.indexWhere((m) => m.id == msg.id);
@@ -8650,11 +8653,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (giftId == null || _giftActionMessageIds.contains(msg.id)) return;
     setState(() => _giftActionMessageIds.add(msg.id));
     _patchLocalGiftStatus(msg, 'kept');
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Подарок сохранён в профиле')),
-    );
     try {
       await PaidFeaturesService.keepGift(giftId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Подарок сохранён в профиле')),
+      );
     } catch (e) {
       if (!mounted) return;
       final idx = _messages.indexWhere((m) => m.id == msg.id);
@@ -8714,9 +8718,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
     if (payload == null || !mounted) return;
     final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(
-      SnackBar(content: Text('Отправлено ${payload.amount} ★')),
-    );
     unawaited(() async {
       try {
         final result = await PaidFeaturesService.donate(
@@ -8724,7 +8725,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           amountStars: payload.amount,
           message: payload.message,
         );
-        if (mounted && result.messageId != null) {
+        if (!mounted) return;
+        messenger.showSnackBar(
+          SnackBar(content: Text('Отправлено ${payload.amount} ★')),
+        );
+        if (result.messageId != null) {
           unawaited(_pollNew());
         }
       } catch (e) {
@@ -13213,7 +13218,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return loc?.previewText ?? '📍 Геопозиция';
     }
     final text = item.content.trim();
-    return text.isEmpty ? item.type.toUpperCase() : text;
+    return text.isEmpty
+        ? item.type.toUpperCase()
+        : previewTextWithCustomEmoji(text);
   }
 
   Future<void> _openScheduledMessagesManager() async {
@@ -13335,6 +13342,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                           );
                                         }
                                         if (!mounted) return;
+                                        if (offerFlexIfRequired(context, e)) {
+                                          return;
+                                        }
+                                        if (offerPackStoreIfRequired(
+                                            context, e)) {
+                                          return;
+                                        }
+                                        if (isStarsRequiredError(e)) {
+                                          await showStarsRequiredSnack(
+                                            context,
+                                            e,
+                                          );
+                                          return;
+                                        }
                                         showErrorSnackBar(
                                           context,
                                           e,
@@ -13385,6 +13406,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                             if (idx >= 0) items[idx] = item;
                                           });
                                           if (!mounted) return;
+                                          if (offerFlexIfRequired(context, e)) {
+                                            return;
+                                          }
+                                          if (offerPackStoreIfRequired(
+                                              context, e)) {
+                                            return;
+                                          }
+                                          if (isStarsRequiredError(e)) {
+                                            await showStarsRequiredSnack(
+                                              context,
+                                              e,
+                                            );
+                                            return;
+                                          }
                                           showErrorSnackBar(
                                             context,
                                             e,

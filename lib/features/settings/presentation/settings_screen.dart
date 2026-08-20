@@ -720,6 +720,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         onTap: () => context.push(StarsWalletRoute.path),
       ),
       _SettingsItem(
+        title: 'Подарки и витрина',
+        icon: Icons.card_giftcard_outlined,
+        subtitle: 'Коллекционные подарки: свои и на продажу',
+        onTap: () => context.push(StarGiftsMarketplaceRoute.path),
+      ),
+      _SettingsItem(
         title: 'Мои боты',
         icon: Icons.smart_toy_outlined,
         subtitle: 'Создание ботов, команды и подключение к чатам',

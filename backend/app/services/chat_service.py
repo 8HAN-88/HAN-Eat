@@ -3812,9 +3812,14 @@ class ChatService:
             if item.type == "text":
                 if not text:
                     raise ValueError("empty_content")
+                from app.services.emoji_pack_service import EmojiPackService
+
+                EmojiPackService(self.db).require_send_tokens(user_id, text)
                 item.content = text[:4000]
             elif item.type in ("image", "video", "video_note", "file"):
-                # Caption edit for media scheduled messages.
+                from app.services.emoji_pack_service import EmojiPackService
+
+                EmojiPackService(self.db).require_send_tokens(user_id, text)
                 item.content = text[:4000]
             else:
                 raise ValueError("content_locked")
