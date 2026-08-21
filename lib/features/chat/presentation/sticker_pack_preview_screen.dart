@@ -63,9 +63,11 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
       final ok = await confirmStarsSpend(
         context,
         title: 'Купить «${pack.title}»',
-        body: pack.ownerName.trim().isEmpty
-            ? '${pack.priceStars} ★'
-            : 'Автор ${pack.ownerName} · комиссия ${pack.feeStars} ★',
+        body: [
+          if (pack.ownerName.trim().isNotEmpty) 'Автор ${pack.ownerName}',
+          '${pack.priceStars} ★',
+          if (pack.feeStars > 0) 'комиссия ${pack.feeStars} ★',
+        ].join(' · '),
         amountStars: pack.priceStars,
         confirmLabel: 'Купить',
       );

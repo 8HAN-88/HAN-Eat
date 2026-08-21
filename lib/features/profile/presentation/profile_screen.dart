@@ -599,12 +599,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   Future<void> _buyProfileGift(UserStarGift gift) async {
     final price = gift.listedStars ?? 0;
     if (price <= 0) return;
+    final fee = PaidFeaturesService.resaleFeeStars(price);
     final ok = await confirmStarsSpend(
       context,
       title: 'Купить ${gift.title}',
-      body: gift.serialLabel.isNotEmpty
-          ? '${gift.emoji} ${gift.serialLabel}'
-          : gift.emoji,
+      body: [
+        gift.serialLabel.isNotEmpty
+            ? '${gift.emoji} ${gift.serialLabel}'
+            : gift.emoji,
+        if (fee > 0) 'Комиссия площадки $fee ★ (уже в цене)',
+      ].join('\n'),
       amountStars: price,
       confirmLabel: 'Купить',
     );
@@ -627,6 +631,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     final sender = gift.senderLabel;
     final me = AuthService.instance.currentUser?.id;
     final canBuy = gift.isListed && me != null && me != gift.ownerId;
+    final listedPrice = gift.listedStars ?? 0;
+    final listedFee = PaidFeaturesService.resaleFeeStars(listedPrice);
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -683,7 +689,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 if (gift.isListed) ...[
                   const SizedBox(height: 12),
                   Text(
-                    'В продаже · ${gift.listedStars} ★',
+                    listedFee > 0
+                        ? 'В продаже · $listedPrice ★ · комиссия $listedFee ★'
+                        : 'В продаже · $listedPrice ★',
                     style: TextStyle(
                       color: scheme.secondary,
                       fontWeight: FontWeight.w800,

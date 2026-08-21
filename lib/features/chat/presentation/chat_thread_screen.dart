@@ -9095,7 +9095,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final contact = ChatContactPayload.tryParse(msg.content);
     if (contact != null) return '👤 ${contact.displayName}';
     final t = msg.content.trim();
-    return t.isEmpty ? 'Сообщение' : t;
+    if (t.isEmpty) return 'Сообщение';
+    return previewTextWithCustomEmoji(t);
   }
 
   String _formatRecordDuration(Duration d) {

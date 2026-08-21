@@ -471,3 +471,54 @@ def test_purchased_sticker_reinstall_after_private(db_session):
     stickers.install_pack(buyer.id, pack.id)
     db_session.commit()
     assert stickers._is_installed(buyer.id, pack.id) is True
+
+
+def test_free_emoji_pack_install(db_session):
+    owner = _user(db_session, 1)
+    other = _user(db_session, 2)
+    _activate(db_session, 1, 70)
+    emoji = EmojiPackService(db_session)
+    pack = emoji.create_pack(owner.id, "Бесплатный пак", True)
+    emoji.add_emoji(
+        user_id=owner.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/free-install.webp",
+    )
+    db_session.commit()
+    emoji.install_pack(other.id, pack.id)
+    db_session.commit()
+    assert emoji._is_installed(other.id, pack.id) is True
+
+
+def test_purchased_emoji_access_survives_unlist(db_session):
+    seller = _user(db_session, 1)
+    buyer = _user(db_session, 2)
+    stranger = _user(db_session, 3)
+    _activate(db_session, 1, 70)
+    _activate(db_session, 2, 69)
+    emoji = EmojiPackService(db_session)
+    pack = emoji.create_pack(seller.id, "Сняли с витрины")
+    item = emoji.add_emoji(
+        user_id=seller.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/unlist.webp",
+    )
+    market = PackMarketplaceService(db_session)
+    market.list_emoji_pack(seller.id, pack.id, 40)
+    db_session.commit()
+    PaidFeaturesService(db_session).add_stars(buyer.id, 40, tx_type="admin_adjust")
+    db_session.commit()
+    market.buy_emoji_pack(buyer.id, pack.id)
+    db_session.commit()
+    emoji.uninstall_pack(buyer.id, pack.id)
+    market.list_emoji_pack(seller.id, pack.id, 0)
+    db_session.commit()
+    assert int(pack.price_stars or 0) == 0
+    assert market.has_emoji_access(buyer.id, pack) is True
+    assert market.has_emoji_access(stranger.id, pack) is False
+    emoji.require_send_tokens(buyer.id, f"[[e:{item.id}]]")
+    emoji.install_pack(buyer.id, pack.id)
+    db_session.commit()
+    emoji.require_send_tokens(buyer.id, f"[[e:{item.id}]]")
+    with pytest.raises(ValueError, match="custom_emoji_denied"):
+        emoji.require_send_tokens(stranger.id, f"[[e:{item.id}]]")

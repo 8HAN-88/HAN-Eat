@@ -58,9 +58,11 @@ class _EmojiPackPreviewScreenState extends State<EmojiPackPreviewScreen> {
       final ok = await confirmStarsSpend(
         context,
         title: 'Купить «${pack.title}»',
-        body: pack.ownerName.trim().isEmpty
-            ? '${pack.priceStars} ★'
-            : 'Автор ${pack.authorLabel} · комиссия ${pack.feeStars} ★',
+        body: [
+          if (pack.authorLabel.trim().isNotEmpty) 'Автор ${pack.authorLabel}',
+          '${pack.priceStars} ★',
+          if (pack.feeStars > 0) 'комиссия ${pack.feeStars} ★',
+        ].join(' · '),
         amountStars: pack.priceStars,
         confirmLabel: 'Купить',
       );

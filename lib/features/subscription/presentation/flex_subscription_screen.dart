@@ -401,7 +401,7 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
         actions: [
           IconButton(
             tooltip: 'Подарить',
-            onPressed: me == null || _busy
+            onPressed: me == null || _busy || _fromCache
                 ? null
                 : () => showFlexGiftSheet(context, me: me, plan: _plan),
             icon: const Icon(Icons.card_giftcard_outlined),

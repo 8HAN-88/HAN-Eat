@@ -217,8 +217,12 @@ class EmojiPackService:
                 user_id, pack.id
             ):
                 raise ValueError("forbidden")
-        if not skip_purchase_check and not PackMarketplaceService(self.db).has_emoji_access(
-            user_id, pack
+        priced = int(getattr(pack, "price_stars", 0) or 0) > 0
+        if (
+            not skip_purchase_check
+            and priced
+            and int(pack.owner_user_id) != int(user_id)
+            and not self._is_purchased(user_id, pack.id)
         ):
             raise ValueError("pack_purchase_required")
         exists = (

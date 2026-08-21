@@ -132,16 +132,6 @@ class PackMarketplaceService:
     def has_emoji_access(self, user_id: int, pack: EmojiPack) -> bool:
         if int(pack.owner_user_id) == int(user_id):
             return True
-        if int(getattr(pack, "price_stars", 0) or 0) <= 0:
-            installed = (
-                self.db.query(EmojiPackInstall.id)
-                .filter(
-                    EmojiPackInstall.user_id == user_id,
-                    EmojiPackInstall.pack_id == pack.id,
-                )
-                .first()
-            )
-            return installed is not None
         bought = (
             self.db.query(EmojiPackPurchase.id)
             .filter(
@@ -150,7 +140,19 @@ class PackMarketplaceService:
             )
             .first()
         )
-        return bought is not None
+        if bought is not None:
+            return True
+        if int(getattr(pack, "price_stars", 0) or 0) > 0:
+            return False
+        installed = (
+            self.db.query(EmojiPackInstall.id)
+            .filter(
+                EmojiPackInstall.user_id == user_id,
+                EmojiPackInstall.pack_id == pack.id,
+            )
+            .first()
+        )
+        return installed is not None
 
     def buy_sticker_pack(self, buyer_id: int, pack_id: int) -> dict:
         pack = self.db.query(StickerPack).filter(StickerPack.id == pack_id).first()
