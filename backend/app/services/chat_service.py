@@ -3510,7 +3510,11 @@ class ChatService:
                 data = _json.loads(content or "{}")
                 text = (data.get("text") or "").strip()
                 if text:
-                    preview = f"🖼 {text[:100]}"
+                    from app.services.emoji_pack_service import (
+                        preview_text_with_custom_emoji,
+                    )
+
+                    preview = f"🖼 {preview_text_with_custom_emoji(text, limit=100)}"
             except Exception:
                 pass
         elif msg_type == "call":
@@ -3537,7 +3541,9 @@ class ChatService:
 
             preview = poll_preview_text(content)
         else:
-            preview = content[:120] if content else ""
+            from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
+            preview = preview_text_with_custom_emoji(content) if content else ""
 
         mentioned_ids = self._mentioned_member_ids(conversation_id, content or "")
         mentioned_ids.discard(sender_id)
@@ -3603,7 +3609,9 @@ class ChatService:
             from app.services.chat_poll_service import poll_preview_text
 
             return poll_preview_text(content)
-        return content[:120] if content else "Сообщение"
+        from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
+        return preview_text_with_custom_emoji(content)
 
     def notify_pinned_message(
         self,

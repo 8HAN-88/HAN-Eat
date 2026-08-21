@@ -151,6 +151,15 @@ class _ChatInlineStickerPanelState extends State<ChatInlineStickerPanel> {
         await showCreatorUpsell(context);
         return;
       }
+      final allowed = _emojiPacks.any(
+        (pack) => pack.items.any((item) => item.id == customId),
+      );
+      if (!allowed) {
+        if (context.mounted) {
+          offerPackStoreIfRequired(context, 'pack_purchase_required');
+        }
+        return;
+      }
       widget.onInsertCustomEmoji?.call(customId);
       return;
     }

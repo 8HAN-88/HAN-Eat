@@ -34,7 +34,10 @@ from app.models.sticker import (
 )
 from app.models.subscription import Subscription
 from app.models.user import User
-from app.services.emoji_pack_service import EmojiPackService
+from app.services.emoji_pack_service import (
+    EmojiPackService,
+    preview_text_with_custom_emoji,
+)
 from app.services.flex_subscription_service import FlexSubscriptionService
 from app.services.pack_marketplace_service import PackMarketplaceService, marketplace_fee_stars
 from app.services.paid_features_service import PaidFeaturesService
@@ -201,6 +204,12 @@ def test_marketplace_fee_waived_under_20():
     assert marketplace_fee_stars(19) == 0
     assert marketplace_fee_stars(20) >= 1
     assert marketplace_fee_stars(100) == 5
+
+
+def test_preview_hides_custom_emoji_tokens():
+    assert preview_text_with_custom_emoji("привет [[e:12]]") == "привет ✦"
+    assert preview_text_with_custom_emoji("[[e:1]]") == "✦"
+    assert preview_text_with_custom_emoji("   ") == "Сообщение"
 
 
 def test_edit_and_schedule_require_custom_emoji(db_session):

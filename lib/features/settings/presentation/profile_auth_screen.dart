@@ -190,10 +190,24 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
       await showCreatorUpsell(context);
       return;
     }
-    if (parseCustomEmojiTokenId(emoji) != null &&
-        !hasFlexFeature('custom_emoji')) {
+    final customId = parseCustomEmojiTokenId(emoji);
+    if (customId != null && !hasFlexFeature('custom_emoji')) {
       await showCreatorUpsell(context);
       return;
+    }
+    if (customId != null) {
+      var allowed = false;
+      try {
+        final packs = await EmojiPackService.listMyPacks();
+        allowed = packs.any(
+          (pack) => pack.canUse && pack.items.any((item) => item.id == customId),
+        );
+      } catch (_) {}
+      if (!allowed) {
+        if (!mounted) return;
+        offerPackStoreIfRequired(context, 'pack_purchase_required');
+        return;
+      }
     }
     try {
       await UserService.instance.updateProfileStyle(emojiStatus: emoji ?? '');

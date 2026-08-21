@@ -37,6 +37,13 @@ def parse_custom_reaction_id(emoji: Optional[str]) -> Optional[int]:
         return None
 
 
+def preview_text_with_custom_emoji(text: Optional[str], *, limit: int = 120) -> str:
+    replaced = CE_TOKEN_RE.sub("✦", text or "").strip()
+    if not replaced:
+        return "Сообщение"
+    return replaced[: max(1, int(limit or 120))]
+
+
 class EmojiPackService:
     def __init__(self, db: Session):
         self.db = db

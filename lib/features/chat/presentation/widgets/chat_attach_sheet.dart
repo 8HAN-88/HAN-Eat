@@ -914,6 +914,17 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
   Future<void> _pickSticker(StickerItem sticker) async {
     final mediaUrl = sticker.mediaUrl.trim();
     if (mediaUrl.isEmpty) return;
+    for (final pack in _stickerPacks) {
+      final mine = pack.stickers.any(
+        (item) => item.id == sticker.id || item.mediaUrl == mediaUrl,
+      );
+      if (!mine) continue;
+      if (pack.isPremium && !hasFlexFeature('premium_stickers')) {
+        await showCreatorUpsell(context);
+        return;
+      }
+      break;
+    }
     await ChatRecentStickersStore.remember(
       mediaUrl: mediaUrl,
       emoji: sticker.emoji,

@@ -78,7 +78,6 @@ class _PackStoreScreenState extends State<PackStoreScreen>
         _emojis = emojis;
         _myStickers = myStickers;
         _myEmojis = myEmojis;
-        _busy.clear();
         _loading = false;
       });
     } catch (e) {
