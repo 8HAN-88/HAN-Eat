@@ -398,11 +398,16 @@ class StickerService:
         term = (query or "").strip()
         if term:
             q = q.filter(StickerPack.title.ilike(f"%{term}%"))
-        return (
+        rows = (
             q.order_by(StickerPack.listed_at.desc(), StickerPack.id.desc())
-            .limit(limit)
+            .limit(limit * 3)
             .all()
         )
+        from app.services.pack_marketplace_service import PackMarketplaceService
+
+        return PackMarketplaceService(self.db).filter_active_listings(
+            rows, kind="sticker"
+        )[:limit]
 
     def list_catalog_packs(
         self,

@@ -114,6 +114,15 @@ class PackMarketplaceService:
         self.db.flush()
         return pack
 
+    def seller_can_list(self, user_id: int, kind: PackKind) -> bool:
+        slug = "sticker_pack_sell" if kind == "sticker" else "emoji_pack_publish"
+        return self.billing.has_feature(user_id, slug)
+
+    def filter_active_listings(self, packs, *, kind: PackKind):
+        owners = {int(p.owner_user_id) for p in packs}
+        allowed = {uid for uid in owners if self.seller_can_list(uid, kind)}
+        return [p for p in packs if int(p.owner_user_id) in allowed]
+
     def has_sticker_access(self, user_id: int, pack: StickerPack) -> bool:
         if int(pack.owner_user_id) == int(user_id):
             return True
@@ -217,7 +226,7 @@ class PackMarketplaceService:
     ) -> dict:
         if seller_id == buyer_id:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "own_pack")
-        if price <= 0:
+        if price <= 0 or not self.seller_can_list(seller_id, kind):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "not_for_sale")
         buyer = (
             self.db.query(User)

@@ -13585,7 +13585,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         limit: 200,
       );
       if (!mounted) return;
-      setState(() => _scheduledPendingCount = items.length);
+      setState(
+        () => _scheduledPendingCount =
+            items.where((e) => e.status == 'pending').length,
+      );
     } catch (_) {
       // Silent: this is a decorative badge.
     }

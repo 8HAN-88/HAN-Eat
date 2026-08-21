@@ -749,3 +749,61 @@ def test_failed_scheduled_sticker_stays_listed(db_session):
     assert canceled.status == "canceled"
     left = chat.list_scheduled_messages(conv.id, buyer.id)
     assert [item.id for item in left] == [retried.id]
+
+
+def test_flex_loss_unlists_priced_packs(db_session):
+    seller = _user(db_session, 1)
+    _activate(db_session, 1, 72)
+    stickers = StickerService(db_session)
+    emoji = EmojiPackService(db_session)
+    market = PackMarketplaceService(db_session)
+    pack = stickers.create_pack(seller.id, "Стикеры с витрины", True)
+    stickers.add_sticker(
+        user_id=seller.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/unlist-sticker.webp",
+    )
+    market.list_sticker_pack(seller.id, pack.id, 80)
+    ep = emoji.create_pack(seller.id, "Эмодзи с витрины")
+    emoji.add_emoji(
+        user_id=seller.id,
+        pack_id=ep.id,
+        media_url="https://cdn.test/unlist-emoji.webp",
+    )
+    market.list_emoji_pack(seller.id, ep.id, 30)
+    db_session.commit()
+    FlexSubscriptionService(db_session).deactivate(1)
+    db_session.commit()
+    db_session.refresh(pack)
+    db_session.refresh(ep)
+    assert pack.price_stars == 80
+    assert ep.price_stars == 30
+    assert emoji.list_marketplace() == []
+    assert stickers.list_marketplace_packs() == []
+    buyer = _user(db_session, 2)
+    PaidFeaturesService(db_session).add_stars(buyer.id, 80, tx_type="admin_adjust")
+    db_session.commit()
+    with pytest.raises(HTTPException) as err:
+        market.buy_sticker_pack(buyer.id, pack.id)
+    assert err.value.status_code == 400
+    _activate(db_session, 1, 72)
+    db_session.commit()
+    assert any(row.id == ep.id for row in emoji.list_marketplace())
+
+
+def test_keep_listing_on_higher_level(db_session):
+    seller = _user(db_session, 1)
+    _activate(db_session, 1, 71)
+    stickers = StickerService(db_session)
+    pack = stickers.create_pack(seller.id, "Остаётся в продаже", True)
+    stickers.add_sticker(
+        user_id=seller.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/keep-listed.webp",
+    )
+    PackMarketplaceService(db_session).list_sticker_pack(seller.id, pack.id, 60)
+    db_session.commit()
+    _activate(db_session, 1, 72)
+    db_session.commit()
+    db_session.refresh(pack)
+    assert pack.price_stars == 60

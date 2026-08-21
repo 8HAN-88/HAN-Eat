@@ -313,7 +313,10 @@ class EmojiPackService:
         term = (query or "").strip()
         if term:
             q = q.filter(EmojiPack.title.ilike(f"%{term}%"))
-        return q.order_by(EmojiPack.listed_at.desc(), EmojiPack.id.desc()).limit(limit).all()
+        rows = q.order_by(EmojiPack.listed_at.desc(), EmojiPack.id.desc()).limit(limit * 3).all()
+        return PackMarketplaceService(self.db).filter_active_listings(
+            rows, kind="emoji"
+        )[:limit]
 
     def list_catalog(self, *, query: Optional[str] = None, limit: int = 50) -> List[EmojiPack]:
         q = self.db.query(EmojiPack).filter(EmojiPack.is_public.is_(True))
