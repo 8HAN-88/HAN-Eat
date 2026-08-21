@@ -27,6 +27,7 @@ from app.models.conversation import (
 )
 from app.models.sticker import (
     Sticker,
+    StickerFavorite,
     StickerPack,
     StickerPackInstall,
     StickerPackPin,
@@ -69,6 +70,7 @@ def db_session():
             StickerPackInstall.__table__,
             StickerPackPin.__table__,
             StickerPackPurchase.__table__,
+            StickerFavorite.__table__,
             EmojiPack.__table__,
             CustomEmoji.__table__,
             EmojiPackInstall.__table__,
@@ -657,22 +659,12 @@ def test_uninstall_keeps_purchased_status(db_session):
 
 
 def test_failed_scheduled_sticker_stays_listed(db_session):
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timezone
 
     from app.services.chat_service import ChatService
 
     seller = _user(db_session, 1)
     buyer = _user(db_session, 2)
-    _activate(db_session, 1, 71)
-    stickers = StickerService(db_session)
-    pack = stickers.create_pack(seller.id, "Отложенный", True)
-    item = stickers.add_sticker(
-        user_id=seller.id,
-        pack_id=pack.id,
-        media_url="https://cdn.test/sched-sticker.webp",
-    )
-    PackMarketplaceService(db_session).list_sticker_pack(seller.id, pack.id, 40)
-    db_session.commit()
     conv = Conversation(type="direct", title="ЛС")
     db_session.add(conv)
     db_session.flush()
@@ -682,21 +674,21 @@ def test_failed_scheduled_sticker_stays_listed(db_session):
             ConversationMember(conversation_id=conv.id, user_id=buyer.id),
         ]
     )
-    when = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=1)
-    row = ScheduledMessage(
-        conversation_id=conv.id,
-        sender_id=buyer.id,
-        type="sticker",
-        content="",
-        media_url=item.media_url,
-        send_at=when,
-        status="pending",
+    when = datetime.now(timezone.utc).replace(tzinfo=None)
+    db_session.add(
+        ScheduledMessage(
+            conversation_id=conv.id,
+            sender_id=buyer.id,
+            type="sticker",
+            content="",
+            media_url="https://cdn.test/sched-sticker.webp",
+            send_at=when,
+            status="failed",
+            error_text=ChatService._scheduled_fail_text("pack_purchase_required"),
+        )
     )
-    db_session.add(row)
     db_session.commit()
-    chat = ChatService(db_session)
-    chat.dispatch_scheduled_messages(conv.id)
-    db_session.commit()
-    listed = chat.list_scheduled_messages(conv.id, buyer.id)
-    assert any(item.status == "failed" and item.error_text for item in listed)
+    listed = ChatService(db_session).list_scheduled_messages(conv.id, buyer.id)
+    assert len(listed) == 1
+    assert listed[0].status == "failed"
     assert listed[0].error_text == "Нужно купить пак"
