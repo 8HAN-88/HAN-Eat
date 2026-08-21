@@ -13132,10 +13132,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _sendScheduledMessageNow(ScheduledChatMessage item) async {
-    await ChatService.cancelScheduledMessage(
-      conversationId: widget.conversationId,
-      scheduledMessageId: item.id,
-    );
+    var canceled = false;
+    try {
+      await ChatService.cancelScheduledMessage(
+        conversationId: widget.conversationId,
+        scheduledMessageId: item.id,
+      );
+      canceled = true;
+      await _enqueueScheduledMessageNow(item);
+    } catch (e) {
+      if (canceled) {
+        await _restoreScheduledAfterFailedSend(item);
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> _enqueueScheduledMessageNow(ScheduledChatMessage item) async {
     final replyId = item.replyToMessageId;
     final media = item.mediaUrl?.trim();
     final topicId = item.topicId ?? _activeTopicIdForSend;
@@ -13146,13 +13159,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         item.type == 'file' ||
         item.type == 'sticker';
     if (needsMedia && (media == null || media.isEmpty)) {
-      await _restoreScheduledAfterFailedSend(item);
       throw Exception('Нет медиа для отправки');
     }
     if (item.type == 'poll') {
       final poll = parseChatPollFromContent(item.content);
       if (poll == null || poll.options.length < 2) {
-        await _restoreScheduledAfterFailedSend(item);
         throw Exception('Не удалось восстановить опрос');
       }
       _enqueueReadyOutgoing(
@@ -13174,7 +13185,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (item.type == 'checklist') {
       final list = ChatChecklist.tryParse(item.content);
       if (list == null || list.items.isEmpty) {
-        await _restoreScheduledAfterFailedSend(item);
         throw Exception('Не удалось восстановить чеклист');
       }
       _enqueueReadyOutgoing(

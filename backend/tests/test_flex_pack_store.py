@@ -612,6 +612,28 @@ def test_cannot_favorite_paid_sticker_without_purchase(db_session):
     assert favorited is True
 
 
+def test_list_favorites_hides_unpurchased_paid(db_session):
+    seller = _user(db_session, 1)
+    buyer = _user(db_session, 2)
+    _activate(db_session, 1, 71)
+    stickers = StickerService(db_session)
+    pack = stickers.create_pack(seller.id, "Скрытое избранное", True)
+    item = stickers.add_sticker(
+        user_id=seller.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/fav-hidden.webp",
+    )
+    PackMarketplaceService(db_session).list_sticker_pack(seller.id, pack.id, 40)
+    db_session.add(StickerFavorite(user_id=buyer.id, sticker_id=item.id))
+    db_session.commit()
+    assert stickers.list_favorites(buyer.id) == []
+    PaidFeaturesService(db_session).add_stars(buyer.id, 40, tx_type="admin_adjust")
+    db_session.commit()
+    PackMarketplaceService(db_session).buy_sticker_pack(buyer.id, pack.id)
+    db_session.commit()
+    assert [row.id for row in stickers.list_favorites(buyer.id)] == [item.id]
+
+
 def test_uninstall_clears_status_without_license(db_session):
     owner = _user(db_session, 1)
     other = _user(db_session, 2)

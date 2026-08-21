@@ -495,7 +495,23 @@ class StickerService:
             )
             .all()
         )
-        return [sticker for sticker, _created in rows]
+        from app.services.pack_marketplace_service import PackMarketplaceService
+
+        market = PackMarketplaceService(self.db)
+        packs = {
+            row.id: row
+            for row in self.db.query(StickerPack).filter(
+                StickerPack.id.in_({s.pack_id for s, _ in rows})
+            )
+        } if rows else {}
+        out: List[Sticker] = []
+        for sticker, _created in rows:
+            pack = packs.get(sticker.pack_id)
+            if pack is not None and int(getattr(pack, "price_stars", 0) or 0) > 0:
+                if not market.has_sticker_access(user_id, pack):
+                    continue
+            out.append(sticker)
+        return out
 
     def add_favorite(
         self,

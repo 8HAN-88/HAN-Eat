@@ -152,7 +152,8 @@ class _ChatInlineStickerPanelState extends State<ChatInlineStickerPanel> {
         return;
       }
       final allowed = _emojiPacks.any(
-        (pack) => pack.items.any((item) => item.id == customId),
+        (pack) =>
+            pack.canUse && pack.items.any((item) => item.id == customId),
       );
       if (!allowed) {
         if (context.mounted) {

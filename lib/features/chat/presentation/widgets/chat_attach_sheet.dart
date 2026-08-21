@@ -923,6 +923,10 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
         await showCreatorUpsell(context);
         return;
       }
+      if (pack.priceStars > 0 && !pack.isOwned && !pack.isPurchased) {
+        offerPackStoreIfRequired(context, 'pack_purchase_required');
+        return;
+      }
       break;
     }
     await ChatRecentStickersStore.remember(

@@ -235,9 +235,18 @@ class PackMarketplaceService:
         price: int,
     ) -> dict:
         if seller_id == buyer_id:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "own_pack")
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                {"code": "own_pack", "message": "Нельзя купить свой пак"},
+            )
         if price <= 0 or not self.seller_can_list(seller_id, kind):
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "not_for_sale")
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                {
+                    "code": "not_for_sale",
+                    "message": "Пак сейчас не продаётся",
+                },
+            )
         buyer = (
             self.db.query(User)
             .filter(User.id == buyer_id, User.deleted_at.is_(None))

@@ -67,6 +67,9 @@ String parseApiErrorMessage(
     if (code == 'not_for_sale') {
       return 'Пак сейчас не продаётся';
     }
+    if (code == 'own_pack') {
+      return 'Нельзя купить свой пак';
+    }
     if (code == 'group_paid_required') {
       final price = detail['monthly_price_stars'];
       if (price is num && price > 0) {

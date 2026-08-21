@@ -62,7 +62,8 @@ class EmojiPack {
     return 'id$ownerUserId';
   }
 
-  bool get canUse => isOwned || isPurchased || isInstalled;
+  bool get canUse =>
+      isOwned || isPurchased || (isInstalled && priceStars <= 0);
 
   bool get isOnSale => isListed && priceStars > 0;
 
