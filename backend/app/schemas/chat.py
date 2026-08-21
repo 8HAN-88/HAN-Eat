@@ -312,6 +312,7 @@ class ScheduledMessageResponse(BaseModel):
     effect_id: Optional[str] = None
     topic_id: Optional[int] = None
     status: str
+    error_text: Optional[str] = None
     created_at: datetime
 
     class Config:

@@ -589,6 +589,13 @@ async def toggle_sticker_favorite(
         code = str(e)
         if code == "sticker_not_found":
             raise HTTPException(status.HTTP_404_NOT_FOUND, code)
+        if code == "premium_sticker":
+            _raise_premium_sticker()
+        if code == "pack_purchase_required":
+            raise HTTPException(
+                status.HTTP_402_PAYMENT_REQUIRED,
+                {"code": "pack_purchase_required", "message": "Сначала купите пак"},
+            )
         raise
     return {
         "ok": True,

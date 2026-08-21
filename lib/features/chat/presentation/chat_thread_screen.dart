@@ -13252,8 +13252,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           final items = List<ScheduledChatMessage>.from(initialItems);
           return StatefulBuilder(
             builder: (ctx, setModalState) {
-              final pending = items.where((e) => e.status == 'pending').toList()
-                ..sort((a, b) => a.sendAt.compareTo(b.sendAt));
+              final pending = items
+                  .where((e) => e.status == 'pending' || e.status == 'failed')
+                  .toList()
+                ..sort((a, b) {
+                  if (a.status != b.status) {
+                    return a.status == 'failed' ? -1 : 1;
+                  }
+                  return a.sendAt.compareTo(b.sendAt);
+                });
               if (pending.isEmpty) {
                 return SafeArea(
                   child: Padding(
@@ -13308,12 +13315,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                               subtitle: Text(
                                 [
                                   if (caption.isNotEmpty) caption,
-                                  item.sendWhenOnline
-                                      ? 'Отправка: когда пользователь онлайн'
-                                      : 'Отправка: ${DateFormat('dd.MM.yyyy HH:mm').format(item.sendAt)}',
+                                  if (item.status == 'failed')
+                                    item.errorText?.trim().isNotEmpty == true
+                                        ? 'Не отправлено: ${item.errorText}'
+                                        : 'Не отправлено',
+                                  if (item.status != 'failed')
+                                    item.sendWhenOnline
+                                        ? 'Отправка: когда пользователь онлайн'
+                                        : 'Отправка: ${DateFormat('dd.MM.yyyy HH:mm').format(item.sendAt)}',
                                   if (item.silent) 'Без звука',
                                 ].join('\n'),
-                                maxLines: 4,
+                                maxLines: 5,
                                 overflow: TextOverflow.ellipsis,
                               ),
                               isThreeLine: caption.isNotEmpty,

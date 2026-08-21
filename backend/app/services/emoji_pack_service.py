@@ -257,6 +257,31 @@ class EmojiPackService:
         if row:
             self.db.delete(row)
             self.db.flush()
+        self._clear_status_if_pack_lost(user_id, pack_id)
+
+    def _clear_status_if_pack_lost(self, user_id: int, pack_id: int) -> None:
+        from app.models.user import User
+
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return
+        token = (getattr(user, "emoji_status", None) or "").strip()
+        eid = parse_custom_reaction_id(token)
+        if eid is None:
+            ids = parse_custom_emoji_ids(token)
+            eid = ids[0] if ids else None
+        if eid is None:
+            return
+        row = self.db.query(CustomEmoji).filter(CustomEmoji.id == eid).first()
+        if row is None or int(row.pack_id) != int(pack_id):
+            return
+        pack = self.get_pack(pack_id)
+        if pack is not None and PackMarketplaceService(self.db).has_emoji_access(
+            user_id, pack
+        ):
+            return
+        user.emoji_status = None
+        self.db.flush()
 
     def list_my_packs(self, user_id: int) -> List[EmojiPack]:
         installed = (

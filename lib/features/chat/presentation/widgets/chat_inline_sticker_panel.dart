@@ -175,12 +175,23 @@ class _ChatInlineStickerPanelState extends State<ChatInlineStickerPanel> {
   }
 
   Future<void> _toggleFavorite(_StickerThumb item) async {
-    final added = await ChatRecentStickersStore.toggleFavorite(
-      mediaUrl: item.mediaUrl,
-      emoji: item.emoji,
-      stickerType: item.stickerType,
-      stickerId: item.stickerId,
-    );
+    late final bool added;
+    try {
+      added = await ChatRecentStickersStore.toggleFavorite(
+        mediaUrl: item.mediaUrl,
+        emoji: item.emoji,
+        stickerType: item.stickerType,
+        stickerId: item.stickerId,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+      return;
+    }
     final favorites = await ChatRecentStickersStore.loadFavorites();
     if (!mounted) return;
     setState(() => _favorites = favorites);

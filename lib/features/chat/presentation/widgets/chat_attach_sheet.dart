@@ -948,12 +948,22 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
     String? stickerType,
     int? stickerId,
   }) async {
-    await ChatRecentStickersStore.toggleFavorite(
-      mediaUrl: mediaUrl,
-      emoji: emoji,
-      stickerType: stickerType,
-      stickerId: stickerId,
-    );
+    try {
+      await ChatRecentStickersStore.toggleFavorite(
+        mediaUrl: mediaUrl,
+        emoji: emoji,
+        stickerType: stickerType,
+        stickerId: stickerId,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+      return;
+    }
     if (!mounted) return;
     await _loadStickerHistory();
   }

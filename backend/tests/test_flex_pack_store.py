@@ -585,3 +585,118 @@ def test_slug_opens_purchased_private_pack(db_session):
     assert emoji.get_pack_by_slug_for_user(buyer.id, pack.slug) is not None
     assert emoji.get_pack_by_slug_for_user(stranger.id, pack.slug) is None
     assert emoji.get_public_pack_by_slug(pack.slug) is None
+
+
+def test_cannot_favorite_paid_sticker_without_purchase(db_session):
+    seller = _user(db_session, 1)
+    buyer = _user(db_session, 2)
+    _activate(db_session, 1, 71)
+    stickers = StickerService(db_session)
+    pack = stickers.create_pack(seller.id, "Избранное", True)
+    item = stickers.add_sticker(
+        user_id=seller.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/fav.webp",
+    )
+    PackMarketplaceService(db_session).list_sticker_pack(seller.id, pack.id, 40)
+    db_session.commit()
+    with pytest.raises(ValueError, match="pack_purchase_required"):
+        stickers.toggle_favorite(user_id=buyer.id, sticker_id=item.id)
+    PaidFeaturesService(db_session).add_stars(buyer.id, 40, tx_type="admin_adjust")
+    db_session.commit()
+    PackMarketplaceService(db_session).buy_sticker_pack(buyer.id, pack.id)
+    db_session.commit()
+    _, favorited = stickers.toggle_favorite(user_id=buyer.id, sticker_id=item.id)
+    assert favorited is True
+
+
+def test_uninstall_clears_status_without_license(db_session):
+    owner = _user(db_session, 1)
+    other = _user(db_session, 2)
+    _activate(db_session, 1, 70)
+    emoji = EmojiPackService(db_session)
+    pack = emoji.create_pack(owner.id, "Статус бесплатный", True)
+    item = emoji.add_emoji(
+        user_id=owner.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/status-free.webp",
+    )
+    db_session.commit()
+    emoji.install_pack(other.id, pack.id)
+    other.emoji_status = f"ce:{item.id}"
+    db_session.commit()
+    emoji.uninstall_pack(other.id, pack.id)
+    db_session.commit()
+    db_session.refresh(other)
+    assert other.emoji_status is None
+
+
+def test_uninstall_keeps_purchased_status(db_session):
+    seller = _user(db_session, 1)
+    buyer = _user(db_session, 2)
+    _activate(db_session, 1, 70)
+    emoji = EmojiPackService(db_session)
+    pack = emoji.create_pack(seller.id, "Статус купленный")
+    item = emoji.add_emoji(
+        user_id=seller.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/status-paid.webp",
+    )
+    PackMarketplaceService(db_session).list_emoji_pack(seller.id, pack.id, 25)
+    db_session.commit()
+    PaidFeaturesService(db_session).add_stars(buyer.id, 25, tx_type="admin_adjust")
+    db_session.commit()
+    PackMarketplaceService(db_session).buy_emoji_pack(buyer.id, pack.id)
+    db_session.commit()
+    buyer.emoji_status = f"ce:{item.id}"
+    db_session.commit()
+    emoji.uninstall_pack(buyer.id, pack.id)
+    db_session.commit()
+    db_session.refresh(buyer)
+    assert buyer.emoji_status == f"ce:{item.id}"
+
+
+def test_failed_scheduled_sticker_stays_listed(db_session):
+    from datetime import datetime, timedelta, timezone
+
+    from app.services.chat_service import ChatService
+
+    seller = _user(db_session, 1)
+    buyer = _user(db_session, 2)
+    _activate(db_session, 1, 71)
+    stickers = StickerService(db_session)
+    pack = stickers.create_pack(seller.id, "Отложенный", True)
+    item = stickers.add_sticker(
+        user_id=seller.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/sched-sticker.webp",
+    )
+    PackMarketplaceService(db_session).list_sticker_pack(seller.id, pack.id, 40)
+    db_session.commit()
+    conv = Conversation(type="direct", title="ЛС")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add_all(
+        [
+            ConversationMember(conversation_id=conv.id, user_id=seller.id),
+            ConversationMember(conversation_id=conv.id, user_id=buyer.id),
+        ]
+    )
+    when = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=1)
+    row = ScheduledMessage(
+        conversation_id=conv.id,
+        sender_id=buyer.id,
+        type="sticker",
+        content="",
+        media_url=item.media_url,
+        send_at=when,
+        status="pending",
+    )
+    db_session.add(row)
+    db_session.commit()
+    chat = ChatService(db_session)
+    chat.dispatch_scheduled_messages(conv.id)
+    db_session.commit()
+    listed = chat.list_scheduled_messages(conv.id, buyer.id)
+    assert any(item.status == "failed" and item.error_text for item in listed)
+    assert listed[0].error_text == "Нужно купить пак"

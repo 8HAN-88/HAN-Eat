@@ -203,8 +203,9 @@ class ChatRecentStickersStore {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_favoritesMigratedKey, true);
       return favorited;
-    } catch (_) {
-      return !exists;
+    } catch (e) {
+      await _saveByKey(_favoritesKey, favorites);
+      rethrow;
     }
   }
 }

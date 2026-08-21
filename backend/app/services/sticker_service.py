@@ -495,6 +495,7 @@ class StickerService:
         sticker = self._resolve_sticker(sticker_id=sticker_id, media_url=media_url)
         if not sticker:
             raise ValueError("sticker_not_found")
+        self.require_sticker_send(user_id, sticker.media_url)
         exists = (
             self.db.query(StickerFavorite.id)
             .filter(
@@ -554,6 +555,7 @@ class StickerService:
             self.db.delete(row)
             self.db.flush()
             return sticker, False
+        self.require_sticker_send(user_id, sticker.media_url)
         self.db.add(StickerFavorite(user_id=user_id, sticker_id=sticker.id))
         self.db.flush()
         return sticker, True
@@ -577,6 +579,14 @@ class StickerService:
             if sticker and sticker.id not in seen:
                 resolved.append(sticker)
                 seen.add(sticker.id)
+        allowed: List[Sticker] = []
+        for sticker in resolved:
+            try:
+                self.require_sticker_send(user_id, sticker.media_url)
+            except ValueError:
+                continue
+            allowed.append(sticker)
+        resolved = allowed
 
         (
             self.db.query(StickerFavorite)

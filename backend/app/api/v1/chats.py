@@ -364,6 +364,7 @@ def _scheduled_message_response(item: ScheduledMessage) -> ScheduledMessageRespo
         effect_id=getattr(item, "effect_id", None),
         topic_id=getattr(item, "topic_id", None),
         status=item.status,
+        error_text=getattr(item, "error_text", None),
         created_at=item.created_at,
     )
 

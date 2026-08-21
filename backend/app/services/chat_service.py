@@ -3765,10 +3765,14 @@ class ChatService:
             .filter(
                 ScheduledMessage.conversation_id == conversation_id,
                 ScheduledMessage.sender_id == user_id,
-                ScheduledMessage.status == "pending",
+                ScheduledMessage.status.in_(("pending", "failed")),
                 ScheduledMessage.canceled_at.is_(None),
             )
-            .order_by(ScheduledMessage.send_at.asc(), ScheduledMessage.id.asc())
+            .order_by(
+                ScheduledMessage.status.asc(),
+                ScheduledMessage.send_at.asc(),
+                ScheduledMessage.id.asc(),
+            )
             .limit(limit)
             .all()
         )
@@ -3886,6 +3890,17 @@ class ChatService:
         )
         return self._dispatch_scheduled_items(due, now=now, limit=limit)
 
+    @staticmethod
+    def _scheduled_fail_text(code: str) -> str:
+        mapping = {
+            "pack_purchase_required": "Нужно купить пак",
+            "custom_emoji_denied": "Эмодзи недоступен — купите пак",
+            "custom_emoji_required": "Кастомные эмодзи с уровня 69",
+            "premium_sticker": "Нужны премиум-стикеры",
+            "paid_message_fee_failed": "Недостаточно звёзд",
+        }
+        return mapping.get(code, code)[:120]
+
     def _dispatch_scheduled_items(
         self,
         due: List[ScheduledMessage],
@@ -3944,7 +3959,7 @@ class ChatService:
                 sent_messages.append(msg)
             except ValueError as e:
                 item.status = "failed"
-                item.error_text = str(e)[:120]
+                item.error_text = self._scheduled_fail_text(str(e))
         return sent_messages
 
     def purge_due_auto_deleted_messages(
