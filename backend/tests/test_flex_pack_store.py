@@ -523,3 +523,56 @@ def test_purchased_emoji_access_survives_unlist(db_session):
     emoji.require_send_tokens(buyer.id, f"[[e:{item.id}]]")
     with pytest.raises(ValueError, match="custom_emoji_denied"):
         emoji.require_send_tokens(stranger.id, f"[[e:{item.id}]]")
+
+
+def test_buy_rejects_stale_price(db_session):
+    seller = _user(db_session, 1)
+    buyer = _user(db_session, 2)
+    _activate(db_session, 1, 70)
+    emoji = EmojiPackService(db_session)
+    pack = emoji.create_pack(seller.id, "Дорожает")
+    emoji.add_emoji(
+        user_id=seller.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/price.webp",
+    )
+    market = PackMarketplaceService(db_session)
+    market.list_emoji_pack(seller.id, pack.id, 40)
+    db_session.commit()
+    PaidFeaturesService(db_session).add_stars(buyer.id, 80, tx_type="admin_adjust")
+    db_session.commit()
+    market.list_emoji_pack(seller.id, pack.id, 80)
+    db_session.commit()
+    with pytest.raises(HTTPException) as err:
+        market.buy_emoji_pack(buyer.id, pack.id, expected_price_stars=40)
+    assert err.value.status_code == 409
+    assert err.value.detail["code"] == "price_changed"
+    market.buy_emoji_pack(buyer.id, pack.id, expected_price_stars=80)
+    db_session.commit()
+    assert PaidFeaturesService(db_session).star_balance(buyer.id) == 0
+
+
+def test_slug_opens_purchased_private_pack(db_session):
+    seller = _user(db_session, 1)
+    buyer = _user(db_session, 2)
+    stranger = _user(db_session, 3)
+    _activate(db_session, 1, 70)
+    emoji = EmojiPackService(db_session)
+    pack = emoji.create_pack(seller.id, "Ссылка")
+    emoji.add_emoji(
+        user_id=seller.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/slug.webp",
+    )
+    market = PackMarketplaceService(db_session)
+    market.list_emoji_pack(seller.id, pack.id, 25)
+    db_session.commit()
+    PaidFeaturesService(db_session).add_stars(buyer.id, 25, tx_type="admin_adjust")
+    db_session.commit()
+    market.buy_emoji_pack(buyer.id, pack.id)
+    db_session.commit()
+    emoji.update_pack(user_id=seller.id, pack_id=pack.id, is_public=False)
+    db_session.commit()
+    assert emoji.get_pack_by_slug_for_user(buyer.id, pack.slug) is not None
+    assert emoji.get_pack_by_slug_for_user(stranger.id, pack.slug) is None
+    assert emoji.get_public_pack_by_slug(pack.slug) is None

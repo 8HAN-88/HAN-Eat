@@ -300,6 +300,18 @@ class EmojiPackService:
             .first()
         )
 
+    def get_pack_by_slug_for_user(self, user_id: int, slug: str) -> Optional[EmojiPack]:
+        public = self.get_public_pack_by_slug(slug)
+        if public is not None:
+            return public
+        clean = (slug or "").strip().lower()
+        if not clean:
+            return None
+        pack = self.db.query(EmojiPack).filter(EmojiPack.slug == clean).first()
+        if not pack:
+            return None
+        return self.get_pack_for_user(user_id, pack.id)
+
     def installed_pack_ids(self, user_id: int) -> set[int]:
         rows = (
             self.db.query(EmojiPackInstall.pack_id)

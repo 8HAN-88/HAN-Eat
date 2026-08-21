@@ -324,6 +324,18 @@ class StickerService:
             .first()
         )
 
+    def get_pack_by_slug_for_user(self, user_id: int, slug: str) -> Optional[StickerPack]:
+        public = self.get_public_pack_by_slug(slug)
+        if public is not None:
+            return public
+        clean = (slug or "").strip().lower()
+        if not clean:
+            return None
+        pack = self.db.query(StickerPack).filter(StickerPack.slug == clean).first()
+        if not pack:
+            return None
+        return self.get_pack_for_user(user_id, pack.id)
+
     def list_my_packs(self, user_id: int) -> List[StickerPack]:
         installed_pack_ids = (
             self.db.query(StickerPackInstall.pack_id)

@@ -198,13 +198,18 @@ async def list_sticker_pack_for_sale(
 @router.post("/stickers/packs/{pack_id}/buy")
 async def buy_sticker_pack(
     pack_id: int,
+    expected_price_stars: int | None = Query(None),
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
     from app.services.pack_marketplace_service import PackMarketplaceService
 
     try:
-        result = PackMarketplaceService(db).buy_sticker_pack(current_user.id, pack_id)
+        result = PackMarketplaceService(db).buy_sticker_pack(
+            current_user.id,
+            pack_id,
+            expected_price_stars=expected_price_stars,
+        )
         db.commit()
         return result
     except HTTPException:
@@ -273,7 +278,7 @@ async def get_sticker_pack_by_slug(
     db: Session = Depends(get_db),
 ):
     svc = StickerService(db)
-    pack = svc.get_public_pack_by_slug(slug)
+    pack = svc.get_pack_by_slug_for_user(current_user.id, slug)
     if not pack:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "pack_not_found")
     installed = svc.installed_pack_ids(current_user.id)
@@ -509,7 +514,7 @@ async def import_sticker_pack_by_slug(
     db: Session = Depends(get_db),
 ):
     svc = StickerService(db)
-    pack = svc.get_public_pack_by_slug(slug)
+    pack = svc.get_pack_by_slug_for_user(current_user.id, slug)
     if not pack:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "pack_not_found")
     try:

@@ -76,7 +76,10 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
     setState(() => _busy = true);
     try {
       if (needsBuy) {
-        await StickerService.buyPack(pack.id);
+        await StickerService.buyPack(
+          pack.id,
+          expectedPriceStars: pack.priceStars,
+        );
       } else {
         await StickerService.installPack(pack.id);
       }

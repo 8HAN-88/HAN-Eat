@@ -124,7 +124,10 @@ class _PackStoreScreenState extends State<PackStoreScreen>
     if (!ok || !mounted) return;
     setState(() => _busy.add(_key('s', pack.id)));
     try {
-      await StickerService.buyPack(pack.id);
+      await StickerService.buyPack(
+        pack.id,
+        expectedPriceStars: pack.priceStars,
+      );
       if (!mounted) return;
       await _load();
       if (!mounted) return;
@@ -189,13 +192,34 @@ class _PackStoreScreenState extends State<PackStoreScreen>
     if (!ok || !mounted) return;
     setState(() => _busy.add(_key('e', pack.id)));
     try {
-      await EmojiPackService.buyPack(pack.id);
+      await EmojiPackService.buyPack(
+        pack.id,
+        expectedPriceStars: pack.priceStars,
+      );
       if (!mounted) return;
       await _load();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('«${pack.title}» установлен')),
-      );
+      if (!hasFlexFeature('custom_emoji')) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              'Пак куплен. Чтобы вставлять эмодзи в сообщения, нужен уровень 69',
+            ),
+            action: SnackBarAction(
+              label: 'Подписка',
+              onPressed: () {
+                if (context.mounted) {
+                  context.push(FlexSubscriptionRoute.path);
+                }
+              },
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('«${pack.title}» установлен')),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       if (offerPackStoreIfRequired(context, e)) return;

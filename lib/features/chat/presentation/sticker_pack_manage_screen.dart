@@ -378,7 +378,10 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
     if (!ok || !mounted) return;
     setState(() => _saving = true);
     try {
-      await StickerService.buyPack(pack.id);
+      await StickerService.buyPack(
+        pack.id,
+        expectedPriceStars: pack.priceStars,
+      );
       await _load();
     } catch (e) {
       if (!mounted) return;

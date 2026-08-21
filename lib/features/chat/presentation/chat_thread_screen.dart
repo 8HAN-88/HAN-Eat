@@ -2749,6 +2749,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           if (!mounted) return;
           setState(() {});
           if (offerFlexIfRequired(context, e)) return;
+          if (offerPackStoreIfRequired(context, e)) return;
           showErrorSnackBar(context, e);
           return;
         }

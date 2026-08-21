@@ -234,8 +234,16 @@ class EmojiPackService {
     return _parsePack(response, 'Не удалось выставить пак');
   }
 
-  static Future<Map<String, dynamic>> buyPack(int packId) async {
-    final uri = Uri.parse('$_base/emoji/packs/$packId/buy');
+  static Future<Map<String, dynamic>> buyPack(
+    int packId, {
+    int? expectedPriceStars,
+  }) async {
+    final uri = Uri.parse('$_base/emoji/packs/$packId/buy').replace(
+      queryParameters: {
+        if (expectedPriceStars != null)
+          'expected_price_stars': '$expectedPriceStars',
+      },
+    );
     final headers = await _headers();
     final response = await HanEatHttpClient.withShared(
       (client) => client.post(uri, headers: headers),

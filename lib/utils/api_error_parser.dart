@@ -60,6 +60,9 @@ String parseApiErrorMessage(
     if (code == 'custom_emoji_denied') {
       return 'Этот эмодзи недоступен — купите пак';
     }
+    if (code == 'price_changed') {
+      return 'Цена пака изменилась. Обновите витрину и подтвердите снова';
+    }
     if (code == 'group_paid_required') {
       final price = detail['monthly_price_stars'];
       if (price is num && price > 0) {

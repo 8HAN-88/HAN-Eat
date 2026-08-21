@@ -71,12 +71,15 @@ class _EmojiPackPreviewScreenState extends State<EmojiPackPreviewScreen> {
     setState(() => _busy = true);
     try {
       if (needsBuy) {
-        await EmojiPackService.buyPack(pack.id);
+        await EmojiPackService.buyPack(
+          pack.id,
+          expectedPriceStars: pack.priceStars,
+        );
       } else {
         await EmojiPackService.installPack(pack.id);
       }
       if (!mounted) return;
-      if (!needsBuy && !hasFlexFeature('custom_emoji')) {
+      if (!hasFlexFeature('custom_emoji')) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(

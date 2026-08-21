@@ -19,6 +19,7 @@ import '../../../../models/gif_models.dart';
 import '../../../../models/sticker_models.dart';
 import '../../../../services/api_reachability_service.dart';
 import '../../../../services/chat_service.dart';
+import '../../../../services/emoji_pack_service.dart';
 import '../../../../services/gif_search_service.dart';
 import '../../../../services/media_upload_service.dart';
 import '../../../../services/phone_contacts_service.dart';
@@ -1004,7 +1005,17 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
       );
       return;
     }
-    final installed = parsed.kind == 'emoji'
+    var kind = parsed.kind;
+    if (kind == 'any') {
+      try {
+        await EmojiPackService.getPackBySlug(parsed.slug);
+        kind = 'emoji';
+      } catch (_) {
+        kind = 'sticker';
+      }
+    }
+    if (!mounted) return;
+    final installed = kind == 'emoji'
         ? await Navigator.of(context).push<bool>(
             MaterialPageRoute(
               builder: (_) => EmojiPackPreviewScreen(slug: parsed.slug),
@@ -1024,7 +1035,7 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
     final text = raw.trim();
     if (text.isEmpty) return null;
     if (!text.contains('/')) {
-      return (kind: 'sticker', slug: text.toLowerCase());
+      return (kind: 'any', slug: text.toLowerCase());
     }
     final uri = Uri.tryParse(text);
     if (uri == null) return null;

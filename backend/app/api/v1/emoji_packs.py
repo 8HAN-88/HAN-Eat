@@ -162,7 +162,7 @@ def get_emoji_pack_by_slug(
     db: Session = Depends(get_db),
 ):
     svc = EmojiPackService(db)
-    pack = svc.get_public_pack_by_slug(slug)
+    pack = svc.get_pack_by_slug_for_user(current_user.id, slug)
     if not pack:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "pack_not_found")
     return _bundle(svc, current_user.id, [pack]).items[0]
@@ -175,7 +175,7 @@ def import_emoji_pack_by_slug(
     db: Session = Depends(get_db),
 ):
     svc = EmojiPackService(db)
-    pack = svc.get_public_pack_by_slug(slug)
+    pack = svc.get_pack_by_slug_for_user(current_user.id, slug)
     if not pack:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "pack_not_found")
     try:
@@ -392,11 +392,16 @@ def list_emoji_pack_for_sale(
 @router.post("/emoji/packs/{pack_id}/buy")
 def buy_emoji_pack(
     pack_id: int,
+    expected_price_stars: int | None = Query(None),
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
     try:
-        result = PackMarketplaceService(db).buy_emoji_pack(current_user.id, pack_id)
+        result = PackMarketplaceService(db).buy_emoji_pack(
+            current_user.id,
+            pack_id,
+            expected_price_stars=expected_price_stars,
+        )
         db.commit()
         return result
     except HTTPException:

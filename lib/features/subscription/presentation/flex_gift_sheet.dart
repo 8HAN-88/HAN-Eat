@@ -95,6 +95,27 @@ class _FlexGiftSheetState extends State<_FlexGiftSheet> {
   Future<void> _pay() async {
     final picked = _picked;
     if (picked == null || _paying) return;
+    final price = widget.me.priceForPlan(_level, _plan);
+    final period = widget.me.periodLabel(_plan);
+    final name = picked.name ?? picked.username ?? '#${picked.id}';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Подарить подписку?'),
+        content: Text('Уровень $_level · $price ₽ / $period\nПолучатель: $name'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Подарить за $price ₽'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
     setState(() => _paying = true);
     try {
       await FlexSubscriptionApi.giftCheckout(

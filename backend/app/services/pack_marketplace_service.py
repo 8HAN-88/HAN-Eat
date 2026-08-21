@@ -154,28 +154,56 @@ class PackMarketplaceService:
         )
         return installed is not None
 
-    def buy_sticker_pack(self, buyer_id: int, pack_id: int) -> dict:
+    @staticmethod
+    def _assert_expected_price(expected_price_stars: int | None, price: int) -> None:
+        if expected_price_stars is None:
+            return
+        if int(expected_price_stars) != int(price):
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                {
+                    "code": "price_changed",
+                    "message": "Цена пака изменилась",
+                    "price_stars": int(price),
+                },
+            )
+
+    def buy_sticker_pack(
+        self,
+        buyer_id: int,
+        pack_id: int,
+        expected_price_stars: int | None = None,
+    ) -> dict:
         pack = self.db.query(StickerPack).filter(StickerPack.id == pack_id).first()
         if not pack or not pack.is_public:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "pack_not_found")
+        price = int(getattr(pack, "price_stars", 0) or 0)
+        self._assert_expected_price(expected_price_stars, price)
         return self._buy(
             kind="sticker",
             buyer_id=buyer_id,
             pack_id=pack.id,
             seller_id=int(pack.owner_user_id),
-            price=int(getattr(pack, "price_stars", 0) or 0),
+            price=price,
         )
 
-    def buy_emoji_pack(self, buyer_id: int, pack_id: int) -> dict:
+    def buy_emoji_pack(
+        self,
+        buyer_id: int,
+        pack_id: int,
+        expected_price_stars: int | None = None,
+    ) -> dict:
         pack = self.db.query(EmojiPack).filter(EmojiPack.id == pack_id).first()
         if not pack or not pack.is_public:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "pack_not_found")
+        price = int(getattr(pack, "price_stars", 0) or 0)
+        self._assert_expected_price(expected_price_stars, price)
         return self._buy(
             kind="emoji",
             buyer_id=buyer_id,
             pack_id=pack.id,
             seller_id=int(pack.owner_user_id),
-            price=int(getattr(pack, "price_stars", 0) or 0),
+            price=price,
         )
 
     def _buy(

@@ -189,7 +189,10 @@ class _EmojiPackManageScreenState extends State<EmojiPackManageScreen> {
     if (!ok || !mounted) return;
     setState(() => _saving = true);
     try {
-      await EmojiPackService.buyPack(pack.id);
+      await EmojiPackService.buyPack(
+        pack.id,
+        expectedPriceStars: pack.priceStars,
+      );
       await _load();
     } catch (e) {
       if (!mounted) return;
@@ -396,7 +399,7 @@ class _EmojiPackManageScreenState extends State<EmojiPackManageScreen> {
                       )
                     else if (!pack.isOwned &&
                         !pack.isInstalled &&
-                        pack.priceStars <= 0)
+                        (pack.priceStars <= 0 || pack.isPurchased))
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                         child: SizedBox(
