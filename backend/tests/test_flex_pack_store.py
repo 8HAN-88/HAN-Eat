@@ -780,6 +780,10 @@ def test_flex_loss_unlists_priced_packs(db_session):
     assert ep.price_stars == 30
     assert emoji.list_marketplace() == []
     assert stickers.list_marketplace_packs() == []
+    assert emoji.list_catalog() == []
+    assert stickers.list_catalog_packs(user_id=seller.id) == []
+    assert market.is_actively_listed(pack, kind="sticker") is False
+    assert market.is_actively_listed(ep, kind="emoji") is False
     buyer = _user(db_session, 2)
     PaidFeaturesService(db_session).add_stars(buyer.id, 80, tx_type="admin_adjust")
     db_session.commit()

@@ -44,6 +44,7 @@ String parseApiErrorMessage(
         'Сначала откройте платное медиа, чтобы переслать',
       'pack_not_installed' =>
         'Сначала установите пак, чтобы закрепить его',
+      'not_for_sale' => 'Пак сейчас не продаётся',
       _ => detail,
     };
   }
@@ -62,6 +63,9 @@ String parseApiErrorMessage(
     }
     if (code == 'price_changed') {
       return 'Цена пака изменилась. Обновите витрину и подтвердите снова';
+    }
+    if (code == 'not_for_sale') {
+      return 'Пак сейчас не продаётся';
     }
     if (code == 'group_paid_required') {
       final price = detail['monthly_price_stars'];

@@ -252,6 +252,14 @@ async def create_post(
         else:
             publish_to = ["feed", "reels"] if request.type == "reel" else ["feed"]
 
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(
+        current_user.id,
+        request.title,
+        request.description,
+    )
+
     paid_fields = _paid_post_fields(
         bool(request.is_paid),
         request.price_stars,
@@ -520,6 +528,14 @@ async def update_post(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not allowed",
         )
+
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(
+        current_user.id,
+        request.title,
+        request.description,
+    )
 
     if request.title is not None:
         post.title = request.title

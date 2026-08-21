@@ -53,7 +53,7 @@ class _EmojiPackPreviewScreenState extends State<EmojiPackPreviewScreen> {
     final pack = _pack;
     if (pack == null) return;
     final needsBuy =
-        pack.priceStars > 0 && !pack.isOwned && !pack.isPurchased;
+        pack.isOnSale && !pack.isOwned && !pack.isPurchased;
     if (needsBuy) {
       final ok = await confirmStarsSpend(
         context,
@@ -193,7 +193,11 @@ class _EmojiPackPreviewScreenState extends State<EmojiPackPreviewScreen> {
                                     ? null
                                     : pack.isInstalled
                                         ? _uninstall
-                                        : _install),
+                                        : (pack.priceStars > 0 &&
+                                                !pack.isPurchased &&
+                                                !pack.isOnSale)
+                                            ? null
+                                            : _install),
                             icon: Icon(
                               pack.isInstalled && !pack.isOwned
                                   ? Icons.remove_circle_outline
@@ -204,10 +208,12 @@ class _EmojiPackPreviewScreenState extends State<EmojiPackPreviewScreen> {
                                   ? 'Ваш пак'
                                   : pack.isInstalled
                                       ? 'Удалить из своих'
-                                      : (pack.priceStars > 0 &&
-                                              !pack.isPurchased)
+                                      : (pack.isOnSale && !pack.isPurchased)
                                           ? 'Купить ${pack.priceStars} ★'
-                                          : 'Добавить эмодзи-пак',
+                                          : (pack.priceStars > 0 &&
+                                                  !pack.isPurchased)
+                                              ? 'Сейчас не продаётся'
+                                              : 'Добавить эмодзи-пак',
                             ),
                           ),
                         ),

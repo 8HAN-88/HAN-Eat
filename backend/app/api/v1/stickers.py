@@ -43,6 +43,17 @@ def _pack_share_link(slug: str) -> str:
     return f"https://haneat.app/stickers/{slug}"
 
 
+def _sticker_is_listed(pack: StickerPack) -> bool:
+    from sqlalchemy.orm import object_session
+
+    from app.services.pack_marketplace_service import PackMarketplaceService
+
+    sess = object_session(pack)
+    if sess is None:
+        return int(getattr(pack, "price_stars", 0) or 0) > 0
+    return PackMarketplaceService(sess).is_actively_listed(pack, kind="sticker")
+
+
 def _pack_response(
     pack: StickerPack,
     *,
@@ -74,6 +85,7 @@ def _pack_response(
         is_installed=pack.id in installed_pack_ids,
         is_owned=bool(viewer_user_id and int(pack.owner_user_id) == int(viewer_user_id)),
         is_purchased=pack.id in purchased_pack_ids,
+        is_listed=_sticker_is_listed(pack),
         price_stars=int(getattr(pack, "price_stars", 0) or 0),
         fee_stars=PaidFeaturesService.resale_fee_stars(
             int(getattr(pack, "price_stars", 0) or 0)

@@ -522,7 +522,7 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
                     ),
                     if (!pack.isOwned &&
                         !pack.isPurchased &&
-                        pack.priceStars > 0)
+                        pack.isOnSale)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                         child: SizedBox(

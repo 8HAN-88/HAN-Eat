@@ -420,7 +420,14 @@ class StickerService:
         term = (query or "").strip()
         if term:
             q = q.filter(StickerPack.title.ilike(f"%{term}%"))
-        return q.order_by(StickerPack.updated_at.desc(), StickerPack.id.desc()).limit(limit).all()
+        rows = q.order_by(StickerPack.updated_at.desc(), StickerPack.id.desc()).limit(
+            limit * 3
+        ).all()
+        from app.services.pack_marketplace_service import PackMarketplaceService
+
+        return PackMarketplaceService(self.db).filter_active_listings(
+            rows, kind="sticker"
+        )[:limit]
 
     def installed_pack_ids(self, user_id: int) -> set[int]:
         rows = (

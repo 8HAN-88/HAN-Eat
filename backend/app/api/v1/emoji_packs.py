@@ -34,6 +34,7 @@ class EmojiPackOut(BaseModel):
     is_installed: bool = False
     is_owned: bool = False
     is_purchased: bool = False
+    is_listed: bool = False
     price_stars: int = 0
     fee_stars: int = 0
     items: list[EmojiItemOut] = []
@@ -76,10 +77,12 @@ def _pack_out(
     purchased: set[int],
     items_by_pack: dict,
     authors: dict[int, str] | None = None,
+    listed_owners: set[int] | None = None,
 ) -> EmojiPackOut:
     items = items_by_pack.get(pack.id, [])
     price = int(getattr(pack, "price_stars", 0) or 0)
     owner_id = int(pack.owner_user_id)
+    listed = price > 0 and (listed_owners is None or owner_id in listed_owners)
     return EmojiPackOut(
         id=pack.id,
         title=pack.title,
@@ -90,6 +93,7 @@ def _pack_out(
         is_installed=pack.id in installed,
         is_owned=int(pack.owner_user_id) == int(user_id),
         is_purchased=pack.id in purchased,
+        is_listed=listed,
         price_stars=price,
         fee_stars=marketplace_fee_stars(price),
         items=[
@@ -109,6 +113,15 @@ def _pack_out(
 def _bundle(svc: EmojiPackService, user_id: int, packs) -> EmojiPackListOut:
     pack_ids = [p.id for p in packs]
     authors = owner_labels(svc.db, [p.owner_user_id for p in packs])
+    market = PackMarketplaceService(svc.db)
+    priced_owners = {
+        int(p.owner_user_id)
+        for p in packs
+        if int(getattr(p, "price_stars", 0) or 0) > 0
+    }
+    listed_owners = {
+        uid for uid in priced_owners if market.seller_can_list(uid, "emoji")
+    }
     return EmojiPackListOut(
         items=[
             _pack_out(
@@ -118,6 +131,7 @@ def _bundle(svc: EmojiPackService, user_id: int, packs) -> EmojiPackListOut:
                 purchased=svc.purchased_pack_ids(user_id),
                 items_by_pack=svc.emojis_by_pack_ids(pack_ids),
                 authors=authors,
+                listed_owners=listed_owners,
             )
             for p in packs
         ]

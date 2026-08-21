@@ -32,6 +32,7 @@ class EmojiPack {
     required this.isInstalled,
     this.isOwned = false,
     this.isPurchased = false,
+    this.isListed = false,
     this.priceStars = 0,
     this.feeStars = 0,
     required this.items,
@@ -48,6 +49,7 @@ class EmojiPack {
   final bool isInstalled;
   final bool isOwned;
   final bool isPurchased;
+  final bool isListed;
   final int priceStars;
   final int feeStars;
   final List<CustomEmojiItem> items;
@@ -61,6 +63,8 @@ class EmojiPack {
   }
 
   bool get canUse => isOwned || isPurchased || isInstalled;
+
+  bool get isOnSale => isListed && priceStars > 0;
 
   EmojiPack copyWith({
     String? title,
@@ -79,6 +83,7 @@ class EmojiPack {
       isInstalled: isInstalled ?? this.isInstalled,
       isOwned: isOwned,
       isPurchased: isPurchased,
+      isListed: isListed,
       priceStars: priceStars,
       feeStars: feeStars,
       items: items ?? this.items,
@@ -99,6 +104,8 @@ class EmojiPack {
       isInstalled: json['is_installed'] as bool? ?? false,
       isOwned: json['is_owned'] as bool? ?? false,
       isPurchased: json['is_purchased'] as bool? ?? false,
+      isListed: json['is_listed'] as bool? ??
+          ((json['price_stars'] as num?)?.toInt() ?? 0) > 0,
       priceStars: (json['price_stars'] as num?)?.toInt() ?? 0,
       feeStars: (json['fee_stars'] as num?)?.toInt() ?? 0,
       items: raw

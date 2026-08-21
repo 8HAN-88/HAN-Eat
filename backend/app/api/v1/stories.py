@@ -328,6 +328,9 @@ async def create_story(
         )
     hours = 48 if billing.has_feature(current_user.id, "longer_stories") else 24
     caption = (payload.caption or "").strip() or None
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(current_user.id, caption)
     if caption and len(caption) > 500:
         billing.require_feature(
             current_user.id,

@@ -323,7 +323,10 @@ class EmojiPackService:
         term = (query or "").strip()
         if term:
             q = q.filter(EmojiPack.title.ilike(f"%{term}%"))
-        return q.order_by(EmojiPack.updated_at.desc(), EmojiPack.id.desc()).limit(limit).all()
+        rows = q.order_by(EmojiPack.updated_at.desc(), EmojiPack.id.desc()).limit(limit * 3).all()
+        return PackMarketplaceService(self.db).filter_active_listings(
+            rows, kind="emoji"
+        )[:limit]
 
     def get_public_pack_by_slug(self, slug: str) -> Optional[EmojiPack]:
         clean = (slug or "").strip().lower()
@@ -413,6 +416,33 @@ class EmojiPackService:
             row = items.get(eid)
             if row is None or not self.can_use_emoji(user_id, row):
                 raise ValueError("custom_emoji_denied")
+
+    def require_send_tokens_http(self, user_id: int, *parts: Optional[str]) -> None:
+        from fastapi import HTTPException, status
+        from app.core.entitlements import feature_required_detail
+
+        try:
+            for part in parts:
+                self.require_send_tokens(user_id, part)
+        except ValueError as exc:
+            code = str(exc)
+            if code == "custom_emoji_required":
+                raise HTTPException(
+                    status.HTTP_403_FORBIDDEN,
+                    feature_required_detail(
+                        "custom_emoji",
+                        "Кастомные эмодзи в тексте доступны с уровня 69",
+                    ),
+                ) from exc
+            if code == "custom_emoji_denied":
+                raise HTTPException(
+                    status.HTTP_403_FORBIDDEN,
+                    {
+                        "code": "custom_emoji_denied",
+                        "message": "Этот эмодзи недоступен — купите пак",
+                    },
+                ) from exc
+            raise
 
     def require_reaction(self, user_id: int, emoji: str) -> Optional[str]:
         eid = parse_custom_reaction_id(emoji)

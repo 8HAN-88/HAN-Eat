@@ -24,6 +24,7 @@ class StickerPackResponse(BaseModel):
     is_installed: bool = False
     is_owned: bool = False
     is_purchased: bool = False
+    is_listed: bool = False
     price_stars: int = 0
     fee_stars: int = 0
     stickers: List[StickerItemResponse] = []

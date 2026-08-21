@@ -58,7 +58,7 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
       return;
     }
     final needsBuy =
-        pack.priceStars > 0 && !pack.isOwned && !pack.isPurchased;
+        pack.isOnSale && !pack.isOwned && !pack.isPurchased;
     if (needsBuy) {
       final ok = await confirmStarsSpend(
         context,
@@ -199,7 +199,11 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
                                     ? null
                                     : pack.isInstalled
                                         ? _uninstall
-                                        : _install),
+                                        : (pack.priceStars > 0 &&
+                                                !pack.isPurchased &&
+                                                !pack.isOnSale)
+                                            ? null
+                                            : _install),
                             icon: Icon(
                               pack.isInstalled && !pack.isOwned
                                   ? Icons.remove_circle_outline
@@ -210,10 +214,12 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
                                   ? 'Ваш пак'
                                   : pack.isInstalled
                                       ? 'Удалить из своих'
-                                      : (pack.priceStars > 0 &&
-                                              !pack.isPurchased)
+                                      : (pack.isOnSale && !pack.isPurchased)
                                           ? 'Купить ${pack.priceStars} ★'
-                                          : 'Добавить стикерпак',
+                                          : (pack.priceStars > 0 &&
+                                                  !pack.isPurchased)
+                                              ? 'Сейчас не продаётся'
+                                              : 'Добавить стикерпак',
                             ),
                           ),
                         ),

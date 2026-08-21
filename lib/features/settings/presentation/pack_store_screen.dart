@@ -513,9 +513,11 @@ class _PackStoreScreenState extends State<PackStoreScreen>
           leading: const Icon(Icons.sticky_note_2_outlined),
           title: Text(pack.title),
           subtitle: Text(
-            pack.priceStars > 0
+            pack.isOnSale
                 ? 'В магазине · ${pack.priceStars} ★'
-                : 'Не продаётся',
+                : (pack.priceStars > 0
+                    ? 'Снято с витрины · ${pack.priceStars} ★'
+                    : 'Не продаётся'),
           ),
           onTap: () async {
             await Navigator.of(context).push<void>(
@@ -538,9 +540,11 @@ class _PackStoreScreenState extends State<PackStoreScreen>
           leading: const Icon(Icons.emoji_emotions_outlined),
           title: Text(pack.title),
           subtitle: Text(
-            pack.priceStars > 0
+            pack.isOnSale
                 ? 'В магазине · ${pack.priceStars} ★'
-                : 'Не продаётся',
+                : (pack.priceStars > 0
+                    ? 'Снято с витрины · ${pack.priceStars} ★'
+                    : 'Не продаётся'),
           ),
           onTap: () async {
             await context.push(EmojiPackManageRoute.pathFor(pack.id));

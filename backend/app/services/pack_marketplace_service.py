@@ -118,10 +118,20 @@ class PackMarketplaceService:
         slug = "sticker_pack_sell" if kind == "sticker" else "emoji_pack_publish"
         return self.billing.has_feature(user_id, slug)
 
+    def is_actively_listed(self, pack, *, kind: PackKind) -> bool:
+        if int(getattr(pack, "price_stars", 0) or 0) <= 0:
+            return False
+        return self.seller_can_list(int(pack.owner_user_id), kind)
+
     def filter_active_listings(self, packs, *, kind: PackKind):
         owners = {int(p.owner_user_id) for p in packs}
         allowed = {uid for uid in owners if self.seller_can_list(uid, kind)}
-        return [p for p in packs if int(p.owner_user_id) in allowed]
+        return [
+            p
+            for p in packs
+            if int(getattr(p, "price_stars", 0) or 0) <= 0
+            or int(p.owner_user_id) in allowed
+        ]
 
     def has_sticker_access(self, user_id: int, pack: StickerPack) -> bool:
         if int(pack.owner_user_id) == int(user_id):

@@ -43,6 +43,10 @@ async def create_comment(
         )
     from app.services.anti_spam_service import AntiSpamService
 
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(current_user.id, text_value)
+
     ok, spam_msg = AntiSpamService(db).check_can_create_comment(current_user)
     if not ok:
         raise HTTPException(
