@@ -496,6 +496,7 @@ def test_purchased_emoji_access_survives_unlist(db_session):
     stranger = _user(db_session, 3)
     _activate(db_session, 1, 70)
     _activate(db_session, 2, 69)
+    _activate(db_session, 3, 69)
     emoji = EmojiPackService(db_session)
     pack = emoji.create_pack(seller.id, "Сняли с витрины")
     item = emoji.add_emoji(
