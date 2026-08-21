@@ -13527,7 +13527,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                     ),
                                   IconButton(
                                     icon: const Icon(Icons.delete_outline),
-                                    tooltip: 'Отменить',
+                                    tooltip: item.status == 'failed'
+                                        ? 'Удалить'
+                                        : 'Отменить',
                                     onPressed: () async {
                                       setModalState(
                                         () => items.removeWhere(

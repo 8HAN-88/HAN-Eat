@@ -658,6 +658,37 @@ def test_uninstall_keeps_purchased_status(db_session):
     assert buyer.emoji_status == f"ce:{item.id}"
 
 
+def test_visible_status_hides_custom_without_flex(db_session):
+    owner = _user(db_session, 1)
+    _activate(db_session, 1, 70)
+    emoji = EmojiPackService(db_session)
+    pack = emoji.create_pack(owner.id, "Статус на профиле", True)
+    item = emoji.add_emoji(
+        user_id=owner.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/status-flex.webp",
+    )
+    owner.emoji_status = f"ce:{item.id}"
+    db_session.commit()
+    assert emoji.visible_emoji_status(owner) == f"ce:{item.id}"
+    FlexSubscriptionService(db_session).deactivate(1)
+    db_session.commit()
+    db_session.refresh(owner)
+    assert owner.emoji_status == f"ce:{item.id}"
+    assert emoji.visible_emoji_status(owner) is None
+    _activate(db_session, 1, 69)
+    db_session.commit()
+    db_session.refresh(owner)
+    assert emoji.visible_emoji_status(owner) == f"ce:{item.id}"
+
+
+def test_visible_status_keeps_unicode(db_session):
+    user = _user(db_session, 1)
+    user.emoji_status = "🔥"
+    db_session.commit()
+    assert EmojiPackService(db_session).visible_emoji_status(user) == "🔥"
+
+
 def test_failed_scheduled_sticker_stays_listed(db_session):
     from datetime import datetime, timezone
 
@@ -688,7 +719,33 @@ def test_failed_scheduled_sticker_stays_listed(db_session):
         )
     )
     db_session.commit()
-    listed = ChatService(db_session).list_scheduled_messages(conv.id, buyer.id)
+    chat = ChatService(db_session)
+    listed = chat.list_scheduled_messages(conv.id, buyer.id)
     assert len(listed) == 1
     assert listed[0].status == "failed"
     assert listed[0].error_text == "Нужно купить пак"
+
+    from datetime import timedelta
+
+    later = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=2)
+    retried = chat.reschedule_message(conv.id, listed[0].id, buyer.id, send_at=later)
+    assert retried.status == "pending"
+    assert retried.error_text is None
+
+    failed = ScheduledMessage(
+        conversation_id=conv.id,
+        sender_id=buyer.id,
+        type="sticker",
+        content="",
+        media_url="https://cdn.test/sched-sticker-2.webp",
+        send_at=when,
+        status="failed",
+        error_text=ChatService._scheduled_fail_text("pack_purchase_required"),
+    )
+    db_session.add(failed)
+    db_session.commit()
+    db_session.refresh(failed)
+    canceled = chat.cancel_scheduled_message(conv.id, failed.id, buyer.id)
+    assert canceled.status == "canceled"
+    left = chat.list_scheduled_messages(conv.id, buyer.id)
+    assert [item.id for item in left] == [retried.id]

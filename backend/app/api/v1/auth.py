@@ -85,17 +85,20 @@ _AUTH_OPEN_PURPOSES = frozenset(
 )
 
 
-def _user_response(user: User) -> UserResponse:
+def _user_response(user: User, db: Session | None = None) -> UserResponse:
     from app.services.legal_consent_service import user_legal_fields
 
     data = UserResponse.model_validate(user, context={"include_phone": True})
     legal = user_legal_fields(user)
-    return data.model_copy(
-        update={
-            "email_verified": is_email_verified(user),
-            **legal,
-        }
-    )
+    updates = {
+        "email_verified": is_email_verified(user),
+        **legal,
+    }
+    if db is not None:
+        from app.services.emoji_pack_service import EmojiPackService
+
+        updates["emoji_status"] = EmojiPackService(db).visible_emoji_status(user)
+    return data.model_copy(update=updates)
 
 
 
@@ -155,11 +158,12 @@ def _auth_response(
     refresh_token: str,
     message: str | None = None,
     session_id: int | None = None,
+    db: Session | None = None,
 ) -> AuthResponse:
     return AuthResponse(
         token=access_token,
         refresh_token=refresh_token,
-        user=_user_response(user),
+        user=_user_response(user, db),
         message=message,
         session_id=session_id,
     )
@@ -341,7 +345,9 @@ async def register(
         )
 
     try:
-        return _auth_response(user, access_token, refresh_token, verify_msg, session_id)
+        return _auth_response(
+            user, access_token, refresh_token, verify_msg, session_id, db=db
+        )
     except Exception as validation_error:
         logger.error(f"UserResponse validation error during registration: {validation_error}")
         raise HTTPException(
@@ -416,7 +422,9 @@ async def login(
         access_token, refresh_token, session_id = _issue_auth_tokens(db, user, http_request)
 
         try:
-            return _auth_response(user, access_token, refresh_token, session_id=session_id)
+            return _auth_response(
+                user, access_token, refresh_token, session_id=session_id, db=db
+            )
         except Exception as validation_error:
             logger.error(f"UserResponse validation error: {validation_error}")
             raise HTTPException(
@@ -617,7 +625,9 @@ async def google_auth(request: GoogleAuthRequest, http_request: Request, db: Ses
             mark_email_verified(user)
             db.commit()
 
-        return _auth_response(user, access_token, refresh_token, session_id=session_id)
+        return _auth_response(
+            user, access_token, refresh_token, session_id=session_id, db=db
+        )
 
     except HTTPException:
         raise
@@ -717,7 +727,9 @@ async def yandex_auth(request: YandexAuthRequest, http_request: Request, db: Ses
             mark_email_verified(user)
             db.commit()
 
-        return _auth_response(user, access_token, refresh_token, session_id=session_id)
+        return _auth_response(
+            user, access_token, refresh_token, session_id=session_id, db=db
+        )
 
     except HTTPException:
         raise
@@ -1105,4 +1117,6 @@ async def totp_verify_login(
         user.is_private = False
         db.commit()
     access_token, refresh_token, session_id = _issue_auth_tokens(db, user, http_request)
-    return _auth_response(user, access_token, refresh_token, session_id=session_id)
+    return _auth_response(
+        user, access_token, refresh_token, session_id=session_id, db=db
+    )

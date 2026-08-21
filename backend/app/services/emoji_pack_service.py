@@ -441,6 +441,29 @@ class EmojiPackService:
             raise ValueError("custom_emoji_denied")
         return f"ce:{eid}"
 
+    def visible_emoji_status(self, user) -> Optional[str]:
+        """Public status: hide custom tokens without flex 69 or pack access.
+
+        The stored value stays so a later resub can restore it. Unicode
+        statuses are unchanged.
+        """
+        token = (getattr(user, "emoji_status", None) or "").strip()
+        if not token:
+            return None
+        eid = parse_custom_reaction_id(token)
+        if eid is None:
+            ids = parse_custom_emoji_ids(token)
+            eid = ids[0] if ids else None
+        if eid is None:
+            return token
+        billing = SubscriptionService(self.db)
+        if not billing.has_feature(int(user.id), "custom_emoji"):
+            return None
+        row = self.db.query(CustomEmoji).filter(CustomEmoji.id == eid).first()
+        if row is None or not self.can_use_emoji(int(user.id), row):
+            return None
+        return f"ce:{eid}"
+
     def get_pack(self, pack_id: int) -> Optional[EmojiPack]:
         return self.db.query(EmojiPack).filter(EmojiPack.id == pack_id).first()
 

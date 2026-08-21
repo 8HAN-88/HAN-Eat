@@ -3791,7 +3791,7 @@ class ChatService:
         )
         if not item:
             raise ValueError("not_found")
-        if item.status != "pending" or item.canceled_at is not None:
+        if item.status not in ("pending", "failed") or item.canceled_at is not None:
             raise ValueError("already_processed")
         item.status = "canceled"
         item.canceled_at = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -3816,7 +3816,7 @@ class ChatService:
         )
         if not item:
             raise ValueError("not_found")
-        if item.status != "pending" or item.canceled_at is not None:
+        if item.status not in ("pending", "failed") or item.canceled_at is not None:
             raise ValueError("already_processed")
 
         if content is not None:
@@ -3850,6 +3850,9 @@ class ChatService:
 
         if send_at is None and content is None:
             raise ValueError("empty_patch")
+        if item.status == "failed":
+            item.status = "pending"
+            item.error_text = None
         return item
 
     def dispatch_scheduled_messages(

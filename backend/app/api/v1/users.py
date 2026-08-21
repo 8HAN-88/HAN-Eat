@@ -58,6 +58,7 @@ async def get_current_user_profile(
 ):
     """Получить профиль текущего пользователя."""
     payload = UserResponse.model_validate(current_user, context=_USER_ME_CONTEXT)
+    from app.services.emoji_pack_service import EmojiPackService
     from app.services.subscription_service import SubscriptionService
 
     from app.services.business_profile_service import public_payload
@@ -68,6 +69,7 @@ async def get_current_user_profile(
                 current_user.id, "profile_decoration"
             ),
             "business": public_payload(db, current_user),
+            "emoji_status": EmojiPackService(db).visible_emoji_status(current_user),
         }
     )
 
@@ -411,12 +413,14 @@ async def get_user_profile(
     if not current_user or current_user.id != user_id:
         stats = stats.model_copy(update={"saved_count": 0})
 
+    from app.services.emoji_pack_service import EmojiPackService
     from app.services.subscription_service import SubscriptionService
 
     user_payload = UserResponse.model_validate(user).model_dump()
     user_payload["profile_decoration"] = SubscriptionService(db).has_feature(
         user.id, "profile_decoration"
     )
+    user_payload["emoji_status"] = EmojiPackService(db).visible_emoji_status(user)
     from app.services.business_profile_service import public_payload
 
     user_payload["business"] = public_payload(db, user)
@@ -688,8 +692,16 @@ async def update_user_profile(
     
     db.commit()
     db.refresh(current_user)
-    
-    return UserResponse.model_validate(current_user, context=_USER_ME_CONTEXT)
+
+    from app.services.emoji_pack_service import EmojiPackService
+
+    return UserResponse.model_validate(
+        current_user, context=_USER_ME_CONTEXT
+    ).model_copy(
+        update={
+            "emoji_status": EmojiPackService(db).visible_emoji_status(current_user),
+        }
+    )
 
 
 @router.get("/{user_id}/posts")

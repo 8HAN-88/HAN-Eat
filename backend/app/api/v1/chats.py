@@ -587,6 +587,7 @@ def _brief(
     send_restricted_until: Optional[datetime] = None,
     send_restriction_reason: Optional[str] = None,
 ) -> ChatUserBrief:
+    from app.services.emoji_pack_service import EmojiPackService
     from app.services.last_seen_privacy import can_viewer_see_last_seen
 
     last_seen = user.last_seen_at
@@ -612,24 +613,38 @@ def _brief(
         send_restricted_until=send_restricted_until,
         send_restriction_reason=send_restriction_reason,
         paid_message_stars=max(0, int(getattr(user, "paid_message_stars", 0) or 0)),
-        emoji_status=getattr(user, "emoji_status", None),
+        emoji_status=(
+            EmojiPackService(db).visible_emoji_status(user)
+            if db is not None
+            else getattr(user, "emoji_status", None)
+        ),
         profile_color=getattr(user, "profile_color", None),
     )
 
 
-def _group_ban_response(item: dict) -> GroupMemberBanResponse:
+def _group_ban_response(
+    item: dict,
+    *,
+    viewer_id: Optional[int] = None,
+    db: Optional[Session] = None,
+) -> GroupMemberBanResponse:
     return GroupMemberBanResponse(
-        user=_brief(item["user"]),
+        user=_brief(item["user"], viewer_id=viewer_id, db=db),
         reason=item.get("reason"),
         banned_until=item.get("banned_until"),
         banned_at=item.get("banned_at"),
     )
 
 
-def _group_join_request_response(item: dict) -> GroupJoinRequestResponse:
+def _group_join_request_response(
+    item: dict,
+    *,
+    viewer_id: Optional[int] = None,
+    db: Optional[Session] = None,
+) -> GroupJoinRequestResponse:
     return GroupJoinRequestResponse(
         id=item["id"],
-        user=_brief(item["user"]),
+        user=_brief(item["user"], viewer_id=viewer_id, db=db),
         status=item["status"],
         requested_at=item["requested_at"],
     )
@@ -5654,7 +5669,9 @@ async def list_group_bans(
     except ValueError:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
     return GroupMemberBanListResponse(
-        items=[_group_ban_response(r) for r in rows],
+        items=[
+            _group_ban_response(r, viewer_id=current_user.id, db=db) for r in rows
+        ],
     )
 
 
@@ -5772,7 +5789,10 @@ async def list_group_join_requests(
         db.rollback()
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
     return GroupJoinRequestListResponse(
-        items=[_group_join_request_response(r) for r in rows]
+        items=[
+            _group_join_request_response(r, viewer_id=current_user.id, db=db)
+            for r in rows
+        ]
     )
 
 
@@ -5856,7 +5876,7 @@ async def list_join_requests_inbox(
             JoinRequestsInboxItemResponse(
                 id=row["id"],
                 conversation=conv_item,
-                user=_brief(row["user"]),
+                user=_brief(row["user"], viewer_id=current_user.id, db=db),
                 status=row["status"],
                 requested_at=row["requested_at"],
             )
@@ -5900,7 +5920,9 @@ async def list_group_moderation_log(
                 action=_moderation_action_from_text(m.content),
                 text=m.content,
                 created_at=m.created_at,
-                actor=_brief(actors[m.sender_id]) if m.sender_id in actors else None,
+                actor=_brief(actors[m.sender_id], viewer_id=current_user.id, db=db)
+                if m.sender_id in actors
+                else None,
             )
             for m in rows
         ]
@@ -5938,7 +5960,11 @@ async def list_contacts(
         user = db.query(User).filter(User.id == row.contact_user_id).first()
         if user:
             items.append(
-                ContactResponse(id=row.id, user=_brief(user), created_at=row.created_at)
+                ContactResponse(
+                    id=row.id,
+                    user=_brief(user, viewer_id=current_user.id, db=db),
+                    created_at=row.created_at,
+                )
             )
     return ContactListResponse(items=items)
 
@@ -5962,7 +5988,11 @@ async def add_contact(
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot add yourself")
         raise
     user = db.query(User).filter(User.id == row.contact_user_id).first()
-    return ContactResponse(id=row.id, user=_brief(user), created_at=row.created_at)
+    return ContactResponse(
+        id=row.id,
+        user=_brief(user, viewer_id=current_user.id, db=db),
+        created_at=row.created_at,
+    )
 
 
 @router.post("/contacts/phone-sync", response_model=PhoneSyncResponse)
