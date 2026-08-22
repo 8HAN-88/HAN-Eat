@@ -89,10 +89,13 @@ def send_verify_email(db: Session, user: User) -> None:
     )
     link = email_web_link("verify-email", raw)
     subject = "Подтвердите email — HanWe"
+    from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
+    greet_name = preview_text_with_custom_emoji((user.name or "").strip() or "друг", limit=80)
     text, html = render_branded_email(
         preheader="Подтвердите email, чтобы войти в HanWe",
         title="Подтвердите ваш email",
-        greeting=f"Здравствуйте, {user.name}!",
+        greeting=f"Здравствуйте, {greet_name}!",
         paragraphs=[
             "Спасибо за регистрацию в HanWe. Нажмите кнопку ниже, "
             "чтобы подтвердить адрес почты и завершить создание аккаунта.",
@@ -114,7 +117,9 @@ def send_password_reset_email(db: Session, user: User) -> bool:
     )
     link = email_web_link("reset-password", raw)
     subject = "Сброс пароля — HanWe"
-    display_name = (user.name or "").strip() or "друг"
+    from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
+    display_name = preview_text_with_custom_emoji((user.name or "").strip() or "друг", limit=80)
     text, html = render_branded_email(
         preheader="Запрос на сброс пароля в HanWe",
         title="Сброс пароля",

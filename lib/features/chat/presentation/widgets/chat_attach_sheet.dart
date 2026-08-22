@@ -33,6 +33,7 @@ import '../../application/chat_recent_gifs_store.dart';
 import '../../application/chat_sticker_pinned_packs_store.dart';
 import '../../application/chat_recent_stickers_store.dart';
 import '../../../../widgets/chat_sticker_tile.dart';
+import '../../../../widgets/highlighted_text.dart';
 import '../../../../services/auth_service.dart';
 import '../sticker_pack_manage_screen.dart';
 import '../sticker_pack_preview_screen.dart';
@@ -3013,11 +3014,12 @@ class _StickerPacksContent extends StatelessWidget {
                   const SizedBox(width: 6),
                 ],
                 Expanded(
-                  child: Text(
-                    pack.title,
+                  child: HighlightedText(
+                    text: pack.title,
                     style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                          fontWeight: FontWeight.w700,
+                        ) ??
+                        const TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ),
                 OutlinedButton(
@@ -3263,9 +3265,10 @@ class _StickerPackQuickPreviewSheetState
             Row(
               children: [
                 Expanded(
-                  child: Text(
-                    pack.title,
-                    style: Theme.of(context).textTheme.titleMedium,
+                  child: HighlightedText(
+                    text: pack.title,
+                    style: Theme.of(context).textTheme.titleMedium ??
+                        const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                 ),
                 if (pack.isPremium)

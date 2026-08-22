@@ -47,6 +47,9 @@ def toggle_favorite(
     count = db.query(GifFavorite).filter(GifFavorite.user_id == user_id).count()
     if count >= MAX_GIF_FAVORITES:
         raise GifFavoriteError("gif_favorite_limit")
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(user_id, title)
     row = GifFavorite(
         user_id=user_id,
         media_url=url,

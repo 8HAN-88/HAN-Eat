@@ -10203,11 +10203,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final text = content.trim();
     switch (messageType) {
       case 'image':
-        return text.isEmpty ? '📷 Фото' : '📷 Подпись: $text';
+        return text.isEmpty
+            ? '📷 Фото'
+            : '📷 Подпись: ${previewTextWithCustomEmoji(text)}';
       case 'video':
-        return text.isEmpty ? '🎬 Видео' : '🎬 Подпись: $text';
+        return text.isEmpty
+            ? '🎬 Видео'
+            : '🎬 Подпись: ${previewTextWithCustomEmoji(text)}';
       case 'video_note':
-        return text.isEmpty ? '⭕ Видеосообщение' : '⭕ Подпись: $text';
+        return text.isEmpty
+            ? '⭕ Видеосообщение'
+            : '⭕ Подпись: ${previewTextWithCustomEmoji(text)}';
       case 'file':
         return text.isEmpty
             ? '📎 Файл'
@@ -10217,13 +10223,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       case 'sticker':
         return '🧩 Стикер';
       case 'poll':
-        return text.isEmpty ? '📊 Опрос' : '📊 $text';
+        return text.isEmpty ? '📊 Опрос' : '📊 ${previewTextWithCustomEmoji(text)}';
       case 'checklist':
         return ChatChecklist.tryParse(content)?.preview ?? '☑ Чеклист';
       case 'location':
         return '📍 Геопозиция';
       default:
-        return text.isEmpty ? '—' : text;
+        return text.isEmpty ? '—' : previewTextWithCustomEmoji(text);
     }
   }
 
@@ -11783,8 +11789,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      author,
+                    HighlightedText(
+                      text: author,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -18033,7 +18039,11 @@ class _Bubble extends StatelessWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(btn.text),
+                          HighlightedText(
+                            text: btn.text,
+                            style: Theme.of(context).textTheme.labelLarge ??
+                                const TextStyle(fontSize: 14),
+                          ),
                           if (btn.isWebApp) ...[
                             const SizedBox(width: 6),
                             Icon(

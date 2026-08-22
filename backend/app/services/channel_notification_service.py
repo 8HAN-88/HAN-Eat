@@ -79,14 +79,15 @@ def send_channel_post_notification(
 
     from app.services.emoji_pack_service import preview_text_with_custom_emoji
 
+    channel_label = preview_text_with_custom_emoji(channel.name or "", limit=80)
     notification_type = "channel_post"
-    title = f"Новый пост в канале {channel.name}"
+    title = f"Новый пост в канале {channel_label}"
     raw_title = (post_title or "").strip()
     body = preview_text_with_custom_emoji(raw_title) if raw_title else "Новый пост"
 
     if post_type == "reel":
         notification_type = "channel_video"
-        title = f"Новое видео в канале {channel.name}"
+        title = f"Новое видео в канале {channel_label}"
         body = preview_text_with_custom_emoji(raw_title) if raw_title else "Новое видео"
 
     notifications = []
@@ -104,7 +105,7 @@ def send_channel_post_notification(
             body=body,
             data={
                 "channel_id": channel_id,
-                "channel_name": channel.name,
+                "channel_name": channel_label,
                 "post_id": post_id,
                 "post_type": post_type,
             },
@@ -139,6 +140,10 @@ def send_channel_announcement(
     if not subscribers:
         return
 
+    from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
+    channel_label = preview_text_with_custom_emoji(channel.name or "", limit=80)
+    body = preview_text_with_custom_emoji(announcement_text)
     notifications = []
     for subscriber in subscribers:
         if getattr(subscriber, "notifications_enabled", True) is False:
@@ -150,11 +155,11 @@ def send_channel_announcement(
             entity_type="channel",
             entity_id=channel_id,
             actor_id=author_id,
-            title=f"Объявление от {channel.name}",
-            body=announcement_text,
+            title=f"Объявление от {channel_label}",
+            body=body,
             data={
                 "channel_id": channel_id,
-                "channel_name": channel.name,
+                "channel_name": channel_label,
             },
             is_read=False,
             created_at=datetime.utcnow()

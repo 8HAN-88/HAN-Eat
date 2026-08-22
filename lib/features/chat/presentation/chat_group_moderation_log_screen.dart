@@ -3,7 +3,9 @@ import 'package:intl/intl.dart';
 
 import '../../../models/chat_models.dart';
 import '../../../services/chat_service.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/highlighted_text.dart';
 
 class ChatGroupModerationLogScreen extends StatefulWidget {
   const ChatGroupModerationLogScreen({
@@ -133,8 +135,14 @@ class _ChatGroupModerationLogScreenState
                           ).format(item.createdAt.toLocal());
                           return ListTile(
                             leading: const Icon(Icons.shield_outlined),
-                            title: Text(item.text),
-                            subtitle: Text('$actor • $ts'),
+                            title: HighlightedText(
+                              text: item.text,
+                              style: Theme.of(context).textTheme.bodyLarge ??
+                                  const TextStyle(fontSize: 16),
+                            ),
+                            subtitle: Text(
+                              '${previewTextWithCustomEmoji(actor)} • $ts',
+                            ),
                           );
                         },
                       ),

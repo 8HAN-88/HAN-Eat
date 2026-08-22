@@ -382,8 +382,13 @@ class CallService:
 
     def notify_incoming(self, call: CallSession) -> None:
         """Publish SSE invite + ephemeral FCM after the call row is committed."""
+        from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
         caller = self.db.query(User).filter(User.id == call.caller_id).first()
-        caller_name = (caller.name if caller else None) or "Звонок"
+        caller_name = preview_text_with_custom_emoji(
+            (caller.name if caller else None) or "Звонок",
+            limit=80,
+        )
         self._publish(
             call.callee_id,
             "call.invite",
@@ -662,8 +667,13 @@ class CallService:
             for uid in self._participant_ids(call.id, live_only=True)
             if uid != call.caller_id
         ]
+        from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
         host = self.db.query(User).filter(User.id == call.caller_id).first()
-        host_name = (host.name if host else None) or "Групповой звонок"
+        host_name = preview_text_with_custom_emoji(
+            (host.name if host else None) or "Групповой звонок",
+            limit=80,
+        )
         for uid in invite_ids:
             self._publish(
                 uid,

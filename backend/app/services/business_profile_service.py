@@ -362,6 +362,7 @@ def update_settings(db: Session, user: User, body: dict[str, Any]) -> dict[str, 
             if "location_address" in body
             else (row.location_address or "")
         )
+        EmojiPackService(db).require_send_tokens_http(user.id, address)
         if lat is None or lng is None or lat == "" or lng == "":
             row.location_lat = None
             row.location_lng = None

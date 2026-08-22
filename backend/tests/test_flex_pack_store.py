@@ -1046,3 +1046,39 @@ def test_checklist_and_file_preview_hide_custom_emoji_tokens():
     file_preview = ChatService(None)._message_preview_text(_Msg())
     assert "[[e:" not in file_preview
     assert "✦" in file_preview
+
+
+def test_report_comment_requires_custom_emoji(db_session):
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    from app.services.content_report_service import ContentReportService
+
+    with pytest.raises(HTTPException) as err:
+        ContentReportService(db_session).create_report(
+            content_type="post",
+            content_id=1,
+            reporter_user_id=owner.id,
+            reason="spam",
+            comment=token,
+        )
+    assert err.value.status_code == 403
+
+
+def test_payout_note_requires_custom_emoji(db_session):
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    with pytest.raises(HTTPException) as err:
+        PaidFeaturesService(db_session).request_creator_payout(
+            owner.id,
+            10,
+            note=token,
+        )
+    assert err.value.status_code == 403
+
+
+def test_channel_push_title_hides_custom_emoji_tokens():
+    from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
+    title = f"Новый пост в канале {preview_text_with_custom_emoji('еда [[e:12]]', limit=80)}"
+    assert "[[e:" not in title
+    assert "✦" in title

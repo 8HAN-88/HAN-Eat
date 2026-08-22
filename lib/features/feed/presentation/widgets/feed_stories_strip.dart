@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../services/custom_emoji_registry.dart';
 import '../../../../services/auth_service.dart';
 import '../../../../services/server_config.dart';
 import '../../../stories/data/story_models.dart';
@@ -303,7 +304,7 @@ class _StoryRing extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                label,
+                previewTextWithCustomEmoji(label),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,

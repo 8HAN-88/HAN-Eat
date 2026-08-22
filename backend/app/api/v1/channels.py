@@ -1068,20 +1068,17 @@ async def approve_channel_join_request(
     db.refresh(channel)
 
     try:
-        from app.models.notification import Notification
+        from app.services.notification_service import NotificationService
 
-        db.add(
-            Notification(
-                user_id=user_id,
-                type="channel_join_approved",
-                entity_type="channel",
-                entity_id=channel_id,
-                actor_id=current_user.id,
-                title=f"Вас приняли в канал «{channel.name}»",
-                body="Теперь доступны все публикации канала.",
-                data={"channel_id": channel_id, "channel_name": channel.name},
-                is_read=False,
-            )
+        NotificationService(db).create_notification(
+            user_id=user_id,
+            type="channel_join_approved",
+            title=f"Вас приняли в канал «{channel.name}»",
+            body="Теперь доступны все публикации канала.",
+            entity_type="channel",
+            entity_id=channel_id,
+            actor_id=current_user.id,
+            data={"channel_id": channel_id, "channel_name": channel.name},
         )
         db.commit()
     except Exception as e:

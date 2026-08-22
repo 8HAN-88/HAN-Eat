@@ -845,6 +845,9 @@ class PaidFeaturesService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Amount must be positive",
             )
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(self.db).require_send_tokens_http(user_id, note)
         balance = self.creator_balance(user_id)
         available = int(balance.available_stars or 0)
         if amount_stars > available:

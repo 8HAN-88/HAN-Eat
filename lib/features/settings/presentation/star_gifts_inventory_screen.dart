@@ -9,6 +9,7 @@ import '../../../models/chat_models.dart';
 import '../../../services/chat_service.dart';
 import '../../../services/paid_features_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/stars_pay_helper.dart';
@@ -94,7 +95,7 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('Конвертировать подарок'),
         content: Text(
-          '«${gift.title}» будет убран с профиля. Вы получите ${gift.stars} ★ на баланс.',
+          '«${previewTextWithCustomEmoji(gift.title)}» будет убран с профиля. Вы получите ${gift.stars} ★ на баланс.',
         ),
         actions: [
           TextButton(
@@ -180,7 +181,7 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
       context,
       title: 'Улучшить до коллекционного',
       body:
-          '«${gift.title}» получит уникальный номер. Стоимость улучшения: ${gift.upgradeStars} ★.',
+          '«${previewTextWithCustomEmoji(gift.title)}» получит уникальный номер. Стоимость улучшения: ${gift.upgradeStars} ★.',
       amountStars: gift.upgradeStars,
       confirmLabel: 'Улучшить',
     );
@@ -230,7 +231,7 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
       final ok = await confirmStarsSpend(
         context,
         title: 'Передать подарок',
-        body: '«${gift.title}» будет передан другому пользователю.',
+        body: '«${previewTextWithCustomEmoji(gift.title)}» будет передан другому пользователю.',
         amountStars: fee,
         confirmLabel: 'Передать',
       );
@@ -543,8 +544,8 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            gift.title,
+                          HighlightedText(
+                            text: gift.title,
                             style: const TextStyle(fontWeight: FontWeight.w800),
                           ),
                           Text(

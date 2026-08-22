@@ -19,6 +19,7 @@ import '../../../../services/phone_contacts_service.dart';
 import '../../../../services/phone_link_prompt_store.dart';
 import '../../../../utils/api_error_parser.dart';
 import '../../../../widgets/app_empty_state.dart';
+import '../../../../widgets/highlighted_text.dart';
 import 'chats_hub_tiles.dart';
 
 class ChatsHubContactsTab extends StatefulWidget {
@@ -590,7 +591,13 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
               if (matched != null) {
                 return ListTile(
                   leading: ChatHubUserAvatar(user: matched.brief),
-                  title: Text(entry.displayName),
+                  title: HighlightedText(
+                    text: entry.displayName,
+                    style: Theme.of(context).textTheme.bodyLarge ??
+                        const TextStyle(fontSize: 16),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   subtitle: Text(
                     matched.name ?? '@${matched.username ?? matched.id}',
                   ),
@@ -614,7 +621,13 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
-                title: Text(entry.displayName),
+                title: HighlightedText(
+                  text: entry.displayName,
+                  style: Theme.of(context).textTheme.bodyLarge ??
+                      const TextStyle(fontSize: 16),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 subtitle: Text(entry.phoneE164),
                 trailing: FilledButton.tonal(
                   onPressed: () => AppInviteService.inviteContact(
@@ -641,7 +654,13 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
                 children: [
                   ListTile(
                     leading: ChatHubUserAvatar(user: contact.user),
-                    title: Text(contact.user.displayName),
+                    title: HighlightedText(
+                      text: contact.user.displayName,
+                      style: Theme.of(context).textTheme.bodyLarge ??
+                          const TextStyle(fontSize: 16),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     subtitle: contact.user.username != null
                         ? Text('@${contact.user.username}')
                         : null,
