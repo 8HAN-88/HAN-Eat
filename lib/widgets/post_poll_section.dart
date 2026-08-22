@@ -4,6 +4,7 @@ import '../models/post.dart';
 import '../services/post_service.dart';
 import '../utils/api_error_parser.dart';
 import 'app_avatar.dart';
+import 'highlighted_text.dart';
 
 /// Опрос в посте ленты / канала с возможностью голосования.
 class PostPollSection extends StatefulWidget {
@@ -262,11 +263,12 @@ class _PostPollSectionState extends State<PostPollSection> {
                 ],
               ),
               const SizedBox(height: 10),
-              Text(
-                _poll.question,
+              HighlightedText(
+                text: _poll.question,
                 style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+                      fontWeight: FontWeight.w600,
+                    ) ??
+                    const TextStyle(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 14),
               if (_poll.hasVoted && !_poll.isClosed)
@@ -307,9 +309,10 @@ class _PostPollSectionState extends State<PostPollSection> {
                               color: theme.colorScheme.outlineVariant,
                             ),
                           ),
-                          child: Text(
-                            option.text,
-                            style: theme.textTheme.bodyMedium,
+                          child: HighlightedText(
+                            text: option.text,
+                            style: theme.textTheme.bodyMedium ??
+                                const TextStyle(fontSize: 14),
                           ),
                         ),
                       ),
@@ -339,13 +342,14 @@ class _PostPollSectionState extends State<PostPollSection> {
                                   ),
                                 ),
                               Expanded(
-                                child: Text(
-                                  option.text,
+                                child: HighlightedText(
+                                  text: option.text,
                                   style: theme.textTheme.bodyMedium?.copyWith(
-                                    fontWeight: isSelected
-                                        ? FontWeight.w600
-                                        : FontWeight.normal,
-                                  ),
+                                        fontWeight: isSelected
+                                            ? FontWeight.w600
+                                            : FontWeight.normal,
+                                      ) ??
+                                      const TextStyle(fontSize: 14),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),

@@ -94,8 +94,9 @@ class NotificationService:
         if post_author_id == commenter_id:
             return
         
-        # Обрезаем текст комментария для уведомления
-        preview = comment_text[:100] + "..." if len(comment_text) > 100 else comment_text
+        from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
+        preview = preview_text_with_custom_emoji(comment_text, limit=100)
         
         notification = self.create_notification(
             user_id=post_author_id,

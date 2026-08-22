@@ -6,6 +6,7 @@ import '../../../../services/notification_service.dart';
 import '../../../../services/server_config.dart';
 import '../../../../services/user_service.dart' as user_service;
 import '../../../../widgets/app_avatar.dart';
+import '../../../../widgets/highlighted_text.dart';
 import '../notification_formatters.dart';
 
 class NotificationTile extends StatefulWidget {
@@ -246,8 +247,8 @@ class _CommentQuote extends StatelessWidget {
           color: scheme.outlineVariant.withValues(alpha: 0.35),
         ),
       ),
-      child: Text(
-        text,
+      child: HighlightedText(
+        text: text,
         maxLines: 3,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(

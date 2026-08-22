@@ -45,7 +45,7 @@ class StoryReactionSummary(BaseModel):
 
 
 class StoryReactionRequest(BaseModel):
-    emoji: str = Field(..., min_length=1, max_length=16)
+    emoji: str = Field(..., min_length=1, max_length=32)
 
 
 class StoryResponse(BaseModel):
@@ -493,8 +493,14 @@ async def set_story_reaction(
         raise HTTPException(status_code=400, detail="Cannot react to your own story")
 
     emoji = (payload.emoji or "").strip()
-    if not emoji or len(emoji) > 16:
+    if not emoji or len(emoji) > 32:
         raise HTTPException(status_code=400, detail="Invalid emoji")
+
+    from app.services.emoji_pack_service import EmojiPackService
+
+    custom = EmojiPackService(db).require_reaction_http(current_user.id, emoji)
+    if custom:
+        emoji = custom
 
     existing = (
         db.query(StoryReaction)

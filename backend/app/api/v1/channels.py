@@ -1495,10 +1495,16 @@ async def create_channel_post(
 
     from app.services.emoji_pack_service import EmojiPackService
 
+    poll_parts: list = []
+    if getattr(request, "poll", None) is not None:
+        poll_parts.append(request.poll.question)
+        poll_parts.extend(request.poll.options or [])
     EmojiPackService(db).require_send_tokens_http(
         current_user.id,
         request.title,
         request.description,
+        request.link.preview if getattr(request, "link", None) is not None else None,
+        *poll_parts,
     )
     
     # Формируем body для поста
@@ -1632,10 +1638,16 @@ async def update_channel_post(
 
     from app.services.emoji_pack_service import EmojiPackService
 
+    poll_parts: list = []
+    if request.poll is not None:
+        poll_parts.append(request.poll.question)
+        poll_parts.extend(request.poll.options or [])
     EmojiPackService(db).require_send_tokens_http(
         current_user.id,
         request.title,
         request.description,
+        request.link.preview if request.link is not None else None,
+        *poll_parts,
     )
     
     # Обновляем поля поста

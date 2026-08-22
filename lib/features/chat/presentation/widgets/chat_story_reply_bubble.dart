@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../services/server_config.dart';
+import '../../../../widgets/highlighted_text.dart';
 
 class ChatStoryReplyPayload {
   const ChatStoryReplyPayload({
@@ -162,8 +163,8 @@ class ChatStoryReplyBubble extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-            child: Text(
-              payload.text,
+            child: HighlightedText(
+              text: payload.text,
               style: TextStyle(
                 color: foregroundColor,
                 fontSize: 15,

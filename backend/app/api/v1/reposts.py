@@ -207,6 +207,9 @@ async def repost_to_channel(
     source_title = effective_repost_source_title(post)
     deep_link = f"haneat://post/{post.id}"
     comment = (request.comment or "").strip()
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(current_user.id, comment)
     display_title = f"Репост: {source_title}"
 
     repost_post = Post(

@@ -1192,8 +1192,8 @@ class _NewPostCardState extends State<NewPostCard>
                             if (repostedBy.comment != null &&
                                 repostedBy.comment!.trim().isNotEmpty) ...[
                               const SizedBox(height: 6),
-                              Text(
-                                repostedBy.comment!.trim(),
+                              HighlightedText(
+                                text: repostedBy.comment!.trim(),
                                 style: TextStyle(
                                   fontSize: 14,
                                   height: 1.35,
@@ -1392,8 +1392,8 @@ class _NewPostCardState extends State<NewPostCard>
                           if (repostedBy.comment != null &&
                               repostedBy.comment!.trim().isNotEmpty) ...[
                             const SizedBox(height: 6),
-                            Text(
-                              repostedBy.comment!.trim(),
+                            HighlightedText(
+                              text: repostedBy.comment!.trim(),
                               style: TextStyle(
                                 fontSize: 14,
                                 height: 1.35,
@@ -1404,8 +1404,8 @@ class _NewPostCardState extends State<NewPostCard>
                         ]
                         // Для постов из каналов показываем описание канала или "Канал"
                         else if (isFromChannel && !isFeedChannelRepostWrapper)
-                          Text(
-                            channel?.description ?? 'Канал',
+                          HighlightedText(
+                            text: channel?.description ?? 'Канал',
                             style: TextStyle(
                               color: scheme.onSurfaceVariant,
                               fontSize: 12,

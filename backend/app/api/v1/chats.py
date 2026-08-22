@@ -3719,6 +3719,16 @@ async def add_chat_poll_option(
             "invalid_poll",
         ):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        if code == "custom_emoji_required":
+            _raise_flex_gate(code)
+        if code == "custom_emoji_denied":
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                {
+                    "code": "custom_emoji_denied",
+                    "message": "Этот эмодзи недоступен — купите пак",
+                },
+            )
         raise
 
     conv = (

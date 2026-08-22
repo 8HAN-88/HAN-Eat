@@ -109,7 +109,7 @@ class ChatHubTile extends StatelessWidget {
     if (hasTyping) {
       body = typing;
     } else if (hasDraft) {
-      body = draft;
+      body = previewTextWithCustomEmoji(draft);
     } else {
       body = _bodyPreview(last);
     }

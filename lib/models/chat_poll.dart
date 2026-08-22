@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import '../services/custom_emoji_registry.dart';
+
 /// Настройки опроса в чате (как в Telegram).
 class ChatPollSettings {
   const ChatPollSettings({
@@ -223,7 +225,7 @@ ChatPollMessage? parseChatPollFromContent(String content) {
 String chatPollPreviewText(ChatPollMessage poll) {
   final q = poll.question.trim();
   if (q.isEmpty) return poll.settings.quizMode ? '📊 Викторина' : '📊 Опрос';
-  return '📊 $q';
+  return '📊 ${previewTextWithCustomEmoji(q)}';
 }
 
 /// Maps a quiz "correct" controller index onto compacted non-empty option indices.

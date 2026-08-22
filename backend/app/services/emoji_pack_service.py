@@ -444,6 +444,32 @@ class EmojiPackService:
                 ) from exc
             raise
 
+    def require_reaction_http(self, user_id: int, emoji: str) -> Optional[str]:
+        from fastapi import HTTPException, status
+        from app.core.entitlements import feature_required_detail
+
+        try:
+            return self.require_reaction(user_id, emoji)
+        except ValueError as exc:
+            code = str(exc)
+            if code == "custom_emoji_reaction_required":
+                raise HTTPException(
+                    status.HTTP_403_FORBIDDEN,
+                    feature_required_detail(
+                        "custom_emoji_reactions",
+                        "Реакции своими эмодзи доступны с уровня 72",
+                    ),
+                ) from exc
+            if code == "custom_emoji_denied":
+                raise HTTPException(
+                    status.HTTP_403_FORBIDDEN,
+                    {
+                        "code": "custom_emoji_denied",
+                        "message": "Этот эмодзи недоступен — купите пак",
+                    },
+                ) from exc
+            raise
+
     def require_reaction(self, user_id: int, emoji: str) -> Optional[str]:
         eid = parse_custom_reaction_id(emoji)
         if eid is None:

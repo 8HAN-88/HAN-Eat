@@ -22,6 +22,7 @@ import '../../chat/presentation/widgets/chat_story_reply_bubble.dart';
 import '../data/story_models.dart';
 import '../data/story_service.dart';
 import '../../../widgets/highlighted_text.dart';
+import '../../../widgets/custom_emoji_view.dart';
 
 /// Один элемент сторис
 class StoryItem {
@@ -538,9 +539,6 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     }
 
     final story = _currentStory;
-    final reactionLabel = story.reactions.isEmpty
-        ? null
-        : story.reactions.map((r) => '${r.emoji}${r.count}').join(' ');
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -616,11 +614,32 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    if (reactionLabel != null) ...[
+                    if (story.reactions.isNotEmpty) ...[
                       const SizedBox(width: 8),
-                      Text(
-                        reactionLabel,
-                        style: const TextStyle(color: Colors.white70),
+                      Flexible(
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 2,
+                          children: [
+                            for (final reaction in story.reactions)
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  ReactionEmojiView(
+                                    token: reaction.emoji,
+                                    size: 14,
+                                  ),
+                                  Text(
+                                    '${reaction.count}',
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                          ],
+                        ),
                       ),
                     ],
                   ],

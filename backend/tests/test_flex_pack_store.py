@@ -214,6 +214,35 @@ def test_preview_hides_custom_emoji_tokens():
     assert preview_text_with_custom_emoji("   ") == "Сообщение"
 
 
+def test_poll_preview_hides_custom_emoji_tokens():
+    import json
+
+    from app.services.chat_poll_service import poll_preview_text
+
+    content = json.dumps({"poll": {"question": "еда [[e:12]]?"}}, ensure_ascii=False)
+    preview = poll_preview_text(content)
+    assert "[[e:" not in preview
+    assert "✦" in preview
+
+
+def test_require_reaction_http_needs_level_72(db_session):
+    seller = _user(db_session, 1)
+    _activate(db_session, 1, 70)
+    emoji = EmojiPackService(db_session)
+    pack = emoji.create_pack(seller.id, "Реакция")
+    item = emoji.add_emoji(
+        user_id=seller.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/react.webp",
+    )
+    db_session.commit()
+    with pytest.raises(HTTPException) as err:
+        emoji.require_reaction_http(seller.id, f"ce:{item.id}")
+    assert err.value.status_code == 403
+    _activate(db_session, 1, 72)
+    assert emoji.require_reaction_http(seller.id, f"ce:{item.id}") == f"ce:{item.id}"
+
+
 def test_edit_and_schedule_require_custom_emoji(db_session):
     from datetime import datetime, timedelta, timezone
 

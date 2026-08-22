@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../../models/chat_poll.dart';
+import '../../../../widgets/highlighted_text.dart';
 
 /// Пузырь опроса в чате (стиль Telegram).
 class ChatPollBubble extends StatefulWidget {
@@ -141,8 +142,8 @@ class _ChatPollBubbleState extends State<ChatPollBubble> {
           ],
         ),
         const SizedBox(height: 8),
-        Text(
-          poll.question,
+        HighlightedText(
+          text: poll.question,
           style: TextStyle(
             color: widget.foregroundColor,
             fontWeight: FontWeight.w600,
@@ -151,8 +152,8 @@ class _ChatPollBubbleState extends State<ChatPollBubble> {
         ),
         if (poll.description.trim().isNotEmpty) ...[
           const SizedBox(height: 4),
-          Text(
-            poll.description,
+          HighlightedText(
+            text: poll.description,
             style: TextStyle(color: widget.mutedColor, fontSize: 13),
           ),
         ],
@@ -196,8 +197,8 @@ class _ChatPollBubbleState extends State<ChatPollBubble> {
                       horizontal: 12,
                       vertical: 11,
                     ),
-                    child: Text(
-                      option.text,
+                    child: HighlightedText(
+                      text: option.text,
                       style: TextStyle(
                         color: widget.foregroundColor,
                         fontSize: 14,
@@ -242,8 +243,8 @@ class _ChatPollBubbleState extends State<ChatPollBubble> {
                           ),
                         ),
                       Expanded(
-                        child: Text(
-                          option.text,
+                        child: HighlightedText(
+                          text: option.text,
                           style: TextStyle(
                             color: widget.foregroundColor,
                             fontWeight: (selected || correct)

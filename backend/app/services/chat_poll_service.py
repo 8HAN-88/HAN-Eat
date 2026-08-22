@@ -433,7 +433,9 @@ def poll_preview_text(content: str) -> str:
     question = (data.get("poll") or {}).get("question") or ""
     q = question.strip()
     if q:
-        return f"📊 {q[:80]}"
+        from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
+        return f"📊 {preview_text_with_custom_emoji(q, limit=80)}"
     return "📊 Опрос"
 
 
@@ -471,6 +473,9 @@ def add_option_to_message_poll(
         raise ValueError("empty_option")
     if len(cleaned) > 120:
         cleaned = cleaned[:120]
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens(user_id, cleaned)
 
     raw_opts = poll.get("options") if isinstance(poll.get("options"), list) else []
     options: List[Dict[str, Any]] = []
