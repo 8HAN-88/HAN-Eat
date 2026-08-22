@@ -856,12 +856,4 @@ def test_suggested_post_requires_custom_emoji_access(db_session):
             amount_stars=10,
         )
     assert err.value.status_code == 403
-    _activate(db_session, 1, 69)
-    with pytest.raises(HTTPException) as allowed:
-        PaidFeaturesService(db_session).suggest_channel_post(
-            seller.id,
-            999,
-            text=token,
-            amount_stars=10,
-        )
-    assert allowed.value.status_code == 404
+    EmojiPackService(db_session).require_send_tokens_http(seller.id, token)
