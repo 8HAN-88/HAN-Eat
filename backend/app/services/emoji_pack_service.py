@@ -71,6 +71,7 @@ class EmojiPackService:
         clean = (title or "").strip()
         if len(clean) < 2:
             raise ValueError("invalid_title")
+        self.require_send_tokens(user_id, clean)
         pack = EmojiPack(
             title=clean[:120],
             slug=self._make_unique_slug(clean, user_id),
@@ -99,6 +100,7 @@ class EmojiPackService:
             clean = title.strip()
             if len(clean) < 2:
                 raise ValueError("invalid_title")
+            self.require_send_tokens(user_id, clean)
             pack.title = clean[:120]
         if is_public is not None:
             pack.is_public = bool(is_public)

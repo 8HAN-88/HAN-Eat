@@ -830,7 +830,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
-        title: Text(user.name),
+        title: HighlightedText(
+          text: user.name,
+          style: Theme.of(context).textTheme.titleLarge ??
+              const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: isOwnProfile
             ? [
                 NeoCircleAction(
@@ -955,20 +961,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Flexible(
-                        child: Text(
-                          user.name,
+                        child: HighlightedText(
+                          text: user.name,
                           textAlign: TextAlign.center,
                           style: textTheme.headlineSmall?.copyWith(
-                            color: () {
-                              final hex = profileColorHex(user.profileColor);
-                              if (hex.isEmpty) return scheme.onSurface;
-                              return Color(
-                                int.parse(hex.replaceFirst('#', '0xFF')),
-                              );
-                            }(),
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.7,
-                          ),
+                                color: () {
+                                  final hex = profileColorHex(user.profileColor);
+                                  if (hex.isEmpty) return scheme.onSurface;
+                                  return Color(
+                                    int.parse(hex.replaceFirst('#', '0xFF')),
+                                  );
+                                }(),
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.7,
+                              ) ??
+                              const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 24,
+                              ),
                         ),
                       ),
                       if ((user.emojiStatus ?? '').trim().isNotEmpty) ...[

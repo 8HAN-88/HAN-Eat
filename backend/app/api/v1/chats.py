@@ -5691,6 +5691,8 @@ async def set_group_member_send_restriction(
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code in ("forbidden", "not_group"):
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        _raise_flex_gate(code)
+        _raise_pack_gate(code)
         raise
     if note is not None:
         _emit(
@@ -5760,6 +5762,8 @@ async def ban_group_member(
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code in ("forbidden", "not_group"):
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        _raise_flex_gate(code)
+        _raise_pack_gate(code)
         raise
     if note is not None:
         _emit(

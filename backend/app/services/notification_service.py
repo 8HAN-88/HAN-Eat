@@ -32,6 +32,11 @@ class NotificationService:
         persist=False — только FCM (без строки в inbox), для эфемерных событий
         вроде входящего звонка.
         """
+        from app.services.emoji_pack_service import CE_TOKEN_RE
+
+        title = CE_TOKEN_RE.sub("✦", title or "")
+        if body:
+            body = CE_TOKEN_RE.sub("✦", body)
         notification = Notification(
             user_id=user_id,
             type=type,

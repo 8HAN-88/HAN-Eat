@@ -11,6 +11,7 @@ import '../../../services/server_config.dart';
 import '../../../services/sticker_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../../../widgets/stars_pay_helper.dart';
 import '../../chat/presentation/sticker_pack_manage_screen.dart';
 import '../../subscription/creator_upsell.dart';
@@ -511,7 +512,13 @@ class _PackStoreScreenState extends State<PackStoreScreen>
       for (final pack in ownedStickers)
         ListTile(
           leading: const Icon(Icons.sticky_note_2_outlined),
-          title: Text(pack.title),
+          title: HighlightedText(
+            text: pack.title,
+            style: Theme.of(context).textTheme.bodyLarge ??
+                const TextStyle(fontSize: 16),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
           subtitle: Text(
             pack.isOnSale
                 ? 'В магазине · ${pack.priceStars} ★'
@@ -538,7 +545,13 @@ class _PackStoreScreenState extends State<PackStoreScreen>
       for (final pack in ownedEmojis)
         ListTile(
           leading: const Icon(Icons.emoji_emotions_outlined),
-          title: Text(pack.title),
+          title: HighlightedText(
+            text: pack.title,
+            style: Theme.of(context).textTheme.bodyLarge ??
+                const TextStyle(fontSize: 16),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
           subtitle: Text(
             pack.isOnSale
                 ? 'В магазине · ${pack.priceStars} ★'
@@ -560,7 +573,13 @@ class _PackStoreScreenState extends State<PackStoreScreen>
         for (final pack in boughtStickers)
           ListTile(
             leading: const Icon(Icons.sticky_note_2_outlined),
-            title: Text(pack.title),
+            title: HighlightedText(
+            text: pack.title,
+            style: Theme.of(context).textTheme.bodyLarge ??
+                const TextStyle(fontSize: 16),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
             subtitle: Text(pack.isInstalled ? 'Установлен' : 'Снят · установить снова'),
             trailing: pack.isInstalled
                 ? null
@@ -580,7 +599,13 @@ class _PackStoreScreenState extends State<PackStoreScreen>
         for (final pack in boughtEmojis)
           ListTile(
             leading: const Icon(Icons.emoji_emotions_outlined),
-            title: Text(pack.title),
+            title: HighlightedText(
+            text: pack.title,
+            style: Theme.of(context).textTheme.bodyLarge ??
+                const TextStyle(fontSize: 16),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
             subtitle: Text(pack.isInstalled ? 'Установлен' : 'Снят · установить снова'),
             trailing: pack.isInstalled
                 ? null

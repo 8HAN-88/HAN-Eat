@@ -487,6 +487,13 @@ async def create_miniapp(
     if exists:
         raise HTTPException(status_code=400, detail="Mini app short_name already exists for this bot")
 
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(
+        current_user.id,
+        payload.name,
+        payload.description,
+    )
     app = BotMiniApp(
         bot_id=bot.id,
         name=payload.name.strip(),
@@ -517,6 +524,13 @@ async def update_miniapp(
     if not bot or bot.created_by_user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(
+        current_user.id,
+        payload.name,
+        payload.description,
+    )
     requires_re_moderation = False
     if payload.name is not None:
         app.name = payload.name.strip()

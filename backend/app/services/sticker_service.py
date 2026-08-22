@@ -78,6 +78,9 @@ class StickerService:
         clean_title = (title or "").strip()
         if len(clean_title) < 2:
             raise ValueError("invalid_title")
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(self.db).require_send_tokens(user_id, clean_title)
         premium = bool(is_premium)
         if premium:
             self._require_premium_stickers(user_id)
@@ -149,6 +152,9 @@ class StickerService:
             clean_title = title.strip()
             if len(clean_title) < 2:
                 raise ValueError("invalid_title")
+            from app.services.emoji_pack_service import EmojiPackService
+
+            EmojiPackService(self.db).require_send_tokens(user_id, clean_title)
             pack.title = clean_title[:120]
         if is_public is not None:
             pack.is_public = bool(is_public)

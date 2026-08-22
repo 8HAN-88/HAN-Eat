@@ -4,6 +4,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../widgets/highlighted_text.dart';
+
 /// Structured location payload in chat content (or type=location).
 class ChatLocationPayload {
   const ChatLocationPayload({
@@ -338,8 +340,8 @@ class ChatLocationBubble extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        title,
+                      HighlightedText(
+                        text: title,
                         style: TextStyle(
                           color: foregroundColor,
                           fontWeight: FontWeight.w600,

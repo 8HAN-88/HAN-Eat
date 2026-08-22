@@ -8,6 +8,7 @@ import '../../../services/media_upload_service.dart';
 import '../../../services/server_config.dart';
 import '../../../services/share_link_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../../../widgets/stars_pay_helper.dart';
 import '../../subscription/creator_upsell.dart';
 
@@ -383,7 +384,13 @@ class _EmojiPackManageScreenState extends State<EmojiPackManageScreen> {
                   children: [
                     if (_saving) const LinearProgressIndicator(minHeight: 2),
                     ListTile(
-                      title: Text(pack.title),
+                      title: HighlightedText(
+                        text: pack.title,
+                        style: Theme.of(context).textTheme.bodyLarge ??
+                            const TextStyle(fontSize: 16),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       subtitle: Text(
                         [
                           'Автор ${pack.authorLabel}',

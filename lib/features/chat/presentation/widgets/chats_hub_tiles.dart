@@ -636,7 +636,7 @@ String chatHubBodyPreview(ChatMessage? msg, {bool isSaved = false}) {
   if (msg.type == 'file') {
     final name = msg.content.trim();
     if (msg.isPaid && !msg.purchased && !msg.isMine) return 'Платный файл';
-    return name.isEmpty ? 'Файл' : name;
+    return name.isEmpty ? 'Файл' : previewTextWithCustomEmoji(name);
   }
   final contact = ChatContactPayload.tryParse(msg.content);
   if (contact != null) return contact.displayName;

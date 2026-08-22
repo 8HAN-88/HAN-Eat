@@ -2315,6 +2315,10 @@ class ChatService:
         send_restricted_until: Optional[datetime],
         reason: Optional[str],
     ) -> ConversationMember:
+        if send_restricted:
+            from app.services.emoji_pack_service import EmojiPackService
+
+            EmojiPackService(self.db).require_send_tokens(actor_id, reason)
         conv = self._get_group_or_error(conversation_id)
         if not self._is_member(conversation_id, actor_id):
             raise ValueError("forbidden")
@@ -2366,6 +2370,9 @@ class ChatService:
         reason: Optional[str],
         banned_until: Optional[datetime],
     ) -> GroupMemberBan:
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(self.db).require_send_tokens(actor_id, reason)
         conv = self._get_group_or_error(conversation_id)
         if not self._is_member(conversation_id, actor_id):
             raise ValueError("forbidden")
@@ -3494,10 +3501,13 @@ class ChatService:
             .all()
         )
         sender = self.db.query(User).filter(User.id == sender_id).first()
-        sender_name = (
+        from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
+        sender_name = preview_text_with_custom_emoji(
             (sender.name or sender.username or "Пользователь")
             if sender
-            else "Пользователь"
+            else "Пользователь",
+            limit=80,
         )
         if msg_type == "voice":
             preview = "🎤 Голосовое"
@@ -3505,7 +3515,7 @@ class ChatService:
             preview = "📷 Фото"
         elif msg_type == "file":
             name = content.strip() if content else "Файл"
-            preview = f"📎 {name[:80]}"
+            preview = f"📎 {preview_text_with_custom_emoji(name, limit=80)}"
         elif msg_type == "video":
             preview = "🎬 Видео"
         elif msg_type == "video_note":
@@ -3552,9 +3562,11 @@ class ChatService:
             from app.services.chat_poll_service import poll_preview_text
 
             preview = poll_preview_text(content)
-        else:
-            from app.services.emoji_pack_service import preview_text_with_custom_emoji
+        elif msg_type == "checklist":
+            from app.services.chat_checklist_service import checklist_preview_text
 
+            preview = checklist_preview_text(content)
+        else:
             preview = preview_text_with_custom_emoji(content) if content else ""
 
         mentioned_ids = self._mentioned_member_ids(conversation_id, content or "")
@@ -3607,8 +3619,14 @@ class ChatService:
         if msg_type == "image":
             return "📷 Фото"
         if msg_type == "file":
+            from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
             name = content.strip() if content else "Файл"
-            return f"📎 {name[:80]}"
+            return f"📎 {preview_text_with_custom_emoji(name, limit=80)}"
+        if msg_type == "checklist":
+            from app.services.chat_checklist_service import checklist_preview_text
+
+            return checklist_preview_text(content)
         if msg_type == "video":
             return "🎬 Видео"
         if msg_type == "video_note":

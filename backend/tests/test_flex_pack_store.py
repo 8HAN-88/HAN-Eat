@@ -980,3 +980,69 @@ def test_donate_note_requires_custom_emoji(db_session):
             message=token,
         )
     assert err.value.status_code == 403
+
+
+def test_sticker_pack_title_requires_custom_emoji(db_session):
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        StickerService(db_session).create_pack(owner.id, token, True)
+
+
+def test_emoji_pack_title_requires_custom_emoji(db_session):
+    owner = _user(db_session, 1)
+    _activate(db_session, 1, 70)
+    emoji = EmojiPackService(db_session)
+    pack = emoji.create_pack(owner.id, "Пак")
+    item = emoji.add_emoji(
+        user_id=owner.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/title.webp",
+    )
+    db_session.commit()
+    token = f"имя [[e:{item.id}]]"
+    _activate(db_session, 1, 10)
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        emoji.update_pack(user_id=owner.id, pack_id=pack.id, title=token)
+
+
+def test_moderation_reason_requires_custom_emoji(db_session):
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        ChatService(db_session).ban_group_member(
+            999,
+            owner.id,
+            2,
+            reason=token,
+            banned_until=None,
+        )
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        ChatService(db_session).set_group_member_send_restriction(
+            999,
+            owner.id,
+            2,
+            send_restricted=True,
+            send_restricted_until=None,
+            reason=token,
+        )
+
+
+def test_checklist_and_file_preview_hide_custom_emoji_tokens():
+    from app.services.chat_checklist_service import checklist_preview_text
+
+    raw = (
+        '{"checklist":{"title":"еда [[e:12]]","items":'
+        '[{"text":"a","done":false}]}}'
+    )
+    preview = checklist_preview_text(raw)
+    assert "[[e:" not in preview
+    assert "✦" in preview
+
+    class _Msg:
+        type = "file"
+        content = "отчет [[e:9]].pdf"
+
+    file_preview = ChatService(None)._message_preview_text(_Msg())
+    assert "[[e:" not in file_preview
+    assert "✦" in file_preview

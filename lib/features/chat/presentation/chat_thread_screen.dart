@@ -4009,7 +4009,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
     if (msg.type == 'file') {
       final name = msg.content.trim();
-      return name.isEmpty ? '📎 Файл' : '📎 $name';
+      return name.isEmpty
+          ? '📎 Файл'
+          : '📎 ${previewTextWithCustomEmoji(name)}';
     }
     if (msg.type == 'location' ||
         ChatLocationPayload.tryParse(msg.content) != null) {
@@ -9117,7 +9119,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (msg.type == 'file') {
       if (msg.isLockedPaidMedia) return '🔒 Платный файл';
       final name = msg.content.trim();
-      return name.isEmpty ? '📎 Файл' : '📎 $name';
+      return name.isEmpty
+          ? '📎 Файл'
+          : '📎 ${previewTextWithCustomEmoji(name)}';
     }
     if (msg.type == 'location' ||
         ChatLocationPayload.tryParse(msg.content) != null) {
@@ -10205,7 +10209,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       case 'video_note':
         return text.isEmpty ? '⭕ Видеосообщение' : '⭕ Подпись: $text';
       case 'file':
-        return text.isEmpty ? '📎 Файл' : '📎 $text';
+        return text.isEmpty
+            ? '📎 Файл'
+            : '📎 ${previewTextWithCustomEmoji(text)}';
       case 'voice':
         return '🎤 Голосовое';
       case 'sticker':
@@ -12458,7 +12464,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final untilText = until == null
           ? 'без срока'
           : DateFormat('dd.MM.yyyy HH:mm').format(until.toLocal());
-      final details = reason.isEmpty ? untilText : '$untilText • $reason';
+      final details = reason.isEmpty
+          ? untilText
+          : '$untilText • ${previewTextWithCustomEmoji(reason)}';
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -13279,7 +13287,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (item.type == 'sticker') return '🧩 Стикер';
     if (item.type == 'file') {
       final name = item.content.trim();
-      return name.isEmpty ? '📎 Файл' : '📎 $name';
+      return name.isEmpty
+          ? '📎 Файл'
+          : '📎 ${previewTextWithCustomEmoji(name)}';
     }
     if (item.type == 'location') {
       final loc = ChatLocationPayload.tryParse(item.content);
@@ -18927,7 +18937,7 @@ class _Bubble extends StatelessWidget {
                 onTap: onForwardFromTap,
                 behavior: HitTestBehavior.opaque,
                 child: Text(
-                  'Переслано от ${message.forwardFromName?.trim().isNotEmpty == true ? message.forwardFromName!.trim() : 'пользователя'}',
+                  'Переслано от ${message.forwardFromName?.trim().isNotEmpty == true ? previewTextWithCustomEmoji(message.forwardFromName!.trim()) : 'пользователя'}',
                   style: TextStyle(
                     color: scheme.primary,
                     fontSize: 12.5,

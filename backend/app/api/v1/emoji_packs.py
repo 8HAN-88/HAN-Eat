@@ -260,7 +260,26 @@ def create_emoji_pack(
         raise
     except ValueError as exc:
         db.rollback()
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+        code = str(exc)
+        if code == "custom_emoji_required":
+            from app.core.entitlements import feature_required_detail
+
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                feature_required_detail(
+                    "custom_emoji",
+                    "Кастомные эмодзи в тексте доступны с уровня 69",
+                ),
+            ) from exc
+        if code == "custom_emoji_denied":
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                {
+                    "code": "custom_emoji_denied",
+                    "message": "Этот эмодзи недоступен — купите пак",
+                },
+            ) from exc
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, code) from exc
     return _bundle(svc, current_user.id, [pack]).items[0]
 
 
@@ -288,6 +307,24 @@ def update_emoji_pack(
             raise HTTPException(status.HTTP_404_NOT_FOUND, code)
         if code == "forbidden":
             raise HTTPException(status.HTTP_403_FORBIDDEN, code)
+        if code == "custom_emoji_required":
+            from app.core.entitlements import feature_required_detail
+
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                feature_required_detail(
+                    "custom_emoji",
+                    "Кастомные эмодзи в тексте доступны с уровня 69",
+                ),
+            ) from exc
+        if code == "custom_emoji_denied":
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                {
+                    "code": "custom_emoji_denied",
+                    "message": "Этот эмодзи недоступен — купите пак",
+                },
+            ) from exc
         raise HTTPException(status.HTTP_400_BAD_REQUEST, code) from exc
     return _bundle(svc, current_user.id, [pack]).items[0]
 

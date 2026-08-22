@@ -39,6 +39,27 @@ def _raise_premium_sticker() -> None:
     )
 
 
+def _raise_emoji_token(code: str) -> None:
+    from app.core.entitlements import feature_required_detail
+
+    if code == "custom_emoji_required":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            feature_required_detail(
+                "custom_emoji",
+                "Кастомные эмодзи в тексте доступны с уровня 69",
+            ),
+        )
+    if code == "custom_emoji_denied":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            {
+                "code": "custom_emoji_denied",
+                "message": "Этот эмодзи недоступен — купите пак",
+            },
+        )
+
+
 def _pack_share_link(slug: str) -> str:
     return f"https://haneat.app/stickers/{slug}"
 
@@ -329,6 +350,7 @@ async def create_sticker_pack(
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code == "premium_sticker":
             _raise_premium_sticker()
+        _raise_emoji_token(code)
         raise
     installed = svc.installed_pack_ids(current_user.id)
     stickers_by_pack_id = svc.stickers_by_pack_ids([pack.id])
@@ -425,6 +447,7 @@ async def update_sticker_pack(
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code == "premium_sticker":
             _raise_premium_sticker()
+        _raise_emoji_token(code)
         raise
     installed = svc.installed_pack_ids(current_user.id)
     stickers_by_pack_id = svc.stickers_by_pack_ids([pack.id])

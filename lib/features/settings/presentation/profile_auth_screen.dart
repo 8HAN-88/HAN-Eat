@@ -148,13 +148,14 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
         );
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content:
-                  Text(userVisibleError(e, fallback: 'Не удалось обновить'))),
-        );
-      }
+      if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content:
+                Text(userVisibleError(e, fallback: 'Не удалось обновить'))),
+      );
     } finally {
       if (mounted) {
         setState(() => _loading = false);

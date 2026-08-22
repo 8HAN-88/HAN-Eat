@@ -439,11 +439,12 @@ async def update_user_profile(
     db: Session = Depends(get_db)
 ):
     """Обновить профиль текущего пользователя"""
+    from app.services.emoji_pack_service import EmojiPackService
+
     if request.name is not None:
+        EmojiPackService(db).require_send_tokens_http(current_user.id, request.name)
         current_user.name = request.name
     if request.bio is not None:
-        from app.services.emoji_pack_service import EmojiPackService
-
         EmojiPackService(db).require_send_tokens_http(current_user.id, request.bio)
         current_user.bio = request.bio
     if request.is_private is not None:

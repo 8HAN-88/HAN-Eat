@@ -1187,7 +1187,13 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                               final until = row.bannedUntil;
                               return ListTile(
                                 leading: const Icon(Icons.block_outlined),
-                                title: Text(row.user.displayName),
+                                title: HighlightedText(
+                                  text: row.user.displayName,
+                                  style: Theme.of(context).textTheme.bodyLarge ??
+                                      const TextStyle(fontSize: 16),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                                 subtitle: Text(
                                   [
                                     if (until == null)
@@ -1195,7 +1201,9 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                                     else
                                       'До ${until.toLocal().day.toString().padLeft(2, '0')}.${until.toLocal().month.toString().padLeft(2, '0')}.${until.toLocal().year}',
                                     if ((row.reason ?? '').trim().isNotEmpty)
-                                      row.reason!.trim(),
+                                      previewTextWithCustomEmoji(
+                                        row.reason!.trim(),
+                                      ),
                                   ].join(' • '),
                                 ),
                                 trailing: TextButton(

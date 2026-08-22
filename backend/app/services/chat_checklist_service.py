@@ -65,9 +65,12 @@ def toggle_checklist_item(content: str, index: int, done: bool) -> str:
 
 
 def checklist_preview_text(content: Optional[str]) -> str:
+    from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
     parsed = parse_checklist(content)
     if parsed is None:
         return "Чеклист"
     done = sum(1 for item in parsed["items"] if item["done"])
     total = len(parsed["items"])
-    return f"☑ {parsed['title']} ({done}/{total})"
+    title = preview_text_with_custom_emoji(parsed["title"], limit=80)
+    return f"☑ {title} ({done}/{total})"

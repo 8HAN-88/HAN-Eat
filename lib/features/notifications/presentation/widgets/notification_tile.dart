@@ -6,6 +6,7 @@ import '../../../../services/notification_service.dart';
 import '../../../../services/server_config.dart';
 import '../../../../services/user_service.dart' as user_service;
 import '../../../../widgets/app_avatar.dart';
+import '../../../../services/custom_emoji_registry.dart';
 import '../../../../widgets/highlighted_text.dart';
 import '../notification_formatters.dart';
 
@@ -210,7 +211,7 @@ class _LeadText extends StatelessWidget {
         ),
         children: [
           TextSpan(
-            text: lead,
+            text: previewTextWithCustomEmoji(lead),
             style: const TextStyle(fontWeight: FontWeight.w500),
           ),
           if (time.isNotEmpty)
