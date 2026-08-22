@@ -290,6 +290,8 @@ def _own_bot(db: Session, owner_id: int, bot_id: int) -> User:
 
 
 def update_settings(db: Session, user: User, body: dict[str, Any]) -> dict[str, Any]:
+    from app.services.emoji_pack_service import EmojiPackService
+
     billing = SubscriptionService(db)
     row = get_or_create_settings(db, user.id)
 
@@ -314,6 +316,7 @@ def update_settings(db: Session, user: User, body: dict[str, Any]) -> dict[str, 
                 "business_greeting",
                 "Приветствие доступно с уровня 61",
             )
+        EmojiPackService(db).require_send_tokens_http(user.id, text)
         row.greeting_enabled = bool(enabled and text)
         row.greeting_text = text or None
         row.greeting_inactivity_days = days
@@ -336,6 +339,7 @@ def update_settings(db: Session, user: User, body: dict[str, Any]) -> dict[str, 
                 "business_away",
                 "Автоответ «меня нет» доступен с уровня 62",
             )
+        EmojiPackService(db).require_send_tokens_http(user.id, text)
         row.away_enabled = bool(enabled and text)
         row.away_text = text or None
         row.away_mode = mode
@@ -402,6 +406,7 @@ def update_settings(db: Session, user: User, body: dict[str, Any]) -> dict[str, 
                 "business_intro",
                 "Стартовая страница доступна с уровня 65",
             )
+        EmojiPackService(db).require_send_tokens_http(user.id, title, text)
         row.intro_title = title or None
         row.intro_text = text or None
         row.intro_sticker_url = sticker or None

@@ -356,6 +356,9 @@ class ChatService:
         clean_title = title.strip()
         if not clean_title:
             raise ValueError("empty_title")
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(self.db).require_send_tokens(creator_id, clean_title)
         others = {uid for uid in member_ids if uid != creator_id}
         if not others:
             raise ValueError("need_members")
@@ -1393,6 +1396,9 @@ class ChatService:
         clean = title.strip()
         if not clean:
             raise ValueError("empty_title")
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(self.db).require_send_tokens(user_id, clean)
         conv.title = clean[:120]
         conv.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         return conv
@@ -1484,6 +1490,12 @@ class ChatService:
         title: str,
         icon_emoji: Optional[str] = None,
     ) -> ForumTopic:
+        clean = (title or "").strip()[:128]
+        if not clean:
+            raise ValueError("empty_title")
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(self.db).require_send_tokens(actor_id, clean)
         if not self._is_member(conversation_id, actor_id):
             raise ValueError("forbidden")
         conv = self._get_group_or_error(conversation_id)
@@ -1491,9 +1503,6 @@ class ChatService:
             raise ValueError("not_a_forum")
         if not self._can_change_group_info(conversation_id, actor_id):
             raise ValueError("forbidden")
-        clean = (title or "").strip()[:128]
-        if not clean:
-            raise ValueError("empty_title")
         self.ensure_general_topic(conversation_id, actor_id)
         emoji = (icon_emoji or "").strip()[:16] or None
         topic = ForumTopic(
@@ -1535,6 +1544,9 @@ class ChatService:
             clean = title.strip()[:128]
             if not clean:
                 raise ValueError("empty_title")
+            from app.services.emoji_pack_service import EmojiPackService
+
+            EmojiPackService(self.db).require_send_tokens(actor_id, clean)
             if topic.is_general and clean.lower() not in ("general", "общий"):
                 # Allow rename of General but keep is_general.
                 pass
@@ -4956,6 +4968,9 @@ class ChatService:
         name = (name or "").strip()
         if not name:
             raise ValueError("invalid_name")
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(self.db).require_send_tokens(user_id, name)
         existing = (
             self.db.query(func.count(ChatFolder.id))
             .filter(ChatFolder.user_id == user_id)
@@ -5032,6 +5047,9 @@ class ChatService:
             name = name.strip()
             if not name:
                 raise ValueError("invalid_name")
+            from app.services.emoji_pack_service import EmojiPackService
+
+            EmojiPackService(self.db).require_send_tokens(user_id, name)
             folder.name = name[:64]
         if icon is not None:
             self._require_folder_flex_options(user_id, icon, None)

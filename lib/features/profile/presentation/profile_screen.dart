@@ -681,8 +681,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 ],
                 if (gift.note != null && gift.note!.trim().isNotEmpty) ...[
                   const SizedBox(height: 10),
-                  Text(
-                    gift.note!.trim(),
+                  HighlightedText(
+                    text: gift.note!.trim(),
                     textAlign: TextAlign.center,
                     style: TextStyle(color: scheme.onSurfaceVariant),
                   ),

@@ -216,6 +216,17 @@ def _raise_flex_gate(code: str) -> None:
     )
 
 
+def _raise_pack_gate(code: str) -> None:
+    if code == "custom_emoji_denied":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            {
+                "code": "custom_emoji_denied",
+                "message": "Этот эмодзи недоступен — купите пак",
+            },
+        )
+
+
 def _require_chat_search(db, user) -> None:
     from app.services.subscription_service import SubscriptionService
 
@@ -1399,8 +1410,10 @@ async def create_chat_folder(
         return ChatFolderResponse(**row)
     except ValueError as e:
         db.rollback()
-        _raise_flex_gate(str(e))
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e
+        code = str(e)
+        _raise_flex_gate(code)
+        _raise_pack_gate(code)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, code) from e
 
 
 @router.post("/chats/folders/reorder", response_model=ChatFolderListResponse)
@@ -1435,8 +1448,10 @@ async def update_chat_folder(
         )
     except ValueError as e:
         db.rollback()
-        _raise_flex_gate(str(e))
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e
+        code = str(e)
+        _raise_flex_gate(code)
+        _raise_pack_gate(code)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, code) from e
     if not row:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Folder not found")
     db.commit()
@@ -1535,6 +1550,13 @@ async def create_quick_reply(
         current_user.id,
         "quick_replies",
         "Быстрые ответы доступны с уровня 60",
+    )
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(
+        current_user.id,
+        str(body.get("title") or ""),
+        str(body.get("text") or ""),
     )
     try:
         row = create_reply(
@@ -1692,6 +1714,8 @@ async def create_group_chat(
         code = str(e)
         if code == "user_not_found":
             raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+        _raise_flex_gate(code)
+        _raise_pack_gate(code)
         if code in ("empty_title", "need_members"):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code == "user_blocked":
@@ -3494,6 +3518,9 @@ async def create_saved_tag(
         "saved_tags",
         "Теги в Избранном доступны с уровня 39",
     )
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(current_user.id, body.title)
     try:
         tag = create_tag(db, current_user.id, body.title, body.emoji)
         db.commit()
@@ -4908,6 +4935,9 @@ async def create_chat_tag(
         "chat_tags",
         "Метки чатов доступны с уровня 48",
     )
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(current_user.id, body.title)
     try:
         tag = create_tag(db, current_user.id, body.title, body.color)
         db.commit()
@@ -5266,6 +5296,7 @@ async def update_group_chat(
         db.rollback()
         code = str(e)
         _raise_flex_gate(code)
+        _raise_pack_gate(code)
         if code == "not_found":
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversation not found")
         if code == "not_group":
@@ -5380,6 +5411,8 @@ async def create_forum_topic(
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
         if code in ("not_a_forum", "empty_title", "not_group"):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        _raise_flex_gate(code)
+        _raise_pack_gate(code)
         raise
     except Exception:
         db.rollback()
@@ -5424,6 +5457,8 @@ async def update_forum_topic(
             "not_group",
         ):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        _raise_flex_gate(code)
+        _raise_pack_gate(code)
         raise
     except Exception:
         db.rollback()

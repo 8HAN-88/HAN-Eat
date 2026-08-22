@@ -693,6 +693,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     } catch (e) {
       if (!mounted) return;
       if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -704,7 +705,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Удалить быстрый ответ?'),
-        content: Text(reply.title.isEmpty ? reply.text : reply.title),
+        content: HighlightedText(
+          text: reply.title.isEmpty ? reply.text : reply.title,
+          style: Theme.of(ctx).textTheme.bodyMedium ??
+              const TextStyle(fontSize: 14),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -3610,6 +3615,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             if (t.id != temp.id) t,
         ];
       });
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -3671,6 +3678,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             if (t.id == topic.id) topic else t,
         ];
       });
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -3739,7 +3748,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              title: Text(topic.displayLabel),
+              title: HighlightedText(
+                text: topic.displayLabel,
+                style: Theme.of(ctx).textTheme.bodyLarge ??
+                    const TextStyle(fontSize: 16),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
               subtitle: Text(
                 topic.isGeneral
                     ? 'Главная тема группы'
@@ -3803,7 +3818,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: FilterChip(
-                  label: Text(tag.label),
+                  label: HighlightedText(
+                    text: tag.label,
+                    style: Theme.of(context).textTheme.labelLarge ??
+                        const TextStyle(fontSize: 14),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   selected: _activeSavedTagId == tag.id,
                   onSelected: locked
                       ? (_) => unawaited(showCreatorUpsell(context))
@@ -3865,10 +3886,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                               color: scheme.onSurfaceVariant,
                             )
                           : null,
-                      label: Text(
-                        topic.closed
+                      label: HighlightedText(
+                        text: topic.closed
                             ? '${topic.displayLabel} · закрыта'
                             : topic.displayLabel,
+                        style: Theme.of(context).textTheme.labelLarge ??
+                            const TextStyle(fontSize: 14),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       selected: _selectedTopicId == topic.id,
                       onSelected: (_) =>
@@ -6920,7 +6945,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 final g = groups[index];
                 return ListTile(
                   leading: const Icon(Icons.group_outlined),
-                  title: Text(g.displayTitle),
+                  title: HighlightedText(
+                    text: g.displayTitle,
+                    style: Theme.of(context).textTheme.bodyLarge ??
+                        const TextStyle(fontSize: 16),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   subtitle: Text('${g.memberCount} участн.'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
@@ -8455,7 +8486,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         );
         unawaited(_pollNew());
       } catch (e) {
-        if (mounted) await showStarsRequiredSnack(context, e);
+        if (!mounted) return;
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
+        await showStarsRequiredSnack(context, e);
       } finally {
         if (mounted) setState(() => _sendingStarGift = false);
       }
@@ -8748,6 +8782,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         }
       } catch (e) {
         if (!mounted) return;
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         await showStarsRequiredSnack(context, e);
       }
     }());
@@ -9974,6 +10010,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     } catch (e) {
       if (!mounted) return null;
       if (offerFlexIfRequired(context, e)) return null;
+      if (offerPackStoreIfRequired(context, e)) return null;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -10029,7 +10066,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                             for (final tag in _savedTags)
                               CheckboxListTile(
                                 value: selected.contains(tag.id),
-                                title: Text(tag.label),
+                                title: HighlightedText(
+                                  text: tag.label,
+                                  style: Theme.of(ctx).textTheme.bodyLarge ??
+                                      const TextStyle(fontSize: 16),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                                 onChanged: (v) {
                                   setLocal(() {
                                     if (v == true) {
@@ -15201,34 +15244,38 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                             Row(
                               children: [
                                 Flexible(
-                                  child: Text(
-                                    _conversation.isGroup
+                                  child: HighlightedText(
+                                    text: _conversation.isGroup
                                         ? _conversation.displayTitle
                                         : (_conversation.peer?.displayName ??
                                             _conversation.displayTitle),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                    letterSpacing: 0.1,
-                                    color: () {
-                                      final hex = profileColorHex(
-                                        _conversation.peer?.profileColor,
-                                      );
-                                      if (hex.isEmpty ||
-                                          _conversation.isGroup) {
-                                        return null;
-                                      }
-                                      return Color(
-                                        int.parse(
-                                          hex.replaceFirst('#', '0xFF'),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w600,
+                                              letterSpacing: 0.1,
+                                              color: () {
+                                                final hex = profileColorHex(
+                                                  _conversation.peer?.profileColor,
+                                                );
+                                                if (hex.isEmpty ||
+                                                    _conversation.isGroup) {
+                                                  return null;
+                                                }
+                                                return Color(
+                                                  int.parse(
+                                                    hex.replaceFirst('#', '0xFF'),
+                                                  ),
+                                                );
+                                              }(),
+                                            ) ??
+                                        const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 16,
                                         ),
-                                      );
-                                    }(),
-                                  ),
                                   ),
                                 ),
                                 if (!_conversation.isGroup &&
@@ -16774,10 +16821,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                   Padding(
                                     padding: const EdgeInsets.only(right: 6),
                                     child: InputChip(
-                                      label: Text(
-                                        reply.title.isNotEmpty
+                                      label: HighlightedText(
+                                        text: reply.title.isNotEmpty
                                             ? reply.title
                                             : reply.text,
+                                        style: Theme.of(context)
+                                                .textTheme
+                                                .labelLarge ??
+                                            const TextStyle(fontSize: 14),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
@@ -18190,8 +18241,8 @@ class _Bubble extends StatelessWidget {
               ),
               if (note != null && note.trim().isNotEmpty) ...[
                 const SizedBox(height: 6),
-                Text(
-                  note.trim(),
+                HighlightedText(
+                  text: note.trim(),
                   style: TextStyle(color: fg.withValues(alpha: 0.8)),
                 ),
               ],
@@ -18281,8 +18332,8 @@ class _Bubble extends StatelessWidget {
               ),
               if (note != null && note.trim().isNotEmpty) ...[
                 const SizedBox(height: 6),
-                Text(
-                  note.trim(),
+                HighlightedText(
+                  text: note.trim(),
                   style: TextStyle(color: fg.withValues(alpha: 0.8)),
                 ),
               ],

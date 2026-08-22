@@ -309,6 +309,9 @@ class PaidFeaturesService:
         if not recipient_exists:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recipient not found")
         note = (message or "").strip() or None
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(self.db).require_send_tokens_http(sender_id, note)
         tx = self._spend_stars(
             sender_id,
             amount,
@@ -1280,6 +1283,9 @@ class PaidFeaturesService:
         import json as _json
 
         note = (message or "").strip()
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(self.db).require_send_tokens_http(sender_id, note)
         # Create message first so we can bind inventory + spend idempotently.
         msg = Message(
             conversation_id=conversation_id,

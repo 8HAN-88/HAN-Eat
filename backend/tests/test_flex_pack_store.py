@@ -40,6 +40,7 @@ from app.services.emoji_pack_service import (
     preview_text_with_custom_emoji,
 )
 from app.services.flex_subscription_service import FlexSubscriptionService
+from app.services.chat_service import ChatService
 from app.services.pack_marketplace_service import PackMarketplaceService, marketplace_fee_stars
 from app.services.paid_features_service import PaidFeaturesService
 from app.services.sticker_service import StickerService
@@ -929,3 +930,53 @@ def test_invoice_and_giveaway_require_custom_emoji(db_session):
             amount_stars=10,
         )
     assert invoice_err.value.status_code == 403
+
+
+def _emoji_token_after_downgrade(db, user_id: int) -> str:
+    _activate(db, user_id, 70)
+    emoji = EmojiPackService(db)
+    pack = emoji.create_pack(user_id, "Гейт")
+    item = emoji.add_emoji(
+        user_id=user_id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/gate.webp",
+    )
+    db.commit()
+    token = f"имя [[e:{item.id}]]"
+    _activate(db, user_id, 10)
+    return token
+
+
+def test_folder_name_requires_custom_emoji(db_session):
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        ChatService(db_session).create_folder(owner.id, token)
+
+
+def test_forum_topic_title_requires_custom_emoji(db_session):
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        ChatService(db_session).create_forum_topic(999, owner.id, token)
+
+
+def test_group_title_requires_custom_emoji(db_session):
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        ChatService(db_session).create_group(owner.id, token, [])
+
+
+def test_donate_note_requires_custom_emoji(db_session):
+    sender = _user(db_session, 1)
+    recipient = _user(db_session, 2)
+    token = _emoji_token_after_downgrade(db_session, sender.id)
+    with pytest.raises(HTTPException) as err:
+        PaidFeaturesService(db_session).donate(
+            sender.id,
+            recipient.id,
+            1,
+            message=token,
+        )
+    assert err.value.status_code == 403

@@ -7,6 +7,7 @@ import '../../../app/app_router.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/chat_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../subscription/creator_upsell.dart';
 import '../application/chat_thread_prefetch.dart';
 
 class ChatCreateGroupScreen extends StatefulWidget {
@@ -96,6 +97,8 @@ class _ChatCreateGroupScreenState extends State<ChatCreateGroupScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _creating = false);
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );

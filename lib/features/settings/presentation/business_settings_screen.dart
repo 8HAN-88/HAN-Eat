@@ -165,6 +165,7 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
       if (!mounted) return;
       setState(() => _busy = false);
       if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );

@@ -12,6 +12,7 @@ import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/stars_pay_helper.dart';
+import '../../../widgets/highlighted_text.dart';
 
 /// Telegram-like received Star gifts: keep, convert, upgrade, transfer.
 class StarGiftsInventoryScreen extends StatefulWidget {
@@ -593,8 +594,8 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
                 ),
                 if (gift.note != null && gift.note!.trim().isNotEmpty) ...[
                   const SizedBox(height: 8),
-                  Text(
-                    gift.note!.trim(),
+                  HighlightedText(
+                    text: gift.note!.trim(),
                     style: TextStyle(color: scheme.onSurfaceVariant),
                   ),
                 ],

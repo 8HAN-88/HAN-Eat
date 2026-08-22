@@ -7,6 +7,7 @@ import '../../../../models/chat_models.dart';
 import '../../../../services/channel_service.dart';
 import '../../../../services/custom_emoji_registry.dart';
 import '../../../../widgets/app_avatar.dart';
+import '../../../../widgets/highlighted_text.dart';
 import '../../../../widgets/telegram_ui.dart';
 import '../../../calls/call_message_labels.dart';
 import '../../application/chat_tag.dart';
@@ -159,8 +160,8 @@ class ChatHubTile extends StatelessWidget {
                     Row(
                       children: [
                         Expanded(
-                          child: Text(
-                            chat.displayTitle,
+                          child: HighlightedText(
+                            text: chat.displayTitle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(

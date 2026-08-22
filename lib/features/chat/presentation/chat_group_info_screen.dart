@@ -13,10 +13,12 @@ import '../../../services/media_upload_service.dart';
 import '../../../services/paid_features_service.dart';
 import '../../../widgets/stars_pay_helper.dart';
 import '../../../services/server_config.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../utils/presence_format.dart';
 import '../../subscription/creator_upsell.dart';
 import '../../../widgets/app_avatar.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../application/chat_inbox_optimistic.dart';
 import '../application/join_requests_bulk.dart';
 import 'chat_group_moderation_log_screen.dart';
@@ -194,6 +196,8 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -1287,7 +1291,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
           Future<void> share(ChatGroupInviteLink link) async {
             final title = _conversation.title?.trim();
             final subject = (title != null && title.isNotEmpty)
-                ? 'Приглашение в «$title»'
+                ? 'Приглашение в «${previewTextWithCustomEmoji(title)}»'
                 : 'Приглашение в группу HanWe';
             await SystemShare.shareText(
               context,
@@ -1702,9 +1706,13 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                         ),
                         const SizedBox(height: 12),
                         Center(
-                          child: Text(
-                            _conversation.displayTitle,
-                            style: theme.textTheme.titleLarge,
+                          child: HighlightedText(
+                            text: _conversation.displayTitle,
+                            style: theme.textTheme.titleLarge ??
+                                const TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w600,
+                                ),
                             textAlign: TextAlign.center,
                           ),
                         ),

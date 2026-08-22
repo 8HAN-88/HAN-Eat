@@ -17,12 +17,14 @@ import '../../../../services/chat_folder_store.dart';
 import '../../../../services/chat_hub_ui_prefs.dart';
 import '../../../../services/chat_service.dart';
 import '../../../../services/auth_service.dart';
+import '../../../../services/custom_emoji_registry.dart';
 import '../../../../services/chat_thread_ui_prefs.dart';
 import '../../../../services/user_realtime_service.dart';
 import '../../../subscription/creator_upsell.dart';
 import '../../../../utils/api_error_parser.dart';
 import '../../../../widgets/app_empty_state.dart';
 import '../../../../widgets/chat_inbox_skeleton.dart';
+import '../../../../widgets/highlighted_text.dart';
 import '../../../../widgets/telegram_ui.dart';
 import '../../../channels/application/channels_list_refresh_provider.dart';
 import '../../../navigation/application/shell_chat_badge_refresh_provider.dart';
@@ -210,7 +212,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                   : channelId != null && folder.containsChannel(channelId);
               return ListTile(
                 leading: const Icon(Icons.folder_outlined),
-                title: Text(folder.displayLabel),
+                title: HighlightedText(
+                  text: folder.displayLabel,
+                  style: Theme.of(ctx).textTheme.bodyLarge ??
+                      const TextStyle(fontSize: 16),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 trailing: inFolder
                     ? Icon(Icons.check,
                         color: Theme.of(ctx).colorScheme.primary)
@@ -237,8 +245,8 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                       SnackBar(
                         content: Text(
                           inFolder
-                              ? 'Убрано из «${folder.name}»'
-                              : 'Добавлено в «${folder.name}»',
+                              ? 'Убрано из «${previewTextWithCustomEmoji(folder.name)}»'
+                              : 'Добавлено в «${previewTextWithCustomEmoji(folder.name)}»',
                         ),
                       ),
                     );
@@ -1677,7 +1685,11 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     unawaited(ChatCacheService.upsertConversation(archived));
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('«${chat.displayTitle}» в архиве')),
+        SnackBar(
+          content: Text(
+            '«${previewTextWithCustomEmoji(chat.displayTitle)}» в архиве',
+          ),
+        ),
       );
     }
     try {
@@ -1808,10 +1820,10 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
             children: [
               Text(
                 chat.isGroup
-                    ? 'Вы выйдете из «${chat.displayTitle}». История останется у других участников.'
+                    ? 'Вы выйдете из «${previewTextWithCustomEmoji(chat.displayTitle)}». История останется у других участников.'
                     : (alsoForPeer
-                        ? 'Чат «${chat.displayTitle}» будет удалён у вас и у собеседника.'
-                        : 'Чат «${chat.displayTitle}» исчезнет из списка. При новом сообщении диалог можно начать снова.'),
+                        ? 'Чат «${previewTextWithCustomEmoji(chat.displayTitle)}» будет удалён у вас и у собеседника.'
+                        : 'Чат «${previewTextWithCustomEmoji(chat.displayTitle)}» исчезнет из списка. При новом сообщении диалог можно начать снова.'),
               ),
               if (isDirect) ...[
                 const SizedBox(height: 12),
@@ -1852,10 +1864,10 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       SnackBar(
         content: Text(
           chat.isGroup
-              ? 'Вы вышли из «${chat.displayTitle}»'
+              ? 'Вы вышли из «${previewTextWithCustomEmoji(chat.displayTitle)}»'
               : (alsoForPeer
-                  ? '«${chat.displayTitle}» удалён у обоих'
-                  : '«${chat.displayTitle}» удалён'),
+                  ? '«${previewTextWithCustomEmoji(chat.displayTitle)}» удалён у обоих'
+                  : '«${previewTextWithCustomEmoji(chat.displayTitle)}» удалён'),
         ),
       ),
     );
@@ -1924,7 +1936,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'Метки «${chat.displayTitle}»',
+                      'Метки «${previewTextWithCustomEmoji(chat.displayTitle)}»',
                       style: Theme.of(ctx).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 8),
@@ -1943,7 +1955,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                             }
                           });
                         },
-                        title: Text(tag.title),
+                        title: HighlightedText(
+                          text: tag.title,
+                          style: Theme.of(ctx).textTheme.bodyLarge ??
+                              const TextStyle(fontSize: 16),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                         secondary: CircleAvatar(
                           radius: 8,
                           backgroundColor:
@@ -2054,6 +2072,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     } catch (e) {
       if (!mounted) return null;
       if (offerFlexIfRequired(context, e)) return null;
+      if (offerPackStoreIfRequired(context, e)) return null;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -2431,7 +2450,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                               Theme.of(context).colorScheme,
                             ),
                           ),
-                          label: Text(tag.title),
+                          label: HighlightedText(
+                            text: tag.title,
+                            style: Theme.of(context).textTheme.labelLarge ??
+                                const TextStyle(fontSize: 14),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                           selected: _selectedTagId == tag.id,
                           onSelected: (_) => setState(
                             () => _selectedTagId =

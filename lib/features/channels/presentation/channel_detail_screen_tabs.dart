@@ -155,9 +155,10 @@ class ChannelAboutTab extends StatelessWidget {
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Text(
-                channel.rules!,
-                style: Theme.of(context).textTheme.bodyMedium,
+              child: HighlightedText(
+                text: channel.rules!,
+                style: Theme.of(context).textTheme.bodyMedium ??
+                    const TextStyle(fontSize: 14),
               ),
             ),
             const SizedBox(height: 24),

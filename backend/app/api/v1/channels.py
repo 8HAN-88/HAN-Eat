@@ -242,6 +242,7 @@ async def create_channel(
             current_user.id,
             request.name,
             request.description,
+            request.rules,
         )
 
         # Создаем канал
@@ -346,6 +347,7 @@ async def update_channel(
         current_user.id,
         request.name,
         request.description,
+        request.rules,
     )
     
     # Проверяем уникальность slug (если изменился)
