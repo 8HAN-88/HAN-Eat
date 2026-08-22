@@ -157,6 +157,41 @@ def _normalize_reply_buttons(
     return normalize_reply_keyboard([[{"text": b.text} for b in buttons]])
 
 
+def _bot_command_text_parts(cmd) -> list:
+    parts = [
+        getattr(cmd, "description", None),
+        getattr(cmd, "response_text", None),
+        getattr(cmd, "reply_keyboard_placeholder", None),
+    ]
+
+    def add_inline(buttons) -> None:
+        if not buttons:
+            return
+        for button in buttons:
+            parts.append(getattr(button, "text", None))
+            parts.append(getattr(button, "callback_text", None))
+
+    def add_reply(buttons) -> None:
+        if not buttons:
+            return
+        for button in buttons:
+            parts.append(getattr(button, "text", None))
+
+    add_inline(getattr(cmd, "inline_buttons", None))
+    for row in getattr(cmd, "inline_button_rows", None) or []:
+        add_inline(row)
+    add_reply(getattr(cmd, "reply_buttons", None))
+    for row in getattr(cmd, "reply_button_rows", None) or []:
+        add_reply(row)
+    return parts
+
+
+def _require_bot_texts(db: Session, user_id: int, *parts: Optional[str]) -> None:
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(user_id, *parts)
+
+
 class BotCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=64)
     username: str = Field(..., min_length=3, max_length=32)
@@ -223,6 +258,18 @@ async def create_bot(
     existing = db.query(User).filter(User.bot_username == username).first()
     if existing:
         raise HTTPException(status_code=400, detail="Бот с таким username уже существует")
+
+    command_parts: list = []
+    for cmd in payload.commands:
+        command_parts.extend(_bot_command_text_parts(cmd))
+    _require_bot_texts(
+        db,
+        current_user.id,
+        payload.name,
+        payload.description,
+        payload.short_description,
+        *command_parts,
+    )
 
     # Генерация токена
     bot_token = secrets.token_urlsafe(32)
@@ -347,6 +394,13 @@ async def update_bot(
     db: Session = Depends(get_db),
 ):
     bot = _bot_or_404(db, bot_id, current_user.id)
+    _require_bot_texts(
+        db,
+        current_user.id,
+        payload.name,
+        payload.description,
+        payload.short_description,
+    )
 
     if payload.name is not None:
         bot.name = payload.name.strip() or bot.name
@@ -613,6 +667,8 @@ async def add_bot_command(
     if existing:
         raise HTTPException(status_code=400, detail="Command already exists")
 
+    _require_bot_texts(db, current_user.id, *_bot_command_text_parts(cmd))
+
     inline_buttons = _normalize_inline_buttons(
         cmd.inline_buttons,
         cmd.inline_button_rows,
@@ -676,6 +732,7 @@ async def update_bot_command(
     ).first()
     if not cmd:
         raise HTTPException(status_code=404, detail="Command not found")
+    _require_bot_texts(db, current_user.id, *_bot_command_text_parts(payload))
     if payload.description is not None:
         cmd.description = payload.description.strip()
     if payload.response_text is not None:

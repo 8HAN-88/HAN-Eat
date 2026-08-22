@@ -886,3 +886,46 @@ def test_suggested_post_requires_custom_emoji_access(db_session):
         )
     assert err.value.status_code == 403
     EmojiPackService(db_session).require_send_tokens_http(seller.id, token)
+
+
+def test_invoice_and_giveaway_require_custom_emoji(db_session):
+    owner = _user(db_session, 1)
+    _activate(db_session, 1, 70)
+    emoji = EmojiPackService(db_session)
+    pack = emoji.create_pack(owner.id, "Счёт")
+    item = emoji.add_emoji(
+        user_id=owner.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/invoice.webp",
+    )
+    db_session.commit()
+    token = f"приз [[e:{item.id}]]"
+    _activate(db_session, 1, 10)
+    with pytest.raises(HTTPException) as err:
+        PaidFeaturesService(db_session).create_star_giveaway(
+            owner.id,
+            1,
+            prize_stars=10,
+            winners_count=1,
+            duration_hours=1,
+            title=token,
+        )
+    assert err.value.status_code == 403
+    bot = User(
+        id=10,
+        email="bot@t.test",
+        password_hash="h",
+        name="Bot",
+        is_bot=True,
+        created_by_user_id=owner.id,
+    )
+    db_session.add(bot)
+    db_session.commit()
+    with pytest.raises(HTTPException) as invoice_err:
+        PaidFeaturesService(db_session).create_star_invoice(
+            owner.id,
+            bot.id,
+            title=token,
+            amount_stars=10,
+        )
+    assert invoice_err.value.status_code == 403

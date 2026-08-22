@@ -13,6 +13,25 @@ from app.models.miniapp import BotMiniApp
 from app.services.analytics_service import AnalyticsService
 
 
+def _text_for_bot_owner(db: Session, bot: User, text: Optional[str]) -> str:
+    raw = (text or "").strip()
+    if not raw:
+        return raw
+    owner_id = int(getattr(bot, "created_by_user_id", 0) or 0)
+    if owner_id <= 0:
+        return raw
+    from app.services.emoji_pack_service import (
+        EmojiPackService,
+        preview_text_with_custom_emoji,
+    )
+
+    try:
+        EmojiPackService(db).require_send_tokens(owner_id, raw)
+        return raw
+    except ValueError:
+        return preview_text_with_custom_emoji(raw)
+
+
 def _find_bot_in_conversation(db: Session, conversation_id: int) -> Optional[User]:
     members = db.query(ConversationMember).filter(
         ConversationMember.conversation_id == conversation_id
@@ -286,6 +305,8 @@ def process_message_for_bot(db: Session, conversation_id: int, sender_id: int, c
     else:
         reply_text = "Неизвестная команда. Напишите /help"
 
+    reply_text = _text_for_bot_owner(db, bot, reply_text)
+
     # Создаём сообщение от имени бота
     bot_msg = Message(
         conversation_id=conversation_id,
@@ -315,6 +336,7 @@ def process_callback_for_bot(
     reply_text = _button_callback_reply(keyboard, callback_data.strip())
     if not reply_text:
         return None
+    reply_text = _text_for_bot_owner(db, bot, reply_text)
     bot_msg = Message(
         conversation_id=conversation_id,
         sender_id=bot.id,

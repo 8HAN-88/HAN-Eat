@@ -6,6 +6,7 @@ import '../../../services/paid_features_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/stars_pay_helper.dart';
+import '../../../widgets/highlighted_text.dart';
 
 /// Pay a bot Stars invoice (Telegram Bot Payments–like).
 class StarInvoicePayScreen extends StatefulWidget {
@@ -208,10 +209,14 @@ class _StarInvoicePayScreenState extends State<StarInvoicePayScreen> {
                 : ListView(
                     padding: const EdgeInsets.all(20),
                     children: [
-                      Text(
-                        invoice!.title,
+                      HighlightedText(
+                        text: invoice!.title,
                         style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                               fontWeight: FontWeight.w900,
+                            ) ??
+                            const TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 24,
                             ),
                       ),
                       const SizedBox(height: 8),
@@ -224,7 +229,11 @@ class _StarInvoicePayScreenState extends State<StarInvoicePayScreen> {
                       ),
                       if (invoice.description?.trim().isNotEmpty == true) ...[
                         const SizedBox(height: 12),
-                        Text(invoice.description!.trim()),
+                        HighlightedText(
+                          text: invoice.description!.trim(),
+                          style: Theme.of(context).textTheme.bodyMedium ??
+                              const TextStyle(fontSize: 14),
+                        ),
                       ],
                       const SizedBox(height: 20),
                       Container(

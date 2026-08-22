@@ -8,6 +8,7 @@ import '../../../services/paid_features_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/stars_pay_helper.dart';
+import '../../../widgets/highlighted_text.dart';
 
 /// Telegram-like channel Stars giveaways manage / join screen.
 class ChannelGiveawaysScreen extends StatefulWidget {
@@ -514,8 +515,8 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  g.title?.trim().isNotEmpty == true
+                HighlightedText(
+                  text: g.title?.trim().isNotEmpty == true
                       ? g.title!.trim()
                       : (g.isPremiumPrize
                           ? 'Розыгрыш HanWe Pro'

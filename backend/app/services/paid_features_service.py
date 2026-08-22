@@ -2276,6 +2276,9 @@ class PaidFeaturesService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Duration must be between 1 hour and 30 days",
             )
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(self.db).require_send_tokens_http(user_id, title)
         self._channel_manage_access(user_id, channel_id)
         active = (
             self.db.query(StarGiveaway.id)
@@ -2683,6 +2686,13 @@ class PaidFeaturesService:
         clean_title = (title or "").strip()
         if not clean_title:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Title required")
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(self.db).require_send_tokens_http(
+            creator_user_id,
+            clean_title,
+            description,
+        )
         if amount_stars < 1 or amount_stars > 100_000:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

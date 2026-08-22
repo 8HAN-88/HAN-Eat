@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../app/app_router.dart';
 import '../services/paid_features_service.dart';
 import '../utils/api_error_parser.dart' show ApiClientException, userVisibleError;
+import 'highlighted_text.dart';
 
 /// Shared Stars UX: confirm spend + recover from insufficient balance.
 Future<bool> confirmStarsSpend(
@@ -26,19 +27,21 @@ Future<bool> confirmStarsSpend(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                title,
+              HighlightedText(
+                text: title,
                 style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w800,
-                    ),
+                    ) ??
+                    const TextStyle(fontWeight: FontWeight.w800, fontSize: 22),
               ),
               const SizedBox(height: 8),
-              Text(
-                body,
+              HighlightedText(
+                text: body,
                 style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
                       color: scheme.onSurfaceVariant,
                       height: 1.35,
-                    ),
+                    ) ??
+                    TextStyle(color: scheme.onSurfaceVariant, height: 1.35),
               ),
               const SizedBox(height: 16),
               Container(
