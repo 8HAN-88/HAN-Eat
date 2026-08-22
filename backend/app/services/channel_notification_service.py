@@ -77,14 +77,17 @@ def send_channel_post_notification(
     if not subscribers:
         return
 
+    from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
     notification_type = "channel_post"
     title = f"Новый пост в канале {channel.name}"
-    body = post_title or "Новый пост"
+    raw_title = (post_title or "").strip()
+    body = preview_text_with_custom_emoji(raw_title) if raw_title else "Новый пост"
 
     if post_type == "reel":
         notification_type = "channel_video"
         title = f"Новое видео в канале {channel.name}"
-        body = post_title or "Новое видео"
+        body = preview_text_with_custom_emoji(raw_title) if raw_title else "Новое видео"
 
     notifications = []
     for subscriber in subscribers:

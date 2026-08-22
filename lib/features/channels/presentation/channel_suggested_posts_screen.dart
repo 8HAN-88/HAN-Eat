@@ -7,6 +7,7 @@ import '../../../services/paid_features_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/stars_pay_helper.dart';
+import '../../../widgets/highlighted_text.dart';
 
 /// Telegram-like paid suggested posts for a channel.
 class ChannelSuggestedPostsScreen extends StatefulWidget {
@@ -331,7 +332,10 @@ class _ChannelSuggestedPostsScreenState
                   style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 4),
-                Text(post.text),
+                HighlightedText(
+                  text: post.text,
+                  style: const TextStyle(fontSize: 14, height: 1.35),
+                ),
                 const SizedBox(height: 6),
                 Text(
                   '${post.amountStars} ★ · ${_statusLabel(post.status)}',

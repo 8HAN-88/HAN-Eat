@@ -28,6 +28,7 @@ import '../../../utils/number_formatter.dart';
 import '../../../widgets/share_action_sheet.dart';
 import '../../../widgets/report_content_dialog.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../../widgets/custom_emoji_view.dart';
 import '../../../app/app_router.dart';
 import '../../../utils/post_publisher_display.dart';
 import '../../navigation/application/root_shell_chrome.dart';
@@ -1585,6 +1586,19 @@ class _ReelCardState extends ConsumerState<ReelCard>
               ),
               recognizer: r,
             );
+          }
+          final emojiMatch = RegExp(r'^\[\[e:(\d+)\]\]$').firstMatch(word);
+          if (emojiMatch != null) {
+            final id = int.tryParse(emojiMatch.group(1) ?? '') ?? 0;
+            if (id > 0) {
+              return WidgetSpan(
+                alignment: PlaceholderAlignment.middle,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 1),
+                  child: CustomEmojiView(id: id, size: 18),
+                ),
+              );
+            }
           }
           if (word.startsWith('@')) {
             final username =

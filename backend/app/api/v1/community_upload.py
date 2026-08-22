@@ -322,6 +322,14 @@ async def upload_community_video(
         if channel.auto_publish_reels:
             publish_to.append("reels")
 
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(
+        current_user.id,
+        request_body.title,
+        request_body.description,
+    )
+
     now = datetime.utcnow()
     post = Post(
         user_id=current_user.id,

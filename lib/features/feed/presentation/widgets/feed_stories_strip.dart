@@ -99,6 +99,7 @@ class _FeedStoriesStripState extends State<FeedStoriesStrip> {
         viewsCount: story.viewsCount,
         myReaction: story.myReaction,
         reactions: story.reactions,
+        caption: story.caption,
         duration: story.isVideo
             ? const Duration(seconds: 60)
             : const Duration(seconds: 5),

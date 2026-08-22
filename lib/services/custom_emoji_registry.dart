@@ -107,3 +107,22 @@ String previewTextWithCustomEmoji(String text) {
   final clean = replaced.trim();
   return clean.isEmpty ? 'Сообщение' : clean;
 }
+
+/// Truncate by visual glyphs so `[[e:123]]` is one character and is never split.
+String truncateKeepingCustomEmojiTokens(String text, int maxVisualChars) {
+  if (text.isEmpty || maxVisualChars <= 0) return text;
+  var visual = 0;
+  var index = 0;
+  while (index < text.length && visual < maxVisualChars) {
+    final match = _tokenRe.matchAsPrefix(text, index);
+    if (match != null) {
+      visual += 1;
+      index = match.end;
+      continue;
+    }
+    visual += 1;
+    index += 1;
+  }
+  if (index >= text.length) return text;
+  return '${text.substring(0, index).trimRight()}…';
+}

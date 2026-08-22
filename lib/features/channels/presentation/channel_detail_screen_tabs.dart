@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
 import '../../../services/channel_service.dart';
+import '../../../widgets/highlighted_text.dart';
 
 /// Пустое состояние вкладки (NestedScrollView + TabBarView): без bottom overflow.
 class ChannelTabEmptyPlaceholder extends StatelessWidget {
@@ -132,9 +133,10 @@ class ChannelAboutTab extends StatelessWidget {
                   ),
             ),
             const SizedBox(height: 12),
-            Text(
-              channel.description!,
-              style: Theme.of(context).textTheme.bodyLarge,
+            HighlightedText(
+              text: channel.description!,
+              style: Theme.of(context).textTheme.bodyLarge ??
+                  const TextStyle(fontSize: 16),
             ),
             const SizedBox(height: 24),
           ],

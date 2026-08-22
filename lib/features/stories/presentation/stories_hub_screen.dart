@@ -114,6 +114,7 @@ class _StoriesHubScreenState extends State<StoriesHubScreen> {
         viewsCount: story.viewsCount,
         myReaction: story.myReaction,
         reactions: story.reactions,
+        caption: story.caption,
         duration: story.isVideo
             ? const Duration(seconds: 60)
             : const Duration(seconds: 5),

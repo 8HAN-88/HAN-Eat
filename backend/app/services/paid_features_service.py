@@ -2509,6 +2509,9 @@ class PaidFeaturesService:
         clean = (text or "").strip()
         if not clean:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Text required")
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(self.db).require_send_tokens_http(user_id, clean)
         if amount_stars < 10 or amount_stars > 100_000:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

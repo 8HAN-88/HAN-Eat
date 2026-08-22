@@ -833,3 +833,35 @@ def test_keep_listing_on_higher_level(db_session):
     db_session.commit()
     db_session.refresh(pack)
     assert pack.price_stars == 60
+
+
+def test_suggested_post_requires_custom_emoji_access(db_session):
+    seller = _user(db_session, 1)
+    stranger = _user(db_session, 3)
+    _activate(db_session, 1, 70)
+    emoji = EmojiPackService(db_session)
+    pack = emoji.create_pack(seller.id, "Совет")
+    item = emoji.add_emoji(
+        user_id=seller.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/suggest.webp",
+    )
+    db_session.commit()
+    token = f"привет [[e:{item.id}]]"
+    with pytest.raises(HTTPException) as err:
+        PaidFeaturesService(db_session).suggest_channel_post(
+            stranger.id,
+            999,
+            text=token,
+            amount_stars=10,
+        )
+    assert err.value.status_code == 403
+    _activate(db_session, 1, 69)
+    with pytest.raises(HTTPException) as allowed:
+        PaidFeaturesService(db_session).suggest_channel_post(
+            seller.id,
+            999,
+            text=token,
+            amount_stars=10,
+        )
+    assert allowed.value.status_code == 404

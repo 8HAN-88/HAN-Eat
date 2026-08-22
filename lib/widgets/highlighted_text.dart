@@ -22,6 +22,10 @@ class HighlightedText extends StatefulWidget {
     this.onMentionTap,
     this.mentionLabels,
     this.parseMarkup = false,
+    this.textAlign,
+    this.leading,
+    this.leadingStyle,
+    this.trailing,
   });
 
   final String text;
@@ -37,6 +41,12 @@ class HighlightedText extends StatefulWidget {
   /// Optional display labels for handles (e.g. `id42` → `Anna`).
   final Map<String, String>? mentionLabels;
   final bool parseMarkup;
+  final TextAlign? textAlign;
+  /// Plain prefix rendered with [leadingStyle] before parsed text.
+  final String? leading;
+  final TextStyle? leadingStyle;
+  /// Widget after the text (e.g. «ещё» on feed captions).
+  final Widget? trailing;
 
   @override
   State<HighlightedText> createState() => _HighlightedTextState();
@@ -276,11 +286,16 @@ class _HighlightedTextState extends State<HighlightedText> {
     final q = widget.query?.trim().toLowerCase();
     final hasQuery = q != null && q.isNotEmpty;
     final hasCustomEmoji = _customEmojiRe.hasMatch(widget.text);
+    final leading = widget.leading;
+    final hasLeading = leading != null && leading.isNotEmpty;
+    final hasTrailing = widget.trailing != null;
     final needsRich = hasQuery ||
         widget.highlightMentions ||
         widget.parseMarkup ||
         reserve != null ||
-        hasCustomEmoji;
+        hasCustomEmoji ||
+        hasLeading ||
+        hasTrailing;
 
     if (!needsRich) {
       return Text(
@@ -288,6 +303,7 @@ class _HighlightedTextState extends State<HighlightedText> {
         style: widget.style,
         maxLines: widget.maxLines,
         overflow: widget.overflow,
+        textAlign: widget.textAlign,
       );
     }
 
@@ -322,11 +338,27 @@ class _HighlightedTextState extends State<HighlightedText> {
       );
     }
     if (reserve != null) spans.add(reserve);
+    if (hasLeading) {
+      spans.insert(
+        0,
+        TextSpan(text: leading, style: widget.leadingStyle),
+      );
+    }
+    if (widget.trailing != null) {
+      spans.add(
+        WidgetSpan(
+          alignment: PlaceholderAlignment.baseline,
+          baseline: TextBaseline.alphabetic,
+          child: widget.trailing!,
+        ),
+      );
+    }
 
     return Text.rich(
       TextSpan(style: widget.style, children: spans),
       maxLines: widget.maxLines,
       overflow: widget.overflow,
+      textAlign: widget.textAlign,
     );
   }
 }

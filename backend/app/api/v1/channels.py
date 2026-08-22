@@ -236,6 +236,14 @@ async def create_channel(
         has_creator = SubscriptionService(db).has_feature(current_user.id, "creator_tools")
         assert_can_create_private_channel(is_public, has_creator)
 
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(db).require_send_tokens_http(
+            current_user.id,
+            request.name,
+            request.description,
+        )
+
         # Создаем канал
         channel = Channel(
             name=request.name,
@@ -331,6 +339,14 @@ async def update_channel(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Недостаточно прав для изменения настроек канала",
         )
+
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(
+        current_user.id,
+        request.name,
+        request.description,
+    )
     
     # Проверяем уникальность slug (если изменился)
     if request.slug and request.slug != channel.slug:
@@ -1476,6 +1492,14 @@ async def create_channel_post(
                 "code": "kitchen_retired",
             },
         )
+
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(
+        current_user.id,
+        request.title,
+        request.description,
+    )
     
     # Формируем body для поста
     body = {}
@@ -1605,6 +1629,14 @@ async def update_channel_post(
             "edit_any_post",
             "Недостаточно прав для редактирования чужих постов канала",
         )
+
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(
+        current_user.id,
+        request.title,
+        request.description,
+    )
     
     # Обновляем поля поста
     if request.title is not None:

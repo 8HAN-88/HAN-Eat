@@ -8,6 +8,7 @@ import '../../../models/sticker_models.dart';
 import '../../../services/media_upload_service.dart';
 import '../../../services/server_config.dart';
 import '../../../services/sticker_service.dart';
+import '../../../services/share_link_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/stars_pay_helper.dart';
 import '../../subscription/creator_upsell.dart';
@@ -469,7 +470,12 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
           IconButton(
             onPressed: (_saving || pack?.shareLink == null)
                 ? null
-                : () => Share.share(pack!.shareLink!),
+                : () => Share.share(
+                    ShareLinkService.packShareText(
+                      pack!.shareLink!,
+                      isPublic: pack.isPublic,
+                    ),
+                  ),
             icon: const Icon(Icons.share_outlined),
             tooltip: 'Поделиться паком',
           ),

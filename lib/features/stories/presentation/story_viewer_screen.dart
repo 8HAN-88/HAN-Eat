@@ -21,6 +21,7 @@ import '../../chat/application/chat_ready_outgoing.dart';
 import '../../chat/presentation/widgets/chat_story_reply_bubble.dart';
 import '../data/story_models.dart';
 import '../data/story_service.dart';
+import '../../../widgets/highlighted_text.dart';
 
 /// Один элемент сторис
 class StoryItem {
@@ -36,6 +37,7 @@ class StoryItem {
     this.viewsCount = 0,
     this.myReaction,
     this.reactions = const [],
+    this.caption,
   });
 
   final String id;
@@ -49,6 +51,7 @@ class StoryItem {
   int viewsCount;
   String? myReaction;
   List<StoryReactionSummary> reactions;
+  final String? caption;
 
   bool get isOwn {
     final me = AuthService.instance.currentUser;
@@ -684,24 +687,37 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
               right: 12,
               bottom: MediaQuery.of(context).padding.bottom + 12,
               child: story.isOwn
-                  ? Center(
-                      child: TextButton.icon(
-                        onPressed: _openViewers,
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          backgroundColor: Colors.white24,
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_storyCaption(story) != null) ...[
+                          _storyCaption(story)!,
+                          const SizedBox(height: 10),
+                        ],
+                        Center(
+                          child: TextButton.icon(
+                            onPressed: _openViewers,
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              backgroundColor: Colors.white24,
+                            ),
+                            icon: const Icon(Icons.visibility_outlined, size: 18),
+                            label: Text(
+                              story.viewsCount == 0
+                                  ? 'Нет просмотров'
+                                  : '${story.viewsCount} просмотр${_ruPlural(story.viewsCount)}',
+                            ),
+                          ),
                         ),
-                        icon: const Icon(Icons.visibility_outlined, size: 18),
-                        label: Text(
-                          story.viewsCount == 0
-                              ? 'Нет просмотров'
-                              : '${story.viewsCount} просмотр${_ruPlural(story.viewsCount)}',
-                        ),
-                      ),
+                      ],
                     )
                   : Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        if (_storyCaption(story) != null) ...[
+                          _storyCaption(story)!,
+                          const SizedBox(height: 10),
+                        ],
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: [
@@ -782,6 +798,29 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget? _storyCaption(StoryItem story) {
+    final text = story.caption?.trim();
+    if (text == null || text.isEmpty) return null;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      decoration: BoxDecoration(
+        color: Colors.black45,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: HighlightedText(
+        text: text,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 15,
+          height: 1.3,
+        ),
+        maxLines: 4,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }

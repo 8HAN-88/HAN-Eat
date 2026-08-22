@@ -23,6 +23,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:han_eat/widgets/app_avatar.dart';
 import 'package:han_eat/widgets/stars_pay_helper.dart';
 import 'package:han_eat/widgets/custom_emoji_view.dart';
+import 'package:han_eat/widgets/highlighted_text.dart';
 import 'package:uuid/uuid.dart';
 import '../../navigation/application/shell_tab_visibility.dart';
 import 'package:han_eat/core/layout/floating_bottom_padding.dart';
@@ -1015,13 +1016,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               ],
               if (user.bio != null && user.bio!.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.md),
-                Text(
-                  user.bio!,
+                HighlightedText(
+                  text: user.bio!,
                   textAlign: TextAlign.center,
                   style: textTheme.bodyMedium?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                    height: 1.35,
-                  ),
+                        color: scheme.onSurfaceVariant,
+                        height: 1.35,
+                      ) ??
+                      const TextStyle(height: 1.35),
                 ),
               ],
               ..._businessProfileWidgets(scheme, textTheme),

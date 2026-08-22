@@ -10,6 +10,7 @@ import '../../../services/channel_service.dart';
 import '../../../widgets/channel_list_badges.dart';
 import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../../widgets/highlighted_text.dart';
 
 class ChannelsManagementScreen extends ConsumerStatefulWidget {
   const ChannelsManagementScreen({super.key});
@@ -662,11 +663,12 @@ class _ManagementChannelCard extends StatelessWidget {
                       if (channel.description != null &&
                           channel.description!.trim().isNotEmpty) ...[
                         const SizedBox(height: 4),
-                        Text(
-                          channel.description!,
+                        HighlightedText(
+                          text: channel.description!,
                           style: textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
+                                color: scheme.onSurfaceVariant,
+                              ) ??
+                              TextStyle(color: scheme.onSurfaceVariant),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),

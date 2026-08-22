@@ -4,6 +4,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../models/sticker_models.dart';
 import '../../../services/server_config.dart';
 import '../../../services/sticker_service.dart';
+import '../../../services/share_link_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/stars_pay_helper.dart';
 import '../../subscription/creator_upsell.dart';
@@ -122,7 +123,12 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
         actions: [
           if (pack?.shareLink != null)
             IconButton(
-              onPressed: () => Share.share(pack!.shareLink!),
+              onPressed: () => Share.share(
+                ShareLinkService.packShareText(
+                  pack!.shareLink!,
+                  isPublic: pack.isPublic,
+                ),
+              ),
               icon: const Icon(Icons.share_outlined),
               tooltip: 'Поделиться паком',
             ),

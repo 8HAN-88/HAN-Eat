@@ -11,6 +11,7 @@ import '../../../utils/session_snackbar.dart';
 import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/report_content_dialog.dart';
+import '../../../widgets/highlighted_text.dart';
 
 class CommentsScreen extends ConsumerStatefulWidget {
   final int postId;
@@ -661,8 +662,8 @@ class _CommentItemState extends State<_CommentItem> {
                       ],
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      '${widget.textPrefix}${comment.text}',
+                    HighlightedText(
+                      text: '${widget.textPrefix}${comment.text}',
                       style: const TextStyle(fontSize: 14),
                       maxLines: (isLongText && !_expanded) ? 3 : null,
                       overflow: (isLongText && !_expanded)

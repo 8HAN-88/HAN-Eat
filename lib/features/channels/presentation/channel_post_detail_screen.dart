@@ -14,6 +14,7 @@ import '../../../utils/image_url_helper.dart';
 import '../../../utils/post_display_title.dart';
 import '../../../widgets/telegram_photo_grid.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../../widgets/highlighted_text.dart';
 
 int? _repostOriginalPostIdFromBody(Map<String, dynamic>? body) {
   final raw = body?['repost_original_post_id'];
@@ -301,8 +302,8 @@ class _ChannelPostDetailScreenState
                 ],
                 if (comment != null && comment.isNotEmpty) ...[
                   const SizedBox(height: 10),
-                  Text(
-                    comment,
+                  HighlightedText(
+                    text: comment,
                     style: const TextStyle(fontSize: 16, height: 1.45),
                   ),
                 ],
@@ -395,8 +396,8 @@ class _ChannelPostDetailScreenState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (showTitle)
-            Text(
-              displayTitleForPost(p),
+            HighlightedText(
+              text: displayTitleForPost(p),
               style: const TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
@@ -404,8 +405,8 @@ class _ChannelPostDetailScreenState
             ),
           if (showTitle) const SizedBox(height: 16),
           if (p.description != null && p.description!.trim().isNotEmpty)
-            Text(
-              p.description!,
+            HighlightedText(
+              text: p.description!,
               style: const TextStyle(
                 fontSize: 16,
                 height: 1.6,
