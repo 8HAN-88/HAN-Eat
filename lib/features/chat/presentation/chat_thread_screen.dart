@@ -18358,8 +18358,8 @@ class _Bubble extends StatelessWidget {
             children: [
               Text(emoji, style: const TextStyle(fontSize: 40)),
               const SizedBox(height: 6),
-              Text(
-                title,
+              HighlightedText(
+                text: title,
                 style: TextStyle(color: fg, fontWeight: FontWeight.w800),
               ),
               if (isAnonymousGift)

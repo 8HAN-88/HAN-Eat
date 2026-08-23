@@ -9,6 +9,7 @@ import '../../../core/theme/app_tokens.dart';
 import '../application/channels_list_refresh_provider.dart';
 import '../../../services/channel_sheet_prefs.dart';
 import '../../../services/channel_service.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../../../widgets/report_content_dialog.dart';
 
 class ChannelSettingsBottomSheet extends ConsumerStatefulWidget {
@@ -92,11 +93,12 @@ class _ChannelSettingsBottomSheetState
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      widget.channel.name,
+                    child: HighlightedText(
+                      text: widget.channel.name,
                       style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                            fontWeight: FontWeight.w800,
+                          ) ??
+                          const TextStyle(fontWeight: FontWeight.w800),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),

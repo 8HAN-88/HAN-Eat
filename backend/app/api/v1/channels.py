@@ -222,6 +222,16 @@ async def create_channel(
     """Создать канал"""
     import logging
     logger = logging.getLogger(__name__)
+
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(
+        current_user.id,
+        request.name,
+        request.description,
+        request.category,
+        *(request.tags or []),
+    )
     
     try:
         # Проверяем уникальность slug
@@ -235,16 +245,6 @@ async def create_channel(
         is_public = request.is_public if request.is_public is not None else True
         has_creator = SubscriptionService(db).has_feature(current_user.id, "creator_tools")
         assert_can_create_private_channel(is_public, has_creator)
-
-        from app.services.emoji_pack_service import EmojiPackService
-
-        EmojiPackService(db).require_send_tokens_http(
-            current_user.id,
-            request.name,
-            request.description,
-            request.rules,
-            *(request.tags or []),
-        )
 
         # Создаем канал
         channel = Channel(
@@ -326,6 +326,17 @@ async def update_channel(
     db: Session = Depends(get_db)
 ):
     """Обновить канал (только владелец или админ)"""
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(
+        current_user.id,
+        request.name,
+        request.description,
+        request.rules,
+        request.category,
+        *(request.tags or []),
+    )
+
     channel = db.query(Channel).filter(Channel.id == channel_id).first()
     if not channel:
         raise HTTPException(
@@ -341,16 +352,6 @@ async def update_channel(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Недостаточно прав для изменения настроек канала",
         )
-
-    from app.services.emoji_pack_service import EmojiPackService
-
-    EmojiPackService(db).require_send_tokens_http(
-        current_user.id,
-        request.name,
-        request.description,
-        request.rules,
-        *(request.tags or []),
-    )
     
     # Проверяем уникальность slug (если изменился)
     if request.slug and request.slug != channel.slug:

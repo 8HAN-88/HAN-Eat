@@ -207,14 +207,19 @@ class _StarGiftPickerSheetState extends State<_StarGiftPickerSheet> {
                                   style: const TextStyle(fontSize: 32),
                                 ),
                                 const SizedBox(height: 6),
-                                Text(
-                                  gift.title,
+                                HighlightedText(
+                                  text: gift.title,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: Theme.of(context)
-                                      .textTheme
-                                      .labelLarge
-                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                          .textTheme
+                                          .labelLarge
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ) ??
+                                      const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                      ),
                                 ),
                                 const SizedBox(height: 2),
                                 Text(

@@ -31,6 +31,7 @@ from app.services.yookassa_service import get_yookassa_service
 from app.services.tbank_service import get_tbank_service
 from app.services.payment_success_handler import process_payment_succeeded
 from app.services.country_service import CountryService
+from app.services.emoji_pack_service import EmojiPackService
 from app.services.subscription_service import SubscriptionService
 from datetime import datetime, timedelta
 from app.services.notification_service import NotificationService
@@ -1477,6 +1478,7 @@ async def request_payment_refund(
     db: Session = Depends(get_db),
 ):
     """Запрос возврата: создаёт тикет в поддержку и помечает подписку как requested."""
+    EmojiPackService(db).require_send_tokens_http(current_user.id, body.reason)
     sub = (
         db.query(Subscription)
         .filter(

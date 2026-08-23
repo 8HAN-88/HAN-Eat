@@ -204,14 +204,18 @@ Future<StarsTipDraft?> pickStarsTipDraft(
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setLocal) => AlertDialog(
-        title: Text(title),
+        title: HighlightedText(
+          text: title,
+          style: Theme.of(ctx).textTheme.titleLarge ??
+              const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (subtitle != null && subtitle.trim().isNotEmpty) ...[
-              Text(
-                subtitle.trim(),
+              HighlightedText(
+                text: subtitle.trim(),
                 style: TextStyle(
                   color: Theme.of(ctx).colorScheme.onSurfaceVariant,
                   fontSize: 13,
@@ -378,8 +382,8 @@ Future<ChannelSubscribeChoice?> showChannelSubscribeSheet(
                         ),
                   ),
                   const SizedBox(height: 6),
-                  Text(
-                    '«$channelName» · $monthlyPriceStars ★/мес',
+                  HighlightedText(
+                    text: '«$channelName» · $monthlyPriceStars ★/мес',
                     style: TextStyle(
                       color: scheme.onSurfaceVariant,
                       height: 1.35,
@@ -524,8 +528,8 @@ Future<bool> showChannelManageSubscriptionSheet(
                         ),
                   ),
                   const SizedBox(height: 6),
-                  Text(
-                    '«$channelName»',
+                  HighlightedText(
+                    text: '«$channelName»',
                     style: TextStyle(
                       color: scheme.onSurfaceVariant,
                       height: 1.35,

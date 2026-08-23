@@ -107,7 +107,7 @@ class _PostShareSheetState extends State<_PostShareSheet> {
     await ShareActionSheet._shareAfterSheetClosed(
       this.context,
       text: text,
-      subject: widget.post.title ?? 'Пост',
+      subject: previewTextWithCustomEmoji(widget.post.title ?? 'Пост'),
     );
   }
 

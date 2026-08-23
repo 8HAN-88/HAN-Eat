@@ -303,7 +303,13 @@ class _ChannelsManagementScreenState
                     final category = _availableCategories[i];
                     final selected = _selectedCategory == category;
                     return ListTile(
-                      title: Text(category),
+                      title: HighlightedText(
+                        text: category,
+                        style: Theme.of(context).textTheme.bodyLarge ??
+                            const TextStyle(fontSize: 16),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       trailing: selected
                           ? Icon(Icons.check,
                               color: Theme.of(context).colorScheme.primary)
@@ -557,7 +563,15 @@ class _ManagementHeader extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 children: [
                   FilterChip(
-                    label: Text(selectedCategory ?? 'Категория'),
+                    label: selectedCategory == null
+                        ? const Text('Категория')
+                        : HighlightedText(
+                            text: selectedCategory!,
+                            style: Theme.of(context).textTheme.labelLarge ??
+                                const TextStyle(fontSize: 14),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                     avatar: Icon(
                       Icons.category_outlined,
                       size: 18,
@@ -651,11 +665,12 @@ class _ManagementChannelCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        channel.name,
+                      HighlightedText(
+                        text: channel.name,
                         style: textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                              fontWeight: FontWeight.w700,
+                            ) ??
+                            const TextStyle(fontWeight: FontWeight.w700),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),

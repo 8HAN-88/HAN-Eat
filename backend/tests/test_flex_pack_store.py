@@ -1408,3 +1408,98 @@ def test_support_resolution_requires_custom_emoji(db_session):
     with pytest.raises(HTTPException) as err:
         asyncio.run(_run())
     assert err.value.status_code == 403
+
+
+def test_channel_category_requires_custom_emoji(db_session):
+    import asyncio
+
+    from app.api.v1.channels import create_channel
+    from app.schemas.channel import CreateChannelRequest
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+
+    async def _run():
+        await create_channel(
+            CreateChannelRequest(
+                name="Кухня",
+                slug="kitchen",
+                category=token,
+            ),
+            current_user=owner,
+            db=db_session,
+        )
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(_run())
+    assert err.value.status_code == 403
+
+
+def test_channel_update_category_requires_custom_emoji(db_session):
+    import asyncio
+
+    from app.api.v1.channels import update_channel
+    from app.schemas.channel import UpdateChannelRequest
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+
+    async def _run():
+        await update_channel(
+            1,
+            UpdateChannelRequest(category=token),
+            current_user=owner,
+            db=db_session,
+        )
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(_run())
+    assert err.value.status_code == 403
+
+
+def test_cancel_subscription_reason_requires_custom_emoji(db_session):
+    import asyncio
+
+    from app.api.v1.subscriptions import CancelSubscriptionRequest, cancel_subscription
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+
+    async def _run():
+        await cancel_subscription(
+            CancelSubscriptionRequest(cancellation_reason=token),
+            current_user=owner,
+            db=db_session,
+        )
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(_run())
+    assert err.value.status_code == 403
+
+
+def test_channel_share_text_hides_custom_emoji_tokens():
+    from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
+    title = preview_text_with_custom_emoji("Кухня [[e:12]]")
+    assert "[[e:" not in title
+    assert "✦" in title
+
+
+def test_payment_refund_reason_requires_custom_emoji(db_session):
+    import asyncio
+
+    from app.api.v1.payments import RefundRequestBody, request_payment_refund
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+
+    async def _run():
+        await request_payment_refund(
+            RefundRequestBody(subscription_id=1, reason=token),
+            current_user=owner,
+            db=db_session,
+        )
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(_run())
+    assert err.value.status_code == 403

@@ -46,7 +46,8 @@ class ShareLinkService {
   }
 
   static String channelShareText(int channelId, String channelName) {
-    final title = channelName.trim().isEmpty ? 'Канал' : channelName.trim();
+    final raw = channelName.trim();
+    final title = raw.isEmpty ? 'Канал' : previewTextWithCustomEmoji(raw);
     return '$title\n\nОткрыть в HanWe: ${channelLink(channelId)}';
   }
 
