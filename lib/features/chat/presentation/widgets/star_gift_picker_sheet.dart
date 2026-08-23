@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../services/paid_features_service.dart';
+import '../../../../widgets/highlighted_text.dart';
 
 class StarGiftSendDraft {
   const StarGiftSendDraft({
@@ -33,7 +34,13 @@ Future<StarGiftSendDraft?> showStarGiftSendFlow(BuildContext context) async {
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setLocal) => AlertDialog(
-        title: Text('${gift.emoji} ${gift.title}'),
+        title: HighlightedText(
+          text: '${gift.emoji} ${gift.title}',
+          style: Theme.of(context).textTheme.bodyLarge ??
+              const TextStyle(fontSize: 16),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,

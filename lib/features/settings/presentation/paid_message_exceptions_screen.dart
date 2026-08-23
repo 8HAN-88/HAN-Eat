@@ -305,7 +305,15 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
                                       displayName: name,
                                       radius: 20,
                                     ),
-                                    title: Text(name),
+                                    title: HighlightedText(
+                                      text: name,
+                                      style: Theme.of(context)
+                                              .textTheme
+                                              .bodyLarge ??
+                                          const TextStyle(fontSize: 16),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                     subtitle: item.username == null
                                         ? null
                                         : Text(

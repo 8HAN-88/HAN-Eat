@@ -24,6 +24,7 @@ import 'package:han_eat/widgets/app_avatar.dart';
 import 'package:han_eat/widgets/stars_pay_helper.dart';
 import 'package:han_eat/widgets/custom_emoji_view.dart';
 import 'package:han_eat/widgets/highlighted_text.dart';
+import 'package:han_eat/services/custom_emoji_registry.dart';
 import 'package:uuid/uuid.dart';
 import '../../navigation/application/shell_tab_visibility.dart';
 import 'package:han_eat/core/layout/floating_bottom_padding.dart';
@@ -618,7 +619,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       await PaidFeaturesService.buyListedGift(gift.id);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${gift.emoji} ${gift.title} теперь ваш')),
+        SnackBar(
+          content: Text(
+            '${gift.emoji} ${previewTextWithCustomEmoji(gift.title)} теперь ваш',
+          ),
+        ),
       );
       unawaited(_loadProfileGifts());
     } catch (e) {

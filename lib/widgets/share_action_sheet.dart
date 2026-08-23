@@ -187,7 +187,9 @@ class _PostShareSheetState extends State<_PostShareSheet> {
       Navigator.pop(context);
       ScaffoldMessenger.of(this.context).showSnackBar(
         SnackBar(
-            content: Text('Репост опубликован в канале «${picked.name}».')),
+            content: Text(
+              'Репост опубликован в канале «${previewTextWithCustomEmoji(picked.name)}».',
+            )),
       );
     } on ApiClientException catch (e) {
       if (!mounted) return;

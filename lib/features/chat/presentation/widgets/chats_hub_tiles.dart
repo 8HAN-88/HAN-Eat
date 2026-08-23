@@ -639,7 +639,9 @@ String chatHubBodyPreview(ChatMessage? msg, {bool isSaved = false}) {
     return name.isEmpty ? 'Файл' : previewTextWithCustomEmoji(name);
   }
   final contact = ChatContactPayload.tryParse(msg.content);
-  if (contact != null) return contact.displayName;
+  if (contact != null) {
+    return previewTextWithCustomEmoji(contact.displayName);
+  }
   final content = msg.content.trim();
   if (content.isEmpty) return 'Сообщение';
   return previewTextWithCustomEmoji(content);

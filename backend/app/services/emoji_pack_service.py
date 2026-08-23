@@ -124,6 +124,7 @@ class EmojiPackService:
         media_url: str,
         shortcode: Optional[str] = None,
     ) -> CustomEmoji:
+        self.require_send_tokens(user_id, shortcode)
         pack = self.db.query(EmojiPack).filter(EmojiPack.id == pack_id).first()
         if not pack:
             raise ValueError("pack_not_found")

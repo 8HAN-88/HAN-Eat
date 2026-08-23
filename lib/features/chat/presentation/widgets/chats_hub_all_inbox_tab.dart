@@ -1449,7 +1449,11 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     }
     setState(() => _removeChannelEntry(channel.id));
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('«${channel.name}» в архиве')),
+      SnackBar(
+        content: Text(
+          '«${previewTextWithCustomEmoji(channel.name)}» в архиве',
+        ),
+      ),
     );
     try {
       await ChannelSheetPrefs.setArchived(channel.id, true);
@@ -1658,7 +1662,11 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     }
     setState(() => _removeChannelEntry(channel.id));
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Вы вышли из «${channel.name}»')),
+      SnackBar(
+        content: Text(
+          'Вы вышли из «${previewTextWithCustomEmoji(channel.name)}»',
+        ),
+      ),
     );
     try {
       await ChannelService.leaveChannel(channel.id);
@@ -2167,7 +2175,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${peer.displayName} не сможет писать вам и видеть ваш профиль в чатах.',
+                  '${previewTextWithCustomEmoji(peer.displayName)} не сможет писать вам и видеть ваш профиль в чатах.',
                 ),
                 const SizedBox(height: 12),
                 CheckboxListTile(
@@ -2216,10 +2224,10 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       SnackBar(
         content: Text(
           chat.peerBlockedByMe
-              ? '${peer.displayName} разблокирован'
+              ? '${previewTextWithCustomEmoji(peer.displayName)} разблокирован'
               : (deleteHistory
-                  ? '${peer.displayName} заблокирован, история удалена'
-                  : '${peer.displayName} заблокирован'),
+                  ? '${previewTextWithCustomEmoji(peer.displayName)} заблокирован, история удалена'
+                  : '${previewTextWithCustomEmoji(peer.displayName)} заблокирован'),
         ),
       ),
     );

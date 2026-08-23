@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../../app/app_router.dart';
 import '../../../../services/moderation_service.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../../widgets/highlighted_text.dart';
 
 class ModerationQueueScreen extends ConsumerStatefulWidget {
   const ModerationQueueScreen({super.key});
@@ -696,7 +697,13 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           if (item.author != null)
-                            Text('Автор: ${item.author!.name}'),
+                            HighlightedText(
+                              text: 'Автор: ${item.author!.name}',
+                              style: Theme.of(context).textTheme.bodySmall ??
+                                  const TextStyle(fontSize: 12),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           if (item.reason != null)
                             Chip(
                               label: Text(

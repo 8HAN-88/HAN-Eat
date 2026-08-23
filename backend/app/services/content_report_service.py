@@ -249,15 +249,20 @@ class ContentReportService:
         for r in reports:
             reporter = users_by_id.get(r.reporter_user_id) if r.reporter_user_id else None
             if reporter:
+                from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
+                reporter_name = preview_text_with_custom_emoji(
+                    reporter.name or "", limit=80
+                )
                 reporter_payload = {
                     "id": reporter.id,
-                    "name": reporter.name,
+                    "name": reporter_name,
                     "username": reporter.username,
                 }
                 reporter_display = (
-                    f"{reporter.name} (@{reporter.username})"
+                    f"{reporter_name} (@{reporter.username})"
                     if reporter.username
-                    else reporter.name
+                    else reporter_name
                 )
             elif r.reporter_user_id:
                 reporter_payload = {

@@ -9,6 +9,7 @@ import '../../../services/auth_service.dart';
 import '../../../services/emoji_pack_service.dart';
 import '../../../services/server_config.dart';
 import '../../../services/sticker_service.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/highlighted_text.dart';
@@ -114,7 +115,7 @@ class _PackStoreScreenState extends State<PackStoreScreen>
     }
     final ok = await confirmStarsSpend(
       context,
-      title: 'Купить «${pack.title}»',
+      title: 'Купить «${previewTextWithCustomEmoji(pack.title)}»',
       body: pack.ownerName.trim().isEmpty
           ? '${pack.priceStars} ★ · комиссия площадки ${pack.feeStars} ★'
           : 'Автор ${pack.ownerName} · ${pack.priceStars} ★, комиссия ${pack.feeStars} ★',
@@ -132,7 +133,11 @@ class _PackStoreScreenState extends State<PackStoreScreen>
       await _load();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('«${pack.title}» установлен')),
+        SnackBar(
+          content: Text(
+            '«${previewTextWithCustomEmoji(pack.title)}» установлен',
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -183,7 +188,7 @@ class _PackStoreScreenState extends State<PackStoreScreen>
     }
     final ok = await confirmStarsSpend(
       context,
-      title: 'Купить «${pack.title}»',
+      title: 'Купить «${previewTextWithCustomEmoji(pack.title)}»',
       body:
           'Автор ${pack.authorLabel} · ${pack.priceStars} ★, комиссия ${pack.feeStars} ★',
       amountStars: pack.priceStars,
@@ -217,7 +222,11 @@ class _PackStoreScreenState extends State<PackStoreScreen>
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('«${pack.title}» установлен')),
+          SnackBar(
+          content: Text(
+            '«${previewTextWithCustomEmoji(pack.title)}» установлен',
+          ),
+        ),
         );
       }
     } catch (e) {

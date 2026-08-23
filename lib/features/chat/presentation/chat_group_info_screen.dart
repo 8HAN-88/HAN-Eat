@@ -2030,10 +2030,14 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                                     .toUpperCase(),
                               ),
                             ),
-                            title: Text(
-                              isMe
+                            title: HighlightedText(
+                              text: isMe
                                   ? '${member.displayName} (вы)'
                                   : member.displayName,
+                              style: Theme.of(context).textTheme.bodyLarge ??
+                                  const TextStyle(fontSize: 16),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             subtitle: Text(
                               [

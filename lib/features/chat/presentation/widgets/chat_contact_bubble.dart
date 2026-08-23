@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../widgets/app_avatar.dart';
+import '../../../../widgets/highlighted_text.dart';
 
 /// Parsed contact payload from chat text (HanWe / Telegram-style card).
 class ChatContactPayload {
@@ -207,8 +208,8 @@ class ChatContactBubble extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          payload.displayName,
+                        HighlightedText(
+                          text: payload.displayName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(

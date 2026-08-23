@@ -3780,9 +3780,11 @@ class _ContactTile extends StatelessWidget {
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
-      title: Text(
-        contact.displayName,
+      title: HighlightedText(
+        text: contact.displayName,
         style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       ),
       subtitle: Text(
         contact.subtitle,

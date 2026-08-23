@@ -10,6 +10,7 @@ import '../../../services/chat_service.dart';
 import '../../../services/paid_features_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../widgets/highlighted_text.dart';
 import '../../../widgets/telegram_ui.dart';
 import '../../miniapps/data/miniapp_models.dart';
@@ -1202,7 +1203,9 @@ class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete Mini App?'),
-        content: Text('«${app.name}» будет удалено из каталога.'),
+        content: Text(
+          '«${previewTextWithCustomEmoji(app.name)}» будет удалено из каталога.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),

@@ -17,6 +17,7 @@ import '../../../../services/chat_service.dart';
 import '../../application/chat_open_direct.dart';
 import '../../../../services/phone_contacts_service.dart';
 import '../../../../services/phone_link_prompt_store.dart';
+import '../../../../services/custom_emoji_registry.dart';
 import '../../../../utils/api_error_parser.dart';
 import '../../../../widgets/app_empty_state.dart';
 import '../../../../widgets/highlighted_text.dart';
@@ -419,7 +420,9 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Удалить контакт?'),
-        content: Text('$name будет убран из списка «Мои контакты».'),
+        content: Text(
+          '${previewTextWithCustomEmoji(name)} будет убран из списка «Мои контакты».',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),

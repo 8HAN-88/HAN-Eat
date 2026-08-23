@@ -12,6 +12,7 @@ import '../../../services/call_service.dart';
 import '../../../services/chat_service.dart';
 import '../../../services/user_realtime_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../call_kit_bridge.dart';
 import '../call_media_controls.dart';
 import 'call_coordinator.dart';
@@ -510,7 +511,12 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
                       leading: CircleAvatar(
                         child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?'),
                       ),
-                      title: Text(name, style: const TextStyle(color: Colors.white)),
+                      title: HighlightedText(
+                        text: name,
+                        style: const TextStyle(color: Colors.white),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       onTap: () => Navigator.of(ctx).pop(m),
                     );
                   },

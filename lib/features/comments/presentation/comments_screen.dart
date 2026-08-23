@@ -249,13 +249,15 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        widget.post!.author?.name ?? 'Неизвестный',
+                      HighlightedText(
+                        text: widget.post!.author?.name ?? 'Неизвестный',
                         style: const TextStyle(fontWeight: FontWeight.bold),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       if (widget.post!.title != null)
-                        Text(
-                          widget.post!.title!,
+                        HighlightedText(
+                          text: widget.post!.title!,
                           style: TextStyle(
                             fontSize: 12,
                             color: scheme.onSurfaceVariant,
@@ -651,12 +653,14 @@ class _CommentItemState extends State<_CommentItem> {
                     Row(
                       children: [
                         Expanded(
-                          child: Text(
-                            comment.authorName ?? 'Неизвестный',
+                          child: HighlightedText(
+                            text: comment.authorName ?? 'Неизвестный',
                             style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 14,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],

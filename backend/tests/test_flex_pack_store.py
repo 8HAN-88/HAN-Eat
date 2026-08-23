@@ -1114,3 +1114,22 @@ def test_signup_name_tokens_require_custom_emoji(db_session):
             "Иван [[e:7]]",
         )
     assert err.value.status_code == 403
+
+
+def test_draft_requires_custom_emoji(db_session):
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        ChatService(db_session).upsert_draft(1, owner.id, token)
+
+
+def test_emoji_shortcode_requires_custom_emoji(db_session):
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        EmojiPackService(db_session).add_emoji(
+            user_id=owner.id,
+            pack_id=1,
+            media_url="https://cdn.test/x.webp",
+            shortcode=token,
+        )

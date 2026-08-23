@@ -4,6 +4,7 @@ import '../../../features/miniapps/data/miniapp_models.dart';
 import '../../../features/miniapps/data/miniapps_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../../widgets/highlighted_text.dart';
 
 class MiniAppsModerationScreen extends StatefulWidget {
   const MiniAppsModerationScreen({super.key});
@@ -160,12 +161,14 @@ class _MiniAppsModerationScreenState extends State<MiniAppsModerationScreen> {
                                   Row(
                                     children: [
                                       Expanded(
-                                        child: Text(
-                                          app.name,
+                                        child: HighlightedText(
+                                          text: app.name,
                                           style: const TextStyle(
                                             fontWeight: FontWeight.w700,
                                             fontSize: 16,
                                           ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
                                       _StatusChip(status: app.moderationStatus),
@@ -175,7 +178,13 @@ class _MiniAppsModerationScreenState extends State<MiniAppsModerationScreen> {
                                   Text('@${app.botUsername} · ${app.shortName}'),
                                   if ((app.description ?? '').trim().isNotEmpty) ...[
                                     const SizedBox(height: 6),
-                                    Text(app.description!.trim()),
+                                    HighlightedText(
+                                      text: app.description!.trim(),
+                                      style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium ??
+                                          const TextStyle(fontSize: 14),
+                                    ),
                                   ],
                                   const SizedBox(height: 8),
                                   Wrap(

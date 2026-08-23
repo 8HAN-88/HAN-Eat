@@ -4517,6 +4517,9 @@ class ChatService:
         text: str,
         reply_to_message_id: Optional[int] = None,
     ) -> ConversationDraft:
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(self.db).require_send_tokens(user_id, text)
         if not self._is_member(conversation_id, user_id):
             raise ValueError("forbidden")
         body = (text or "").strip()

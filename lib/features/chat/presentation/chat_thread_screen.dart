@@ -4038,7 +4038,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return reply?.previewText ?? '🖼 Ответ на сторис';
     }
     final contact = ChatContactPayload.tryParse(msg.content);
-    if (contact != null) return '👤 ${contact.displayName}';
+    if (contact != null) {
+      return '👤 ${previewTextWithCustomEmoji(contact.displayName)}';
+    }
     final text = msg.content.trim();
     if (text.isEmpty) return 'Сообщение';
     return previewTextWithCustomEmoji(text);
@@ -8789,7 +8791,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (peer == null) return;
     final payload = await pickStarsTipDraft(
       context,
-      title: 'Отправить звёзды ${peer.displayName}',
+      title:
+          'Отправить звёзды ${previewTextWithCustomEmoji(peer.displayName)}',
       subtitle: 'Как в Telegram: звёзды появятся сообщением в чате.',
     );
     if (payload == null || !mounted) return;
@@ -8913,7 +8916,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '${peer.displayName} не сможет писать вам и видеть ваш профиль в чатах.',
+                '${previewTextWithCustomEmoji(peer.displayName)} не сможет писать вам и видеть ваш профиль в чатах.',
               ),
               const SizedBox(height: 12),
               CheckboxListTile(
@@ -9168,7 +9171,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return reply?.previewText ?? '🖼 Ответ на сторис';
     }
     final contact = ChatContactPayload.tryParse(msg.content);
-    if (contact != null) return '👤 ${contact.displayName}';
+    if (contact != null) {
+      return '👤 ${previewTextWithCustomEmoji(contact.displayName)}';
+    }
     final t = msg.content.trim();
     if (t.isEmpty) return 'Сообщение';
     return previewTextWithCustomEmoji(t);

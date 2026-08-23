@@ -5,6 +5,7 @@ import '../../../../app/app_router.dart';
 import '../../../../services/like_service.dart';
 import '../../../../utils/api_error_parser.dart';
 import '../../../../widgets/app_avatar.dart';
+import '../../../../widgets/highlighted_text.dart';
 
 /// Instagram-style list of users who liked a post.
 Future<void> showPostLikersSheet(
@@ -191,8 +192,8 @@ class _PostLikersSheetState extends State<_PostLikersSheet> {
                                   displayName: user.name,
                                   radius: 22,
                                 ),
-                                title: Text(
-                                  user.name,
+                                title: HighlightedText(
+                                  text: user.name,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(

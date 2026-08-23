@@ -1070,15 +1070,18 @@ async def approve_channel_join_request(
     try:
         from app.services.notification_service import NotificationService
 
+        from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
+        channel_label = preview_text_with_custom_emoji(channel.name or "", limit=80)
         NotificationService(db).create_notification(
             user_id=user_id,
             type="channel_join_approved",
-            title=f"Вас приняли в канал «{channel.name}»",
+            title=f"Вас приняли в канал «{channel_label}»",
             body="Теперь доступны все публикации канала.",
             entity_type="channel",
             entity_id=channel_id,
             actor_id=current_user.id,
-            data={"channel_id": channel_id, "channel_name": channel.name},
+            data={"channel_id": channel_id, "channel_name": channel_label},
         )
         db.commit()
     except Exception as e:
