@@ -36,6 +36,9 @@ def list_tags(db: Session, user_id: int) -> List[ChatTag]:
 
 
 def create_tag(db: Session, user_id: int, title: str, color: str | None = None) -> ChatTag:
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens(user_id, title)
     heading = (title or "").strip()
     if not heading:
         raise ChatTagError("tag_title_required")

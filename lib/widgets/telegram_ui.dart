@@ -651,26 +651,35 @@ class _TelegramActionSheetRow extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      action.title,
+                    HighlightedText(
+                      text: action.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                             color: fg,
                             fontWeight: FontWeight.w500,
+                          ) ??
+                          TextStyle(
+                            color: fg,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 16,
                           ),
                     ),
                     if (action.subtitle != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          action.subtitle!,
+                        child: HighlightedText(
+                          text: action.subtitle!,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style:
                               Theme.of(context).textTheme.bodySmall?.copyWith(
                                     color: scheme.onSurfaceVariant,
-                                  ),
+                                  ) ??
+                              TextStyle(
+                                color: scheme.onSurfaceVariant,
+                                fontSize: 12,
+                              ),
                         ),
                       ),
                   ],

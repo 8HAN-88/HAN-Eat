@@ -1727,3 +1727,36 @@ def test_saved_tag_emoji_requires_custom_emoji(db_session):
     with pytest.raises(HTTPException) as err:
         asyncio.run(_run())
     assert err.value.status_code == 403
+
+
+def test_quick_reply_service_requires_custom_emoji(db_session):
+    from app.services.quick_reply_service import create_reply
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    with pytest.raises(ValueError, match="custom_emoji"):
+        create_reply(db_session, owner.id, "hi", token)
+
+
+def test_chat_tag_service_requires_custom_emoji(db_session):
+    from app.services.chat_tag_service import create_tag
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    with pytest.raises(ValueError, match="custom_emoji"):
+        create_tag(db_session, owner.id, token)
+
+
+def test_saved_tag_service_requires_custom_emoji(db_session):
+    from app.services.saved_tag_service import create_tag
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    with pytest.raises(ValueError, match="custom_emoji"):
+        create_tag(db_session, owner.id, token)
+
+
+def test_share_preview_hides_custom_emoji_tokens():
+    out = preview_text_with_custom_emoji("Привет [[e:12]]")
+    assert "[[e:" not in out
+    assert "✦" in out

@@ -43,6 +43,10 @@ def list_tags(db: Session, user_id: int) -> List[SavedTag]:
 
 
 def create_tag(db: Session, user_id: int, title: str, emoji: Optional[str] = None) -> SavedTag:
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens(user_id, title)
+    EmojiPackService(db).require_send_tokens(user_id, emoji)
     heading = (title or "").strip()
     if not heading:
         raise SavedTagError("tag_title_required")

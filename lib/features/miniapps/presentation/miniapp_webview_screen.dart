@@ -618,7 +618,14 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
                     height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : Text(_mainButtonText),
+                : HighlightedText(
+                    text: _mainButtonText,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
           ),
         ),
       ),

@@ -9479,6 +9479,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return _messagePreview(msg);
   }
 
+  /// Share / export preview — clipboard copy stays raw so `[[e:id]]` can be pasted back.
+  String _shareableText(ChatMessage msg) =>
+      previewTextWithCustomEmoji(_copyableText(msg));
+
   int _mediaMessageCount() {
     return _messages
         .where(
@@ -9600,7 +9604,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Future<void> _shareSelectedMessages() async {
     final texts = _selectedMessages
-        .map(_copyableText)
+        .map(_shareableText)
         .where((t) => t.isNotEmpty)
         .join('\n\n');
     if (texts.isEmpty) {
@@ -9626,7 +9630,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
       return;
     }
-    final text = _copyableText(msg);
+    final text = _shareableText(msg);
     if (text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Нечего отправить')),
@@ -10216,16 +10220,21 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                         ),
                   ),
                   const SizedBox(height: 12),
-                  Text(
-                    translated,
-                    style: Theme.of(ctx).textTheme.bodyLarge,
+                  HighlightedText(
+                    text: translated,
+                    style: Theme.of(ctx).textTheme.bodyLarge ??
+                        const TextStyle(fontSize: 16),
                   ),
                   const SizedBox(height: 16),
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton.icon(
                       onPressed: () {
-                        Clipboard.setData(ClipboardData(text: translated));
+                        Clipboard.setData(
+                          ClipboardData(
+                            text: previewTextWithCustomEmoji(translated),
+                          ),
+                        );
                         Navigator.pop(ctx);
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Перевод скопирован')),
@@ -18887,8 +18896,8 @@ class _Bubble extends StatelessWidget {
                 textChild,
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                    translated,
+                  child: HighlightedText(
+                    text: translated,
                     style: TextStyle(
                       color: fg.withValues(alpha: 0.78),
                       height: 1.22,
