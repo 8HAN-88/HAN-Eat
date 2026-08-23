@@ -11,6 +11,7 @@ import '../../../services/chat_service.dart';
 import '../../../services/custom_emoji_registry.dart';
 import '../../../services/user_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../../subscription/creator_upsell.dart';
 
 enum _FolderPickTab { all, chats, channels }
@@ -708,8 +709,20 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
                     (item) => CheckboxListTile(
                       value: _isSelected(item),
                       onChanged: (_) => _toggle(item),
-                      title: Text(item.title),
-                      subtitle: Text(item.subtitle),
+                      title: HighlightedText(
+                        text: item.title,
+                        style: Theme.of(context).textTheme.bodyLarge ??
+                            const TextStyle(fontSize: 16),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: HighlightedText(
+                        text: item.subtitle,
+                        style: Theme.of(context).textTheme.bodySmall ??
+                            const TextStyle(fontSize: 12),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       controlAffinity: ListTileControlAffinity.leading,
                       dense: true,
                     ),

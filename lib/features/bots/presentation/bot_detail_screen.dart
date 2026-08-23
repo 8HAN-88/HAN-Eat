@@ -10,6 +10,7 @@ import '../../../services/chat_service.dart';
 import '../../../services/paid_features_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../../../widgets/telegram_ui.dart';
 import '../../miniapps/data/miniapp_models.dart';
 import '../../miniapps/data/miniapps_service.dart';
@@ -1802,8 +1803,20 @@ class _SelectChatDialogState extends State<_SelectChatDialog> {
                   return RadioListTile<int>(
                     value: chat.id,
                     groupValue: _selectedConversationId,
-                    title: Text(chat.title),
-                    subtitle: Text(chat.subtitle),
+                    title: HighlightedText(
+                      text: chat.title,
+                      style: Theme.of(context).textTheme.bodyLarge ??
+                          const TextStyle(fontSize: 16),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: HighlightedText(
+                      text: chat.subtitle,
+                      style: Theme.of(context).textTheme.bodySmall ??
+                          const TextStyle(fontSize: 12),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     onChanged: (value) {
                       setState(() => _selectedConversationId = value);
                     },

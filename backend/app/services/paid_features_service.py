@@ -917,6 +917,9 @@ class PaidFeaturesService:
         approve: bool,
         note: Optional[str] = None,
     ) -> CreatorPayoutRequest:
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(self.db).require_send_tokens_http(reviewer_user_id, note)
         payout = (
             self.db.query(CreatorPayoutRequest)
             .filter(CreatorPayoutRequest.id == payout_id)

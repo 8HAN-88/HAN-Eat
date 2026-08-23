@@ -9,7 +9,9 @@ import '../../../services/media_upload_service.dart';
 import '../../../services/server_config.dart';
 import '../../../services/sticker_service.dart';
 import '../../../services/share_link_service.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../../../widgets/stars_pay_helper.dart';
 import '../../subscription/creator_upsell.dart';
 
@@ -369,10 +371,10 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
     if (pack.priceStars <= 0) return;
     final ok = await confirmStarsSpend(
       context,
-      title: 'Купить «${pack.title}»',
+      title: 'Купить «${previewTextWithCustomEmoji(pack.title)}»',
       body: pack.ownerName.trim().isEmpty
           ? '${pack.priceStars} ★'
-          : 'Автор ${pack.ownerName} · комиссия ${pack.feeStars} ★',
+          : 'Автор ${previewTextWithCustomEmoji(pack.ownerName)} · комиссия ${pack.feeStars} ★',
       amountStars: pack.priceStars,
       confirmLabel: 'Купить',
     );
@@ -512,9 +514,13 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
                       child: Row(
                         children: [
                           Expanded(
-                            child: Text(
-                              '${pack.title} · ${pack.stickers.length} стик.',
-                              style: Theme.of(context).textTheme.titleMedium,
+                            child: HighlightedText(
+                              text:
+                                  '${pack.title} · ${pack.stickers.length} стик.',
+                              style: Theme.of(context).textTheme.titleMedium ??
+                                  const TextStyle(fontSize: 16),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           Text(

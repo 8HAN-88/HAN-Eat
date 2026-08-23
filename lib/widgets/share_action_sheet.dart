@@ -14,9 +14,11 @@ import '../models/post_model.dart';
 import '../services/auth_service.dart';
 import '../services/channel_service.dart';
 import '../services/repost_service.dart';
+import '../services/custom_emoji_registry.dart';
 import '../services/share_link_service.dart';
 import '../utils/api_error_parser.dart';
 import 'app_avatar.dart';
+import 'highlighted_text.dart';
 import 'chat_target_picker_sheet.dart';
 
 class ShareActionSheet {
@@ -153,7 +155,13 @@ class _PostShareSheetState extends State<_PostShareSheet> {
                         ? Text(c.name.isNotEmpty ? c.name[0] : '?')
                         : null,
                   ),
-                  title: Text(c.name),
+                  title: HighlightedText(
+                    text: c.name,
+                    style: Theme.of(context).textTheme.bodyLarge ??
+                        const TextStyle(fontSize: 16),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   onTap: () => Navigator.pop(ctx, c),
                 ),
             ],
@@ -346,7 +354,9 @@ class _ChannelRepostCommentDialogState
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text('Репост в «${widget.channelName}»'),
+      title: Text(
+        'Репост в «${previewTextWithCustomEmoji(widget.channelName)}»',
+      ),
       content: SingleChildScrollView(
         child: TextField(
           controller: _controller,

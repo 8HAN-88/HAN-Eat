@@ -4,7 +4,9 @@ import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/chat_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../widgets/app_avatar.dart';
+import '../../../widgets/highlighted_text.dart';
 
 class BlockedUsersScreen extends StatefulWidget {
   const BlockedUsersScreen({super.key});
@@ -53,7 +55,11 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
         _items = _items.where((u) => u.id != user.id).toList(growable: false);
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${user.displayName} разблокирован')),
+        SnackBar(
+          content: Text(
+            '${previewTextWithCustomEmoji(user.displayName)} разблокирован',
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -139,7 +145,13 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
             displayName: user.displayName,
             radius: 22,
           ),
-          title: Text(user.displayName),
+          title: HighlightedText(
+            text: user.displayName,
+            style: Theme.of(context).textTheme.bodyLarge ??
+                const TextStyle(fontSize: 16),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
           subtitle: username.isEmpty ? null : Text('@$username'),
           trailing: TextButton(
             onPressed: () => _unblock(user),

@@ -6,6 +6,7 @@ import '../../../services/emoji_pack_service.dart';
 import '../../../services/server_config.dart';
 import '../../../services/share_link_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../../../widgets/stars_pay_helper.dart';
 import '../../subscription/creator_upsell.dart';
 
@@ -149,9 +150,12 @@ class _EmojiPackPreviewScreenState extends State<EmojiPackPreviewScreen> {
                       child: Row(
                         children: [
                           Expanded(
-                            child: Text(
-                              pack.title,
-                              style: Theme.of(context).textTheme.titleLarge,
+                            child: HighlightedText(
+                              text: pack.title,
+                              style: Theme.of(context).textTheme.titleLarge ??
+                                  const TextStyle(fontSize: 22),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           Text(

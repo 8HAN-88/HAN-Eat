@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/chat_service.dart';
 import '../../../services/flex_subscription_service.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/highlighted_text.dart';
 
 Future<void> showFlexGiftSheet(
   BuildContext context, {
@@ -102,7 +104,9 @@ class _FlexGiftSheetState extends State<_FlexGiftSheet> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Подарить подписку?'),
-        content: Text('Уровень $_level · $price ₽ / $period\nПолучатель: $name'),
+        content: Text(
+          'Уровень $_level · $price ₽ / $period\nПолучатель: ${previewTextWithCustomEmoji(name)}',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -215,7 +219,13 @@ class _FlexGiftSheetState extends State<_FlexGiftSheet> {
                           itemBuilder: (context, index) {
                             final user = _results[index];
                             return ListTile(
-                              title: Text(user.name ?? user.username ?? '#${user.id}'),
+                              title: HighlightedText(
+                                text: user.name ?? user.username ?? '#${user.id}',
+                                style: Theme.of(context).textTheme.bodyLarge ??
+                                    const TextStyle(fontSize: 16),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                               subtitle: user.username != null ? Text('@${user.username}') : null,
                               selected: _picked?.id == user.id,
                               onTap: () => setState(() => _picked = user),

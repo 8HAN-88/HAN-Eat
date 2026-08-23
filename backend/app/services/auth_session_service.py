@@ -29,11 +29,13 @@ def create_session(
     user_agent: Optional[str] = None,
     ip_address: Optional[str] = None,
 ) -> tuple[str, str, AuthSession]:
+    from app.services.emoji_pack_service import strip_custom_emoji_tokens
+
     jti = _new_jti()
     session = AuthSession(
         user_id=user.id,
         jti=jti,
-        device_name=(device_name or "").strip()[:120] or None,
+        device_name=strip_custom_emoji_tokens(device_name)[:120] or None,
         device_platform=(device_platform or "").strip()[:40] or None,
         user_agent=(user_agent or "").strip()[:512] or None,
         ip_address=(ip_address or "").strip()[:64] or None,

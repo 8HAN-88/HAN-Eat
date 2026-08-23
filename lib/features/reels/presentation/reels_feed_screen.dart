@@ -29,6 +29,7 @@ import '../../../widgets/share_action_sheet.dart';
 import '../../../widgets/report_content_dialog.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/custom_emoji_view.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../../../app/app_router.dart';
 import '../../../utils/post_publisher_display.dart';
 import '../../navigation/application/root_shell_chrome.dart';
@@ -1479,8 +1480,8 @@ class _ReelCardState extends ConsumerState<ReelCard>
                     Expanded(
                       child: GestureDetector(
                         onTap: widget.onAuthorTap,
-                        child: Text(
-                          PostPublisherDisplay.atLabel(reel),
+                        child: HighlightedText(
+                          text: PostPublisherDisplay.atLabel(reel),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(

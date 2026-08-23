@@ -7,6 +7,7 @@ import '../../../services/user_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../../widgets/highlighted_text.dart';
 
 enum FollowListType { followers, following }
 
@@ -195,7 +196,13 @@ class _FollowListScreenState extends State<FollowListScreen> {
                                       : '?')
                                   : null,
                             ),
-                            title: Text(name),
+                            title: HighlightedText(
+                              text: name,
+                              style: Theme.of(context).textTheme.bodyLarge ??
+                                  const TextStyle(fontSize: 16),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                             subtitle: user.username != null
                                 ? Text('@${user.username}')
                                 : null,

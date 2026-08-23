@@ -1249,8 +1249,8 @@ class _NewPostCardState extends State<NewPostCard>
                             Flexible(
                               child: GestureDetector(
                                 onTap: widget.onAuthorTap,
-                                child: Text(
-                                  displayName,
+                                child: HighlightedText(
+                                  text: displayName,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(

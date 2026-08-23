@@ -172,7 +172,13 @@ class _PostPollSectionState extends State<PostPollSection> {
                                     ? const Icon(Icons.person, size: 16)
                                     : null,
                               ),
-                              title: Text(voter.name),
+                              title: HighlightedText(
+                                text: voter.name,
+                                style: Theme.of(context).textTheme.bodyLarge ??
+                                    const TextStyle(fontSize: 16),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                               subtitle: (username != null && username.isNotEmpty)
                                   ? Text('@$username')
                                   : null,

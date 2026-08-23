@@ -17,6 +17,7 @@ import '../../../widgets/app_avatar.dart';
 import '../../chat/application/join_requests_bulk.dart';
 import '../../settings/application/subscription_status_provider.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../../widgets/highlighted_text.dart';
 
 const _permissionLabels = <String, (String, String)>{
   'manage_channel_settings': (
@@ -926,7 +927,13 @@ class _ChannelManagementScreenState
                       ? Text(name.isNotEmpty ? name[0].toUpperCase() : '?')
                       : null,
                 ),
-                title: Text(name),
+                title: HighlightedText(
+                  text: name,
+                  style: Theme.of(context).textTheme.bodyLarge ??
+                      const TextStyle(fontSize: 16),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 subtitle: Text(user?['username'] as String? ?? ''),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -974,7 +981,13 @@ class _ChannelManagementScreenState
                     ? Text(member['name']?[0] ?? '?')
                     : null,
               ),
-              title: Text(member['name'] ?? 'Без имени'),
+              title: HighlightedText(
+                text: (member['name'] as String?) ?? 'Без имени',
+                style: Theme.of(context).textTheme.bodyLarge ??
+                    const TextStyle(fontSize: 16),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
               subtitle: Text(member['username'] ?? ''),
               trailing: Chip(
                 label: Text(member['role'] ?? 'member'),

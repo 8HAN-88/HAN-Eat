@@ -6,6 +6,7 @@ import '../../../app/app_router.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/auth_sessions_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/highlighted_text.dart';
 
 /// Центр безопасности аккаунта: активные сеансы и быстрые действия.
 class AccountSecurityScreen extends StatefulWidget {
@@ -271,8 +272,14 @@ class _SessionTile extends StatelessWidget {
         session.isCurrent ? Icons.smartphone : Icons.devices_other_outlined,
         color: session.isCurrent ? scheme.primary : null,
       ),
-      title: Text(
-        session.isCurrent ? '${session.title} · это устройство' : session.title,
+      title: HighlightedText(
+        text: session.isCurrent
+            ? '${session.title} · это устройство'
+            : session.title,
+        style: Theme.of(context).textTheme.bodyLarge ??
+            const TextStyle(fontSize: 16),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
       ),
       subtitle: Text(
         [

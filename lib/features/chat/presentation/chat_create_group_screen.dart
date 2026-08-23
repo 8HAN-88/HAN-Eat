@@ -7,6 +7,7 @@ import '../../../app/app_router.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/chat_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../../subscription/creator_upsell.dart';
 import '../application/chat_thread_prefetch.dart';
 
@@ -147,7 +148,13 @@ class _ChatCreateGroupScreenState extends State<ChatCreateGroupScreen> {
                 itemBuilder: (context, i) {
                   final user = _selected.values.elementAt(i);
                   return InputChip(
-                    label: Text(user.displayName),
+                    label: HighlightedText(
+                      text: user.displayName,
+                      style: Theme.of(context).textTheme.labelLarge ??
+                          const TextStyle(fontSize: 14),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     onDeleted: () => _toggle(user),
                   );
                 },
@@ -172,7 +179,13 @@ class _ChatCreateGroupScreenState extends State<ChatCreateGroupScreen> {
                               return CheckboxListTile(
                                 value: checked,
                                 onChanged: (_) => _toggle(user),
-                                title: Text(user.displayName),
+                                title: HighlightedText(
+                                  text: user.displayName,
+                                  style: Theme.of(context).textTheme.bodyLarge ??
+                                      const TextStyle(fontSize: 16),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                                 secondary: CircleAvatar(
                                   child: Text(
                                     _avatarLetter(user.displayName),

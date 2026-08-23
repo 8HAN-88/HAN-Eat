@@ -460,8 +460,8 @@ class ChatHubRecommendedChannelChip extends StatelessWidget {
               const SizedBox(width: 8),
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 140),
-                child: Text(
-                  channel.name,
+                child: HighlightedText(
+                  text: channel.name,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontWeight: FontWeight.w500),
@@ -793,9 +793,13 @@ class _ChannelInboxTileState extends State<ChannelInboxTile> {
 
   String _postPreview(Map<String, dynamic> post) {
     final title = (post['title'] as String?)?.trim();
-    if (title != null && title.isNotEmpty) return title;
+    if (title != null && title.isNotEmpty) {
+      return previewTextWithCustomEmoji(title);
+    }
     final description = (post['description'] as String?)?.trim();
-    if (description != null && description.isNotEmpty) return description;
+    if (description != null && description.isNotEmpty) {
+      return previewTextWithCustomEmoji(description);
+    }
     final type = (post['type'] as String?)?.toLowerCase() ?? '';
     if (type == 'recipe') return 'Пост';
     if (type == 'reel' || type == 'video') return 'Видео';
@@ -807,7 +811,7 @@ class _ChannelInboxTileState extends State<ChannelInboxTile> {
     if (_channel.postsCount > 0 && _loadingPost) return 'Загрузка…';
     if (_preview != null) return _preview!;
     final d = _channel.description?.trim();
-    if (d != null && d.isNotEmpty) return d;
+    if (d != null && d.isNotEmpty) return previewTextWithCustomEmoji(d);
     return 'Канал';
   }
 
@@ -842,8 +846,8 @@ class _ChannelInboxTileState extends State<ChannelInboxTile> {
                             size: 15, color: scheme.primary),
                         const SizedBox(width: 4),
                         Expanded(
-                          child: Text(
-                            _channel.name,
+                          child: HighlightedText(
+                            text: _channel.name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(

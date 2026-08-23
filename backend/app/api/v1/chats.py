@@ -3432,7 +3432,9 @@ async def transcribe_chat_message(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "voice_media_missing")
     try:
         data = load_media_bytes(msg.media_url)
-        msg.transcription = transcribe_audio_bytes(data)
+        from app.services.emoji_pack_service import strip_custom_emoji_tokens
+
+        msg.transcription = strip_custom_emoji_tokens(transcribe_audio_bytes(data)) or None
         db.commit()
         db.refresh(msg)
     except TranscriptionUnavailable:

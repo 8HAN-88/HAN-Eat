@@ -44,6 +44,14 @@ def preview_text_with_custom_emoji(text: Optional[str], *, limit: int = 120) -> 
     return replaced[: max(1, int(limit or 120))]
 
 
+def strip_custom_emoji_tokens(text: Optional[str]) -> str:
+    """Drop `[[e:id]]` tokens without substituting a glyph (OAuth/ASR/headers)."""
+    if not text:
+        return ""
+    cleaned = CE_TOKEN_RE.sub("", text)
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
 class EmojiPackService:
     def __init__(self, db: Session):
         self.db = db

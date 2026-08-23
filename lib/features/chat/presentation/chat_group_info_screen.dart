@@ -654,7 +654,13 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                               }
                             });
                           },
-                          title: Text(user.displayName),
+                          title: HighlightedText(
+                            text: user.displayName,
+                            style: Theme.of(context).textTheme.bodyLarge ??
+                                const TextStyle(fontSize: 16),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                           secondary: CircleAvatar(
                             child: Text(
                               user.displayName.characters.first.toUpperCase(),
@@ -708,7 +714,9 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Удалить участника?'),
-        content: Text('Удалить ${member.displayName} из группы?'),
+        content: Text(
+          'Удалить ${previewTextWithCustomEmoji(member.displayName)} из группы?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -785,7 +793,9 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) => AlertDialog(
-          title: Text('Права: ${member.displayName}'),
+          title: Text(
+            'Права: ${previewTextWithCustomEmoji(member.displayName)}',
+          ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -906,7 +916,9 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) => AlertDialog(
-          title: Text('Ограничить: ${member.displayName}'),
+          title: Text(
+            'Ограничить: ${previewTextWithCustomEmoji(member.displayName)}',
+          ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1037,7 +1049,9 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) => AlertDialog(
-          title: Text('Забанить: ${member.displayName}'),
+          title: Text(
+            'Забанить: ${previewTextWithCustomEmoji(member.displayName)}',
+          ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -2286,7 +2300,15 @@ class _GroupJoinRequestsSheetState extends State<_GroupJoinRequestsSheet> {
                                           .toUpperCase(),
                                     ),
                                   ),
-                                  title: Text(row.user.displayName),
+                                  title: HighlightedText(
+                                    text: row.user.displayName,
+                                    style: Theme.of(context)
+                                            .textTheme
+                                            .bodyLarge ??
+                                        const TextStyle(fontSize: 16),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                   subtitle: Text(
                                     'Запрос от ${row.requestedAt.day.toString().padLeft(2, '0')}.${row.requestedAt.month.toString().padLeft(2, '0')}.${row.requestedAt.year}',
                                   ),

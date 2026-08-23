@@ -1082,3 +1082,35 @@ def test_channel_push_title_hides_custom_emoji_tokens():
     title = f"Новый пост в канале {preview_text_with_custom_emoji('еда [[e:12]]', limit=80)}"
     assert "[[e:" not in title
     assert "✦" in title
+
+
+def test_strip_custom_emoji_tokens_for_imported_names():
+    from app.services.emoji_pack_service import strip_custom_emoji_tokens
+
+    assert strip_custom_emoji_tokens("Анна [[e:12]] Иванова") == "Анна Иванова"
+    assert strip_custom_emoji_tokens("[[e:1]]") == ""
+    assert strip_custom_emoji_tokens(None) == ""
+    assert strip_custom_emoji_tokens("  Google User  ") == "Google User"
+
+
+def test_review_payout_note_requires_custom_emoji(db_session):
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    with pytest.raises(HTTPException) as err:
+        PaidFeaturesService(db_session).review_payout(
+            999,
+            reviewer_user_id=owner.id,
+            approve=True,
+            note=token,
+        )
+    assert err.value.status_code == 403
+
+
+def test_signup_name_tokens_require_custom_emoji(db_session):
+    owner = _user(db_session, 1)
+    with pytest.raises(HTTPException) as err:
+        EmojiPackService(db_session).require_send_tokens_http(
+            owner.id,
+            "Иван [[e:7]]",
+        )
+    assert err.value.status_code == 403

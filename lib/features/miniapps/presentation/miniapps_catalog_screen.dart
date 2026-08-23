@@ -195,7 +195,13 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
               child: ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.smart_toy_outlined),
-                title: Text(bot.name),
+                title: HighlightedText(
+                  text: bot.name,
+                  style: Theme.of(context).textTheme.bodyLarge ??
+                      const TextStyle(fontSize: 16),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 subtitle: Text('@${bot.username}'),
               ),
             ),

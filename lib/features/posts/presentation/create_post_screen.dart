@@ -13,6 +13,7 @@ import 'package:han_eat/services/feed_api_cache.dart';
 import 'package:han_eat/services/media_upload_service.dart';
 import 'package:han_eat/utils/file_helper.dart';
 import 'package:han_eat/widgets/app_avatar.dart';
+import 'package:han_eat/widgets/highlighted_text.dart';
 import 'package:han_eat/widgets/telegram_photo_grid.dart';
 import 'package:han_eat/widgets/create_poll_form_section.dart';
 import 'package:han_eat/utils/url_validator.dart';
@@ -907,7 +908,13 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                         ..._userChannels.map((channel) {
                           return DropdownMenuItem<int>(
                             value: channel.id,
-                            child: Text(channel.name),
+                            child: HighlightedText(
+                              text: channel.name,
+                              style: Theme.of(context).textTheme.bodyLarge ??
+                                  const TextStyle(fontSize: 16),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           );
                         }),
                       ],

@@ -1343,8 +1343,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                     itemBuilder: (context, index) {
                       final item = _joinRequestsInbox[index];
                       return ListTile(
-                        title: Text(
-                          '${item.user.displayName} → ${item.conversation.displayTitle}',
+                        title: HighlightedText(
+                          text:
+                              '${item.user.displayName} → ${item.conversation.displayTitle}',
+                          style: Theme.of(context).textTheme.bodyLarge ??
+                              const TextStyle(fontSize: 16),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         subtitle: Text(
                           '${item.requestedAt.day.toString().padLeft(2, '0')}.'
@@ -2528,8 +2533,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                         ..._joinRequestsInbox.take(3).map((item) {
                           return ListTile(
                             dense: true,
-                            title: Text(
-                              '${item.user.displayName} -> ${item.conversation.displayTitle}',
+                            title: HighlightedText(
+                              text:
+                                  '${item.user.displayName} → ${item.conversation.displayTitle}',
+                              style: Theme.of(context).textTheme.bodyLarge ??
+                                  const TextStyle(fontSize: 16),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             subtitle: Text(
                               '${item.requestedAt.day.toString().padLeft(2, '0')}.${item.requestedAt.month.toString().padLeft(2, '0')}.${item.requestedAt.year}',

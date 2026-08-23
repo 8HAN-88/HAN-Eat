@@ -3037,8 +3037,22 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                           )
                         : null,
                   ),
-                  title: Text(item.title),
-                  subtitle: item.subtitle != null ? Text(item.subtitle!) : null,
+                  title: HighlightedText(
+                    text: item.title,
+                    style: Theme.of(context).textTheme.bodyLarge ??
+                        const TextStyle(fontSize: 16),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: item.subtitle != null
+                      ? HighlightedText(
+                          text: item.subtitle!,
+                          style: Theme.of(context).textTheme.bodySmall ??
+                              const TextStyle(fontSize: 12),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        )
+                      : null,
                   onTap: () {
                     if (item.isSlashCommand) {
                       _insertBotCommand(item.username);
@@ -6861,7 +6875,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 displayName: peer.displayName,
                 radius: 22,
               ),
-              title: Text(peer.displayName),
+              title: HighlightedText(
+                text: peer.displayName,
+                style: Theme.of(context).textTheme.bodyLarge ??
+                    const TextStyle(fontSize: 16),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
               subtitle: Text(
                 peer.isOnline
                     ? 'в сети'
@@ -7512,7 +7532,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                       _openUserProfile(member.id);
                     },
                   ),
-                  title: Text(member.displayName),
+                  title: HighlightedText(
+                    text: member.displayName,
+                    style: Theme.of(context).textTheme.bodyLarge ??
+                        const TextStyle(fontSize: 16),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   subtitle: Text(formatLastSeen(member.lastSeenAt)),
                   onTap: () {
                     Navigator.pop(ctx);
@@ -8927,7 +8953,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         );
       });
       messenger.showSnackBar(
-        SnackBar(content: Text('${peer.displayName} заблокирован')),
+        SnackBar(
+          content: Text(
+            '${previewTextWithCustomEmoji(peer.displayName)} заблокирован',
+          ),
+        ),
       );
     }
     unawaited(() async {
@@ -8959,7 +8989,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${peer.displayName} разблокирован')),
+      SnackBar(
+        content: Text(
+          '${previewTextWithCustomEmoji(peer.displayName)} разблокирован',
+        ),
+      ),
     );
     try {
       await ChatService.unblockUser(peer.id);
@@ -18205,8 +18239,8 @@ class _Bubble extends StatelessWidget {
                 style: TextStyle(color: fg, fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 4),
-              Text(
-                buttonText,
+              HighlightedText(
+                text: buttonText,
                 style: TextStyle(
                   color: scheme.secondary,
                   fontWeight: FontWeight.w700,
@@ -18214,8 +18248,8 @@ class _Bubble extends StatelessWidget {
               ),
               if (shortData.isNotEmpty) ...[
                 const SizedBox(height: 6),
-                Text(
-                  shortData,
+                HighlightedText(
+                  text: shortData,
                   style: TextStyle(color: fg.withValues(alpha: 0.85)),
                 ),
               ],
@@ -18422,8 +18456,8 @@ class _Bubble extends StatelessWidget {
             if ((message.transcription ?? '').isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  message.transcription!,
+                child: HighlightedText(
+                  text: message.transcription!,
                   style: TextStyle(color: fg, fontSize: 13),
                 ),
               )

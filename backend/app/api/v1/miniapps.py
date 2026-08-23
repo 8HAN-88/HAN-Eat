@@ -783,6 +783,9 @@ async def send_miniapp_web_app_data(
         raise HTTPException(status_code=400, detail="Bot is not in this chat")
 
     button_text = (payload.button_text or app.name or "Mini App").strip()[:64]
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(current_user.id, data, button_text)
     content = json.dumps(
         {
             "data": data,

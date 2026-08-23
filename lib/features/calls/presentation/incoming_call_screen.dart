@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../services/call_service.dart';
+import '../../../widgets/highlighted_text.dart';
 
 /// Fullscreen incoming ring UI (accept / reject + haptic pulse).
 class IncomingCallScreen extends StatefulWidget {
@@ -91,13 +92,16 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
                   : null,
             ),
             const SizedBox(height: 20),
-            Text(
-              peerName,
+            HighlightedText(
+              text: peerName,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 28,
                 fontWeight: FontWeight.w700,
               ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
             ),
             const Spacer(),
             Padding(

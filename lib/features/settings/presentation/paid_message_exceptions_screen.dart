@@ -8,6 +8,7 @@ import '../../../services/chat_service.dart';
 import '../../../services/paid_features_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_avatar.dart';
+import '../../../widgets/highlighted_text.dart';
 
 /// Telegram-like allowlist: who can DM you without paying Stars.
 class PaidMessageExceptionsScreen extends StatefulWidget {
@@ -179,7 +180,13 @@ class _PaidMessageExceptionsScreenState
             displayName: user.displayName,
             radius: 22,
           ),
-          title: Text(user.displayName),
+          title: HighlightedText(
+            text: user.displayName,
+            style: Theme.of(context).textTheme.bodyLarge ??
+                const TextStyle(fontSize: 16),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
           subtitle: username != null && username.isNotEmpty
               ? Text(username.startsWith('@') ? username : '@$username')
               : const Text('Пишет бесплатно'),
