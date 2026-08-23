@@ -1644,6 +1644,38 @@ def test_business_auto_text_previews_after_downgrade(db_session):
     assert "✦" in out
 
 
+def test_channel_last_post_preview_hides_custom_emoji_tokens():
+    from types import SimpleNamespace
+
+    from app.api.v1.channels import _post_preview_text
+
+    post = SimpleNamespace(title="Кухня [[e:12]]", description="", type="text")
+    out = _post_preview_text(post)
+    assert "[[e:" not in out
+    assert "✦" in out
+
+
+def test_translate_requires_custom_emoji(db_session):
+    import asyncio
+
+    from app.api.v1.chats import translate_chat_text
+    from app.schemas.chat import TranslateTextRequest
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+
+    async def _run():
+        await translate_chat_text(
+            TranslateTextRequest(text=token, target_lang="en"),
+            current_user=owner,
+            db=db_session,
+        )
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(_run())
+    assert err.value.status_code == 403
+
+
 def test_saved_tag_emoji_requires_custom_emoji(db_session):
     import asyncio
 

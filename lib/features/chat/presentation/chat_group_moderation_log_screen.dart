@@ -119,7 +119,9 @@ class _ChatGroupModerationLogScreenState
                 )
               : _items.isEmpty
                   ? Center(
-                      child: Text('Для "$title" пока нет записей'),
+                      child: Text(
+                        'Для "${previewTextWithCustomEmoji(title)}" пока нет записей',
+                      ),
                     )
                   : RefreshIndicator(
                       onRefresh: _load,

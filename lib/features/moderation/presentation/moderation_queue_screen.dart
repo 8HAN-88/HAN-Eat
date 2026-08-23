@@ -514,8 +514,9 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Жалобу отправил: ${report.reporterLine}',
+        HighlightedText(
+          text: report.reporterLine,
+          leading: 'Жалобу отправил: ',
           style: const TextStyle(fontSize: 13),
         ),
         if (when.isNotEmpty)
@@ -529,17 +530,11 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
         if (report.hasComment)
           Padding(
             padding: const EdgeInsets.only(top: 6),
-            child: Text.rich(
-              TextSpan(
-                style: const TextStyle(fontSize: 13),
-                children: [
-                  const TextSpan(
-                    text: 'Комментарий: ',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  TextSpan(text: report.comment),
-                ],
-              ),
+            child: HighlightedText(
+              text: report.comment ?? '',
+              leading: 'Комментарий: ',
+              leadingStyle: const TextStyle(fontWeight: FontWeight.w600),
+              style: const TextStyle(fontSize: 13),
             ),
           ),
       ],

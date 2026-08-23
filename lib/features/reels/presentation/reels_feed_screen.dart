@@ -1532,8 +1532,9 @@ class _ReelCardState extends ConsumerState<ReelCard>
                     children: widget.reel.tags!.map((tag) {
                       return GestureDetector(
                         onTap: () => widget.onHashtagTap(tag),
-                        child: Text(
-                          '#$tag',
+                        child: HighlightedText(
+                          text: tag,
+                          leading: '#',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 14,

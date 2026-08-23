@@ -175,7 +175,14 @@ class _MiniAppsModerationScreenState extends State<MiniAppsModerationScreen> {
                                     ],
                                   ),
                                   const SizedBox(height: 6),
-                                  Text('@${app.botUsername} · ${app.shortName}'),
+                                  HighlightedText(
+                                    text: app.shortName,
+                                    leading: '@${app.botUsername} · ',
+                                    style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium ??
+                                        const TextStyle(fontSize: 14),
+                                  ),
                                   if ((app.description ?? '').trim().isNotEmpty) ...[
                                     const SizedBox(height: 6),
                                     HighlightedText(

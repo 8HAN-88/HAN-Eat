@@ -4088,6 +4088,9 @@ async def translate_chat_text(
     text = (body.text or "").strip()
     if not text:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "empty_text")
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(current_user.id, text)
     target = (body.target_lang or "ru").strip().lower()[:8] or "ru"
     from app.services.text_translation import translate_text
     from app.services.subscription_service import SubscriptionService

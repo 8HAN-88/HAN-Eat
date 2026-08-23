@@ -14,6 +14,7 @@ import '../application/chat_thread_prefetch.dart';
 import '../../../services/chat_thread_ui_prefs.dart';
 import '../../../services/user_realtime_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/highlighted_text.dart';
 import '../../../widgets/telegram_ui.dart';
@@ -783,9 +784,9 @@ class _ArchivedChannelTile extends StatelessWidget {
     final unread = channel.inboxUnreadPosts;
     final hasUnread = unread > 0;
     final preview = (channel.lastPostPreview?.trim().isNotEmpty ?? false)
-        ? channel.lastPostPreview!.trim()
+        ? previewTextWithCustomEmoji(channel.lastPostPreview!.trim())
         : ((channel.description?.trim().isNotEmpty ?? false)
-            ? channel.description!.trim()
+            ? previewTextWithCustomEmoji(channel.description!.trim())
             : 'Канал');
 
     final tile = Material(

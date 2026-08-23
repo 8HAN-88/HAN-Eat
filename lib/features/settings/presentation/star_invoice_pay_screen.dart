@@ -220,8 +220,8 @@ class _StarInvoicePayScreenState extends State<StarInvoicePayScreen> {
                             ),
                       ),
                       const SizedBox(height: 8),
-                      Text(
-                        invoice.botName ??
+                      HighlightedText(
+                        text: invoice.botName ??
                             (invoice.botUsername != null
                                 ? '@${invoice.botUsername}'
                                 : 'Бот'),

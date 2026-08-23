@@ -811,7 +811,7 @@ class _ChannelInboxTileState extends State<ChannelInboxTile> {
 
   String _subtitle() {
     if (_channel.postsCount > 0 && _loadingPost) return 'Загрузка…';
-    if (_preview != null) return _preview!;
+    if (_preview != null) return previewTextWithCustomEmoji(_preview!);
     final d = _channel.description?.trim();
     if (d != null && d.isNotEmpty) return previewTextWithCustomEmoji(d);
     return 'Канал';

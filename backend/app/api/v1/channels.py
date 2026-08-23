@@ -105,10 +105,12 @@ def assert_can_create_private_channel(is_public: bool, has_creator: bool) -> Non
 
 
 def _post_preview_text(post: Post) -> str:
-    title = (post.title or "").strip()
+    from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
+    title = preview_text_with_custom_emoji((post.title or "").strip())
     if title:
         return title[:120]
-    desc = (post.description or "").strip()
+    desc = preview_text_with_custom_emoji((post.description or "").strip())
     if desc:
         return desc[:120]
     ptype = (post.type or "").lower()
