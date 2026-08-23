@@ -1169,3 +1169,87 @@ def test_miniapp_moderation_note_requires_custom_emoji(db_session):
     with pytest.raises(HTTPException) as err:
         asyncio.run(_run())
     assert err.value.status_code == 403
+
+
+def test_moderation_comment_requires_custom_emoji(db_session):
+    import asyncio
+
+    from app.api.v1.moderation import ApproveRequest, approve_content
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+
+    async def _run():
+        await approve_content(
+            1,
+            ApproveRequest(comment=token),
+            current_user=owner,
+            db=db_session,
+        )
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(_run())
+    assert err.value.status_code == 403
+
+
+def test_moderation_reject_reason_requires_custom_emoji(db_session):
+    import asyncio
+
+    from app.api.v1.moderation import RejectRequest, reject_content
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+
+    async def _run():
+        await reject_content(
+            1,
+            RejectRequest(reason=token, comment=None),
+            current_user=owner,
+            db=db_session,
+        )
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(_run())
+    assert err.value.status_code == 403
+
+
+def test_moderation_warn_message_requires_custom_emoji(db_session):
+    import asyncio
+
+    from app.api.v1.moderation import WarnUserRequest, warn_user
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+
+    async def _run():
+        await warn_user(
+            2,
+            WarnUserRequest(message=token),
+            current_user=owner,
+            db=db_session,
+        )
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(_run())
+    assert err.value.status_code == 403
+
+
+def test_moderation_ban_reason_requires_custom_emoji(db_session):
+    import asyncio
+
+    from app.api.v1.moderation import BanUserRequest, ban_user
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+
+    async def _run():
+        await ban_user(
+            2,
+            BanUserRequest(reason=token),
+            current_user=owner,
+            db=db_session,
+        )
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(_run())
+    assert err.value.status_code == 403

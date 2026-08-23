@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../models/emoji_pack_models.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../services/emoji_pack_service.dart';
 import '../../../services/media_upload_service.dart';
 import '../../../services/server_config.dart';
@@ -183,8 +184,9 @@ class _EmojiPackManageScreenState extends State<EmojiPackManageScreen> {
     if (pack.priceStars <= 0) return;
     final ok = await confirmStarsSpend(
       context,
-      title: 'Купить «${pack.title}»',
-      body: 'Автор ${pack.authorLabel} · комиссия ${pack.feeStars} ★',
+      title: 'Купить «${previewTextWithCustomEmoji(pack.title)}»',
+      body:
+          'Автор ${previewTextWithCustomEmoji(pack.authorLabel)} · комиссия ${pack.feeStars} ★',
       amountStars: pack.priceStars,
       confirmLabel: 'Купить',
     );

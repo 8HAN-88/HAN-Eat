@@ -1494,8 +1494,8 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       SnackBar(
         content: Text(
           enabled
-              ? '«${channel.name}» без звука'
-              : 'Уведомления «${channel.name}» включены',
+              ? '«${previewTextWithCustomEmoji(channel.name)}» без звука'
+              : 'Уведомления «${previewTextWithCustomEmoji(channel.name)}» включены',
         ),
       ),
     );
@@ -1542,8 +1542,8 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       SnackBar(
         content: Text(
           isFav
-              ? '«${channel.name}» убран из избранного'
-              : '«${channel.name}» в избранном',
+              ? '«${previewTextWithCustomEmoji(channel.name)}» убран из избранного'
+              : '«${previewTextWithCustomEmoji(channel.name)}» в избранном',
         ),
       ),
     );
@@ -1638,7 +1638,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       builder: (ctx) => AlertDialog(
         title: const Text('Отписаться от канала?'),
         content: Text(
-          '«${channel.name}» исчезнет из списка. Вы сможете подписаться снова.',
+          '«${previewTextWithCustomEmoji(channel.name)}» исчезнет из списка. Вы сможете подписаться снова.',
         ),
         actions: [
           TextButton(

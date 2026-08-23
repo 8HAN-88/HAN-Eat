@@ -201,8 +201,9 @@ class _FlexGiftSheetState extends State<_FlexGiftSheet> {
                 ),
                 if (_picked != null) ...[
                   const SizedBox(height: 8),
-                  Text(
-                    'Получатель: ${_picked!.name ?? _picked!.username ?? '#${_picked!.id}'}',
+                  HighlightedText(
+                    text:
+                        'Получатель: ${_picked!.name ?? _picked!.username ?? '#${_picked!.id}'}',
                     style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ],

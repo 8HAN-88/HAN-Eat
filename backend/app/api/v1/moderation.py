@@ -932,6 +932,9 @@ async def approve_content(
     current_user: User = Depends(get_current_moderator_required),
     db: Session = Depends(get_db),
 ):
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(current_user.id, request.comment)
     item = db.query(ModerationQueue).filter(ModerationQueue.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Moderation item not found")
@@ -1002,6 +1005,11 @@ async def reject_content(
     current_user: User = Depends(get_current_moderator_required),
     db: Session = Depends(get_db),
 ):
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(
+        current_user.id, request.reason, request.comment
+    )
     item = db.query(ModerationQueue).filter(ModerationQueue.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Moderation item not found")
@@ -1109,6 +1117,9 @@ async def warn_user(
     current_user: User = Depends(get_current_moderator_required),
     db: Session = Depends(get_db),
 ):
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(current_user.id, request.message)
     target = db.query(User).filter(User.id == user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
@@ -1149,6 +1160,9 @@ async def ban_user(
     current_user: User = Depends(get_current_admin_required),
     db: Session = Depends(get_db),
 ):
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(current_user.id, request.reason)
     target = db.query(User).filter(User.id == user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="User not found")

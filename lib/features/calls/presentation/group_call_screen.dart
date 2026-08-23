@@ -10,6 +10,7 @@ import '../../../models/chat_models.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/call_service.dart';
 import '../../../services/chat_service.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../services/user_realtime_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/highlighted_text.dart';
@@ -535,7 +536,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Приглашение отправлено: ${picked.name?.trim().isNotEmpty == true ? picked.name!.trim() : 'участник'}',
+            'Приглашение отправлено: ${picked.name?.trim().isNotEmpty == true ? previewTextWithCustomEmoji(picked.name!.trim()) : 'участник'}',
           ),
         ),
       );

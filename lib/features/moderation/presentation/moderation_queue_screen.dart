@@ -781,18 +781,22 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 if (item.contentPreview!['title'] != null)
-                                  Text(
-                                    'Заголовок: ${item.contentPreview!['title']}',
+                                  HighlightedText(
+                                    text:
+                                        'Заголовок: ${item.contentPreview!['title']}',
                                     style: const TextStyle(fontSize: 14),
                                   ),
-                                if (item.contentPreview!['description'] != null)
-                                  Text(
-                                    'Описание: ${item.contentPreview!['description']}',
+                                if (item.contentPreview!['description'] !=
+                                    null)
+                                  HighlightedText(
+                                    text:
+                                        'Описание: ${item.contentPreview!['description']}',
                                     style: const TextStyle(fontSize: 14),
                                   ),
                                 if (item.contentPreview!['text'] != null)
-                                  Text(
-                                    'Текст: ${item.contentPreview!['text']}',
+                                  HighlightedText(
+                                    text:
+                                        'Текст: ${item.contentPreview!['text']}',
                                     style: const TextStyle(fontSize: 14),
                                   ),
                               ],

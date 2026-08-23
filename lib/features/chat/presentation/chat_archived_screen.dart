@@ -662,8 +662,8 @@ class _ArchivedChatTile extends StatelessWidget {
                 ? Row(
                     children: [
                       Flexible(
-                        child: Text(
-                          preview,
+                        child: HighlightedText(
+                          text: preview,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -679,8 +679,8 @@ class _ArchivedChatTile extends StatelessWidget {
                       ),
                     ],
                   )
-                : Text(
-                    prefix == null ? preview : '$prefix$preview',
+                : HighlightedText(
+                    text: prefix == null ? preview : '$prefix$preview',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(

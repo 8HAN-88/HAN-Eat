@@ -264,7 +264,11 @@ class _PostShareSheetState extends State<_PostShareSheet> {
       if (!mounted) return;
       Navigator.pop(context);
       ScaffoldMessenger.of(this.context).showSnackBar(
-        SnackBar(content: Text('Отправлено в «${picked.displayTitle}»')),
+        SnackBar(
+          content: Text(
+            'Отправлено в «${previewTextWithCustomEmoji(picked.displayTitle)}»',
+          ),
+        ),
       );
     } on ApiClientException catch (e) {
       if (!mounted) return;

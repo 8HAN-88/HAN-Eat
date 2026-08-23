@@ -744,11 +744,12 @@ class _GiftTransferUserPickerState extends State<_GiftTransferUserPicker> {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-                child: Text(
-                  'Кому передать «${widget.giftTitle}»?',
+                child: HighlightedText(
+                  text: 'Кому передать «${widget.giftTitle}»?',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w800,
-                      ),
+                      ) ??
+                      const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
                 ),
               ),
               if (widget.feeStars > 0)

@@ -287,8 +287,8 @@ class ChatHubTile extends StatelessWidget {
                                     ? Row(
                                         children: [
                                           Flexible(
-                                            child: Text(
-                                              body,
+                                            child: HighlightedText(
+                                              text: body,
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                               style: TextStyle(

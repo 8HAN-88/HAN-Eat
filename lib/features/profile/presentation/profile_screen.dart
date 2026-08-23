@@ -566,7 +566,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     if (_isSendingTip) return;
     final draft = await pickStarsTipDraft(
       context,
-      title: 'Отправить звёзды ${user.name}',
+      title: 'Отправить звёзды ${previewTextWithCustomEmoji(user.name)}',
       subtitle: 'Звёзды появятся сообщением в личке, как в Telegram.',
     );
     if (draft == null || !mounted) return;
@@ -604,7 +604,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     final fee = PaidFeaturesService.resaleFeeStars(price);
     final ok = await confirmStarsSpend(
       context,
-      title: 'Купить ${gift.title}',
+      title: 'Купить ${previewTextWithCustomEmoji(gift.title)}',
       body: [
         gift.serialLabel.isNotEmpty
             ? '${gift.emoji} ${gift.serialLabel}'
@@ -652,10 +652,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               children: [
                 Text(gift.emoji, style: const TextStyle(fontSize: 48)),
                 const SizedBox(height: 8),
-                Text(
-                  gift.title,
+                HighlightedText(
+                  text: gift.title,
+                  textAlign: TextAlign.center,
                   style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w800,
+                      ) ??
+                      const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 22,
                       ),
                 ),
                 if (gift.serialLabel.isNotEmpty) ...[
@@ -994,8 +999,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                         const SizedBox(width: 8),
                         Tooltip(
                           message: worn.serialLabel.isNotEmpty
-                              ? '${worn.title} ${worn.serialLabel}'
-                              : worn.title,
+                              ? '${previewTextWithCustomEmoji(worn.title)} ${worn.serialLabel}'
+                              : previewTextWithCustomEmoji(worn.title),
                           child: Text(
                             worn.emoji,
                             style: const TextStyle(fontSize: 28),
@@ -1078,9 +1083,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                             Tooltip(
                               message: () {
                                 final base = g.serialLabel.isNotEmpty
-                                    ? '${g.title} ${g.serialLabel} · ${g.stars} ★'
-                                    : '${g.title} · ${g.stars} ★';
-                                final sender = g.senderLabel;
+                                    ? '${previewTextWithCustomEmoji(g.title)} ${g.serialLabel} · ${g.stars} ★'
+                                    : '${previewTextWithCustomEmoji(g.title)} · ${g.stars} ★';
+                                final sender = previewTextWithCustomEmoji(
+                                  g.senderLabel,
+                                );
                                 return sender.isEmpty
                                     ? base
                                     : '$base · от $sender';

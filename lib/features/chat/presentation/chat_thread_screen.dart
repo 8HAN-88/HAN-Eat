@@ -7283,7 +7283,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       }
       final verb = picked.asCopy ? 'Скопировано' : 'Переслано';
       final label = dests.length == 1
-          ? '«${dests.first.displayTitle}»'
+          ? '«${previewTextWithCustomEmoji(dests.first.displayTitle)}»'
           : '${dests.length} чатов';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('$verb в $label')),
@@ -9786,7 +9786,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
       await Share.shareXFiles(
         [file],
-        text: 'Экспорт чата «${_conversation.displayTitle}»',
+        text:
+            'Экспорт чата «${previewTextWithCustomEmoji(_conversation.displayTitle)}»',
         subject: filename,
       );
     } catch (e) {
@@ -9864,7 +9865,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _exitSelectionMode();
       final verb = picked.asCopy ? 'Скопировано' : 'Переслано';
       final destLabel = dests.length == 1
-          ? '«${dests.first.displayTitle}»'
+          ? '«${previewTextWithCustomEmoji(dests.first.displayTitle)}»'
           : '${dests.length} чатов';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -15354,13 +15355,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                   ? Row(
                                       children: [
                                         Flexible(
-                                          child: Text(
-                                            subtitle,
+                                          child: HighlightedText(
+                                            text: subtitle,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                             style: subtitleStyle?.copyWith(
-                                              fontSize: 12,
-                                            ),
+                                                  fontSize: 12,
+                                                ) ??
+                                                const TextStyle(fontSize: 12),
                                           ),
                                         ),
                                         const SizedBox(width: 4),

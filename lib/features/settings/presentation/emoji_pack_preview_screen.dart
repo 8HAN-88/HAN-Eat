@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../models/emoji_pack_models.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../services/emoji_pack_service.dart';
 import '../../../services/server_config.dart';
 import '../../../services/share_link_service.dart';
@@ -59,9 +60,10 @@ class _EmojiPackPreviewScreenState extends State<EmojiPackPreviewScreen> {
     if (needsBuy) {
       final ok = await confirmStarsSpend(
         context,
-        title: 'Купить «${pack.title}»',
+        title: 'Купить «${previewTextWithCustomEmoji(pack.title)}»',
         body: [
-          if (pack.authorLabel.trim().isNotEmpty) 'Автор ${pack.authorLabel}',
+          if (pack.authorLabel.trim().isNotEmpty)
+            'Автор ${previewTextWithCustomEmoji(pack.authorLabel)}',
           '${pack.priceStars} ★',
           if (pack.feeStars > 0) 'комиссия ${pack.feeStars} ★',
         ].join(' · '),
