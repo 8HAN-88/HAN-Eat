@@ -769,17 +769,23 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
                                 ),
                               ),
                               const SizedBox(height: 12),
-                              Text(
-                                bot.name,
+                              HighlightedText(
+                                text: bot.name,
                                 textAlign: TextAlign.center,
                                 style: Theme.of(context)
-                                    .textTheme
-                                    .headlineSmall
-                                    ?.copyWith(fontWeight: FontWeight.w900),
+                                        .textTheme
+                                        .headlineSmall
+                                        ?.copyWith(fontWeight: FontWeight.w900) ??
+                                    const TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.w900,
+                                    ),
                               ),
                               const SizedBox(height: 4),
-                              Text(
-                                (bot.shortDescription ?? bot.description ?? '')
+                              HighlightedText(
+                                text: (bot.shortDescription ??
+                                            bot.description ??
+                                            '')
                                         .trim()
                                         .isEmpty
                                     ? 'Настройте бота как в @BotFather'
@@ -787,11 +793,12 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
                                         bot.description)!,
                                 textAlign: TextAlign.center,
                                 style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                      color: scheme.onSurfaceVariant,
-                                    ),
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          color: scheme.onSurfaceVariant,
+                                        ) ??
+                                    const TextStyle(fontSize: 14),
                               ),
                               const SizedBox(height: 22),
                               _BotFatherGroup(

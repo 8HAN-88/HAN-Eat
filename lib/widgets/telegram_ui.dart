@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../core/theme/app_tokens.dart';
+import 'highlighted_text.dart';
 
 class TelegramSectionHeader extends StatelessWidget {
   const TelegramSectionHeader({
@@ -573,11 +574,15 @@ class TelegramActionSheet extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 22),
-                    Text(
-                      title,
+                    HighlightedText(
+                      text: title,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w800,
                             letterSpacing: -0.1,
+                          ) ??
+                          const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
                           ),
                     ),
                     const SizedBox(height: 18),

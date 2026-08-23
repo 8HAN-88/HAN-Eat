@@ -6,6 +6,7 @@ import '../../../app/app_router.dart';
 import '../../../services/api_service.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/app_gradient_background.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../../../widgets/telegram_ui.dart';
 import '../data/bot_models.dart';
 import '../data/bot_token_storage.dart';
@@ -230,14 +231,18 @@ class _MyBotsScreenState extends State<MyBotsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            bot.name,
+                          HighlightedText(
+                            text: bot.name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: Theme.of(context)
-                                .textTheme
-                                .titleSmall
-                                ?.copyWith(fontWeight: FontWeight.w800),
+                                    .textTheme
+                                    .titleSmall
+                                    ?.copyWith(fontWeight: FontWeight.w800) ??
+                                const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                ),
                           ),
                           const SizedBox(height: 2),
                           Text(
@@ -249,14 +254,15 @@ class _MyBotsScreenState extends State<MyBotsScreen> {
                           ),
                           if ((bot.description ?? '').trim().isNotEmpty) ...[
                             const SizedBox(height: 2),
-                            Text(
-                              bot.description!,
+                            HighlightedText(
+                              text: bot.description!,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: Theme.of(context)
-                                  .textTheme
-                                  .labelSmall
-                                  ?.copyWith(color: scheme.outline),
+                                      .textTheme
+                                      .labelSmall
+                                      ?.copyWith(color: scheme.outline) ??
+                                  const TextStyle(fontSize: 11),
                             ),
                           ],
                         ],

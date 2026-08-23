@@ -167,8 +167,16 @@ async def create_post(
 
     from app.services.emoji_pack_service import EmojiPackService
 
+    poll_parts: list[str | None] = []
+    if request.poll is not None:
+        poll_parts.append(request.poll.question)
+        poll_parts.extend(request.poll.options or [])
     EmojiPackService(db).require_send_tokens_http(
         current_user.id,
+        request.title,
+        request.description,
+        request.link.preview if request.link is not None else None,
+        *poll_parts,
         *(request.tags or []),
     )
 
@@ -258,21 +266,6 @@ async def create_post(
                     publish_to.append("reels")
         else:
             publish_to = ["feed", "reels"] if request.type == "reel" else ["feed"]
-
-    from app.services.emoji_pack_service import EmojiPackService
-
-    poll_parts: list[str | None] = []
-    if request.poll is not None:
-        poll_parts.append(request.poll.question)
-        poll_parts.extend(request.poll.options or [])
-    EmojiPackService(db).require_send_tokens_http(
-        current_user.id,
-        request.title,
-        request.description,
-        request.link.preview if request.link is not None else None,
-        *poll_parts,
-        *(request.tags or []),
-    )
 
     paid_fields = _paid_post_fields(
         bool(request.is_paid),
@@ -529,8 +522,16 @@ async def update_post(
     """Обновить пост автора (в т.ч. link-пост в ленте профиля)."""
     from app.services.emoji_pack_service import EmojiPackService
 
+    poll_parts: list[str | None] = []
+    if request.poll is not None:
+        poll_parts.append(request.poll.question)
+        poll_parts.extend(request.poll.options or [])
     EmojiPackService(db).require_send_tokens_http(
         current_user.id,
+        request.title,
+        request.description,
+        request.link.preview if request.link is not None else None,
+        *poll_parts,
         *(request.tags or []),
     )
     post = (
@@ -548,21 +549,6 @@ async def update_post(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not allowed",
         )
-
-    from app.services.emoji_pack_service import EmojiPackService
-
-    poll_parts: list[str | None] = []
-    if request.poll is not None:
-        poll_parts.append(request.poll.question)
-        poll_parts.extend(request.poll.options or [])
-    EmojiPackService(db).require_send_tokens_http(
-        current_user.id,
-        request.title,
-        request.description,
-        request.link.preview if request.link is not None else None,
-        *poll_parts,
-        *(request.tags or []),
-    )
 
     if request.title is not None:
         post.title = request.title

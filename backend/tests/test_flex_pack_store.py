@@ -1485,6 +1485,90 @@ def test_channel_share_text_hides_custom_emoji_tokens():
     assert "✦" in title
 
 
+def test_create_post_title_requires_custom_emoji(db_session):
+    import asyncio
+
+    from app.api.v1.posts import create_post
+    from app.schemas.post import CreatePostRequest
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+
+    async def _run():
+        await create_post(
+            CreatePostRequest(type="text", title=token),
+            current_user=owner,
+            db=db_session,
+        )
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(_run())
+    assert err.value.status_code == 403
+
+
+def test_update_post_title_requires_custom_emoji(db_session):
+    import asyncio
+
+    from app.api.v1.posts import update_post
+    from app.schemas.post import UpdatePostRequest
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+
+    async def _run():
+        await update_post(
+            1,
+            UpdatePostRequest(title=token),
+            current_user=owner,
+            db=db_session,
+        )
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(_run())
+    assert err.value.status_code == 403
+
+
+def test_create_quick_reply_requires_custom_emoji(db_session):
+    import asyncio
+
+    from app.api.v1.chats import create_quick_reply
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+
+    async def _run():
+        await create_quick_reply(
+            {"title": token, "text": "ок"},
+            current_user=owner,
+            db=db_session,
+        )
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(_run())
+    assert err.value.status_code == 403
+
+
+def test_create_chat_tag_requires_custom_emoji(db_session):
+    import asyncio
+
+    from app.api.v1.chats import create_chat_tag
+    from app.schemas.chat import CreateChatTagRequest
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+
+    async def _run():
+        await create_chat_tag(
+            CreateChatTagRequest(title=token),
+            current_user=owner,
+            db=db_session,
+        )
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(_run())
+    assert err.value.status_code == 403
+
+
 def test_saved_tag_emoji_requires_custom_emoji(db_session):
     import asyncio
 

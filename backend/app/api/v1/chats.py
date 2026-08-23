@@ -1545,18 +1545,17 @@ async def create_quick_reply(
 ):
     from app.services.quick_reply_service import QuickReplyError, create_reply
     from app.services.subscription_service import SubscriptionService
-
-    SubscriptionService(db).require_feature(
-        current_user.id,
-        "quick_replies",
-        "Быстрые ответы доступны с уровня 60",
-    )
     from app.services.emoji_pack_service import EmojiPackService
 
     EmojiPackService(db).require_send_tokens_http(
         current_user.id,
         str(body.get("title") or ""),
         str(body.get("text") or ""),
+    )
+    SubscriptionService(db).require_feature(
+        current_user.id,
+        "quick_replies",
+        "Быстрые ответы доступны с уровня 60",
     )
     try:
         row = create_reply(
@@ -4932,15 +4931,14 @@ async def create_chat_tag(
 ):
     from app.services.chat_tag_service import ChatTagError, create_tag
     from app.services.subscription_service import SubscriptionService
+    from app.services.emoji_pack_service import EmojiPackService
 
+    EmojiPackService(db).require_send_tokens_http(current_user.id, body.title)
     SubscriptionService(db).require_feature(
         current_user.id,
         "chat_tags",
         "Метки чатов доступны с уровня 48",
     )
-    from app.services.emoji_pack_service import EmojiPackService
-
-    EmojiPackService(db).require_send_tokens_http(current_user.id, body.title)
     try:
         tag = create_tag(db, current_user.id, body.title, body.color)
         db.commit()
