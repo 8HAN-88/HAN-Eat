@@ -783,9 +783,11 @@ def _sender_name(user: Optional[User]) -> Optional[str]:
 
 
 def _user_label(user: Optional[User], fallback_id: Optional[int] = None) -> str:
+    from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
     if user is not None:
         if user.name and user.name.strip():
-            return user.name.strip()
+            return preview_text_with_custom_emoji(user.name.strip())
         if user.username and user.username.strip():
             return f"@{user.username.strip()}"
         return f"User {user.id}"

@@ -29,7 +29,7 @@ class ShareLinkService {
     final name = (displayName ?? '').trim();
     final handle = (username ?? '').trim().replaceFirst(RegExp(r'^@'), '');
     final title = name.isNotEmpty
-        ? name
+        ? previewTextWithCustomEmoji(name)
         : (handle.isNotEmpty ? '@$handle' : 'Профиль');
     final handleLine = handle.isNotEmpty ? '\n@$handle' : '';
     final link =

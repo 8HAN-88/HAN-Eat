@@ -42,7 +42,7 @@ class AppInviteService {
     if (name == null || name.isEmpty || _looksLikePhone(name)) {
       return 'Привет!';
     }
-    return 'Привет, $name!';
+    return 'Привет, ${previewTextWithCustomEmoji(name)}!';
   }
 
   static String inviteMessage({

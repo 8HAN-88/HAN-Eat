@@ -2155,7 +2155,9 @@ class ChatService:
         if not self._is_member(conversation_id, actor_id):
             raise ValueError("forbidden")
         conv = self._get_group_or_error(conversation_id)
-        body = (text or "").strip()
+        from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
+        body = preview_text_with_custom_emoji((text or "").strip())
         if not body:
             raise ValueError("empty_message")
         note = Message(
@@ -3423,8 +3425,12 @@ class ChatService:
                     if author
                     else "Пользователь"
                 )
+            from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
             msg.forward_from_user_id = forward_user_id
-            msg.forward_from_name = (forward_name or "")[:120] or None
+            msg.forward_from_name = (
+                preview_text_with_custom_emoji(forward_name or "")[:120] or None
+            )
             msg.forwarded_from_message_id = src.id
         self.db.flush()
         return msg

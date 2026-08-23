@@ -202,8 +202,9 @@ class _StarGiftsMarketplaceScreenState extends State<StarGiftsMarketplaceScreen>
                               ),
                             ),
                           if (gift.sellerLabel.isNotEmpty)
-                            Text(
-                              'Продавец ${gift.sellerLabel}',
+                            HighlightedText(
+                              text: gift.sellerLabel,
+                              leading: 'Продавец ',
                               style: TextStyle(color: scheme.onSurfaceVariant),
                             ),
                         ],

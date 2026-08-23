@@ -1644,6 +1644,17 @@ def test_business_auto_text_previews_after_downgrade(db_session):
     assert "✦" in out
 
 
+def test_user_label_hides_custom_emoji_tokens():
+    from types import SimpleNamespace
+
+    from app.api.v1.chats import _user_label
+
+    user = SimpleNamespace(id=1, name="Анна [[e:12]]", username="anna")
+    out = _user_label(user)
+    assert "[[e:" not in out
+    assert "✦" in out
+
+
 def test_channel_last_post_preview_hides_custom_emoji_tokens():
     from types import SimpleNamespace
 

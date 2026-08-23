@@ -7962,7 +7962,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             children: [
               for (final option in options)
                 ListTile(
-                  title: Text(option.label),
+                  title: HighlightedText(
+                    text: option.label,
+                    style: Theme.of(ctx).textTheme.bodyLarge ??
+                        const TextStyle(fontSize: 16),
+                  ),
                   trailing: selectedValue == option.value
                       ? const Icon(Icons.check)
                       : null,
@@ -11848,8 +11852,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                         height: 1.15,
                       ),
                     ),
-                    Text(
-                      preview,
+                    HighlightedText(
+                      text: preview,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -18020,8 +18024,8 @@ class _Bubble extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (replyAuthor != null && replyAuthor!.isNotEmpty)
-                  Text(
-                    replyAuthor!,
+                  HighlightedText(
+                    text: replyAuthor!,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(

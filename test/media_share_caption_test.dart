@@ -9,5 +9,12 @@ void main() {
       expect(normalizeMediaShareCaption('   '), isNull);
       expect(normalizeMediaShareCaption('  hello  '), 'hello');
     });
+
+    test('previews custom emoji tokens', () {
+      expect(
+        normalizeMediaShareCaption('фото [[e:12]]'),
+        isNot(contains('[[e:')),
+      );
+    });
   });
 }

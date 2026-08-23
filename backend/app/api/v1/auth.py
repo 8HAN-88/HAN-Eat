@@ -300,7 +300,9 @@ async def register(
     from app.services.emoji_pack_service import parse_custom_emoji_ids
 
     # New accounts have no flex — custom-emoji tokens are always forbidden.
-    if parse_custom_emoji_ids(request.name):
+    if parse_custom_emoji_ids(request.name) or parse_custom_emoji_ids(
+        request.username
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=feature_required_detail(
