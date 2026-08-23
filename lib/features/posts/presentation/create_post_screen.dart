@@ -444,8 +444,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                 ),
               ),
             if (image != null && image.isNotEmpty) const SizedBox(height: 8),
-            Text(
-              title ?? url,
+            HighlightedText(
+              text: title ?? url,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontWeight: FontWeight.w600),
@@ -453,8 +453,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
             if (description != null && description.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                  description,
+                child: HighlightedText(
+                  text: description,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(

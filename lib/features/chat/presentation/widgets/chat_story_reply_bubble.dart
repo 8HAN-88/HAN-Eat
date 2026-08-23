@@ -146,8 +146,8 @@ class ChatStoryReplyBubble extends StatelessWidget {
                         ),
                       ),
                       if ((payload.authorName ?? '').trim().isNotEmpty)
-                        Text(
-                          payload.authorName!.trim(),
+                        HighlightedText(
+                          text: payload.authorName!.trim(),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(

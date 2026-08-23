@@ -92,6 +92,12 @@ async def create_repost(
     db: Session = Depends(get_db)
 ):
     """Создать репост"""
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(
+        current_user.id,
+        request.comment,
+    )
     # Проверяем, существует ли пост
     post = db.query(Post).filter(
         Post.id == post_id,

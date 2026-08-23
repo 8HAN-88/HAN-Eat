@@ -1644,6 +1644,27 @@ def test_business_auto_text_previews_after_downgrade(db_session):
     assert "✦" in out
 
 
+def test_create_repost_comment_requires_custom_emoji(db_session):
+    import asyncio
+
+    from app.api.v1.reposts import CreateRepostRequest, create_repost
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+
+    async def _run():
+        await create_repost(
+            1,
+            CreateRepostRequest(comment=token),
+            current_user=owner,
+            db=db_session,
+        )
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(_run())
+    assert err.value.status_code == 403
+
+
 def test_user_label_hides_custom_emoji_tokens():
     from types import SimpleNamespace
 

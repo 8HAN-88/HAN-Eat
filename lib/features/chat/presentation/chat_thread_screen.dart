@@ -10822,8 +10822,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    caption,
+                  HighlightedText(
+                    text: caption,
                     style: TextStyle(
                       color: fg,
                       height: 1.24,
@@ -15603,7 +15603,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                     ? chipLabelColor
                                                     : chipSelectedLabelColor,
                                               ),
-                                              label: Text(_searchSenderLabel()),
+                                              label: HighlightedText(
+                                                text: _searchSenderLabel(),
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  color: _threadSearchSenderId ==
+                                                          null
+                                                      ? chipLabelColor
+                                                      : chipSelectedLabelColor,
+                                                ),
+                                              ),
                                               selected:
                                                   _threadSearchSenderId != null,
                                               onSelected: (_) =>
