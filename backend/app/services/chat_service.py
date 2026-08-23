@@ -3660,8 +3660,10 @@ class ChatService:
             .filter(ConversationMember.conversation_id == conversation_id)
             .all()
         )
+        from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
         actor = self.db.query(User).filter(User.id == actor_id).first()
-        actor_name = (
+        actor_name = preview_text_with_custom_emoji(
             (actor.name or actor.username or "Пользователь")
             if actor
             else "Пользователь"

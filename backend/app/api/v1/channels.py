@@ -243,6 +243,7 @@ async def create_channel(
             request.name,
             request.description,
             request.rules,
+            *(request.tags or []),
         )
 
         # Создаем канал
@@ -348,6 +349,7 @@ async def update_channel(
         request.name,
         request.description,
         request.rules,
+        *(request.tags or []),
     )
     
     # Проверяем уникальность slug (если изменился)
@@ -1507,6 +1509,7 @@ async def create_channel_post(
         request.description,
         request.link.preview if getattr(request, "link", None) is not None else None,
         *poll_parts,
+        *(request.tags or []),
     )
     
     # Формируем body для поста
@@ -1650,6 +1653,7 @@ async def update_channel_post(
         request.description,
         request.link.preview if request.link is not None else None,
         *poll_parts,
+        *(request.tags or []),
     )
     
     # Обновляем поля поста

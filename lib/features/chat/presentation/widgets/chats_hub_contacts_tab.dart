@@ -601,8 +601,12 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  subtitle: Text(
-                    matched.name ?? '@${matched.username ?? matched.id}',
+                  subtitle: HighlightedText(
+                    text: matched.name ?? '@${matched.username ?? matched.id}',
+                    style: Theme.of(context).textTheme.bodyMedium ??
+                        const TextStyle(fontSize: 14),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   trailing: matched.isContact
                       ? const Icon(Icons.check_circle, color: Colors.green)

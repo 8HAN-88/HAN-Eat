@@ -163,7 +163,12 @@ async def resolve_ticket(
     db: Session = Depends(get_db)
 ):
     """Обработать обращение (только для админов)"""
-    
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(
+        current_user.id,
+        request.resolution_comment,
+    )
     ticket = db.query(SupportTicket).filter(
         SupportTicket.id == ticket_id
     ).first()

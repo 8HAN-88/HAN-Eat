@@ -1315,3 +1315,96 @@ def test_folder_icon_update_requires_custom_emoji(db_session):
             1,
             icon=token,
         )
+
+
+def test_post_tags_require_custom_emoji(db_session):
+    import asyncio
+
+    from app.api.v1.posts import create_post
+    from app.schemas.post import CreatePostRequest
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+
+    async def _run():
+        await create_post(
+            CreatePostRequest(type="text", tags=[token]),
+            current_user=owner,
+            db=db_session,
+        )
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(_run())
+    assert err.value.status_code == 403
+
+
+def test_post_tag_update_requires_custom_emoji(db_session):
+    import asyncio
+
+    from app.api.v1.posts import update_post
+    from app.schemas.post import UpdatePostRequest
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+
+    async def _run():
+        await update_post(
+            1,
+            UpdatePostRequest(tags=[token]),
+            current_user=owner,
+            db=db_session,
+        )
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(_run())
+    assert err.value.status_code == 403
+
+
+def test_community_tag_requires_custom_emoji(db_session):
+    import asyncio
+
+    from app.api.v1.community_upload import (
+        CommunityUploadRequest,
+        upload_community_video,
+    )
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+
+    async def _run():
+        await upload_community_video(
+            CommunityUploadRequest(
+                title="Рилс",
+                author="Автор",
+                description="ок",
+                tags=[token],
+            ),
+            request=None,
+            current_user=owner,
+            db=db_session,
+        )
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(_run())
+    assert err.value.status_code == 403
+
+
+def test_support_resolution_requires_custom_emoji(db_session):
+    import asyncio
+
+    from app.api.v1.support import ResolveTicketRequest, resolve_ticket
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+
+    async def _run():
+        await resolve_ticket(
+            1,
+            ResolveTicketRequest(resolution_comment=token),
+            current_user=owner,
+            db=db_session,
+        )
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(_run())
+    assert err.value.status_code == 403

@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../core/share/system_share.dart';
 import 'auth_service.dart';
+import 'custom_emoji_registry.dart';
 
 /// Приглашение друзей в HanWe (ссылка + SMS / системный шаринг).
 class AppInviteService {
@@ -49,8 +50,8 @@ class AppInviteService {
     String? inviterName,
     String? ref,
   }) {
-    final inviter = inviterName?.trim();
-    final who = inviter != null && inviter.isNotEmpty ? inviter : 'Я';
+    final inviter = previewTextWithCustomEmoji(inviterName?.trim() ?? '');
+    final who = inviter.isNotEmpty ? inviter : 'Я';
     final link = webInviteUrl(ref: ref);
     return '${_greeting(contactName)}\n'
         '$who приглашает вас в HanWe — чаты, лента и каналы.\n\n'

@@ -177,7 +177,11 @@ class ChannelAboutTab extends StatelessWidget {
               runSpacing: 8,
               children: channel.tags!.map((tag) {
                 return Chip(
-                  label: Text('#$tag'),
+                  label: HighlightedText(
+                    text: '#$tag',
+                    style: Theme.of(context).textTheme.labelLarge ??
+                        const TextStyle(fontSize: 14),
+                  ),
                   backgroundColor:
                       Theme.of(context).colorScheme.primaryContainer,
                 );

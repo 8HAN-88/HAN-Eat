@@ -229,6 +229,7 @@ async def upload_community_video(
         request_body.title,
         request_body.description,
         request_body.author,
+        *(request_body.tags or []),
     )
     video_url: Optional[str] = None
     thumbnail_url: Optional[str] = None

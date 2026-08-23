@@ -165,6 +165,13 @@ async def create_post(
             },
         )
 
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(
+        current_user.id,
+        *(request.tags or []),
+    )
+
     if request.type == "poll":
         if not request.poll:
             raise HTTPException(
@@ -264,6 +271,7 @@ async def create_post(
         request.description,
         request.link.preview if request.link is not None else None,
         *poll_parts,
+        *(request.tags or []),
     )
 
     paid_fields = _paid_post_fields(
@@ -519,6 +527,12 @@ async def update_post(
     db: Session = Depends(get_db),
 ):
     """Обновить пост автора (в т.ч. link-пост в ленте профиля)."""
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(
+        current_user.id,
+        *(request.tags or []),
+    )
     post = (
         db.query(Post)
         .filter(Post.id == post_id, Post.deleted_at.is_(None))
@@ -547,6 +561,7 @@ async def update_post(
         request.description,
         request.link.preview if request.link is not None else None,
         *poll_parts,
+        *(request.tags or []),
     )
 
     if request.title is not None:

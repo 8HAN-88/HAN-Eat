@@ -607,8 +607,8 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                       ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(
-                        story.authorName!,
+                      child: HighlightedText(
+                        text: story.authorName!,
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
