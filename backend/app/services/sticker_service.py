@@ -105,6 +105,9 @@ class StickerService:
         emoji: Optional[str] = None,
         sticker_type: str = "static",
     ) -> Sticker:
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(self.db).require_send_tokens(user_id, emoji)
         pack = self.db.query(StickerPack).filter(StickerPack.id == pack_id).first()
         if not pack:
             raise ValueError("pack_not_found")

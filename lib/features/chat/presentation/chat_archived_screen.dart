@@ -15,6 +15,7 @@ import '../../../services/chat_thread_ui_prefs.dart';
 import '../../../services/user_realtime_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../../../widgets/telegram_ui.dart';
 import 'widgets/chats_hub_tiles.dart';
 
@@ -649,8 +650,8 @@ class _ArchivedChatTile extends StatelessWidget {
                                 ? Icons.groups_rounded
                                 : Icons.person_rounded,
                       )),
-            title: Text(
-              chat.displayTitle,
+            title: HighlightedText(
+              text: chat.displayTitle,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -800,8 +801,8 @@ class _ArchivedChannelTile extends StatelessWidget {
                     onChanged: (_) => onToggleSelect(),
                   )
                 : const Icon(Icons.campaign_outlined),
-            title: Text(
-              channel.name,
+            title: HighlightedText(
+              text: channel.name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(

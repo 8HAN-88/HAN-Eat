@@ -574,7 +574,13 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
                             if (_supportBotName != null &&
                                 _bots.every((b) => b.id != _supportBotId))
                               ListTile(
-                                title: Text(_supportBotName!),
+                                title: HighlightedText(
+                                  text: _supportBotName!,
+                                  style: Theme.of(context).textTheme.bodyLarge ??
+                                      const TextStyle(fontSize: 16),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                                 subtitle: const Text('Текущий бот'),
                               ),
                           ],

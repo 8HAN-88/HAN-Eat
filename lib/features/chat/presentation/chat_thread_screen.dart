@@ -6802,10 +6802,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             if (canOpenProfile)
               ListTile(
                 leading: const Icon(Icons.person_outline_rounded),
-                title: Text(
-                  msg.forwardFromName?.trim().isNotEmpty == true
+                title: HighlightedText(
+                  text: msg.forwardFromName?.trim().isNotEmpty == true
                       ? msg.forwardFromName!.trim()
                       : 'Профиль',
+                  style: Theme.of(context).textTheme.bodyLarge ??
+                      const TextStyle(fontSize: 16),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 onTap: () => Navigator.pop(ctx, 'profile'),
               ),
@@ -7026,7 +7030,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   onChanged: (v) => setLocal(() => alsoForPeer = v ?? false),
                   title: Text(
                     (peerName != null && peerName.isNotEmpty)
-                        ? 'Также удалить у $peerName'
+                        ? 'Также удалить у ${previewTextWithCustomEmoji(peerName)}'
                         : 'Также удалить у собеседника',
                   ),
                   controlAffinity: ListTileControlAffinity.leading,
@@ -7387,7 +7391,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   onChanged: (v) => setLocal(() => alsoForPeer = v ?? false),
                   title: Text(
                     (peerName != null && peerName.isNotEmpty)
-                        ? 'Также удалить у $peerName'
+                        ? 'Также удалить у ${previewTextWithCustomEmoji(peerName)}'
                         : 'Также удалить у собеседника',
                   ),
                   controlAffinity: ListTileControlAffinity.leading,

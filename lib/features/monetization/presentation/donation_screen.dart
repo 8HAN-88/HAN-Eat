@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../services/api_service.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../../../widgets/stars_pay_helper.dart';
 import '../data/donation_models.dart';
 
@@ -100,14 +101,25 @@ class _DonationScreenState extends State<DonationScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            widget.recipientName,
-                            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                          HighlightedText(
+                            text: widget.recipientName,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ) ??
+                                const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                           if (widget.channelName != null)
-                            Text(
-                              widget.channelName!,
-                              style: theme.textTheme.bodySmall,
+                            HighlightedText(
+                              text: widget.channelName!,
+                              style: theme.textTheme.bodySmall ??
+                                  const TextStyle(fontSize: 12),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                         ],
                       ),

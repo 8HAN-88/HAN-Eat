@@ -387,9 +387,11 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
                                     )
                                   : null,
                             ),
-                            title: Text(
-                              w.name,
+                            title: HighlightedText(
+                              text: w.name,
                               style: const TextStyle(fontWeight: FontWeight.w700),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             subtitle: w.username != null &&
                                     w.username!.trim().isNotEmpty
@@ -427,7 +429,14 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Розыгрыши · ${widget.channelName}'),
+        title: HighlightedText(
+          text: widget.channelName,
+          leading: 'Розыгрыши · ',
+          style: Theme.of(context).textTheme.titleLarge ??
+              const TextStyle(fontSize: 20),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: [
           if (widget.canManage)
             IconButton(

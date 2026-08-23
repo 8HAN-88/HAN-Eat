@@ -490,8 +490,10 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
                               final statusLabel = _invoiceStatusLabel(inv.status);
                               final canRefund = inv.status == 'paid';
                               return ListTile(
-                                title: Text(
-                                  inv.title,
+                                title: HighlightedText(
+                                  text: inv.title,
+                                  style: Theme.of(context).textTheme.bodyLarge ??
+                                      const TextStyle(fontSize: 16),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -1363,11 +1365,13 @@ class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
                                         : Icons.apps_outage_outlined,
                                   ),
                                 ),
-                                title: Text(
-                                  app.name,
+                                title: HighlightedText(
+                                  text: app.name,
                                   style: const TextStyle(
                                     fontWeight: FontWeight.w700,
                                   ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                                 subtitle: Text(
                                   [
@@ -1718,7 +1722,13 @@ class _BotCommandsScreenState extends State<_BotCommandsScreen> {
                         return ListTile(
                           leading: const Icon(Icons.code_rounded),
                           title: Text('/${c.command}'),
-                          subtitle: Text(c.description),
+                          subtitle: HighlightedText(
+                            text: c.description,
+                            style: Theme.of(context).textTheme.bodySmall ??
+                                const TextStyle(fontSize: 12),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [

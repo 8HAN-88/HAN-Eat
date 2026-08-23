@@ -12,6 +12,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../../app/app_router.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../../../services/auth_service.dart';
 import '../application/community_controller.dart';
 import '../application/community_upload_controller.dart';
@@ -228,11 +229,18 @@ class _CommunityUploadScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          widget.channelName != null && widget.channelName!.trim().isNotEmpty
-              ? 'Рилс в «${widget.channelName!.trim()}»'
-              : 'Новый рилс',
-        ),
+        title: widget.channelName != null &&
+                widget.channelName!.trim().isNotEmpty
+            ? HighlightedText(
+                text: widget.channelName!.trim(),
+                leading: 'Рилс в «',
+                trailing: const Text('»'),
+                style: Theme.of(context).textTheme.titleLarge ??
+                    const TextStyle(fontSize: 20),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              )
+            : const Text('Новый рилс'),
       ),
       body: Form(
         key: _formKey,

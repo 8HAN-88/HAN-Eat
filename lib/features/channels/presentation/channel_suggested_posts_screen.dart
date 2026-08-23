@@ -240,7 +240,14 @@ class _ChannelSuggestedPostsScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Предложения · ${widget.channelName}'),
+        title: HighlightedText(
+          text: widget.channelName,
+          leading: 'Предложения · ',
+          style: Theme.of(context).textTheme.titleLarge ??
+              const TextStyle(fontSize: 20),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: [
           if (_canSuggest)
             IconButton(

@@ -459,10 +459,16 @@ class _EmojiPackManageScreenState extends State<EmojiPackManageScreen> {
                                       ),
                                     ),
                                   ),
-                                  title: Text(
-                                    item.shortcode?.isNotEmpty == true
+                                  title: HighlightedText(
+                                    text: item.shortcode?.isNotEmpty == true
                                         ? item.shortcode!
                                         : '#${item.id}',
+                                    style: Theme.of(context)
+                                            .textTheme
+                                            .bodyLarge ??
+                                        const TextStyle(fontSize: 16),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                   trailing: IconButton(
                                     onPressed: _saving

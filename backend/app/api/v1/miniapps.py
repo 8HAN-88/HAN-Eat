@@ -942,6 +942,12 @@ async def moderate_miniapp(
     current_user: User = Depends(get_current_moderator_required),
     db: Session = Depends(get_db),
 ):
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(
+        current_user.id,
+        payload.moderation_note,
+    )
     app = db.query(BotMiniApp).filter(BotMiniApp.id == miniapp_id).first()
     if not app:
         raise HTTPException(status_code=404, detail="Mini app not found")

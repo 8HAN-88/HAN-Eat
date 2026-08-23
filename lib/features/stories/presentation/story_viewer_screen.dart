@@ -384,9 +384,11 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                                     )
                                   : null,
                             ),
-                            title: Text(
-                              item.user.name,
+                            title: HighlightedText(
+                              text: item.user.name,
                               style: const TextStyle(color: Colors.white),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             subtitle: Text(
                               _formatViewedAt(item.viewedAt),

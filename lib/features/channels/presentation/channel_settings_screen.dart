@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../services/channel_service.dart';
 import '../../../services/channel_cache_service.dart';
 import '../../../app/app_router.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../application/channels_list_refresh_provider.dart';
 
 class ChannelSettingsScreen extends ConsumerStatefulWidget {
@@ -178,7 +179,14 @@ class _ChannelSettingsScreenState extends ConsumerState<ChannelSettingsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Настройки: ${widget.channelName}'),
+        title: HighlightedText(
+          text: widget.channelName,
+          leading: 'Настройки: ',
+          style: Theme.of(context).textTheme.titleLarge ??
+              const TextStyle(fontSize: 20),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: [
           if (_isLoading)
             const Padding(

@@ -541,7 +541,7 @@ class _NewPostCardState extends State<NewPostCard>
         title: Text(
           authorName == null || authorName.isEmpty
               ? 'Поддержать автора'
-              : 'Поддержать $authorName',
+              : 'Поддержать ${previewTextWithCustomEmoji(authorName)}',
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,

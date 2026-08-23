@@ -589,10 +589,14 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
                                     const Icon(Icons.broken_image_outlined),
                               ),
                             ),
-                            title: Text(
-                              item.emoji?.trim().isNotEmpty == true
+                            title: HighlightedText(
+                              text: item.emoji?.trim().isNotEmpty == true
                                   ? item.emoji!
                                   : 'Стикер #${item.id}',
+                              style: Theme.of(context).textTheme.bodyLarge ??
+                                  const TextStyle(fontSize: 16),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             subtitle: Text(item.stickerType),
                             trailing: pack.isOwned

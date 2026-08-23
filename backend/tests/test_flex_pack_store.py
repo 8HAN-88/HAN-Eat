@@ -1133,3 +1133,39 @@ def test_emoji_shortcode_requires_custom_emoji(db_session):
             media_url="https://cdn.test/x.webp",
             shortcode=token,
         )
+
+
+def test_sticker_emoji_requires_custom_emoji(db_session):
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        StickerService(db_session).add_sticker(
+            user_id=owner.id,
+            pack_id=1,
+            media_url="https://cdn.test/x.webp",
+            emoji=token,
+        )
+
+
+def test_miniapp_moderation_note_requires_custom_emoji(db_session):
+    import asyncio
+
+    from app.api.v1.miniapps import MiniAppModerationRequest, moderate_miniapp
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+
+    async def _run():
+        await moderate_miniapp(
+            1,
+            MiniAppModerationRequest(
+                moderation_status="approved",
+                moderation_note=token,
+            ),
+            current_user=owner,
+            db=db_session,
+        )
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(_run())
+    assert err.value.status_code == 403
