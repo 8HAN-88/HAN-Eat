@@ -3514,15 +3514,16 @@ async def create_saved_tag(
 ):
     from app.services.saved_tag_service import SavedTagError, create_tag
     from app.services.subscription_service import SubscriptionService
+    from app.services.emoji_pack_service import EmojiPackService
 
+    EmojiPackService(db).require_send_tokens_http(
+        current_user.id, body.title, body.emoji
+    )
     SubscriptionService(db).require_feature(
         current_user.id,
         "saved_tags",
         "Теги в Избранном доступны с уровня 39",
     )
-    from app.services.emoji_pack_service import EmojiPackService
-
-    EmojiPackService(db).require_send_tokens_http(current_user.id, body.title)
     try:
         tag = create_tag(db, current_user.id, body.title, body.emoji)
         db.commit()

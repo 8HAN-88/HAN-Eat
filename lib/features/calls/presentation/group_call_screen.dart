@@ -709,7 +709,10 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(label, style: const TextStyle(color: Colors.white70)),
+                HighlightedText(
+                  text: label,
+                  style: const TextStyle(color: Colors.white70),
+                ),
                 if (muted) ...[
                   const SizedBox(width: 6),
                   const Icon(Icons.mic_off, color: Colors.white70, size: 16),

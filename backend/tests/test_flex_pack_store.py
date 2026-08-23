@@ -1483,3 +1483,24 @@ def test_channel_share_text_hides_custom_emoji_tokens():
     title = preview_text_with_custom_emoji("Кухня [[e:12]]")
     assert "[[e:" not in title
     assert "✦" in title
+
+
+def test_saved_tag_emoji_requires_custom_emoji(db_session):
+    import asyncio
+
+    from app.api.v1.chats import create_saved_tag
+    from app.schemas.chat import SavedTagCreateRequest
+
+    owner = _user(db_session, 1)
+    _emoji_token_after_downgrade(db_session, owner.id)
+
+    async def _run():
+        await create_saved_tag(
+            SavedTagCreateRequest(title="Работа", emoji="[[e:1]]"),
+            current_user=owner,
+            db=db_session,
+        )
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(_run())
+    assert err.value.status_code == 403

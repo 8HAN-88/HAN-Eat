@@ -635,7 +635,15 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                               final suggestion = _suggestions[index];
                               return ListTile(
                                 leading: const Icon(Icons.search, size: 20),
-                                title: Text(suggestion),
+                                title: HighlightedText(
+                                  text: suggestion,
+                                  style: Theme.of(context)
+                                          .textTheme
+                                          .bodyLarge ??
+                                      const TextStyle(fontSize: 16),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                                 onTap: () {
                                   _searchController.text = suggestion;
                                   setState(() => _showSuggestions = false);

@@ -1326,6 +1326,7 @@ async def admin_process_refund(
     db: Session = Depends(get_db),
 ):
     """Провести возврат через Т-Банк или ЮKassa (только админ)."""
+    EmojiPackService(db).require_send_tokens_http(current_user.id, body.reason)
     sub = db.query(Subscription).filter(Subscription.id == body.subscription_id).first()
     if not sub:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscription not found")
@@ -1406,6 +1407,7 @@ async def admin_reject_refund(
     db: Session = Depends(get_db),
 ):
     """Отклонить запрос на возврат (только админ)."""
+    EmojiPackService(db).require_send_tokens_http(current_user.id, body.comment)
     sub = db.query(Subscription).filter(Subscription.id == body.subscription_id).first()
     if not sub:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscription not found")

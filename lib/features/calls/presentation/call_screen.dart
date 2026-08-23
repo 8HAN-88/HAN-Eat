@@ -9,6 +9,7 @@ import '../../../app/router_keys.dart';
 import '../../../services/call_service.dart';
 import '../../../services/user_realtime_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../call_kit_bridge.dart';
 import '../call_media_controls.dart';
 import 'call_coordinator.dart';
@@ -566,8 +567,8 @@ class _CallScreenState extends State<CallScreen> {
                       icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white),
                     ),
                     const Spacer(),
-                    Text(
-                      peerName,
+                    HighlightedText(
+                      text: peerName,
                       style: const TextStyle(color: Colors.white, fontSize: 18),
                     ),
                     const Spacer(),
@@ -727,8 +728,8 @@ class _CallScreenState extends State<CallScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          Text(
-            peerName,
+          HighlightedText(
+            text: peerName,
             style: const TextStyle(
               color: Colors.white,
               fontSize: 22,

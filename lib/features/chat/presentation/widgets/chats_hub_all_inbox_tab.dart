@@ -1846,7 +1846,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                   onChanged: (v) => setLocal(() => alsoForPeer = v ?? false),
                   title: Text(
                     (peerName != null && peerName.isNotEmpty)
-                        ? 'Также удалить у $peerName'
+                        ? 'Также удалить у ${previewTextWithCustomEmoji(peerName)}'
                         : 'Также удалить у собеседника',
                   ),
                   controlAffinity: ListTileControlAffinity.leading,
