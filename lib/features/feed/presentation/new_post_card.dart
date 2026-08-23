@@ -938,8 +938,8 @@ class _NewPostCardState extends State<NewPostCard>
                           const SizedBox(height: 2),
                           GestureDetector(
                             onTap: () => openSource(orig),
-                            child: Text(
-                              name,
+                            child: HighlightedText(
+                              text: name,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -959,8 +959,8 @@ class _NewPostCardState extends State<NewPostCard>
             if (comment != null && comment.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                child: Text(
-                  comment,
+                child: HighlightedText(
+                  text: comment,
                   style: const TextStyle(fontSize: 14, height: 1.35),
                 ),
               ),
@@ -1170,22 +1170,22 @@ class _NewPostCardState extends State<NewPostCard>
                                 context
                                     .push('/profile?userId=${repostedBy.id}');
                               },
-                              child: Text.rich(
-                                TextSpan(
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
-                                  ),
-                                  children: [
-                                    const TextSpan(text: 'Репост · '),
-                                    TextSpan(
-                                      text: repostedBy.name,
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w600),
-                                    ),
-                                  ],
+                              child: HighlightedText(
+                                text: repostedBy.name,
+                                leading: 'Репост · ',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                                leadingStyle: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w400,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
                                 ),
                               ),
                             ),
@@ -1358,8 +1358,8 @@ class _NewPostCardState extends State<NewPostCard>
                                         .push('/profile?userId=${post.userId}');
                                   }
                                 },
-                                child: Text(
-                                  originalAuthorName,
+                                child: HighlightedText(
+                                  text: originalAuthorName,
                                   style: TextStyle(
                                     color: scheme.onSurfaceVariant,
                                     fontSize: 12,
@@ -1763,7 +1763,7 @@ class _NewPostCardState extends State<NewPostCard>
       }
     }
 
-    return Text(line, style: style);
+    return HighlightedText(text: line, style: style);
   }
 
   Widget _buildInstagramCaption({

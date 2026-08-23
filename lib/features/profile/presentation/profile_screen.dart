@@ -418,19 +418,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           child: Column(
             children: [
               if (intro.title.isNotEmpty)
-                Text(
-                  intro.title,
+                HighlightedText(
+                  text: intro.title,
                   textAlign: TextAlign.center,
                   style: textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+                        fontWeight: FontWeight.w800,
+                      ) ??
+                      const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
                 ),
               if (intro.text.isNotEmpty) ...[
                 if (intro.title.isNotEmpty) const SizedBox(height: 4),
-                Text(
-                  intro.text,
+                HighlightedText(
+                  text: intro.text,
                   textAlign: TextAlign.center,
-                  style: textTheme.bodyMedium,
+                  style: textTheme.bodyMedium ??
+                      const TextStyle(fontSize: 14),
                 ),
               ],
             ],

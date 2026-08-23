@@ -32,6 +32,31 @@ from app.models.user_block import UserBlock
 from app.services.notification_service import NotificationService
 
 
+def _inline_keyboard_text_parts(inline_keyboard_json: Optional[str]) -> List[str]:
+    if not inline_keyboard_json:
+        return []
+    try:
+        source = json.loads(inline_keyboard_json)
+    except Exception:
+        return []
+    if not isinstance(source, list):
+        return []
+    parts: List[str] = []
+    for row in source:
+        if not isinstance(row, list):
+            continue
+        for btn in row:
+            if not isinstance(btn, dict):
+                continue
+            text = str(btn.get("text") or "").strip()
+            if text:
+                parts.append(text)
+            callback_text = str(btn.get("callback_text") or "").strip()
+            if callback_text:
+                parts.append(callback_text)
+    return parts
+
+
 class ChatService:
     def __init__(self, db: Session):
         self.db = db
@@ -3138,6 +3163,12 @@ class ChatService:
         is_anonymous: bool = False,
         notify: bool = True,
     ) -> tuple[Message, bool]:
+        from app.services.emoji_pack_service import EmojiPackService
+
+        emoji = EmojiPackService(self.db)
+        emoji.require_send_tokens(sender_id, content)
+        for part in _inline_keyboard_text_parts(inline_keyboard_json):
+            emoji.require_send_tokens(sender_id, part)
         if client_message_id:
             existing = (
                 self.db.query(Message)
@@ -3164,9 +3195,6 @@ class ChatService:
             media_url=media_url,
             reply_to_message_id=reply_to_message_id,
         )
-        from app.services.emoji_pack_service import EmojiPackService
-
-        EmojiPackService(self.db).require_send_tokens(sender_id, content)
         anonymous = bool(is_anonymous)
         if anonymous:
             is_group = bool(conv and conv.type == "group")
@@ -3729,6 +3757,12 @@ class ChatService:
         effect_id: Optional[str] = None,
         topic_id: Optional[int] = None,
     ) -> ScheduledMessage:
+        from app.services.emoji_pack_service import EmojiPackService
+
+        emoji = EmojiPackService(self.db)
+        emoji.require_send_tokens(sender_id, content)
+        for part in _inline_keyboard_text_parts(inline_keyboard_json):
+            emoji.require_send_tokens(sender_id, part)
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         conv = (
             self.db.query(Conversation)
@@ -3759,9 +3793,6 @@ class ChatService:
             media_url=media_url,
             reply_to_message_id=reply_to_message_id,
         )
-        from app.services.emoji_pack_service import EmojiPackService
-
-        EmojiPackService(self.db).require_send_tokens(sender_id, content)
         effect = self._normalize_send_effect(effect_id, sender_id)
         resolved_topic_id = self._resolve_topic_for_send(conversation_id, topic_id)
 

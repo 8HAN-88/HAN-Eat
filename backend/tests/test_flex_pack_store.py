@@ -1569,6 +1569,40 @@ def test_create_chat_tag_requires_custom_emoji(db_session):
     assert err.value.status_code == 403
 
 
+def test_inline_keyboard_text_requires_custom_emoji(db_session):
+    import json
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    keyboard = json.dumps([[{"text": token, "callback_data": "ok"}]])
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        ChatService(db_session).send_message(
+            conversation_id=1,
+            sender_id=owner.id,
+            msg_type="text",
+            content="ок",
+            inline_keyboard_json=keyboard,
+        )
+
+
+def test_schedule_inline_keyboard_text_requires_custom_emoji(db_session):
+    import json
+    from datetime import datetime, timedelta, timezone
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    keyboard = json.dumps([[{"text": token, "callback_text": "нажал"}]])
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        ChatService(db_session).schedule_message(
+            conversation_id=1,
+            sender_id=owner.id,
+            msg_type="text",
+            content="ок",
+            send_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            inline_keyboard_json=keyboard,
+        )
+
+
 def test_saved_tag_emoji_requires_custom_emoji(db_session):
     import asyncio
 

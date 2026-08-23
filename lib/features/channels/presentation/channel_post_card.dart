@@ -967,8 +967,8 @@ class _ChannelPostCardState extends State<ChannelPostCard>
                           const SizedBox(height: 2),
                           GestureDetector(
                             onTap: openSource,
-                            child: Text(
-                              name,
+                            child: HighlightedText(
+                              text: name,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -988,8 +988,8 @@ class _ChannelPostCardState extends State<ChannelPostCard>
             if (comment != null && comment.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                child: Text(
-                  comment,
+                child: HighlightedText(
+                  text: comment,
                   style: const TextStyle(fontSize: 14, height: 1.35),
                 ),
               ),

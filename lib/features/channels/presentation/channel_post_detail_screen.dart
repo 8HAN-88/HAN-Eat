@@ -291,8 +291,8 @@ class _ChannelPostDetailScreenState
                   const SizedBox(height: 4),
                   GestureDetector(
                     onTap: openSource,
-                    child: Text(
-                      name,
+                    child: HighlightedText(
+                      text: name,
                       style: const TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w600,
