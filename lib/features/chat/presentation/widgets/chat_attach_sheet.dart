@@ -35,6 +35,7 @@ import '../../application/chat_recent_stickers_store.dart';
 import '../../../../widgets/chat_sticker_tile.dart';
 import '../../../../widgets/highlighted_text.dart';
 import '../../../../services/auth_service.dart';
+import '../../../../services/custom_emoji_registry.dart';
 import '../sticker_pack_manage_screen.dart';
 import '../sticker_pack_preview_screen.dart';
 import '../../../settings/presentation/emoji_pack_preview_screen.dart';
@@ -2491,8 +2492,8 @@ class _RecentFileTile extends StatelessWidget {
           ),
         ),
       ),
-      title: Text(
-        entry.name,
+      title: HighlightedText(
+        text: entry.name,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(fontWeight: FontWeight.w500),
@@ -3188,7 +3189,7 @@ class _StickerQuickActions extends StatelessWidget {
                 PopupMenuItem(
                   value: _StickerQuickAction.addAnimated,
                   child: Text(
-                      'Добавить анимированный в "${editablePackTitle ?? ''}"'),
+                      'Добавить анимированный в "${previewTextWithCustomEmoji(editablePackTitle ?? '')}"'),
                 ),
               if (editablePackId != null)
                 const PopupMenuItem(

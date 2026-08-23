@@ -32,6 +32,34 @@ def _text_for_bot_owner(db: Session, bot: User, text: Optional[str]) -> str:
         return preview_text_with_custom_emoji(raw)
 
 
+def _keyboard_for_bot_owner(
+    db: Session,
+    bot: User,
+    keyboard: Optional[List[List[Dict[str, Any]]]],
+) -> Optional[List[List[Dict[str, Any]]]]:
+    if not keyboard:
+        return keyboard
+    out: List[List[Dict[str, Any]]] = []
+    for row in keyboard:
+        if not isinstance(row, list):
+            continue
+        out_row: List[Dict[str, Any]] = []
+        for btn in row:
+            if not isinstance(btn, dict):
+                continue
+            clean = dict(btn)
+            if clean.get("text"):
+                clean["text"] = _text_for_bot_owner(db, bot, str(clean["text"]))
+            if clean.get("callback_text"):
+                clean["callback_text"] = _text_for_bot_owner(
+                    db, bot, str(clean["callback_text"])
+                )
+            out_row.append(clean)
+        if out_row:
+            out.append(out_row)
+    return out or None
+
+
 def _find_bot_in_conversation(db: Session, conversation_id: int) -> Optional[User]:
     members = db.query(ConversationMember).filter(
         ConversationMember.conversation_id == conversation_id
@@ -234,7 +262,11 @@ def process_message_for_bot(db: Session, conversation_id: int, sender_id: int, c
     reply_keyboard_update: Optional[dict] = None
     if cmd_row:
         reply_text = (cmd_row.response_text or "").strip() or cmd_row.description
-        keyboard = _normalize_inline_buttons(getattr(cmd_row, "inline_buttons_json", None))
+        keyboard = _keyboard_for_bot_owner(
+            db,
+            bot,
+            _normalize_inline_buttons(getattr(cmd_row, "inline_buttons_json", None)),
+        )
         if keyboard:
             inline_keyboard_json = json.dumps(keyboard, ensure_ascii=False)
         from app.services.reply_keyboard_service import (
@@ -258,13 +290,21 @@ def process_message_for_bot(db: Session, conversation_id: int, sender_id: int, c
                 "remove_reply_keyboard": True,
             }
         else:
-            reply_kb = normalize_reply_keyboard(
-                getattr(cmd_row, "reply_buttons_json", None)
+            reply_kb = _keyboard_for_bot_owner(
+                db,
+                bot,
+                normalize_reply_keyboard(
+                    getattr(cmd_row, "reply_buttons_json", None)
+                ),
             )
             if reply_kb:
                 one_time = bool(getattr(cmd_row, "reply_keyboard_one_time", False))
                 resize = bool(getattr(cmd_row, "reply_keyboard_resize", True))
-                placeholder = getattr(cmd_row, "reply_keyboard_placeholder", None)
+                placeholder = _text_for_bot_owner(
+                    db,
+                    bot,
+                    getattr(cmd_row, "reply_keyboard_placeholder", None),
+                )
                 set_member_reply_keyboard(
                     db,
                     conversation_id=conversation_id,

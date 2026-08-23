@@ -1501,8 +1501,8 @@ class _NewPostCardState extends State<NewPostCard>
                             const Icon(Icons.link, size: 18),
                             const SizedBox(width: 8),
                             Expanded(
-                              child: Text(
-                                post.linkTitle ?? post.linkUrl!,
+                              child: HighlightedText(
+                                text: post.linkTitle ?? post.linkUrl!,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
@@ -1515,8 +1515,8 @@ class _NewPostCardState extends State<NewPostCard>
                             post.linkDescription!.isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(top: 6),
-                            child: Text(
-                              post.linkDescription!,
+                            child: HighlightedText(
+                              text: post.linkDescription!,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(

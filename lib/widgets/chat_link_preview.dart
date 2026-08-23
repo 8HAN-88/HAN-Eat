@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../core/network/haneat_http_client.dart';
 import '../services/auth_service.dart';
 import '../services/server_config.dart';
+import 'highlighted_text.dart';
 
 class LinkPreview {
   const LinkPreview({
@@ -338,8 +339,8 @@ class _ChatLinkPreviewState extends State<ChatLinkPreview> {
                   ),
                   if (preview.title?.trim().isNotEmpty ?? false) ...[
                     const SizedBox(height: 2),
-                    Text(
-                      preview.title!.trim(),
+                    HighlightedText(
+                      text: preview.title!.trim(),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -351,8 +352,8 @@ class _ChatLinkPreviewState extends State<ChatLinkPreview> {
                   ],
                   if (preview.description?.trim().isNotEmpty ?? false) ...[
                     const SizedBox(height: 3),
-                    Text(
-                      preview.description!.trim(),
+                    HighlightedText(
+                      text: preview.description!.trim(),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(

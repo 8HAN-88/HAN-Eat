@@ -1603,6 +1603,47 @@ def test_schedule_inline_keyboard_text_requires_custom_emoji(db_session):
         )
 
 
+def test_bot_owner_text_previews_after_downgrade(db_session):
+    from types import SimpleNamespace
+
+    from app.services.bot_handler import _text_for_bot_owner
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    bot = SimpleNamespace(created_by_user_id=owner.id)
+    out = _text_for_bot_owner(db_session, bot, token)
+    assert "[[e:" not in out
+    assert "✦" in out
+
+
+def test_bot_owner_keyboard_previews_after_downgrade(db_session):
+    from types import SimpleNamespace
+
+    from app.services.bot_handler import _keyboard_for_bot_owner
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    bot = SimpleNamespace(created_by_user_id=owner.id)
+    out = _keyboard_for_bot_owner(
+        db_session,
+        bot,
+        [[{"text": token, "callback_text": token, "callback_data": "x"}]],
+    )
+    assert out is not None
+    assert "[[e:" not in out[0][0]["text"]
+    assert "[[e:" not in out[0][0]["callback_text"]
+
+
+def test_business_auto_text_previews_after_downgrade(db_session):
+    from app.services.business_profile_service import _auto_text_for_sender
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    out = _auto_text_for_sender(db_session, owner.id, token)
+    assert "[[e:" not in out
+    assert "✦" in out
+
+
 def test_saved_tag_emoji_requires_custom_emoji(db_session):
     import asyncio
 

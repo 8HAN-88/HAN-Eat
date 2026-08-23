@@ -467,12 +467,29 @@ def _mark_auto(db: Session, owner_id: int, peer_id: int, kind: str) -> None:
     db.flush()
 
 
+def _auto_text_for_sender(db: Session, sender_id: int, text: str) -> str:
+    raw = (text or "").strip()
+    if not raw:
+        return raw
+    from app.services.emoji_pack_service import (
+        EmojiPackService,
+        preview_text_with_custom_emoji,
+    )
+
+    try:
+        EmojiPackService(db).require_send_tokens(sender_id, raw)
+        return raw
+    except ValueError:
+        return preview_text_with_custom_emoji(raw)
+
+
 def _insert_auto_text(db: Session, conversation_id: int, sender_id: int, text: str) -> Message:
+    clean = _auto_text_for_sender(db, sender_id, text)
     msg = Message(
         conversation_id=conversation_id,
         sender_id=sender_id,
         type="text",
-        content=text[:4000],
+        content=clean[:4000],
         created_at=_now(),
     )
     db.add(msg)

@@ -9754,16 +9754,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final fmt = DateFormat('yyyy-MM-dd HH:mm');
       final buf = StringBuffer()
         ..writeln('HanWe — экспорт чата')
-        ..writeln(_conversation.displayTitle)
+        ..writeln(previewTextWithCustomEmoji(_conversation.displayTitle))
         ..writeln('Сообщений: ${collected.length}')
         ..writeln('---');
       for (final msg in collected) {
         final who = msg.isMine
             ? 'Вы'
             : (msg.senderName?.trim().isNotEmpty == true
-                ? msg.senderName!.trim()
+                ? previewTextWithCustomEmoji(msg.senderName!.trim())
                 : 'Участник');
-        final body = _copyableText(msg).replaceAll('\n', ' ');
+        final body = previewTextWithCustomEmoji(
+          _copyableText(msg),
+        ).replaceAll('\n', ' ');
         buf.writeln('${fmt.format(msg.createdAt.toLocal())} · $who: $body');
       }
       final text = buf.toString();
@@ -10288,7 +10290,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
     if (editorId != null && editorId > 0) {
       final name = _displayNameForUserId(editorId);
-      if (name != null && name.isNotEmpty) parts.add(name);
+      if (name != null && name.isNotEmpty) {
+        parts.add(previewTextWithCustomEmoji(name));
+      }
     }
     if (at != null) parts.add(formatChatMessageTime(at));
     return parts.isEmpty ? '—' : parts.join(' · ');
