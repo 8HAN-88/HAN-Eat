@@ -684,8 +684,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 ),
                 if (sender.isNotEmpty) ...[
                   const SizedBox(height: 8),
-                  Text(
-                    'От $sender',
+                  HighlightedText(
+                    text: 'От $sender',
+                    textAlign: TextAlign.center,
                     style: TextStyle(color: scheme.onSurfaceVariant),
                   ),
                 ],

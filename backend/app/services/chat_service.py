@@ -1496,6 +1496,7 @@ class ChatService:
         from app.services.emoji_pack_service import EmojiPackService
 
         EmojiPackService(self.db).require_send_tokens(actor_id, clean)
+        EmojiPackService(self.db).require_send_tokens(actor_id, icon_emoji)
         if not self._is_member(conversation_id, actor_id):
             raise ValueError("forbidden")
         conv = self._get_group_or_error(conversation_id)
@@ -1526,6 +1527,12 @@ class ChatService:
         closed: Optional[bool] = None,
         icon_emoji: Optional[str] = None,
     ) -> ForumTopic:
+        from app.services.emoji_pack_service import EmojiPackService
+
+        if title is not None:
+            EmojiPackService(self.db).require_send_tokens(actor_id, title)
+        if icon_emoji is not None:
+            EmojiPackService(self.db).require_send_tokens(actor_id, icon_emoji)
         if not self._is_member(conversation_id, actor_id):
             raise ValueError("forbidden")
         if not self._can_change_group_info(conversation_id, actor_id):
@@ -1544,9 +1551,6 @@ class ChatService:
             clean = title.strip()[:128]
             if not clean:
                 raise ValueError("empty_title")
-            from app.services.emoji_pack_service import EmojiPackService
-
-            EmojiPackService(self.db).require_send_tokens(actor_id, clean)
             if topic.is_general and clean.lower() not in ("general", "общий"):
                 # Allow rename of General but keep is_general.
                 pass
@@ -4992,6 +4996,7 @@ class ChatService:
         from app.services.emoji_pack_service import EmojiPackService
 
         EmojiPackService(self.db).require_send_tokens(user_id, name)
+        EmojiPackService(self.db).require_send_tokens(user_id, icon)
         existing = (
             self.db.query(func.count(ChatFolder.id))
             .filter(ChatFolder.user_id == user_id)
@@ -5057,6 +5062,12 @@ class ChatService:
         channel_ids: Optional[List[int]] = None,
         filters: Optional[dict] = None,
     ) -> Optional[dict]:
+        from app.services.emoji_pack_service import EmojiPackService
+
+        if name is not None:
+            EmojiPackService(self.db).require_send_tokens(user_id, name)
+        if icon is not None:
+            EmojiPackService(self.db).require_send_tokens(user_id, icon)
         folder = (
             self.db.query(ChatFolder)
             .filter(ChatFolder.id == folder_id, ChatFolder.user_id == user_id)
@@ -5068,9 +5079,6 @@ class ChatService:
             name = name.strip()
             if not name:
                 raise ValueError("invalid_name")
-            from app.services.emoji_pack_service import EmojiPackService
-
-            EmojiPackService(self.db).require_send_tokens(user_id, name)
             folder.name = name[:64]
         if icon is not None:
             self._require_folder_flex_options(user_id, icon, None)

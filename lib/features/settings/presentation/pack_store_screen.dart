@@ -118,7 +118,7 @@ class _PackStoreScreenState extends State<PackStoreScreen>
       title: 'Купить «${previewTextWithCustomEmoji(pack.title)}»',
       body: pack.ownerName.trim().isEmpty
           ? '${pack.priceStars} ★ · комиссия площадки ${pack.feeStars} ★'
-          : 'Автор ${pack.ownerName} · ${pack.priceStars} ★, комиссия ${pack.feeStars} ★',
+          : 'Автор ${previewTextWithCustomEmoji(pack.ownerName)} · ${pack.priceStars} ★, комиссия ${pack.feeStars} ★',
       amountStars: pack.priceStars,
       confirmLabel: 'Купить',
     );
@@ -190,7 +190,7 @@ class _PackStoreScreenState extends State<PackStoreScreen>
       context,
       title: 'Купить «${previewTextWithCustomEmoji(pack.title)}»',
       body:
-          'Автор ${pack.authorLabel} · ${pack.priceStars} ★, комиссия ${pack.feeStars} ★',
+          'Автор ${previewTextWithCustomEmoji(pack.authorLabel)} · ${pack.priceStars} ★, комиссия ${pack.feeStars} ★',
       amountStars: pack.priceStars,
       confirmLabel: 'Купить',
     );
@@ -715,24 +715,28 @@ class _PackCard extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      title,
-                      style: Theme.of(context).textTheme.titleMedium,
+                    child: HighlightedText(
+                      text: title,
+                      style: Theme.of(context).textTheme.titleMedium ??
+                          const TextStyle(fontSize: 16),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   Text('$priceStars ★'),
                 ],
               ),
               const SizedBox(height: 2),
-              Text(
-                [
+              HighlightedText(
+                text: [
                   if (author.trim().isNotEmpty) 'Автор $author',
                   countLabel,
                   if (feeStars > 0) 'комиссия $feeStars ★',
                 ].join(' · '),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: scheme.onSurfaceVariant,
-                    ),
+                    ) ??
+                    TextStyle(color: scheme.onSurfaceVariant),
               ),
               if (thumbs.isNotEmpty) ...[
                 const SizedBox(height: 10),

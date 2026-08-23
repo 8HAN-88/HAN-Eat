@@ -167,10 +167,12 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
                                   ),
                             ),
                           ),
-                          Text(
-                            pack.ownerName.trim().isEmpty
+                          HighlightedText(
+                            text: pack.ownerName.trim().isEmpty
                                 ? '${pack.stickers.length} стик.'
                                 : '${pack.stickers.length} стик. · ${pack.ownerName}',
+                            style: Theme.of(context).textTheme.bodyMedium ??
+                                const TextStyle(fontSize: 14),
                           ),
                         ],
                       ),

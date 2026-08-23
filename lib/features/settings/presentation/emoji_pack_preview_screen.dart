@@ -160,10 +160,12 @@ class _EmojiPackPreviewScreenState extends State<EmojiPackPreviewScreen> {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          Text(
-                            pack.ownerName.trim().isEmpty
+                          HighlightedText(
+                            text: pack.ownerName.trim().isEmpty
                                 ? '${pack.items.length} эмодзи'
                                 : '${pack.items.length} эмодзи · ${pack.authorLabel}',
+                            style: Theme.of(context).textTheme.bodyMedium ??
+                                const TextStyle(fontSize: 14),
                           ),
                         ],
                       ),

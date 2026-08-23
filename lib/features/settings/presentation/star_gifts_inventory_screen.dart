@@ -553,8 +553,8 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
                             style: TextStyle(color: scheme.onSurfaceVariant),
                           ),
                           if (gift.senderLabel.isNotEmpty)
-                            Text(
-                              gift.isAnonymous && gift.senderId != null
+                            HighlightedText(
+                              text: gift.isAnonymous && gift.senderId != null
                                   ? 'От ${gift.senderLabel} · имя скрыто на профиле'
                                   : 'От ${gift.senderLabel}',
                               style: TextStyle(

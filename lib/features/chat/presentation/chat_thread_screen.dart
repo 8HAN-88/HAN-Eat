@@ -18963,8 +18963,8 @@ class _Bubble extends StatelessWidget {
                   ? GestureDetector(
                       onTap: onSenderTap,
                       behavior: HitTestBehavior.opaque,
-                      child: Text(
-                        senderLabel!,
+                      child: HighlightedText(
+                        text: senderLabel!,
                         style: TextStyle(
                           color: nameColor,
                           fontSize: 12.5,
@@ -18972,8 +18972,8 @@ class _Bubble extends StatelessWidget {
                         ),
                       ),
                     )
-                  : Text(
-                      senderLabel!,
+                  : HighlightedText(
+                      text: senderLabel!,
                       style: TextStyle(
                         color: nameColor,
                         fontSize: 12.5,

@@ -222,6 +222,14 @@ async def upload_community_video(
     """
     Загрузить рилс: принять video_url (предпочтительно) или base64-видео, создать пост type=reel.
     """
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(
+        current_user.id,
+        request_body.title,
+        request_body.description,
+        request_body.author,
+    )
     video_url: Optional[str] = None
     thumbnail_url: Optional[str] = None
 
@@ -321,14 +329,6 @@ async def upload_community_video(
             publish_to.insert(0, "feed")
         if channel.auto_publish_reels:
             publish_to.append("reels")
-
-    from app.services.emoji_pack_service import EmojiPackService
-
-    EmojiPackService(db).require_send_tokens_http(
-        current_user.id,
-        request_body.title,
-        request_body.description,
-    )
 
     now = datetime.utcnow()
     post = Post(

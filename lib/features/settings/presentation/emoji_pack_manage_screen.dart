@@ -393,12 +393,14 @@ class _EmojiPackManageScreenState extends State<EmojiPackManageScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      subtitle: Text(
-                        [
+                      subtitle: HighlightedText(
+                        text: [
                           'Автор ${pack.authorLabel}',
                           '${pack.items.length} эмодзи',
                           if (pack.priceStars > 0) '${pack.priceStars} ★',
                         ].join(' · '),
+                        style: Theme.of(context).textTheme.bodyMedium ??
+                            const TextStyle(fontSize: 14),
                       ),
                     ),
                     if (!pack.isOwned && !pack.isPurchased && pack.isOnSale)

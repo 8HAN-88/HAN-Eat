@@ -334,8 +334,8 @@ class _ChannelSuggestedPostsScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  post.authorLabel,
+                HighlightedText(
+                  text: post.authorLabel,
                   style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 4),

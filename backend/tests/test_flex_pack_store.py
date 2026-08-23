@@ -1253,3 +1253,65 @@ def test_moderation_ban_reason_requires_custom_emoji(db_session):
     with pytest.raises(HTTPException) as err:
         asyncio.run(_run())
     assert err.value.status_code == 403
+
+
+def test_community_author_requires_custom_emoji(db_session):
+    import asyncio
+
+    from app.api.v1.community_upload import (
+        CommunityUploadRequest,
+        upload_community_video,
+    )
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+
+    async def _run():
+        await upload_community_video(
+            CommunityUploadRequest(
+                title="Рилс",
+                author=token,
+                description="ок",
+            ),
+            request=None,
+            current_user=owner,
+            db=db_session,
+        )
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(_run())
+    assert err.value.status_code == 403
+
+
+def test_forum_topic_icon_requires_custom_emoji(db_session):
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        ChatService(db_session).create_forum_topic(
+            1,
+            owner.id,
+            title="Тема",
+            icon_emoji=token,
+        )
+
+
+def test_folder_icon_requires_custom_emoji(db_session):
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        ChatService(db_session).create_folder(
+            owner.id,
+            name="Папка",
+            icon=token,
+        )
+
+
+def test_folder_icon_update_requires_custom_emoji(db_session):
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        ChatService(db_session).update_folder(
+            owner.id,
+            1,
+            icon=token,
+        )

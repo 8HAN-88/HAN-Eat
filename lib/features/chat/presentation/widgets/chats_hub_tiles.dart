@@ -262,8 +262,8 @@ class ChatHubTile extends StatelessWidget {
                                   ),
                                 ),
                               ] else if (prefix != null)
-                                Text(
-                                  prefix,
+                                HighlightedText(
+                                  text: prefix,
                                   style: TextStyle(
                                     color: hasUnread
                                         ? scheme.onSurface
