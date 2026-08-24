@@ -1530,7 +1530,7 @@ class ChatService:
         if not self._can_change_group_info(conversation_id, actor_id):
             raise ValueError("forbidden")
         self.ensure_general_topic(conversation_id, actor_id)
-        emoji = (icon_emoji or "").strip()[:16] or None
+        emoji = (icon_emoji or "").strip()[:32] or None
         topic = ForumTopic(
             conversation_id=conversation_id,
             title=clean,
@@ -1581,7 +1581,7 @@ class ChatService:
                 pass
             topic.title = clean
         if icon_emoji is not None:
-            topic.icon_emoji = icon_emoji.strip()[:16] or None
+            topic.icon_emoji = icon_emoji.strip()[:32] or None
         if closed is not None:
             if topic.is_general and closed:
                 raise ValueError("cannot_close_general")

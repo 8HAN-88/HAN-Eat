@@ -221,7 +221,7 @@ class EditMessageRequest(BaseModel):
 
 
 class MessageReactionRequest(BaseModel):
-    emoji: str = Field(..., min_length=1, max_length=16)
+    emoji: str = Field(..., min_length=1, max_length=32)
     # Optional Stars to attach (Telegram paid reaction).
     stars: int = Field(default=0, ge=0, le=100000)
     idempotency_key: Optional[str] = Field(default=None, max_length=128)
@@ -458,12 +458,12 @@ class UpdateGroupChatRequest(BaseModel):
 
 class ForumTopicCreateRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=128)
-    icon_emoji: Optional[str] = Field(None, max_length=16)
+    icon_emoji: Optional[str] = Field(None, max_length=32)
 
 
 class ForumTopicUpdateRequest(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=128)
-    icon_emoji: Optional[str] = Field(None, max_length=16)
+    icon_emoji: Optional[str] = Field(None, max_length=32)
     closed: Optional[bool] = None
 
 

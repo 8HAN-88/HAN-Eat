@@ -128,7 +128,7 @@ class StickerService:
         item = Sticker(
             pack_id=pack_id,
             media_url=clean_url[:512],
-            emoji=(emoji or "").strip()[:16] or None,
+            emoji=(emoji or "").strip()[:32] or None,
             sticker_type=clean_type,
             order_index=next_order,
         )

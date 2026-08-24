@@ -43,7 +43,7 @@ class Sticker(Base):
         index=True,
     )
     media_url = Column(String(512), nullable=False)
-    emoji = Column(String(16), nullable=True)
+    emoji = Column(String(32), nullable=True)
     sticker_type = Column(String(16), nullable=False, default="static", index=True)
     order_index = Column(Integer, nullable=False, default=0, index=True)
     created_at = Column(DateTime, server_default=func.now(), index=True)

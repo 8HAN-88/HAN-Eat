@@ -2108,3 +2108,84 @@ def test_saved_tag_emoji_keeps_custom_emoji_token(db_session):
     db_session.commit()
     assert tag.emoji == token
     assert len(token) > 8
+
+
+def test_forward_tokens_return_flex_gate(db_session):
+    import asyncio
+
+    from fastapi import BackgroundTasks
+
+    from app.api.v1.chats import forward_message
+    from app.schemas.chat import ForwardMessageRequest
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    conv = Conversation(type="group", title="Чат")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=owner.id))
+    msg = Message(
+        conversation_id=conv.id,
+        sender_id=owner.id,
+        type="text",
+        content=token,
+    )
+    db_session.add(msg)
+    db_session.commit()
+
+    async def _run():
+        await forward_message(
+            conv.id,
+            ForwardMessageRequest(
+                source_conversation_id=conv.id,
+                message_id=msg.id,
+            ),
+            BackgroundTasks(),
+            current_user=owner,
+            db=db_session,
+        )
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(_run())
+    _assert_custom_emoji_feature(err.value)
+
+
+def test_sticker_emoji_keeps_long_token(db_session):
+    owner = _user(db_session, 1)
+    _activate(db_session, owner.id, 70)
+    emoji = EmojiPackService(db_session)
+    pack = emoji.create_pack(owner.id, "Стикер")
+    item = emoji.add_emoji(
+        user_id=owner.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/st.webp",
+    )
+    db_session.commit()
+    token = f"associated [[e:{item.id}]]"
+    stickers = StickerService(db_session)
+    sticker_pack = stickers.create_pack(owner.id, "Коты", True)
+    sticker = stickers.add_sticker(
+        user_id=owner.id,
+        pack_id=sticker_pack.id,
+        media_url="https://cdn.test/cat.webp",
+        emoji=token,
+    )
+    db_session.commit()
+    assert sticker.emoji == token
+    assert len(token) > 16
+
+
+def test_reaction_and_topic_schema_accepts_token():
+    from app.schemas.chat import (
+        ForumTopicCreateRequest,
+        MessageReactionRequest,
+    )
+    from app.schemas.sticker import AddStickerRequest
+
+    token = "associated [[e:123]]"
+    assert MessageReactionRequest(emoji=token).emoji == token
+    assert ForumTopicCreateRequest(title="Тема", icon_emoji=token).icon_emoji == token
+    assert AddStickerRequest(
+        media_url="https://cdn.test/s.webp",
+        emoji=token,
+    ).emoji == token

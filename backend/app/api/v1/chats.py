@@ -2676,8 +2676,8 @@ async def forward_message(
     except ValueError as e:
         db.rollback()
         code = str(e)
-        if code == "hide_forward_required":
-            _raise_flex_gate(code)
+        _raise_flex_gate(code)
+        _raise_pack_gate(code)
         if code == "forbidden":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
         if code == "not_found":
@@ -2696,6 +2696,14 @@ async def forward_message(
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code == "user_blocked":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "User blocked")
+        if code == "pack_purchase_required":
+            raise HTTPException(
+                status.HTTP_402_PAYMENT_REQUIRED,
+                {
+                    "code": "pack_purchase_required",
+                    "message": "Сначала купите пак",
+                },
+            )
         if code == "protect_content":
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
@@ -3225,6 +3233,20 @@ async def start_live_location(
     except ValueError as exc:
         db.rollback()
         code = str(exc)
+        _raise_flex_gate(code)
+        _raise_pack_gate(code)
+        if code == "forbidden":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        if code == "user_blocked":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "User blocked")
+        if code == "pack_purchase_required":
+            raise HTTPException(
+                status.HTTP_402_PAYMENT_REQUIRED,
+                {
+                    "code": "pack_purchase_required",
+                    "message": "Сначала купите пак",
+                },
+            )
         raise HTTPException(status.HTTP_400_BAD_REQUEST, code) from exc
 
     response = _live_location_message_response(

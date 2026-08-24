@@ -46,7 +46,7 @@ class CreateStickerPackRequest(BaseModel):
 
 class AddStickerRequest(BaseModel):
     media_url: str = Field(..., min_length=1, max_length=512)
-    emoji: Optional[str] = Field(default=None, max_length=16)
+    emoji: Optional[str] = Field(default=None, max_length=32)
     sticker_type: str = Field(default="static", pattern="^(static|animated)$")
 
 
