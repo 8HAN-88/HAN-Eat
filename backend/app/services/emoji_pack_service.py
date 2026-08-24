@@ -52,6 +52,17 @@ def strip_custom_emoji_tokens(text: Optional[str]) -> str:
     return re.sub(r"\s+", " ", cleaned).strip()
 
 
+def avatar_letter_with_custom_emoji(text: Optional[str]) -> str:
+    """First letter for avatars — skip `[[e:id]]` so the glyph is not `[`."""
+    raw = (text or "").strip()
+    if not raw:
+        return "?"
+    stripped = CE_TOKEN_RE.sub(" ", raw).strip()
+    if not stripped:
+        return "✦"
+    return stripped[0].upper()
+
+
 class EmojiPackService:
     def __init__(self, db: Session):
         self.db = db

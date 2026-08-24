@@ -8,6 +8,7 @@ import '../../../app/app_router.dart';
 import '../../../core/theme/app_card_decorations.dart';
 import '../../../services/channel_service.dart';
 import '../../../widgets/channel_list_badges.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/highlighted_text.dart';
@@ -651,9 +652,7 @@ class _ManagementChannelCard extends StatelessWidget {
                   ),
                   child: resolvedAvatarImage(channel.avatarUrl) == null
                       ? Text(
-                          channel.name.isNotEmpty
-                              ? channel.name[0].toUpperCase()
-                              : '?',
+                          avatarLetterWithCustomEmoji(channel.name),
                           style: textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),

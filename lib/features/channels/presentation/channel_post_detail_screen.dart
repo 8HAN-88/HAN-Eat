@@ -13,6 +13,7 @@ import '../../../services/server_config.dart';
 import '../../../utils/image_url_helper.dart';
 import '../../../utils/post_display_title.dart';
 import '../../../widgets/telegram_photo_grid.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/highlighted_text.dart';
 
@@ -246,7 +247,7 @@ class _ChannelPostDetailScreenState
 
     final name = sourceName();
     final url = avatarUrl();
-    final initial = name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?';
+    final initial = avatarLetterWithCustomEmoji(name);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),

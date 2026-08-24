@@ -510,7 +510,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
                         : (m.username ?? 'Участник');
                     return ListTile(
                       leading: CircleAvatar(
-                        child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?'),
+                        child: Text(avatarLetterWithCustomEmoji(name)),
                       ),
                       title: HighlightedText(
                         text: name,
@@ -729,7 +729,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     return Center(
       child: CircleAvatar(
         radius: 36,
-        child: Text(label.isNotEmpty ? label[0].toUpperCase() : '?'),
+        child: Text(avatarLetterWithCustomEmoji(label)),
       ),
     );
   }

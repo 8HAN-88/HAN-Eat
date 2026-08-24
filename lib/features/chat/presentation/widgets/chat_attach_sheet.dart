@@ -3737,7 +3737,7 @@ class _ContactsPanel extends StatelessWidget {
     final map = <String, List<_AttachSheetContact>>{};
     for (final contact in items) {
       final name = contact.displayName.trim();
-      final first = name.isNotEmpty ? name[0].toUpperCase() : '#';
+      final first = avatarLetterWithCustomEmoji(name);
       final key = RegExp(r'[A-ZА-ЯЁ]', caseSensitive: false).hasMatch(first)
           ? first
           : '#';

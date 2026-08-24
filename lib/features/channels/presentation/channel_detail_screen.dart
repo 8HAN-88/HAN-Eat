@@ -331,7 +331,7 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
                           : null,
                   child: c.avatarUrl == null || c.avatarUrl!.isEmpty
                       ? Text(
-                          c.name.isNotEmpty ? c.name[0].toUpperCase() : '?',
+                          avatarLetterWithCustomEmoji(c.name),
                           style: const TextStyle(fontWeight: FontWeight.w600),
                         )
                       : null,

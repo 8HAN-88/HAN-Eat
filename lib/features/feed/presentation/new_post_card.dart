@@ -864,8 +864,7 @@ class _NewPostCardState extends State<NewPostCard>
 
         final name = sourceName(orig);
         final url = sourceAvatar(orig);
-        final initial =
-            name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?';
+        final initial = avatarLetterWithCustomEmoji(name);
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1093,8 +1092,7 @@ class _NewPostCardState extends State<NewPostCard>
       displayAvatar = author?.avatarUrl ?? post.author?.avatarUrl;
     }
 
-    final displayInitial =
-        displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
+    final displayInitial = avatarLetterWithCustomEmoji(displayName);
 
     final hasFeedVideo =
         post.videoUrl != null && post.videoUrl!.trim().isNotEmpty;
@@ -1148,10 +1146,9 @@ class _NewPostCardState extends State<NewPostCard>
                           child: originalAuthorAvatar == null ||
                                   originalAuthorAvatar.isEmpty
                               ? Text(
-                                  (originalAuthorName != null &&
-                                          originalAuthorName.isNotEmpty)
-                                      ? originalAuthorName[0].toUpperCase()
-                                      : '?',
+                                  avatarLetterWithCustomEmoji(
+                                    originalAuthorName,
+                                  ),
                                   style: const TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
@@ -1336,7 +1333,9 @@ class _NewPostCardState extends State<NewPostCard>
                                         radius: 10,
                                         backgroundColor: Colors.grey[400],
                                         child: Text(
-                                          originalAuthorName[0].toUpperCase(),
+                                          avatarLetterWithCustomEmoji(
+                                            originalAuthorName,
+                                          ),
                                           style: const TextStyle(
                                             fontSize: 10,
                                             color: Colors.white,

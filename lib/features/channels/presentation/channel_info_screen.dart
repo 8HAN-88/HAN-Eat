@@ -16,6 +16,7 @@ import 'channel_detail_screen_tabs.dart';
 import 'channel_settings_bottom_sheet.dart';
 import 'channel_search_screen.dart';
 import '../../../app/app_router.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/highlighted_text.dart';
 import '../../subscription/creator_upsell.dart';
@@ -403,7 +404,7 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
                           : null,
                   child: c.avatarUrl == null || c.avatarUrl!.isEmpty
                       ? Text(
-                          c.name.isNotEmpty ? c.name[0].toUpperCase() : '?',
+                          avatarLetterWithCustomEmoji(c.name),
                           style: const TextStyle(
                             fontSize: 32,
                             fontWeight: FontWeight.bold,

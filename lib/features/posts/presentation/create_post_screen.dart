@@ -13,6 +13,7 @@ import 'package:han_eat/services/feed_api_cache.dart';
 import 'package:han_eat/services/media_upload_service.dart';
 import 'package:han_eat/utils/file_helper.dart';
 import 'package:han_eat/widgets/app_avatar.dart';
+import 'package:han_eat/services/custom_emoji_registry.dart';
 import 'package:han_eat/widgets/highlighted_text.dart';
 import 'package:han_eat/widgets/telegram_photo_grid.dart';
 import 'package:han_eat/widgets/create_poll_form_section.dart';
@@ -941,9 +942,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       future: AuthService.getCurrentUser(),
       builder: (context, snapshot) {
         final user = snapshot.data;
-        final initial = (user?.name.isNotEmpty ?? false)
-            ? user!.name[0].toUpperCase()
-            : '?';
+        final initial = avatarLetterWithCustomEmoji(user?.name);
 
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,

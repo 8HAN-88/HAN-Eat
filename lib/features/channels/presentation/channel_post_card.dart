@@ -20,6 +20,7 @@ import '../../../utils/post_display_title.dart';
 import '../../../widgets/post_card_container.dart';
 import '../../../widgets/share_action_sheet.dart';
 import '../../../widgets/post_poll_section.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../widgets/app_avatar.dart';
 import '../../../services/channel_service.dart';
 import '../../../services/api_service.dart';
@@ -894,8 +895,7 @@ class _ChannelPostCardState extends State<ChannelPostCard>
 
         final avatarUrl = sourceAvatarUrl();
         final name = sourceName();
-        final initial =
-            name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?';
+        final initial = avatarLetterWithCustomEmoji(name);
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,

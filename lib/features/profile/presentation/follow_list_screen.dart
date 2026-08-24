@@ -5,6 +5,7 @@ import '../../../app/app_router.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/user_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/highlighted_text.dart';
@@ -191,9 +192,7 @@ class _FollowListScreenState extends State<FollowListScreen> {
                                 decodeWidth: 96,
                               ),
                               child: resolvedAvatarImage(user.avatarUrl) == null
-                                  ? Text(name.isNotEmpty
-                                      ? name[0].toUpperCase()
-                                      : '?')
+                                  ? Text(avatarLetterWithCustomEmoji(name))
                                   : null,
                             ),
                             title: HighlightedText(

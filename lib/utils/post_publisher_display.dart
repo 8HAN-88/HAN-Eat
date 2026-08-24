@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../app/app_router.dart';
 import '../models/post_model.dart';
+import '../services/custom_emoji_registry.dart';
 
 /// Кто показывается как «автор» поста/рилса: канал или пользователь.
 class PostPublisherDisplay {
@@ -54,8 +55,7 @@ class PostPublisherDisplay {
   }
 
   static String avatarInitial(PostModel post) {
-    final name = label(post);
-    return name.isNotEmpty ? name[0].toUpperCase() : '?';
+    return avatarLetterWithCustomEmoji(label(post));
   }
 
   static void open(BuildContext context, PostModel post) {

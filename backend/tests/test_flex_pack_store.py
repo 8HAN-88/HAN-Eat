@@ -37,6 +37,7 @@ from app.models.subscription import Subscription
 from app.models.user import User
 from app.services.emoji_pack_service import (
     EmojiPackService,
+    avatar_letter_with_custom_emoji,
     preview_text_with_custom_emoji,
 )
 from app.services.flex_subscription_service import FlexSubscriptionService
@@ -213,6 +214,14 @@ def test_preview_hides_custom_emoji_tokens():
     assert preview_text_with_custom_emoji("привет [[e:12]]") == "привет ✦"
     assert preview_text_with_custom_emoji("[[e:1]]") == "✦"
     assert preview_text_with_custom_emoji("   ") == "Сообщение"
+
+
+def test_avatar_letter_skips_custom_emoji_tokens():
+    assert avatar_letter_with_custom_emoji("") == "?"
+    assert avatar_letter_with_custom_emoji("   ") == "?"
+    assert avatar_letter_with_custom_emoji("[[e:12]]") == "✦"
+    assert avatar_letter_with_custom_emoji("[[e:12]] Иван") == "И"
+    assert avatar_letter_with_custom_emoji("привет") == "П"
 
 
 def test_poll_preview_hides_custom_emoji_tokens():

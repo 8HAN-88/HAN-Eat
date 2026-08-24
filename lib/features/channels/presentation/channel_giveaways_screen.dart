@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../services/paid_features_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/stars_pay_helper.dart';
 import '../../../widgets/highlighted_text.dart';
@@ -381,9 +382,7 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
                               child: w.avatarUrl == null ||
                                       w.avatarUrl!.trim().isEmpty
                                   ? Text(
-                                      w.name.trim().isNotEmpty
-                                          ? w.name.trim()[0].toUpperCase()
-                                          : '?',
+                                      avatarLetterWithCustomEmoji(w.name),
                                     )
                                   : null,
                             ),

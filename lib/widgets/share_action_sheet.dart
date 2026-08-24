@@ -152,7 +152,7 @@ class _PostShareSheetState extends State<_PostShareSheet> {
                   leading: CircleAvatar(
                     backgroundImage: resolvedAvatarImage(c.avatarUrl),
                     child: resolvedAvatarImage(c.avatarUrl) == null
-                        ? Text(c.name.isNotEmpty ? c.name[0] : '?')
+                        ? Text(avatarLetterWithCustomEmoji(c.name))
                         : null,
                   ),
                   title: HighlightedText(

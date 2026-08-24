@@ -13,6 +13,7 @@ import '../../../services/media_upload_service.dart';
 import '../../../app/app_router.dart';
 import '../application/channels_list_refresh_provider.dart';
 import '../../../core/layout/long_label_tab_bar.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../widgets/app_avatar.dart';
 import '../../chat/application/join_requests_bulk.dart';
 import '../../settings/application/subscription_status_provider.dart';
@@ -645,7 +646,7 @@ class _ChannelManagementScreenState
                         _newAvatarUrl == null &&
                         _channel?.avatarUrl == null)
                     ? Text(
-                        _channel?.name[0].toUpperCase() ?? '?',
+                        avatarLetterWithCustomEmoji(_channel?.name),
                         style: const TextStyle(fontSize: 40),
                       )
                     : null,
@@ -924,7 +925,7 @@ class _ChannelManagementScreenState
                 leading: CircleAvatar(
                   backgroundImage: resolvedAvatarImage(avatar, decodeWidth: 96),
                   child: resolvedAvatarImage(avatar) == null
-                      ? Text(name.isNotEmpty ? name[0].toUpperCase() : '?')
+                      ? Text(avatarLetterWithCustomEmoji(name))
                       : null,
                 ),
                 title: HighlightedText(

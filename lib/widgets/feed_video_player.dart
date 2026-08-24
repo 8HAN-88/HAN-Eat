@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../services/custom_emoji_registry.dart';
 import '../services/server_config.dart';
 import 'highlighted_text.dart';
 import 'inline_video_player.dart';
@@ -47,8 +48,7 @@ class FeedVideoPlayer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final initial =
-        author.name.isNotEmpty ? author.name[0].toUpperCase() : '?';
+    final initial = avatarLetterWithCustomEmoji(author.name);
     final avatar = author.avatarUrl != null && author.avatarUrl!.isNotEmpty
         ? ServerConfig.resolvePublisherAvatarUrl(author.avatarUrl!)
         : null;

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/app_router.dart';
 import '../../../services/channel_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/highlighted_text.dart';
@@ -192,9 +193,7 @@ class _ChannelSubscribersScreenState extends State<ChannelSubscribersScreen> {
                                 decodeWidth: 96,
                               ),
                               child: resolvedAvatarImage(avatarUrl) == null
-                                  ? Text(name.isNotEmpty
-                                      ? name[0].toUpperCase()
-                                      : '?')
+                                  ? Text(avatarLetterWithCustomEmoji(name))
                                   : null,
                             ),
                             title: HighlightedText(
