@@ -1,4 +1,6 @@
 """Flexible leveled subscription API."""
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
@@ -99,12 +101,21 @@ def admin_list_features(
     }
 
 
+def _require_flex_admin_texts(db: Session, user_id: int, *parts: Optional[str]) -> None:
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(user_id, *parts)
+
+
 @router.post("/admin/features", status_code=status.HTTP_201_CREATED)
 def admin_create_feature(
     request: FlexFeatureWrite,
-    _: User = Depends(get_current_admin_required),
+    current_user: User = Depends(get_current_admin_required),
     db: Session = Depends(get_db),
 ):
+    _require_flex_admin_texts(
+        db, current_user.id, request.title, request.description, request.icon
+    )
     feat = _svc(db).create_feature(request.model_dump(exclude_unset=True))
     db.commit()
     db.refresh(feat)
@@ -115,9 +126,12 @@ def admin_create_feature(
 def admin_update_feature(
     feature_id: int,
     request: FlexFeatureWrite,
-    _: User = Depends(get_current_admin_required),
+    current_user: User = Depends(get_current_admin_required),
     db: Session = Depends(get_db),
 ):
+    _require_flex_admin_texts(
+        db, current_user.id, request.title, request.description, request.icon
+    )
     feat = _svc(db).update_feature(feature_id, request.model_dump(exclude_unset=True))
     db.commit()
     db.refresh(feat)
@@ -127,9 +141,10 @@ def admin_update_feature(
 @router.post("/admin/blocks")
 def admin_upsert_block(
     request: FlexBlockWrite,
-    _: User = Depends(get_current_admin_required),
+    current_user: User = Depends(get_current_admin_required),
     db: Session = Depends(get_db),
 ):
+    _require_flex_admin_texts(db, current_user.id, request.title)
     block = _svc(db).upsert_block(request.model_dump(exclude_unset=True))
     db.commit()
     db.refresh(block)
@@ -140,9 +155,10 @@ def admin_upsert_block(
 def admin_update_block(
     block_id: int,
     request: FlexBlockWrite,
-    _: User = Depends(get_current_admin_required),
+    current_user: User = Depends(get_current_admin_required),
     db: Session = Depends(get_db),
 ):
+    _require_flex_admin_texts(db, current_user.id, request.title)
     block = _svc(db).upsert_block(request.model_dump(exclude_unset=True), block_id=block_id)
     db.commit()
     db.refresh(block)

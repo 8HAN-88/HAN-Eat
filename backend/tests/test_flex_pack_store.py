@@ -1809,3 +1809,33 @@ def test_checklist_title_requires_custom_emoji(db_session):
     with pytest.raises(HTTPException) as err:
         asyncio.run(_run())
     assert err.value.status_code == 403
+
+
+def test_admin_flex_feature_title_requires_custom_emoji(db_session):
+    from app.api.v1.flex_subscription import admin_create_feature
+    from app.schemas.flex_subscription import FlexFeatureWrite
+
+    admin = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, admin.id)
+    with pytest.raises(HTTPException) as err:
+        admin_create_feature(
+            FlexFeatureWrite(slug="tokfeat", title=token),
+            admin,
+            db_session,
+        )
+    assert err.value.status_code == 403
+
+
+def test_admin_flex_block_title_requires_custom_emoji(db_session):
+    from app.api.v1.flex_subscription import admin_upsert_block
+    from app.schemas.flex_subscription import FlexBlockWrite
+
+    admin = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, admin.id)
+    with pytest.raises(HTTPException) as err:
+        admin_upsert_block(
+            FlexBlockWrite(key="tokblock", title=token),
+            admin,
+            db_session,
+        )
+    assert err.value.status_code == 403

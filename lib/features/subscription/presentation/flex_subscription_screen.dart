@@ -4,6 +4,7 @@ import '../../../services/flex_subscription_service.dart';
 import '../../../services/subscription_status_cache.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
+import '../../../widgets/highlighted_text.dart';
 import 'flex_gift_sheet.dart';
 import 'flex_preview_sheet.dart';
 
@@ -200,7 +201,11 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
           children: [
             for (final preset in me.presets)
               ActionChip(
-                label: Text('${preset.title} · ${preset.level}'),
+                label: HighlightedText(
+                  text: '${preset.title} · ${preset.level}',
+                  style: Theme.of(context).textTheme.labelLarge ??
+                      const TextStyle(fontSize: 14),
+                ),
                 onPressed: _busy || _fromCache
                     ? null
                     : () => _changeLevel(preset.level),
@@ -446,11 +451,13 @@ class _BlockHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      'Блок ${block.key} · ${block.title} (${block.minLevel}–${block.maxLevel})',
+    return HighlightedText(
+      text:
+          'Блок ${block.key} · ${block.title} (${block.minLevel}–${block.maxLevel})',
       style: Theme.of(context).textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.w800,
-          ),
+          ) ??
+          const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
     );
   }
 }
@@ -507,7 +514,13 @@ class _DraggableFeature extends StatelessWidget {
       dense: true,
       contentPadding: EdgeInsets.zero,
       leading: Icon(locked ? Icons.lock_rounded : Icons.drag_indicator_rounded),
-      title: Text(feature.title),
+      title: HighlightedText(
+        text: feature.title,
+        style: Theme.of(context).textTheme.bodyLarge ??
+            const TextStyle(fontSize: 16),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
       subtitle: Text(
         locked
             ? 'Закреплена на уровне ${feature.assignedLevel}'
@@ -582,9 +595,11 @@ class _HeroCard extends StatelessWidget {
           ),
           if (currentFeature != null && me.active) ...[
             const SizedBox(height: 4),
-            Text(
-              currentFeature.title,
-              style: TextStyle(color: scheme.onPrimaryContainer.withValues(alpha: 0.85)),
+            HighlightedText(
+              text: currentFeature.title,
+              style: TextStyle(
+                color: scheme.onPrimaryContainer.withValues(alpha: 0.85),
+              ),
             ),
           ],
           if (me.active && me.expiresAt != null) ...[
@@ -635,7 +650,12 @@ class _NextCta extends StatelessWidget {
           children: [
             const Text('Следующая возможность', style: TextStyle(fontWeight: FontWeight.w800)),
             const SizedBox(height: 6),
-            Text('🔓 ${feature.title}'),
+            HighlightedText(
+              text: feature.title,
+              leading: '🔓 ',
+              style: Theme.of(context).textTheme.bodyLarge ??
+                  const TextStyle(fontSize: 16),
+            ),
             const SizedBox(height: 4),
             Text(
               'Открой всего за +$step ₽/$unit. Итого $price ₽.',

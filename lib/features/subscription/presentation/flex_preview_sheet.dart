@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../services/flex_subscription_service.dart';
+import '../../../widgets/highlighted_text.dart';
 
 Future<bool?> showFlexPreviewSheet(
   BuildContext context, {
@@ -62,10 +63,20 @@ Future<bool?> showFlexPreviewSheet(
               const SizedBox(height: 6),
               if (confirmDowngrade)
                 for (final f in preview.disabled)
-                  Text('⚠️ ${f.title}')
+                  HighlightedText(
+                    text: f.title,
+                    leading: '⚠️ ',
+                    style: Theme.of(ctx).textTheme.bodyMedium ??
+                        const TextStyle(fontSize: 14),
+                  )
               else ...[
                 for (final f in _previewGain(preview))
-                  Text('✅ ${f.title}'),
+                  HighlightedText(
+                    text: f.title,
+                    leading: '✅ ',
+                    style: Theme.of(ctx).textTheme.bodyMedium ??
+                        const TextStyle(fontSize: 14),
+                  ),
                 if (_previewGain(preview).isEmpty)
                   const Text(
                     'На этом уровне новых функций нет — меняется только цена или период.',
@@ -80,7 +91,12 @@ Future<bool?> showFlexPreviewSheet(
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 4),
-                Text('➕ ${preview.nextFeature!.title}'),
+                HighlightedText(
+                  text: preview.nextFeature!.title,
+                  leading: '➕ ',
+                  style: Theme.of(ctx).textTheme.bodyMedium ??
+                      const TextStyle(fontSize: 14),
+                ),
               ],
               const SizedBox(height: 16),
               Row(
