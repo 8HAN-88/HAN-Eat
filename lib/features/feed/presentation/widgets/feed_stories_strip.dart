@@ -134,7 +134,9 @@ class _FeedStoriesStripState extends State<FeedStoriesStrip> {
             _StoryRing(
               label: 'Ваша история',
               avatarUrl: me.avatarUrl,
-              initial: me.name.isNotEmpty ? me.name[0].toUpperCase() : '+',
+              initial: me.name.isNotEmpty
+                  ? avatarLetterWithCustomEmoji(me.name)
+                  : '+',
               hasStory: myGroup != null,
               isOwn: true,
               unseen: myGroup != null && !_seenAuthorIds.contains(me.id),
@@ -179,7 +181,7 @@ class _FeedStoriesStripState extends State<FeedStoriesStrip> {
                 label: group.author.name,
                 avatarUrl: group.author.avatarUrl,
                 initial: group.author.name.isNotEmpty
-                    ? group.author.name[0].toUpperCase()
+                    ? avatarLetterWithCustomEmoji(group.author.name)
                     : '?',
                 hasStory: true,
                 isOwn: false,

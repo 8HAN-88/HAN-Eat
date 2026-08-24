@@ -576,10 +576,19 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
   }
 
   String _initials(String? name) {
-    if (name == null || name.isEmpty) return '?';
-    final parts = name.trim().split(' ');
-    if (parts.length == 1) return parts[0][0].toUpperCase();
-    return (parts[0][0] + parts[parts.length > 1 ? 1 : 0][0]).toUpperCase();
+    final stripped =
+        (name ?? '').replaceAll(RegExp(r'\[\[e:\d+\]\]'), ' ').trim();
+    if (stripped.isEmpty) {
+      return (name ?? '').trim().isEmpty ? '?' : '✦';
+    }
+    final parts =
+        stripped.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return '✦';
+    if (parts.length == 1) {
+      return avatarLetterWithCustomEmoji(parts[0]);
+    }
+    return avatarLetterWithCustomEmoji(parts[0]) +
+        avatarLetterWithCustomEmoji(parts[1]);
   }
 }
 

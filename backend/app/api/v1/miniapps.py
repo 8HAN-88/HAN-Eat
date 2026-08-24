@@ -122,9 +122,12 @@ def _ensure_url(url: str) -> str:
 
 
 def _serialize_user(user: User) -> dict:
+    from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
+    name = (user.name or "").strip()
     return {
         "id": user.id,
-        "first_name": user.name or "",
+        "first_name": preview_text_with_custom_emoji(name) if name else "",
         "username": user.username or "",
     }
 

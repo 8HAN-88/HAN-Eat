@@ -1760,3 +1760,43 @@ def test_share_preview_hides_custom_emoji_tokens():
     out = preview_text_with_custom_emoji("Привет [[e:12]]")
     assert "[[e:" not in out
     assert "✦" in out
+
+
+def test_miniapp_init_user_previews_custom_emoji():
+    from types import SimpleNamespace
+
+    from app.api.v1.miniapps import _serialize_user
+
+    user = SimpleNamespace(id=1, name="Анна [[e:12]]", username="anna")
+    out = _serialize_user(user)
+    assert "[[e:" not in out["first_name"]
+    assert "✦" in out["first_name"]
+
+
+def test_checklist_title_requires_custom_emoji(db_session):
+    import asyncio
+
+    from fastapi import BackgroundTasks
+
+    from app.api.v1.chats import send_message
+    from app.schemas.chat import SendMessageRequest
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+
+    async def _run():
+        await send_message(
+            1,
+            SendMessageRequest(
+                type="checklist",
+                checklist_title=token,
+                checklist_items=["хлеб"],
+            ),
+            BackgroundTasks(),
+            current_user=owner,
+            db=db_session,
+        )
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(_run())
+    assert err.value.status_code == 403

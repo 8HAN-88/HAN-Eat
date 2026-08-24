@@ -506,7 +506,7 @@ class ChatHubGroupAvatar extends StatelessWidget {
       radius: 28,
       backgroundColor: scheme.primaryContainer,
       child: Text(
-        members.first.displayName.characters.first.toUpperCase(),
+        avatarLetterWithCustomEmoji(members.first.displayName),
         style: TextStyle(
           fontWeight: FontWeight.w600,
           color: scheme.onPrimaryContainer,
@@ -578,11 +578,7 @@ class ChatHubChannelAvatar extends StatelessWidget {
   }
 }
 
-String chatHubAvatarLetter(String value) {
-  final trimmed = value.trim();
-  if (trimmed.isEmpty) return '?';
-  return trimmed.characters.first.toUpperCase();
-}
+String chatHubAvatarLetter(String value) => avatarLetterWithCustomEmoji(value);
 
 String chatHubBodyPreview(ChatMessage? msg, {bool isSaved = false}) {
   if (msg == null) {

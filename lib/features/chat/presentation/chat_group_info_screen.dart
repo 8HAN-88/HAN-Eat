@@ -663,7 +663,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                           ),
                           secondary: CircleAvatar(
                             child: Text(
-                              user.displayName.characters.first.toUpperCase(),
+                              avatarLetterWithCustomEmoji(user.displayName),
                             ),
                           ),
                         );
@@ -2026,8 +2026,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                           return ListTile(
                             leading: CircleAvatar(
                               child: Text(
-                                member.displayName.characters.first
-                                    .toUpperCase(),
+                                avatarLetterWithCustomEmoji(member.displayName),
                               ),
                             ),
                             title: HighlightedText(
@@ -2300,8 +2299,9 @@ class _GroupJoinRequestsSheetState extends State<_GroupJoinRequestsSheet> {
                                 return ListTile(
                                   leading: CircleAvatar(
                                     child: Text(
-                                      row.user.displayName.characters.first
-                                          .toUpperCase(),
+                                      avatarLetterWithCustomEmoji(
+                                        row.user.displayName,
+                                      ),
                                     ),
                                   ),
                                   title: HighlightedText(

@@ -21,6 +21,7 @@ import '../../chat/application/chat_ready_outgoing.dart';
 import '../../chat/presentation/widgets/chat_story_reply_bubble.dart';
 import '../data/story_models.dart';
 import '../data/story_service.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../widgets/highlighted_text.dart';
 import '../../../widgets/custom_emoji_view.dart';
 
@@ -378,9 +379,9 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                                     ),
                               child: item.user.avatarUrl == null
                                   ? Text(
-                                      item.user.name.isNotEmpty
-                                          ? item.user.name[0].toUpperCase()
-                                          : '?',
+                                      avatarLetterWithCustomEmoji(
+                                        item.user.name,
+                                      ),
                                     )
                                   : null,
                             ),

@@ -7,6 +7,7 @@ import '../../../app/app_router.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/chat_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../widgets/highlighted_text.dart';
 import '../../subscription/creator_upsell.dart';
 import '../application/chat_thread_prefetch.dart';
@@ -201,8 +202,4 @@ class _ChatCreateGroupScreenState extends State<ChatCreateGroupScreen> {
   }
 }
 
-String _avatarLetter(String value) {
-  final trimmed = value.trim();
-  if (trimmed.isEmpty) return '?';
-  return trimmed.characters.first.toUpperCase();
-}
+String _avatarLetter(String value) => avatarLetterWithCustomEmoji(value);

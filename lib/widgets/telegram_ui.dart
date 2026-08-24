@@ -217,10 +217,22 @@ class TelegramActionRow extends StatelessWidget {
         backgroundColor: (iconColor ?? scheme.primary).withValues(alpha: 0.14),
         child: Icon(icon, size: 20, color: iconColor ?? scheme.primary),
       ),
-      title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+      title: HighlightedText(
+        text: title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.bodyLarge ??
+            const TextStyle(fontSize: 16),
+      ),
       subtitle: subtitle == null
           ? null
-          : Text(subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis),
+          : HighlightedText(
+              text: subtitle!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodyMedium ??
+                  const TextStyle(fontSize: 14),
+            ),
       trailing: trailing,
     );
   }

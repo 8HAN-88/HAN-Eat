@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../models/emoji_pack_models.dart';
 import '../../../../models/sticker_models.dart';
+import '../../../../services/custom_emoji_registry.dart';
 import '../../../../services/emoji_pack_service.dart';
 import '../../../../services/server_config.dart';
 import '../../../../services/sticker_service.dart';
@@ -358,7 +359,7 @@ class _ChatInlineStickerPanelState extends State<ChatInlineStickerPanel> {
                           _selectedPackId == pack.id,
                       label: pack.title.isEmpty
                           ? '#'
-                          : pack.title.characters.first.toUpperCase(),
+                          : avatarLetterWithCustomEmoji(pack.title),
                       onTap: () => setState(() {
                         _tab = _InlineStickerTab.pack;
                         _selectedPackId = pack.id;
@@ -371,7 +372,7 @@ class _ChatInlineStickerPanelState extends State<ChatInlineStickerPanel> {
                           _selectedEmojiPackId == pack.id,
                       label: pack.title.isEmpty
                           ? 'Э'
-                          : pack.title.characters.first.toUpperCase(),
+                          : avatarLetterWithCustomEmoji(pack.title),
                       onTap: () => setState(() {
                         _tab = _InlineStickerTab.emoji;
                         _selectedEmojiPackId = pack.id;

@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:characters/characters.dart';
+
 import '../core/network/haneat_http_client.dart';
 import '../models/emoji_pack_models.dart';
 import 'auth_service.dart';
@@ -106,6 +108,15 @@ String previewTextWithCustomEmoji(String text) {
   });
   final clean = replaced.trim();
   return clean.isEmpty ? 'Сообщение' : clean;
+}
+
+/// First letter for avatars — skip `[[e:id]]` so the glyph is not `[`.
+String avatarLetterWithCustomEmoji(String? value) {
+  final raw = (value ?? '').trim();
+  if (raw.isEmpty) return '?';
+  final stripped = raw.replaceAll(_tokenRe, ' ').trim();
+  if (stripped.isEmpty) return '✦';
+  return stripped.characters.first.toUpperCase();
 }
 
 /// Truncate by visual glyphs so `[[e:123]]` is one character and is never split.

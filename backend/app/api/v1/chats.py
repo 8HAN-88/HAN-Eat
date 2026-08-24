@@ -263,6 +263,13 @@ def _require_send_flex_options(db, user, body) -> None:
                 "Викторины и расширенные опросы доступны с уровня 27",
             )
     if getattr(body, "type", None) == "checklist":
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(db).require_send_tokens_http(
+            user.id,
+            getattr(body, "checklist_title", None),
+            *(getattr(body, "checklist_items", None) or []),
+        )
         billing.require_feature(
             user.id,
             "checklist",
