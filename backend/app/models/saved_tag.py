@@ -22,7 +22,7 @@ class SavedTag(Base):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     title = Column(String(40), nullable=False)
-    emoji = Column(String(8), nullable=True)
+    emoji = Column(String(32), nullable=True)
     sort_order = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, server_default=func.now())
 

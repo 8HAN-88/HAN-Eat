@@ -56,7 +56,7 @@ def create_tag(db: Session, user_id: int, title: str, emoji: Optional[str] = Non
     tag = SavedTag(
         user_id=user_id,
         title=heading[:40],
-        emoji=(emoji or "").strip()[:8] or None,
+        emoji=(emoji or "").strip()[:32] or None,
         sort_order=count,
     )
     db.add(tag)

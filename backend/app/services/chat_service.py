@@ -5054,7 +5054,7 @@ class ChatService:
         folder = ChatFolder(
             user_id=user_id,
             name=name[:64],
-            icon=(icon or "")[:8] or None,
+            icon=(icon or "")[:32] or None,
             position=(max_pos or -1) + 1,
             filters_json=json.dumps(norm_filters) if norm_filters else None,
         )
@@ -5121,7 +5121,7 @@ class ChatService:
             folder.name = name[:64]
         if icon is not None:
             self._require_folder_flex_options(user_id, icon, None)
-            folder.icon = icon[:8] if icon else None
+            folder.icon = (icon or "")[:32] or None
         if filters is not None:
             norm_filters = self._normalize_filters(filters)
             self._require_folder_flex_options(user_id, None, norm_filters)

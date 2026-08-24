@@ -36,6 +36,8 @@ from app.models.sticker import (
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.models.user_business import UserBusinessSettings
+from app.models.chat_folder import ChatFolder, ChatFolderItem
+from app.models.saved_tag import SavedTag
 from app.services.emoji_pack_service import (
     EmojiPackService,
     avatar_letter_with_custom_emoji,
@@ -85,6 +87,9 @@ def db_session():
             MessageEditHistory.__table__,
             ScheduledMessage.__table__,
             UserBusinessSettings.__table__,
+            ChatFolder.__table__,
+            ChatFolderItem.__table__,
+            SavedTag.__table__,
         ],
     )
     Session = sessionmaker(bind=engine)
@@ -2035,3 +2040,71 @@ def test_add_emoji_shortcode_returns_flex_gate(db_session):
             db=db_session,
         )
     _assert_custom_emoji_feature(err.value)
+
+
+def test_folder_and_saved_tag_schema_accepts_token():
+    from app.schemas.chat import CreateChatFolderRequest, SavedTagCreateRequest
+
+    token = "имя [[e:123]]"
+    assert CreateChatFolderRequest(name="Работа", icon=token).icon == token
+    assert SavedTagCreateRequest(title="Работа", emoji=token).emoji == token
+
+
+def test_draft_upsert_returns_flex_gate(db_session):
+    import asyncio
+
+    from app.api.v1.chats import upsert_chat_draft
+    from app.schemas.chat import ConversationDraftRequest
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+
+    async def _run():
+        await upsert_chat_draft(
+            1,
+            ConversationDraftRequest(text=token),
+            current_user=owner,
+            db=db_session,
+        )
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(_run())
+    _assert_custom_emoji_feature(err.value)
+
+
+def test_folder_icon_keeps_custom_emoji_token(db_session):
+    owner = _user(db_session, 1)
+    _activate(db_session, owner.id, 70)
+    emoji = EmojiPackService(db_session)
+    pack = emoji.create_pack(owner.id, "Папка")
+    item = emoji.add_emoji(
+        user_id=owner.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/folder.webp",
+    )
+    db_session.commit()
+    token = f"имя [[e:{item.id}]]"
+    row = ChatService(db_session).create_folder(owner.id, "Работа", token)
+    db_session.commit()
+    assert row["icon"] == token
+    assert len(token) > 8
+
+
+def test_saved_tag_emoji_keeps_custom_emoji_token(db_session):
+    from app.services.saved_tag_service import create_tag
+
+    owner = _user(db_session, 1)
+    _activate(db_session, owner.id, 70)
+    emoji = EmojiPackService(db_session)
+    pack = emoji.create_pack(owner.id, "Тег")
+    item = emoji.add_emoji(
+        user_id=owner.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/tag.webp",
+    )
+    db_session.commit()
+    token = f"имя [[e:{item.id}]]"
+    tag = create_tag(db_session, owner.id, "Работа", token)
+    db_session.commit()
+    assert tag.emoji == token
+    assert len(token) > 8

@@ -438,7 +438,7 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
                         ? null
                         : const Icon(Icons.lock_outline),
                   ),
-                  maxLength: 2,
+                  maxLength: 32,
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,

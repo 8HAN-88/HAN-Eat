@@ -359,7 +359,7 @@ class SavedTagItem(BaseModel):
 
 class SavedTagCreateRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=40)
-    emoji: Optional[str] = Field(default=None, max_length=8)
+    emoji: Optional[str] = Field(default=None, max_length=32)
 
 
 class SavedTagListResponse(BaseModel):
@@ -680,7 +680,7 @@ class ChatFolderListResponse(BaseModel):
 
 class CreateChatFolderRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=64)
-    icon: Optional[str] = Field(None, max_length=8)
+    icon: Optional[str] = Field(None, max_length=32)
     conversation_ids: List[int] = []
     channel_ids: List[int] = []
     filters: dict = Field(default_factory=dict)
@@ -688,7 +688,7 @@ class CreateChatFolderRequest(BaseModel):
 
 class UpdateChatFolderRequest(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=64)
-    icon: Optional[str] = Field(None, max_length=8)
+    icon: Optional[str] = Field(None, max_length=32)
     conversation_ids: Optional[List[int]] = None
     channel_ids: Optional[List[int]] = None
     filters: Optional[dict] = None

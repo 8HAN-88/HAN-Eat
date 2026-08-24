@@ -1347,6 +1347,8 @@ async def upsert_chat_draft(
         code = str(e)
         if code == "forbidden":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        _raise_flex_gate(code)
+        _raise_pack_gate(code)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
     publish_user_event(
         current_user.id,
