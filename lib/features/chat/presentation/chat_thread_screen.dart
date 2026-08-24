@@ -11736,11 +11736,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                               vertical: 10,
                             ),
                           ),
-                          child: Text(
-                            row[i],
+                          child: HighlightedText(
+                            text: row[i],
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.labelLarge ??
+                                const TextStyle(fontSize: 14),
                           ),
                         ),
                       ),

@@ -17,6 +17,12 @@ from app.services.moderation_pipeline_service import (
 )
 
 
+def _text_for_moderation(raw: Optional[str]) -> str:
+    from app.services.emoji_pack_service import text_for_moderation
+
+    return text_for_moderation(raw)
+
+
 def _log_ai_moderation(
     db: Session,
     *,
@@ -108,8 +114,8 @@ def run_post_moderation(
 
     svc = ModerationPipelineService()
     scores = svc.analyze_text(
-        text=post.description or "",
-        title=post.title,
+        text=_text_for_moderation(post.description),
+        title=_text_for_moderation(post.title) or None,
         image_urls=_collect_post_image_urls(post),
         trust_score=float(author.trust_score or 0.5),
     )
@@ -161,7 +167,7 @@ def run_comment_moderation(
 
     svc = ModerationPipelineService()
     scores = svc.analyze_text(
-        text=text,
+        text=_text_for_moderation(text),
         trust_score=float(author.trust_score or 0.5),
     )
 

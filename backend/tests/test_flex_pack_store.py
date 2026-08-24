@@ -39,6 +39,7 @@ from app.services.emoji_pack_service import (
     EmojiPackService,
     avatar_letter_with_custom_emoji,
     preview_text_with_custom_emoji,
+    text_for_moderation,
 )
 from app.services.flex_subscription_service import FlexSubscriptionService
 from app.services.chat_service import ChatService
@@ -1839,3 +1840,39 @@ def test_admin_flex_block_title_requires_custom_emoji(db_session):
             db_session,
         )
     assert err.value.status_code == 403
+
+
+def test_gif_favorite_title_requires_custom_emoji(db_session):
+    from app.services.gif_favorite_service import toggle_favorite
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    with pytest.raises(HTTPException) as err:
+        toggle_favorite(
+            db_session,
+            owner.id,
+            "https://cdn.test/g.gif",
+            title=token,
+        )
+    assert err.value.status_code == 403
+
+
+def test_star_gift_note_requires_custom_emoji(db_session):
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    with pytest.raises(HTTPException) as err:
+        PaidFeaturesService(db_session).send_star_gift(
+            owner.id,
+            gift_id=1,
+            conversation_id=1,
+            message=token,
+        )
+    assert err.value.status_code == 403
+
+
+def test_moderation_text_previews_custom_emoji():
+    assert text_for_moderation("") == ""
+    assert text_for_moderation("   ") == ""
+    out = text_for_moderation("привет [[e:12]]")
+    assert "[[e:" not in out
+    assert "✦" in out

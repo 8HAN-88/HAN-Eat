@@ -52,6 +52,14 @@ def strip_custom_emoji_tokens(text: Optional[str]) -> str:
     return re.sub(r"\s+", " ", cleaned).strip()
 
 
+def text_for_moderation(text: Optional[str]) -> str:
+    """Preview tokens for AI/heuristics; empty stays empty (not «Сообщение»)."""
+    raw = (text or "").strip()
+    if not raw:
+        return ""
+    return preview_text_with_custom_emoji(raw)
+
+
 def avatar_letter_with_custom_emoji(text: Optional[str]) -> str:
     """First letter for avatars — skip `[[e:id]]` so the glyph is not `[`."""
     raw = (text or "").strip()

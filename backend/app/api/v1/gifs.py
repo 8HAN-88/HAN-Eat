@@ -64,8 +64,12 @@ async def toggle_gif_favorite(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    from app.services.emoji_pack_service import EmojiPackService
     from app.services.gif_favorite_service import GifFavoriteError, toggle_favorite
 
+    EmojiPackService(db).require_send_tokens_http(
+        current_user.id, body.get("title")
+    )
     SubscriptionService(db).require_feature(
         current_user.id,
         "gif_favorites",

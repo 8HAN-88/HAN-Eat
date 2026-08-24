@@ -303,15 +303,15 @@ class PaidFeaturesService:
         create_chat_message: bool = True,
     ) -> tuple[StarTransaction, Optional[Message]]:
         """Send Stars tip. Optionally posts a Telegram-like tip bubble in the DM."""
+        note = (message or "").strip() or None
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(self.db).require_send_tokens_http(sender_id, note)
         if sender_id == recipient_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot donate to yourself")
         recipient_exists = self.db.query(User.id).filter(User.id == recipient_id, User.deleted_at.is_(None)).first()
         if not recipient_exists:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recipient not found")
-        note = (message or "").strip() or None
-        from app.services.emoji_pack_service import EmojiPackService
-
-        EmojiPackService(self.db).require_send_tokens_http(sender_id, note)
         tx = self._spend_stars(
             sender_id,
             amount,
@@ -1212,6 +1212,10 @@ class PaidFeaturesService:
         hide_name: bool = False,
         idempotency_key: Optional[str] = None,
     ) -> Message:
+        note = (message or "").strip()
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(self.db).require_send_tokens_http(sender_id, note)
         gift = (
             self.db.query(StarGift)
             .filter(StarGift.id == gift_id, StarGift.is_active.is_(True))
@@ -1288,10 +1292,6 @@ class PaidFeaturesService:
 
         import json as _json
 
-        note = (message or "").strip()
-        from app.services.emoji_pack_service import EmojiPackService
-
-        EmojiPackService(self.db).require_send_tokens_http(sender_id, note)
         # Create message first so we can bind inventory + spend idempotently.
         msg = Message(
             conversation_id=conversation_id,
@@ -2686,6 +2686,13 @@ class PaidFeaturesService:
         payload: Optional[str] = None,
         expires_in_hours: int = 24,
     ) -> StarInvoice:
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(self.db).require_send_tokens_http(
+            creator_user_id,
+            title,
+            description,
+        )
         bot = (
             self.db.query(User)
             .filter(User.id == bot_id, User.is_bot.is_(True), User.deleted_at.is_(None))
@@ -2698,13 +2705,6 @@ class PaidFeaturesService:
         clean_title = (title or "").strip()
         if not clean_title:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Title required")
-        from app.services.emoji_pack_service import EmojiPackService
-
-        EmojiPackService(self.db).require_send_tokens_http(
-            creator_user_id,
-            clean_title,
-            description,
-        )
         if amount_stars < 1 or amount_stars > 100_000:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
