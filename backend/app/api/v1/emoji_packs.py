@@ -17,6 +17,27 @@ from app.services.pack_marketplace_service import (
 router = APIRouter()
 
 
+def _raise_emoji_token(code: str) -> None:
+    from app.core.entitlements import feature_required_detail
+
+    if code == "custom_emoji_required":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            feature_required_detail(
+                "custom_emoji",
+                "Кастомные эмодзи в тексте доступны с уровня 69",
+            ),
+        )
+    if code == "custom_emoji_denied":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            {
+                "code": "custom_emoji_denied",
+                "message": "Этот эмодзи недоступен — купите пак",
+            },
+        )
+
+
 class EmojiItemOut(BaseModel):
     id: int
     media_url: str
@@ -261,24 +282,7 @@ def create_emoji_pack(
     except ValueError as exc:
         db.rollback()
         code = str(exc)
-        if code == "custom_emoji_required":
-            from app.core.entitlements import feature_required_detail
-
-            raise HTTPException(
-                status.HTTP_403_FORBIDDEN,
-                feature_required_detail(
-                    "custom_emoji",
-                    "Кастомные эмодзи в тексте доступны с уровня 69",
-                ),
-            ) from exc
-        if code == "custom_emoji_denied":
-            raise HTTPException(
-                status.HTTP_403_FORBIDDEN,
-                {
-                    "code": "custom_emoji_denied",
-                    "message": "Этот эмодзи недоступен — купите пак",
-                },
-            ) from exc
+        _raise_emoji_token(code)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, code) from exc
     return _bundle(svc, current_user.id, [pack]).items[0]
 
@@ -307,24 +311,7 @@ def update_emoji_pack(
             raise HTTPException(status.HTTP_404_NOT_FOUND, code)
         if code == "forbidden":
             raise HTTPException(status.HTTP_403_FORBIDDEN, code)
-        if code == "custom_emoji_required":
-            from app.core.entitlements import feature_required_detail
-
-            raise HTTPException(
-                status.HTTP_403_FORBIDDEN,
-                feature_required_detail(
-                    "custom_emoji",
-                    "Кастомные эмодзи в тексте доступны с уровня 69",
-                ),
-            ) from exc
-        if code == "custom_emoji_denied":
-            raise HTTPException(
-                status.HTTP_403_FORBIDDEN,
-                {
-                    "code": "custom_emoji_denied",
-                    "message": "Этот эмодзи недоступен — купите пак",
-                },
-            ) from exc
+        _raise_emoji_token(code)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, code) from exc
     return _bundle(svc, current_user.id, [pack]).items[0]
 
@@ -352,6 +339,7 @@ def add_custom_emoji(
             raise HTTPException(status.HTTP_404_NOT_FOUND, code)
         if code == "forbidden":
             raise HTTPException(status.HTTP_403_FORBIDDEN, code)
+        _raise_emoji_token(code)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, code) from exc
     from app.models.emoji_pack import EmojiPack
 

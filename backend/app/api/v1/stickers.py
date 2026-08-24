@@ -372,6 +372,9 @@ async def add_sticker_to_pack(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(current_user.id, body.emoji)
     if (body.sticker_type or "").strip().lower() == "animated":
         from app.services.subscription_service import SubscriptionService
 
@@ -399,6 +402,7 @@ async def add_sticker_to_pack(
             raise HTTPException(status.HTTP_403_FORBIDDEN, code)
         if code in ("missing_media", "invalid_sticker_type"):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        _raise_emoji_token(code)
         raise
     pack = svc.get_pack_for_user(current_user.id, pack_id)
     if not pack:

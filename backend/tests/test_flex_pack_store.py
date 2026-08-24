@@ -1994,3 +1994,44 @@ def test_poll_option_tokens_before_message_query(db_session):
     token = _emoji_token_after_downgrade(db_session, owner.id)
     with pytest.raises(ValueError, match="custom_emoji_required"):
         add_option_to_message_poll(db_session, 999, owner.id, token)
+
+
+def test_add_sticker_tokens_before_animated_flex(db_session):
+    import asyncio
+
+    from app.api.v1.stickers import add_sticker_to_pack
+    from app.schemas.sticker import AddStickerRequest
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+
+    async def _run():
+        await add_sticker_to_pack(
+            1,
+            AddStickerRequest(
+                media_url="https://cdn.test/s.webp",
+                emoji=token,
+                sticker_type="animated",
+            ),
+            current_user=owner,
+            db=db_session,
+        )
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(_run())
+    _assert_custom_emoji_feature(err.value)
+
+
+def test_add_emoji_shortcode_returns_flex_gate(db_session):
+    from app.api.v1.emoji_packs import AddEmojiIn, add_custom_emoji
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    with pytest.raises(HTTPException) as err:
+        add_custom_emoji(
+            1,
+            AddEmojiIn(media_url="https://cdn.test/e.webp", shortcode=token),
+            current_user=owner,
+            db=db_session,
+        )
+    _assert_custom_emoji_feature(err.value)
