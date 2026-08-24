@@ -320,6 +320,10 @@ async def create_story(
     from app.services.subscription_service import SubscriptionService
 
     billing = SubscriptionService(db)
+    caption = (payload.caption or "").strip() or None
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(current_user.id, caption)
     if visibility == "close_friends":
         billing.require_feature(
             current_user.id,
@@ -327,10 +331,6 @@ async def create_story(
             "Сторис для близких доступны с уровня 20",
         )
     hours = 48 if billing.has_feature(current_user.id, "longer_stories") else 24
-    caption = (payload.caption or "").strip() or None
-    from app.services.emoji_pack_service import EmojiPackService
-
-    EmojiPackService(db).require_send_tokens_http(current_user.id, caption)
     if caption and len(caption) > 500:
         billing.require_feature(
             current_user.id,

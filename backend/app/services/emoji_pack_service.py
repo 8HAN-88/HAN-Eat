@@ -90,15 +90,15 @@ class EmojiPackService:
         return slug
 
     def create_pack(self, user_id: int, title: str, is_public: bool = True) -> EmojiPack:
+        clean = (title or "").strip()
+        if len(clean) < 2:
+            raise ValueError("invalid_title")
+        self.require_send_tokens(user_id, clean)
         SubscriptionService(self.db).require_feature(
             user_id,
             "emoji_pack_publish",
             "Публикация эмодзи-паков доступна с уровня 70",
         )
-        clean = (title or "").strip()
-        if len(clean) < 2:
-            raise ValueError("invalid_title")
-        self.require_send_tokens(user_id, clean)
         pack = EmojiPack(
             title=clean[:120],
             slug=self._make_unique_slug(clean, user_id),

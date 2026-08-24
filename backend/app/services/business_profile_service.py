@@ -310,13 +310,13 @@ def update_settings(db: Session, user: User, body: dict[str, Any]) -> dict[str, 
                 raise BusinessError("invalid_greeting_days") from exc
             if days not in GREETING_DAYS:
                 raise BusinessError("invalid_greeting_days")
+        EmojiPackService(db).require_send_tokens_http(user.id, text)
         if (enabled or text) and not billing.has_feature(user.id, "business_greeting"):
             billing.require_feature(
                 user.id,
                 "business_greeting",
                 "Приветствие доступно с уровня 61",
             )
-        EmojiPackService(db).require_send_tokens_http(user.id, text)
         row.greeting_enabled = bool(enabled and text)
         row.greeting_text = text or None
         row.greeting_inactivity_days = days
@@ -331,6 +331,7 @@ def update_settings(db: Session, user: User, body: dict[str, Any]) -> dict[str, 
         mode = str(body.get("away_mode") or row.away_mode or "manual").strip()
         if mode not in AWAY_MODES:
             raise BusinessError("invalid_away_mode")
+        EmojiPackService(db).require_send_tokens_http(user.id, text)
         if (enabled or text or mode != "manual") and not billing.has_feature(
             user.id, "business_away"
         ):
@@ -339,7 +340,6 @@ def update_settings(db: Session, user: User, body: dict[str, Any]) -> dict[str, 
                 "business_away",
                 "Автоответ «меня нет» доступен с уровня 62",
             )
-        EmojiPackService(db).require_send_tokens_http(user.id, text)
         row.away_enabled = bool(enabled and text)
         row.away_text = text or None
         row.away_mode = mode
@@ -401,13 +401,13 @@ def update_settings(db: Session, user: User, body: dict[str, Any]) -> dict[str, 
             if "intro_sticker_url" in body
             else (row.intro_sticker_url or "")
         )
+        EmojiPackService(db).require_send_tokens_http(user.id, title, text)
         if (title or text or sticker) and not billing.has_feature(user.id, "business_intro"):
             billing.require_feature(
                 user.id,
                 "business_intro",
                 "Стартовая страница доступна с уровня 65",
             )
-        EmojiPackService(db).require_send_tokens_http(user.id, title, text)
         row.intro_title = title or None
         row.intro_text = text or None
         row.intro_sticker_url = sticker or None

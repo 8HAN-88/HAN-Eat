@@ -35,6 +35,7 @@ from app.models.sticker import (
 )
 from app.models.subscription import Subscription
 from app.models.user import User
+from app.models.user_business import UserBusinessSettings
 from app.services.emoji_pack_service import (
     EmojiPackService,
     avatar_letter_with_custom_emoji,
@@ -83,6 +84,7 @@ def db_session():
             Message.__table__,
             MessageEditHistory.__table__,
             ScheduledMessage.__table__,
+            UserBusinessSettings.__table__,
         ],
     )
     Session = sessionmaker(bind=engine)
@@ -1876,3 +1878,119 @@ def test_moderation_text_previews_custom_emoji():
     out = text_for_moderation("привет [[e:12]]")
     assert "[[e:" not in out
     assert "✦" in out
+
+
+def _assert_custom_emoji_feature(exc: HTTPException) -> None:
+    assert exc.status_code == 403
+    detail = exc.detail
+    assert isinstance(detail, dict)
+    assert detail.get("feature") == "custom_emoji"
+
+
+def test_business_greeting_tokens_before_flex(db_session):
+    from app.services.business_profile_service import update_settings
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    with pytest.raises(HTTPException) as err:
+        update_settings(
+            db_session,
+            owner,
+            {"greeting_enabled": True, "greeting_text": token},
+        )
+    _assert_custom_emoji_feature(err.value)
+
+
+def test_business_away_tokens_before_flex(db_session):
+    from app.services.business_profile_service import update_settings
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    with pytest.raises(HTTPException) as err:
+        update_settings(
+            db_session,
+            owner,
+            {"away_enabled": True, "away_text": token, "away_mode": "manual"},
+        )
+    _assert_custom_emoji_feature(err.value)
+
+
+def test_business_intro_tokens_before_flex(db_session):
+    from app.services.business_profile_service import update_settings
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    with pytest.raises(HTTPException) as err:
+        update_settings(
+            db_session,
+            owner,
+            {"intro_title": token, "intro_text": "о нас"},
+        )
+    _assert_custom_emoji_feature(err.value)
+
+
+def test_story_caption_tokens_before_close_friends(db_session):
+    import asyncio
+
+    from app.api.v1.stories import StoryCreateRequest, create_story
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+
+    async def _run():
+        await create_story(
+            StoryCreateRequest(
+                media_url="https://cdn.test/s.jpg",
+                media_type="image",
+                caption=token,
+                visibility="close_friends",
+            ),
+            current_user=owner,
+            db=db_session,
+        )
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(_run())
+    _assert_custom_emoji_feature(err.value)
+
+
+def test_schedule_tokens_before_scheduled_flex(db_session):
+    import asyncio
+    from datetime import datetime, timedelta, timezone
+
+    from app.api.v1.chats import schedule_message
+    from app.schemas.chat import ScheduleMessageRequest
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+
+    async def _run():
+        await schedule_message(
+            1,
+            ScheduleMessageRequest(
+                content=token,
+                send_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            ),
+            current_user=owner,
+            db=db_session,
+        )
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(_run())
+    _assert_custom_emoji_feature(err.value)
+
+
+def test_emoji_pack_create_tokens_before_publish_flex(db_session):
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        EmojiPackService(db_session).create_pack(owner.id, token)
+
+
+def test_poll_option_tokens_before_message_query(db_session):
+    from app.services.chat_poll_service import add_option_to_message_poll
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        add_option_to_message_poll(db_session, 999, owner.id, token)

@@ -11703,6 +11703,27 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
+  String _composerHintText({
+    required bool canCompose,
+    required bool peerBlockedByMe,
+    required bool isRestrictedByModeration,
+    required int activeCooldownSeconds,
+  }) {
+    if (!canCompose) {
+      if (peerBlockedByMe) return 'Пользователь заблокирован';
+      if (_selectedTopicIsClosed) return 'Тема закрыта';
+      if (isRestrictedByModeration) return 'Отправка ограничена';
+      return 'Только админы';
+    }
+    if (activeCooldownSeconds > 0) {
+      return 'Подождите ${_formatSlowModeCountdown(activeCooldownSeconds)}';
+    }
+    if (_editingMessage != null) return 'Изменить…';
+    final raw = _replyKeyboard?.placeholder?.trim() ?? '';
+    if (raw.isEmpty) return 'Сообщение';
+    return previewTextWithCustomEmoji(raw);
+  }
+
   Widget _buildReplyKeyboardStrip(ColorScheme scheme) {
     final kb = _replyKeyboard;
     if (kb == null || kb.isEmpty) return const SizedBox.shrink();
@@ -17149,20 +17170,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                               bottom: 96,
                                             ),
                                             decoration: InputDecoration(
-                                              hintText: !canCompose
-                                                  ? (peerBlockedByMe
-                                                      ? 'Пользователь заблокирован'
-                                                      : (_selectedTopicIsClosed
-                                                          ? 'Тема закрыта'
-                                                          : (isRestrictedByModeration
-                                                              ? 'Отправка ограничена'
-                                                              : 'Только админы')))
-                                                  : (activeCooldownSeconds > 0
-                                                      ? 'Подождите ${_formatSlowModeCountdown(activeCooldownSeconds)}'
-                                                      : (_editingMessage !=
-                                                              null
-                                                          ? 'Изменить…'
-                                                          : 'Сообщение')),
+                                              hintText: _composerHintText(
+                                                canCompose: canCompose,
+                                                peerBlockedByMe: peerBlockedByMe,
+                                                isRestrictedByModeration:
+                                                    isRestrictedByModeration,
+                                                activeCooldownSeconds:
+                                                    activeCooldownSeconds,
+                                              ),
                                               filled: true,
                                               fillColor: Colors.transparent,
                                               border: OutlineInputBorder(
