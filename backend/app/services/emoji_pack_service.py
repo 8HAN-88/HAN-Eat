@@ -182,7 +182,7 @@ def is_contact_card_content(content: Optional[str]) -> bool:
 def authored_send_texts(
     msg_type: Optional[str], content: Optional[str]
 ) -> list[Optional[str]]:
-    """Texts the sender wrote — not embedded peer names in cards/payloads."""
+    """Texts the sender wrote — not embedded peer names or sticker emoji."""
     kind = (msg_type or "").strip()
     if kind == "story_reply":
         try:
@@ -194,6 +194,9 @@ def authored_send_texts(
         return [content]
     if is_contact_card_content(content):
         return []
+    if kind == "sticker":
+        # Associated emoji is pack metadata, not the sender's caption.
+        return []
     return [content]
 
 
@@ -203,10 +206,11 @@ def preview_peer_tokens_in_content(
     msg_type: Optional[str],
     content: Optional[str],
 ) -> str:
-    """Keep peer names as tokens when the sender may use them; else preview.
+    """Keep peer names / sticker emoji when the sender may use them; else preview.
 
     Story reply JSON embeds the author's name; a contact card embeds the
-    peer's display name. Those are received names — do not 403 the sender.
+    peer's display name; a sticker carries the pack's associated emoji.
+    Those are received texts — do not 403 the sender.
     """
     text = content or ""
     if not text:
@@ -228,6 +232,12 @@ def preview_peer_tokens_in_content(
             return json.dumps(data, ensure_ascii=False)
         return text
     if is_contact_card_content(text):
+        try:
+            svc.require_send_tokens(user_id, text)
+        except ValueError:
+            return preview_text_with_custom_emoji(text)
+        return text
+    if (msg_type or "").strip() == "sticker":
         try:
             svc.require_send_tokens(user_id, text)
         except ValueError:

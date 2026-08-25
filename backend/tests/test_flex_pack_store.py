@@ -2500,6 +2500,63 @@ def test_http_skips_token_gate_for_reply_keyboard_label(db_session):
     )
 
 
+def test_sticker_associated_emoji_does_not_block_sender(db_session):
+    owner = _user(db_session, 1)
+    sender = _user(db_session, 2)
+    _activate(db_session, owner.id, 70)
+    emoji = EmojiPackService(db_session)
+    pack = emoji.create_pack(owner.id, "Гейт")
+    item = emoji.add_emoji(
+        user_id=owner.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/gate.webp",
+    )
+    token = f"имя [[e:{item.id}]]"
+    stickers = StickerService(db_session)
+    sticker_pack = stickers.create_pack(owner.id, "Коты", True)
+    sticker = stickers.add_sticker(
+        user_id=owner.id,
+        pack_id=sticker_pack.id,
+        media_url="https://cdn.test/cat-send.webp",
+        emoji=token,
+    )
+    db_session.commit()
+    conv = Conversation(type="group", title="Чат")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add_all(
+        [
+            ConversationMember(conversation_id=conv.id, user_id=owner.id),
+            ConversationMember(conversation_id=conv.id, user_id=sender.id),
+        ]
+    )
+    db_session.commit()
+    msg, _ = ChatService(db_session).send_message(
+        conversation_id=conv.id,
+        sender_id=sender.id,
+        msg_type="sticker",
+        content=token,
+        media_url=sticker.media_url,
+        notify=False,
+    )
+    db_session.commit()
+    assert "[[e:" not in (msg.content or "")
+    assert (msg.content or "").strip()
+
+
+def test_http_skips_token_gate_for_sticker_emoji(db_session):
+    from app.api.v1.chats import _require_send_text_tokens
+    from app.schemas.chat import SendMessageRequest
+
+    sender = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, sender.id)
+    _require_send_text_tokens(
+        db_session,
+        sender,
+        SendMessageRequest(type="sticker", content=token),
+    )
+
+
 def test_sticker_emoji_keeps_long_token(db_session):
     owner = _user(db_session, 1)
     _activate(db_session, owner.id, 70)
@@ -2535,6 +2592,7 @@ def test_authored_send_texts_skips_peer_names():
     assert authored_send_texts("story_reply", payload) == ["круто"]
     card = "👤 Контакт\nИмя [[e:9]]\n@peer"
     assert authored_send_texts("text", card) == []
+    assert authored_send_texts("sticker", "👍 [[e:9]]") == []
     assert authored_send_texts("text", "привет [[e:9]]") == ["привет [[e:9]]"]
 
 
