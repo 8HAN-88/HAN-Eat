@@ -2411,3 +2411,88 @@ def test_reaction_and_topic_schema_accepts_token():
         media_url="https://cdn.test/s.webp",
         emoji=token,
     ).emoji == token
+
+
+def test_edit_contact_card_previews_peer_name_without_flex(db_session):
+    peer = _user(db_session, 1)
+    sender = _user(db_session, 2)
+    token = _emoji_token_after_downgrade(db_session, peer.id)
+    conv = Conversation(type="group", title="Чат")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add_all(
+        [
+            ConversationMember(conversation_id=conv.id, user_id=peer.id),
+            ConversationMember(conversation_id=conv.id, user_id=sender.id),
+        ]
+    )
+    msg = Message(
+        conversation_id=conv.id,
+        sender_id=sender.id,
+        type="text",
+        content=f"👤 Контакт\n{token}\n@peer",
+    )
+    db_session.add(msg)
+    db_session.commit()
+    edited = ChatService(db_session).edit_message(
+        conv.id, msg.id, sender.id, f"👤 Контакт\n{token}\n@peer"
+    )
+    db_session.commit()
+    assert "[[e:" not in (edited.content or "")
+    assert "Контакт" in (edited.content or "")
+
+
+def test_edit_own_text_still_requires_flex(db_session):
+    sender = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, sender.id)
+    conv = Conversation(type="group", title="Чат")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=sender.id))
+    msg = Message(
+        conversation_id=conv.id,
+        sender_id=sender.id,
+        type="text",
+        content="привет",
+    )
+    db_session.add(msg)
+    db_session.commit()
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        ChatService(db_session).edit_message(conv.id, msg.id, sender.id, token)
+
+
+def test_reschedule_contact_card_previews_peer_name_without_flex(db_session):
+    from datetime import datetime, timedelta, timezone
+
+    peer = _user(db_session, 1)
+    sender = _user(db_session, 2)
+    token = _emoji_token_after_downgrade(db_session, peer.id)
+    conv = Conversation(type="group", title="Чат")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add_all(
+        [
+            ConversationMember(conversation_id=conv.id, user_id=peer.id),
+            ConversationMember(conversation_id=conv.id, user_id=sender.id),
+        ]
+    )
+    when = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=2)
+    item = ScheduledMessage(
+        conversation_id=conv.id,
+        sender_id=sender.id,
+        type="text",
+        content="позже",
+        send_at=when,
+        status="pending",
+    )
+    db_session.add(item)
+    db_session.commit()
+    updated = ChatService(db_session).reschedule_message(
+        conversation_id=conv.id,
+        scheduled_message_id=item.id,
+        user_id=sender.id,
+        content=f"👤 Контакт\n{token}\n@peer",
+    )
+    db_session.commit()
+    assert "[[e:" not in (updated.content or "")
+    assert "Контакт" in (updated.content or "")

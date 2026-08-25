@@ -187,6 +187,23 @@ def preview_peer_tokens_in_content(
     return text
 
 
+def prepare_send_content(
+    svc: "EmojiPackService",
+    user_id: int,
+    msg_type: Optional[str],
+    content: Optional[str],
+) -> str:
+    """Gate the sender's own text; preview embedded peer names on deny.
+
+    Used on send, schedule, edit, and reschedule so a contact card or
+    story-reply name does not 403 a user without custom_emoji (69).
+    """
+    text = content or ""
+    for part in authored_send_texts(msg_type, text):
+        svc.require_send_tokens(user_id, part)
+    return preview_peer_tokens_in_content(svc, user_id, msg_type, text)
+
+
 class EmojiPackService:
     def __init__(self, db: Session):
         self.db = db

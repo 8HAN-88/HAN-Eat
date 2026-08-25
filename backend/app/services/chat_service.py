@@ -3167,16 +3167,11 @@ class ChatService:
     ) -> tuple[Message, bool]:
         from app.services.emoji_pack_service import (
             EmojiPackService,
-            authored_send_texts,
-            preview_peer_tokens_in_content,
+            prepare_send_content,
         )
 
         emoji = EmojiPackService(self.db)
-        for part in authored_send_texts(msg_type, content):
-            emoji.require_send_tokens(sender_id, part)
-        content = preview_peer_tokens_in_content(
-            emoji, sender_id, msg_type, content
-        )
+        content = prepare_send_content(emoji, sender_id, msg_type, content)
         for part in _inline_keyboard_text_parts(inline_keyboard_json):
             emoji.require_send_tokens(sender_id, part)
         if client_message_id:
@@ -3773,16 +3768,11 @@ class ChatService:
     ) -> ScheduledMessage:
         from app.services.emoji_pack_service import (
             EmojiPackService,
-            authored_send_texts,
-            preview_peer_tokens_in_content,
+            prepare_send_content,
         )
 
         emoji = EmojiPackService(self.db)
-        for part in authored_send_texts(msg_type, content):
-            emoji.require_send_tokens(sender_id, part)
-        content = preview_peer_tokens_in_content(
-            emoji, sender_id, msg_type, content
-        )
+        content = prepare_send_content(emoji, sender_id, msg_type, content)
         for part in _inline_keyboard_text_parts(inline_keyboard_json):
             emoji.require_send_tokens(sender_id, part)
         now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -3913,9 +3903,14 @@ class ChatService:
             if item.type == "text":
                 if not text:
                     raise ValueError("empty_content")
-                from app.services.emoji_pack_service import EmojiPackService
+                from app.services.emoji_pack_service import (
+                    EmojiPackService,
+                    prepare_send_content,
+                )
 
-                EmojiPackService(self.db).require_send_tokens(user_id, text)
+                text = prepare_send_content(
+                    EmojiPackService(self.db), user_id, item.type, text
+                )
                 item.content = text[:4000]
             elif item.type in ("image", "video", "video_note", "file"):
                 from app.services.emoji_pack_service import EmojiPackService
@@ -4178,9 +4173,14 @@ class ChatService:
         clean = (content or "").strip()
         if msg.type == "text" and not clean:
             raise ValueError("empty_message")
-        from app.services.emoji_pack_service import EmojiPackService
+        from app.services.emoji_pack_service import (
+            EmojiPackService,
+            prepare_send_content,
+        )
 
-        EmojiPackService(self.db).require_send_tokens(user_id, clean)
+        clean = prepare_send_content(
+            EmojiPackService(self.db), user_id, msg.type, clean
+        )
         previous = (msg.content or "")[:4000]
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         if previous != clean[:4000]:
