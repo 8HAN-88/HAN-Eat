@@ -50,7 +50,9 @@ class AppInviteService {
     String? inviterName,
     String? ref,
   }) {
-    final inviter = previewTextWithCustomEmoji(inviterName?.trim() ?? '');
+    final rawInviter = inviterName?.trim() ?? '';
+    final inviter =
+        rawInviter.isEmpty ? '' : previewTextWithCustomEmoji(rawInviter);
     final who = inviter.isNotEmpty ? inviter : 'Я';
     final link = webInviteUrl(ref: ref);
     return '${_greeting(contactName)}\n'
