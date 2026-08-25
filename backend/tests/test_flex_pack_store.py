@@ -2216,6 +2216,7 @@ def test_story_reply_author_name_does_not_block_sender(db_session):
         sender_id=sender.id,
         msg_type="story_reply",
         content=content,
+        notify=False,
     )
     db_session.commit()
     assert "[[e:" not in (msg.content or "")
@@ -2271,6 +2272,7 @@ def test_contact_card_name_does_not_block_sender(db_session):
         sender_id=sender.id,
         msg_type="text",
         content=card,
+        notify=False,
     )
     db_session.commit()
     assert "[[e:" not in (msg.content or "")
