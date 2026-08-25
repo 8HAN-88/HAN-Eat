@@ -69,10 +69,13 @@ class NotificationService:
         if post_author_id == liker_id:
             return
         
+        from app.services.emoji_pack_service import display_name_or_default
+
+        who = display_name_or_default(liker_name, default="Пользователь")
         notification = self.create_notification(
             user_id=post_author_id,
             type="like",
-            title=f"{liker_name} лайкнул(а) ваш пост",
+            title=f"{who} лайкнул(а) ваш пост",
             body=None,
             entity_type="post",
             entity_id=post_id,
@@ -99,14 +102,23 @@ class NotificationService:
         if post_author_id == commenter_id:
             return
         
-        from app.services.emoji_pack_service import preview_text_with_custom_emoji
+        from app.services.emoji_pack_service import (
+            display_name_or_default,
+            preview_text_with_custom_emoji,
+        )
 
-        preview = preview_text_with_custom_emoji(comment_text, limit=100)
-        
+        who = display_name_or_default(commenter_name, default="Пользователь")
+        raw_comment = (comment_text or "").strip()
+        preview = (
+            preview_text_with_custom_emoji(raw_comment, limit=100)
+            if raw_comment
+            else None
+        )
+
         notification = self.create_notification(
             user_id=post_author_id,
             type="comment",
-            title=f"{commenter_name} прокомментировал(а) ваш пост",
+            title=f"{who} прокомментировал(а) ваш пост",
             body=preview,
             entity_type="post",
             entity_id=post_id,
@@ -127,10 +139,13 @@ class NotificationService:
         follower_name: str
     ):
         """Уведомить о новой подписке"""
+        from app.services.emoji_pack_service import display_name_or_default
+
+        who = display_name_or_default(follower_name, default="Пользователь")
         notification = self.create_notification(
             user_id=followee_id,
             type="follow",
-            title=f"{follower_name} подписался(ась) на вас",
+            title=f"{who} подписался(ась) на вас",
             body=None,
             entity_type="user",
             entity_id=follower_id,
@@ -155,10 +170,13 @@ class NotificationService:
         if post_author_id == reposter_id:
             return
         
+        from app.services.emoji_pack_service import display_name_or_default
+
+        who = display_name_or_default(reposter_name, default="Пользователь")
         notification = self.create_notification(
             user_id=post_author_id,
             type="repost",
-            title=f"{reposter_name} репостнул(а) ваш пост",
+            title=f"{who} репостнул(а) ваш пост",
             body=None,
             entity_type="post",
             entity_id=post_id,
@@ -179,10 +197,13 @@ class NotificationService:
         mentioner_name: str
     ):
         """Уведомить об упоминании"""
+        from app.services.emoji_pack_service import display_name_or_default
+
+        who = display_name_or_default(mentioner_name, default="Пользователь")
         notification = self.create_notification(
             user_id=mentioned_user_id,
             type="mention",
-            title=f"{mentioner_name} упомянул(а) вас",
+            title=f"{who} упомянул(а) вас",
             body=None,
             entity_type="post",
             entity_id=post_id,
@@ -206,10 +227,13 @@ class NotificationService:
         preview: str = "",
     ):
         """Уведомить об @упоминании в чате."""
+        from app.services.emoji_pack_service import display_name_or_default
+
+        who = display_name_or_default(mentioner_name, default="Пользователь")
         return self.create_notification(
             user_id=mentioned_user_id,
             type="mention",
-            title=f"{mentioner_name} упомянул(а) вас",
+            title=f"{who} упомянул(а) вас",
             body=(preview or None),
             entity_type="conversation",
             entity_id=conversation_id,

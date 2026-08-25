@@ -44,6 +44,7 @@ from app.services.emoji_pack_service import (
     authored_or_peer_label,
     authored_send_texts,
     avatar_letter_with_custom_emoji,
+    display_name_or_default,
     editor_or_preview_tokens,
     keep_or_preview_tokens,
     preview_text_with_custom_emoji,
@@ -1070,6 +1071,20 @@ def test_checklist_and_file_preview_hide_custom_emoji_tokens():
     file_preview = ChatService(None)._message_preview_text(_Msg())
     assert "[[e:" not in file_preview
     assert "✦" in file_preview
+
+
+def test_file_preview_blank_name_is_file_not_soobshenie():
+    class _Msg:
+        type = "file"
+        content = "   "
+
+    assert ChatService(None)._message_preview_text(_Msg()) == "📎 Файл"
+
+
+def test_display_name_or_default_skips_soobshenie():
+    assert display_name_or_default("   ", default="Звонок") == "Звонок"
+    assert display_name_or_default("", default="Пользователь") == "Пользователь"
+    assert display_name_or_default("еда [[e:12]]", default="Звонок") == "еда ✦"
 
 
 def test_report_comment_requires_custom_emoji(db_session):

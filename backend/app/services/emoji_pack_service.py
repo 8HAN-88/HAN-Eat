@@ -130,6 +130,19 @@ def authored_or_peer_label(
     return clean or default
 
 
+def display_name_or_default(
+    text: Optional[str],
+    *,
+    default: str,
+    limit: int = 80,
+) -> str:
+    """Preview tokens in a name; empty/whitespace never becomes «Сообщение»."""
+    raw = (text or "").strip()
+    if not raw:
+        return default
+    return preview_text_with_custom_emoji(raw, limit=limit)
+
+
 def avatar_letter_with_custom_emoji(text: Optional[str]) -> str:
     """First letter for avatars — skip `[[e:id]]` so the glyph is not `[`."""
     raw = (text or "").strip()

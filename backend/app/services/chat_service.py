@@ -3571,7 +3571,7 @@ class ChatService:
         elif msg_type == "image":
             preview = "📷 Фото"
         elif msg_type == "file":
-            name = content.strip() if content else "Файл"
+            name = (content or "").strip() or "Файл"
             preview = f"📎 {preview_text_with_custom_emoji(name, limit=80)}"
         elif msg_type == "video":
             preview = "🎬 Видео"
@@ -3678,7 +3678,7 @@ class ChatService:
         if msg_type == "file":
             from app.services.emoji_pack_service import preview_text_with_custom_emoji
 
-            name = content.strip() if content else "Файл"
+            name = (content or "").strip() or "Файл"
             return f"📎 {preview_text_with_custom_emoji(name, limit=80)}"
         if msg_type == "checklist":
             from app.services.chat_checklist_service import checklist_preview_text
