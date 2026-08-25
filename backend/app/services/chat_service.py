@@ -3433,16 +3433,22 @@ class ChatService:
             else:
                 forward_user_id = src.sender_id
                 author = self.db.query(User).filter(User.id == src.sender_id).first()
-                forward_name = (
-                    (author.name or author.username or "Пользователь")
-                    if author
-                    else "Пользователь"
-                )
+                if author:
+                    forward_name = (
+                        (author.name or "").strip()
+                        or (author.username or "").strip()
+                        or "Пользователь"
+                    )
+                else:
+                    forward_name = "Пользователь"
             from app.services.emoji_pack_service import preview_text_with_custom_emoji
 
+            raw_forward = (forward_name or "").strip()
             msg.forward_from_user_id = forward_user_id
             msg.forward_from_name = (
-                preview_text_with_custom_emoji(forward_name or "")[:120] or None
+                preview_text_with_custom_emoji(raw_forward, limit=120)
+                if raw_forward
+                else None
             )
             msg.forwarded_from_message_id = src.id
         self.db.flush()
@@ -3554,12 +3560,12 @@ class ChatService:
         sender = self.db.query(User).filter(User.id == sender_id).first()
         from app.services.emoji_pack_service import preview_text_with_custom_emoji
 
-        sender_name = preview_text_with_custom_emoji(
-            (sender.name or sender.username or "Пользователь")
+        sender_label = (
+            ((sender.name or "").strip() or (sender.username or "").strip() or "Пользователь")
             if sender
-            else "Пользователь",
-            limit=80,
+            else "Пользователь"
         )
+        sender_name = preview_text_with_custom_emoji(sender_label, limit=80)
         if msg_type == "voice":
             preview = "🎤 Голосовое"
         elif msg_type == "image":
@@ -3710,11 +3716,12 @@ class ChatService:
         from app.services.emoji_pack_service import preview_text_with_custom_emoji
 
         actor = self.db.query(User).filter(User.id == actor_id).first()
-        actor_name = preview_text_with_custom_emoji(
-            (actor.name or actor.username or "Пользователь")
+        actor_label = (
+            ((actor.name or "").strip() or (actor.username or "").strip() or "Пользователь")
             if actor
             else "Пользователь"
         )
+        actor_name = preview_text_with_custom_emoji(actor_label, limit=80)
         msg = (
             self.db.query(Message)
             .filter(

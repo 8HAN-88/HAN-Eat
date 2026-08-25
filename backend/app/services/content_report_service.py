@@ -251,8 +251,11 @@ class ContentReportService:
             if reporter:
                 from app.services.emoji_pack_service import preview_text_with_custom_emoji
 
-                reporter_name = preview_text_with_custom_emoji(
-                    reporter.name or "", limit=80
+                raw_reporter = (reporter.name or "").strip()
+                reporter_name = (
+                    preview_text_with_custom_emoji(raw_reporter, limit=80)
+                    if raw_reporter
+                    else "Пользователь"
                 )
                 reporter_payload = {
                     "id": reporter.id,

@@ -1279,7 +1279,7 @@ def test_moderation_ban_reason_requires_custom_emoji(db_session):
     assert err.value.status_code == 403
 
 
-def test_community_author_requires_custom_emoji(db_session):
+def test_community_author_does_not_require_custom_emoji(db_session):
     import asyncio
 
     from app.api.v1.community_upload import (
@@ -1302,9 +1302,11 @@ def test_community_author_requires_custom_emoji(db_session):
             db=db_session,
         )
 
+    # Author is a prefilled channel/profile name — 400 (no video), not 403 flex.
     with pytest.raises(HTTPException) as err:
         asyncio.run(_run())
-    assert err.value.status_code == 403
+    assert err.value.status_code == 400
+    assert "custom_emoji" not in str(err.value.detail)
 
 
 def test_forum_topic_icon_requires_custom_emoji(db_session):
@@ -2261,6 +2263,65 @@ def test_saved_tag_emoji_keeps_custom_emoji_token(db_session):
     db_session.commit()
     assert tag.emoji == token
     assert len(token) > 8
+
+
+def test_forward_blank_sender_name_is_not_soobshenie(db_session):
+    sender = User(
+        id=3, email="blank@t.test", password_hash="h", name="   ", username=None
+    )
+    forwarder = _user(db_session, 2)
+    db_session.add(sender)
+    db_session.commit()
+    conv = Conversation(type="group", title="Чат")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add(
+        ConversationMember(conversation_id=conv.id, user_id=sender.id)
+    )
+    db_session.add(
+        ConversationMember(conversation_id=conv.id, user_id=forwarder.id)
+    )
+    src = Message(
+        conversation_id=conv.id,
+        sender_id=sender.id,
+        type="text",
+        content="привет",
+    )
+    db_session.add(src)
+    db_session.commit()
+    out = ChatService(db_session).forward_message(
+        target_conversation_id=conv.id,
+        source_conversation_id=conv.id,
+        message_id=src.id,
+        sender_id=forwarder.id,
+    )
+    assert out.forward_from_name != "Сообщение"
+    assert (out.forward_from_name or "").strip()
+
+
+def test_forward_empty_forward_name_is_not_soobshenie(db_session):
+    owner = _user(db_session, 1)
+    conv = Conversation(type="group", title="Чат")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=owner.id))
+    src = Message(
+        conversation_id=conv.id,
+        sender_id=owner.id,
+        type="text",
+        content="привет",
+        forward_from_user_id=9,
+        forward_from_name="",
+    )
+    db_session.add(src)
+    db_session.commit()
+    out = ChatService(db_session).forward_message(
+        target_conversation_id=conv.id,
+        source_conversation_id=conv.id,
+        message_id=src.id,
+        sender_id=owner.id,
+    )
+    assert out.forward_from_name != "Сообщение"
 
 
 def test_forward_tokens_return_flex_gate(db_session):
