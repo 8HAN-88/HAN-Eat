@@ -2630,6 +2630,19 @@ class PaidFeaturesService:
                 body = {"media": [{"type": "image", "url": row.media_url}]}
             import json as _json
             from sqlalchemy import text as sa_text
+            from app.services.emoji_pack_service import (
+                EmojiPackService,
+                keep_or_preview_tokens,
+            )
+
+            # Suggestion text is the author's — preview if the reviewing
+            # admin cannot send those tokens (post is stored as admin).
+            description = (
+                keep_or_preview_tokens(
+                    EmojiPackService(self.db), user_id, row.text
+                )
+                or row.text
+            )
 
             inserted = self.db.execute(
                 sa_text(
@@ -2642,7 +2655,7 @@ class PaidFeaturesService:
                     "user_id": user_id,
                     "channel_id": row.channel_id,
                     "type": "photo" if row.media_url else "text",
-                    "description": row.text,
+                    "description": description,
                     "body": _json.dumps(body) if body else None,
                     "status": "published",
                     "visibility": "public",

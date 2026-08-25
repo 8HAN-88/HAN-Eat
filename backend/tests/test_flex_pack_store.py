@@ -43,6 +43,7 @@ from app.services.emoji_pack_service import (
     EmojiPackService,
     authored_send_texts,
     avatar_letter_with_custom_emoji,
+    keep_or_preview_tokens,
     preview_text_with_custom_emoji,
     text_for_moderation,
     text_for_translation,
@@ -1729,6 +1730,29 @@ def test_translate_previews_tokens_without_flex(db_session):
     out = asyncio.run(_run())
     assert "[[e:" not in out.translated
     assert "✦" in out.translated
+
+
+def test_keep_or_preview_tokens_without_flex(db_session):
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    out = keep_or_preview_tokens(EmojiPackService(db_session), owner.id, token)
+    assert "[[e:" not in (out or "")
+    assert "✦" in (out or "")
+
+
+def test_keep_or_preview_tokens_keeps_when_allowed(db_session):
+    owner = _user(db_session, 1)
+    _activate(db_session, owner.id, 70)
+    emoji = EmojiPackService(db_session)
+    pack = emoji.create_pack(owner.id, "Превью")
+    item = emoji.add_emoji(
+        user_id=owner.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/keep.webp",
+    )
+    db_session.commit()
+    token = f"имя [[e:{item.id}]]"
+    assert keep_or_preview_tokens(emoji, owner.id, token) == token
 
 
 def test_saved_tag_emoji_requires_custom_emoji(db_session):

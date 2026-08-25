@@ -213,10 +213,26 @@ async def repost_to_channel(
     source_title = effective_repost_source_title(post)
     deep_link = f"haneat://post/{post.id}"
     comment = (request.comment or "").strip()
-    from app.services.emoji_pack_service import EmojiPackService
+    from app.services.emoji_pack_service import (
+        EmojiPackService,
+        keep_or_preview_tokens,
+    )
 
-    EmojiPackService(db).require_send_tokens_http(current_user.id, comment)
+    emoji = EmojiPackService(db)
+    emoji.require_send_tokens_http(current_user.id, comment)
+    # Source title/tags are the original author's — preview if the
+    # reposter cannot send those tokens (do not 403, do not persist
+    # tokens they could not write).
+    source_title = (
+        keep_or_preview_tokens(emoji, current_user.id, source_title)
+        or source_title
+    )
     display_title = f"Репост: {source_title}"
+    tags = [
+        keep_or_preview_tokens(emoji, current_user.id, tag) or tag
+        for tag in (post.tags or [])
+        if isinstance(tag, str)
+    ]
 
     repost_post = Post(
         user_id=current_user.id,
@@ -234,7 +250,7 @@ async def repost_to_channel(
         },
         publish_to=["feed", f"channel:{channel.id}"],
         visibility="public",
-        tags=post.tags or [],
+        tags=tags,
         status="published",
         published_at=datetime.utcnow(),
     )

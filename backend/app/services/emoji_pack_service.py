@@ -75,6 +75,23 @@ def text_for_translation(text: Optional[str]) -> str:
     return text_for_external(text)
 
 
+def keep_or_preview_tokens(
+    svc: "EmojiPackService", user_id: int, text: Optional[str]
+) -> Optional[str]:
+    """Keep tokens if the actor may send them; otherwise preview.
+
+    Receive-and-persist of someone else's text — do not 403, and do not
+    write `[[e:id]]` the actor could not author.
+    """
+    if not (text or "").strip():
+        return text
+    try:
+        svc.require_send_tokens(user_id, text)
+    except ValueError:
+        return text_for_external(text) or text
+    return text
+
+
 def avatar_letter_with_custom_emoji(text: Optional[str]) -> str:
     """First letter for avatars — skip `[[e:id]]` so the glyph is not `[`."""
     raw = (text or "").strip()
