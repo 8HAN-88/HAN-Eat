@@ -47,6 +47,7 @@ from app.services.emoji_pack_service import (
     display_name_or_default,
     editor_or_preview_tokens,
     keep_or_preview_tokens,
+    prepare_forward_content,
     preview_text_with_custom_emoji,
     text_for_moderation,
     text_for_translation,
@@ -2377,6 +2378,54 @@ def test_forward_tokens_return_flex_gate(db_session):
     with pytest.raises(HTTPException) as err:
         asyncio.run(_run())
     _assert_custom_emoji_feature(err.value)
+
+
+def test_prepare_forward_content_previews_peer_tokens(db_session):
+    author = _user(db_session, 1)
+    forwarder = _user(db_session, 2)
+    token = _emoji_token_after_downgrade(db_session, author.id)
+    emoji = EmojiPackService(db_session)
+    assert prepare_forward_content(
+        emoji, author.id, token, original_author_id=author.id
+    ) == token
+    previewed = prepare_forward_content(
+        emoji, forwarder.id, token, original_author_id=author.id
+    )
+    assert previewed != token
+    assert "[[e:" not in (previewed or "")
+
+
+def test_forward_peer_tokens_does_not_403(db_session):
+    author = _user(db_session, 1)
+    forwarder = _user(db_session, 2)
+    token = _emoji_token_after_downgrade(db_session, author.id)
+    conv = Conversation(type="group", title="Чат")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add_all(
+        [
+            ConversationMember(conversation_id=conv.id, user_id=author.id),
+            ConversationMember(conversation_id=conv.id, user_id=forwarder.id),
+        ]
+    )
+    src = Message(
+        conversation_id=conv.id,
+        sender_id=author.id,
+        type="text",
+        content=token,
+    )
+    db_session.add(src)
+    db_session.commit()
+    out = ChatService(db_session).forward_message(
+        target_conversation_id=conv.id,
+        source_conversation_id=conv.id,
+        message_id=src.id,
+        sender_id=forwarder.id,
+    )
+    db_session.commit()
+    assert out.sender_id == forwarder.id
+    assert "[[e:" not in (out.content or "")
+    assert (out.content or "").strip()
 
 
 def test_sticker_emoji_keeps_long_token(db_session):

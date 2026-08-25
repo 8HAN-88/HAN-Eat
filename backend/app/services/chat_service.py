@@ -3407,6 +3407,21 @@ class ChatService:
                     raise ValueError("paid_media_locked")
             if not media_url:
                 raise ValueError("paid_media_locked")
+        from app.services.emoji_pack_service import (
+            EmojiPackService,
+            prepare_forward_content,
+        )
+
+        original_author_id = getattr(src, "forward_from_user_id", None) or src.sender_id
+        content = (
+            prepare_forward_content(
+                EmojiPackService(self.db),
+                sender_id,
+                content,
+                original_author_id=original_author_id,
+            )
+            or content
+        )
         msg, _ = self.send_message(
             conversation_id=target_conversation_id,
             sender_id=sender_id,

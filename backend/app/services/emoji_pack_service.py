@@ -110,6 +110,24 @@ def editor_or_preview_tokens(
     return keep_or_preview_tokens(svc, user_id, text)
 
 
+def prepare_forward_content(
+    svc: "EmojiPackService",
+    forwarder_id: int,
+    content: Optional[str],
+    *,
+    original_author_id: Optional[int],
+) -> Optional[str]:
+    """Gate the author's own re-send; preview a peer's tokens.
+
+    Forward and «в избранное» copy someone else's message. Do not 403 a
+    user without custom_emoji (69) for the original author's `[[e:id]]`.
+    Re-sending your own tokens after a downgrade still raises.
+    """
+    if int(original_author_id or 0) == int(forwarder_id):
+        return content
+    return keep_or_preview_tokens(svc, forwarder_id, content)
+
+
 def authored_or_peer_label(
     svc: "EmojiPackService",
     user_id: int,
