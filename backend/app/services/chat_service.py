@@ -1562,12 +1562,6 @@ class ChatService:
         closed: Optional[bool] = None,
         icon_emoji: Optional[str] = None,
     ) -> ForumTopic:
-        from app.services.emoji_pack_service import EmojiPackService
-
-        if title is not None:
-            EmojiPackService(self.db).require_send_tokens(actor_id, title)
-        if icon_emoji is not None:
-            EmojiPackService(self.db).require_send_tokens(actor_id, icon_emoji)
         if not self._is_member(conversation_id, actor_id):
             raise ValueError("forbidden")
         if not self._can_change_group_info(conversation_id, actor_id):
@@ -1582,16 +1576,35 @@ class ChatService:
         )
         if topic is None:
             raise ValueError("topic_not_found")
+        from app.services.emoji_pack_service import (
+            EmojiPackService,
+            editor_or_preview_tokens,
+        )
+
+        # Topic author wrote the title/icon; another admin may resend
+        # them when renaming. Do not 403 a manager without 69.
+        emoji = EmojiPackService(self.db)
+        own = int(topic.created_by_user_id or 0) == int(actor_id)
         if title is not None:
             clean = title.strip()[:128]
             if not clean:
                 raise ValueError("empty_title")
+            clean = (
+                editor_or_preview_tokens(emoji, actor_id, clean, own=own)
+                or clean
+            )[:128]
             if topic.is_general and clean.lower() not in ("general", "общий"):
                 # Allow rename of General but keep is_general.
                 pass
             topic.title = clean
         if icon_emoji is not None:
-            topic.icon_emoji = icon_emoji.strip()[:32] or None
+            icon = icon_emoji.strip()[:32] or None
+            if icon:
+                icon = (
+                    editor_or_preview_tokens(emoji, actor_id, icon, own=own)
+                    or icon
+                ).strip()[:32] or None
+            topic.icon_emoji = icon
         if closed is not None:
             if topic.is_general and closed:
                 raise ValueError("cannot_close_general")

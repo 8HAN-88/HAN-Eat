@@ -38,6 +38,7 @@ from app.models.user import User
 from app.models.user_business import UserBusinessSettings
 from app.models.chat_folder import ChatFolder, ChatFolderItem
 from app.models.chat_folder_share import ChatFolderShare
+from app.models.forum_topic import ForumTopic
 from app.models.saved_tag import SavedTag
 from app.services.emoji_pack_service import (
     EmojiPackService,
@@ -98,6 +99,7 @@ def db_session():
             ChatFolder.__table__,
             ChatFolderItem.__table__,
             ChatFolderShare.__table__,
+            ForumTopic.__table__,
             SavedTag.__table__,
         ],
     )
@@ -1883,6 +1885,57 @@ def test_update_group_title_admin_previews_creator_tokens(db_session):
     assert "✦" in (updated.title or "")
     with pytest.raises(ValueError, match="custom_emoji"):
         ChatService(db_session).update_group_title(conv.id, creator.id, token)
+
+
+def test_update_forum_topic_admin_previews_author_tokens(db_session):
+    creator = _user(db_session, 1)
+    admin = _user(db_session, 2)
+    token = _emoji_token_after_downgrade(db_session, creator.id)
+    _activate(db_session, admin.id, 10)
+    conv = Conversation(
+        type="group",
+        title="Форум",
+        created_by_user_id=creator.id,
+        is_forum=True,
+    )
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add(
+        ConversationMember(
+            conversation_id=conv.id,
+            user_id=creator.id,
+            is_admin=True,
+            can_change_info=True,
+        )
+    )
+    db_session.add(
+        ConversationMember(
+            conversation_id=conv.id,
+            user_id=admin.id,
+            is_admin=True,
+            can_change_info=True,
+        )
+    )
+    topic = ForumTopic(
+        conversation_id=conv.id,
+        title="Новости",
+        icon_emoji="📰",
+        created_by_user_id=creator.id,
+        is_general=False,
+    )
+    db_session.add(topic)
+    db_session.commit()
+    renamed = ChatService(db_session).update_forum_topic(
+        conv.id, admin.id, topic.id, title=token, icon_emoji=token
+    )
+    assert "[[e:" not in (renamed.title or "")
+    assert "✦" in (renamed.title or "")
+    assert "[[e:" not in (renamed.icon_emoji or "")
+    assert "✦" in (renamed.icon_emoji or "")
+    with pytest.raises(ValueError, match="custom_emoji"):
+        ChatService(db_session).update_forum_topic(
+            conv.id, creator.id, topic.id, title=token
+        )
 
 
 def test_saved_tag_emoji_requires_custom_emoji(db_session):
