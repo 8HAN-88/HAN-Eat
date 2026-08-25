@@ -45,22 +45,31 @@ class ShareLinkService {
     return '$base?msg=$messageId';
   }
 
-  static String channelShareText(int channelId, String channelName) {
+  static String channelShareSubject(String channelName) {
     final raw = channelName.trim();
-    final title = raw.isEmpty ? 'Канал' : previewTextWithCustomEmoji(raw);
-    return '$title\n\nОткрыть в HanWe: ${channelLink(channelId)}';
+    return raw.isEmpty ? 'Канал' : previewTextWithCustomEmoji(raw);
+  }
+
+  static String channelShareText(int channelId, String channelName) {
+    return '${channelShareSubject(channelName)}\n\nОткрыть в HanWe: ${channelLink(channelId)}';
+  }
+
+  static String postShareSubject(PostModel post) {
+    final rawTitle = (post.title ?? '').trim();
+    if (rawTitle.isNotEmpty) return previewTextWithCustomEmoji(rawTitle);
+    final rawDescription = (post.description ?? '').trim();
+    if (rawDescription.isNotEmpty) {
+      return previewTextWithCustomEmoji(rawDescription);
+    }
+    return post.type == 'reel' ? 'Рилс' : 'Пост';
   }
 
   static String postShareText(PostModel post) {
-    final raw = (post.title ?? post.description ?? 'Пост').trim();
-    final title = raw.isEmpty ? 'Пост' : previewTextWithCustomEmoji(raw);
-    return '$title\n\nОткрыть в HanWe: ${postLink(post.id)}';
+    return '${postShareSubject(post)}\n\nОткрыть в HanWe: ${postLink(post.id)}';
   }
 
   static String reelShareText(PostModel reel) {
-    final raw = (reel.title ?? reel.description ?? 'Рилс').trim();
-    final title = raw.isEmpty ? 'Рилс' : previewTextWithCustomEmoji(raw);
-    return '$title\n\nОткрыть в HanWe: ${reelLink(reel.id)}';
+    return '${postShareSubject(reel)}\n\nОткрыть в HanWe: ${reelLink(reel.id)}';
   }
 
   static String packShareText(String link, {required bool isPublic}) {

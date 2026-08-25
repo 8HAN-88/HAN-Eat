@@ -44,6 +44,7 @@ from app.services.emoji_pack_service import (
     authored_or_peer_label,
     authored_send_texts,
     avatar_letter_with_custom_emoji,
+    editor_or_preview_tokens,
     keep_or_preview_tokens,
     preview_text_with_custom_emoji,
     text_for_moderation,
@@ -1802,6 +1803,78 @@ def test_authored_or_peer_label_gates_own_button(db_session):
             default="Mini App",
             limit=64,
         )
+
+
+def test_editor_or_preview_tokens_gates_own(db_session):
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    with pytest.raises(ValueError, match="custom_emoji"):
+        editor_or_preview_tokens(
+            EmojiPackService(db_session), owner.id, token, own=True
+        )
+
+
+def test_editor_or_preview_tokens_previews_peer(db_session):
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    editor = _user(db_session, 2)
+    _activate(db_session, editor.id, 10)
+    out = editor_or_preview_tokens(
+        EmojiPackService(db_session), editor.id, token, own=False
+    )
+    assert "[[e:" not in (out or "")
+    assert "✦" in (out or "")
+
+
+def test_editor_or_preview_tokens_keeps_when_allowed(db_session):
+    owner = _user(db_session, 1)
+    _activate(db_session, owner.id, 70)
+    emoji = EmojiPackService(db_session)
+    pack = emoji.create_pack(owner.id, "Правка")
+    item = emoji.add_emoji(
+        user_id=owner.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/edit.webp",
+    )
+    db_session.commit()
+    token = f"имя [[e:{item.id}]]"
+    assert editor_or_preview_tokens(emoji, owner.id, token, own=True) == token
+
+
+def test_update_group_title_admin_previews_creator_tokens(db_session):
+    creator = _user(db_session, 1)
+    admin = _user(db_session, 2)
+    token = _emoji_token_after_downgrade(db_session, creator.id)
+    _activate(db_session, admin.id, 10)
+    conv = Conversation(
+        type="group",
+        title="Еда",
+        created_by_user_id=creator.id,
+    )
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add(
+        ConversationMember(
+            conversation_id=conv.id,
+            user_id=creator.id,
+            is_admin=True,
+            can_change_info=True,
+        )
+    )
+    db_session.add(
+        ConversationMember(
+            conversation_id=conv.id,
+            user_id=admin.id,
+            is_admin=True,
+            can_change_info=True,
+        )
+    )
+    db_session.commit()
+    updated = ChatService(db_session).update_group_title(conv.id, admin.id, token)
+    assert "[[e:" not in (updated.title or "")
+    assert "✦" in (updated.title or "")
+    with pytest.raises(ValueError, match="custom_emoji"):
+        ChatService(db_session).update_group_title(conv.id, creator.id, token)
 
 
 def test_saved_tag_emoji_requires_custom_emoji(db_session):

@@ -79,7 +79,10 @@ def send_channel_post_notification(
 
     from app.services.emoji_pack_service import preview_text_with_custom_emoji
 
-    channel_label = preview_text_with_custom_emoji(channel.name or "", limit=80)
+    raw_name = (channel.name or "").strip()
+    channel_label = (
+        preview_text_with_custom_emoji(raw_name, limit=80) if raw_name else "канал"
+    )
     notification_type = "channel_post"
     title = f"Новый пост в канале {channel_label}"
     raw_title = (post_title or "").strip()
@@ -142,8 +145,16 @@ def send_channel_announcement(
 
     from app.services.emoji_pack_service import preview_text_with_custom_emoji
 
-    channel_label = preview_text_with_custom_emoji(channel.name or "", limit=80)
-    body = preview_text_with_custom_emoji(announcement_text)
+    raw_name = (channel.name or "").strip()
+    channel_label = (
+        preview_text_with_custom_emoji(raw_name, limit=80) if raw_name else "канал"
+    )
+    raw_announcement = (announcement_text or "").strip()
+    body = (
+        preview_text_with_custom_emoji(raw_announcement)
+        if raw_announcement
+        else "Сообщение канала"
+    )
     notifications = []
     for subscriber in subscribers:
         if getattr(subscriber, "notifications_enabled", True) is False:

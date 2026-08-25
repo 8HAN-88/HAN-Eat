@@ -1421,9 +1421,19 @@ class ChatService:
         clean = title.strip()
         if not clean:
             raise ValueError("empty_title")
-        from app.services.emoji_pack_service import EmojiPackService
+        from app.services.emoji_pack_service import (
+            EmojiPackService,
+            editor_or_preview_tokens,
+        )
 
-        EmojiPackService(self.db).require_send_tokens(user_id, clean)
+        # Creator authored the title; another admin may resend it on Save.
+        own = int(conv.created_by_user_id or 0) == int(user_id)
+        clean = (
+            editor_or_preview_tokens(
+                EmojiPackService(self.db), user_id, clean, own=own
+            )
+            or clean
+        )
         conv.title = clean[:120]
         conv.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         return conv

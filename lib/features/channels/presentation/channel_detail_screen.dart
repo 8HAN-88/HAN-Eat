@@ -12,7 +12,6 @@ import '../../../services/paid_features_service.dart';
 import '../../../models/post_model.dart';
 import '../../../core/share/system_share.dart';
 import '../../../services/server_config.dart';
-import '../../../services/custom_emoji_registry.dart';
 import '../../../services/share_link_service.dart';
 import '../../../app/app_router.dart';
 import '../../subscription/creator_upsell.dart';
@@ -519,7 +518,7 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
     await SystemShare.shareText(
       context,
       text: text,
-      subject: previewTextWithCustomEmoji(name),
+      subject: ShareLinkService.channelShareSubject(name),
     );
   }
 

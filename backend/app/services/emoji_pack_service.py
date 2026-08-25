@@ -92,6 +92,24 @@ def keep_or_preview_tokens(
     return text
 
 
+def editor_or_preview_tokens(
+    svc: "EmojiPackService",
+    user_id: int,
+    text: Optional[str],
+    *,
+    own: bool,
+) -> Optional[str]:
+    """Gate the author's own edit; preview an editor's copy of peer text.
+
+    Channel admins resend the original title/tags when saving any change.
+    Do not 403 them for the author's `[[e:id]]`.
+    """
+    if own:
+        svc.require_send_tokens(user_id, text)
+        return text
+    return keep_or_preview_tokens(svc, user_id, text)
+
+
 def authored_or_peer_label(
     svc: "EmojiPackService",
     user_id: int,

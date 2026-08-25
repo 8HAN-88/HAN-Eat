@@ -330,24 +330,13 @@ async def update_channel(
     db: Session = Depends(get_db)
 ):
     """Обновить канал (только владелец или админ)"""
-    from app.services.emoji_pack_service import EmojiPackService
-
-    EmojiPackService(db).require_send_tokens_http(
-        current_user.id,
-        request.name,
-        request.description,
-        request.rules,
-        request.category,
-        *(request.tags or []),
-    )
-
     channel = db.query(Channel).filter(Channel.id == channel_id).first()
     if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Channel not found"
         )
-    
+
     member = get_membership(db, channel_id, current_user.id)
     if not has_channel_permission(
         channel, member, current_user, "manage_channel_settings"
@@ -356,7 +345,39 @@ async def update_channel(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Недостаточно прав для изменения настроек канала",
         )
-    
+
+    from app.services.emoji_pack_service import (
+        EmojiPackService,
+        keep_or_preview_tokens,
+    )
+
+    emoji = EmojiPackService(db)
+    name = request.name
+    description = request.description
+    rules = request.rules
+    category = request.category
+    tags = request.tags
+    if is_channel_owner(channel, current_user):
+        emoji.require_send_tokens_http(
+            current_user.id,
+            name,
+            description,
+            rules,
+            category,
+            *(tags or []),
+        )
+    else:
+        # Admin resends the owner's name/tags when saving any setting.
+        name = keep_or_preview_tokens(emoji, current_user.id, name)
+        description = keep_or_preview_tokens(emoji, current_user.id, description)
+        rules = keep_or_preview_tokens(emoji, current_user.id, rules)
+        category = keep_or_preview_tokens(emoji, current_user.id, category)
+        if tags is not None:
+            tags = [
+                keep_or_preview_tokens(emoji, current_user.id, tag) or tag
+                for tag in tags
+            ]
+
     # Проверяем уникальность slug (если изменился)
     if request.slug and request.slug != channel.slug:
         existing = db.query(Channel).filter(Channel.slug == request.slug).first()
@@ -365,14 +386,14 @@ async def update_channel(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Channel with this slug already exists"
             )
-    
+
     # Обновляем поля (только переданные)
     if request.name is not None:
-        channel.name = request.name
+        channel.name = name
     if request.slug is not None:
         channel.slug = request.slug
     if request.description is not None:
-        channel.description = request.description
+        channel.description = description
     if request.cover_url is not None:
         channel.cover_url = request.cover_url
     if request.avatar_url is not None:
@@ -382,11 +403,11 @@ async def update_channel(
         assert_can_create_private_channel(request.is_public, has_creator)
         channel.is_public = request.is_public
     if request.category is not None:
-        channel.category = request.category
+        channel.category = category
     if request.tags is not None:
-        channel.tags = request.tags
+        channel.tags = tags
     if request.rules is not None:
-        channel.rules = request.rules
+        channel.rules = rules
     if request.auto_publish_to_feed is not None:
         channel.auto_publish_to_feed = request.auto_publish_to_feed
     if request.allow_comments is not None:
@@ -1651,28 +1672,58 @@ async def update_channel_post(
             "Недостаточно прав для редактирования чужих постов канала",
         )
 
-    from app.services.emoji_pack_service import EmojiPackService
-
-    poll_parts: list = []
-    if request.poll is not None:
-        poll_parts.append(request.poll.question)
-        poll_parts.extend(request.poll.options or [])
-    EmojiPackService(db).require_send_tokens_http(
-        current_user.id,
-        request.title,
-        request.description,
-        request.link.preview if request.link is not None else None,
-        *poll_parts,
-        *(request.tags or []),
+    from app.services.emoji_pack_service import (
+        EmojiPackService,
+        keep_or_preview_tokens,
     )
-    
+
+    emoji = EmojiPackService(db)
+    title = request.title
+    description = request.description
+    tags = request.tags
+    link_preview = request.link.preview if request.link is not None else None
+    poll_question = request.poll.question if request.poll is not None else None
+    poll_options = (
+        list(request.poll.options or []) if request.poll is not None else None
+    )
+    if is_author:
+        emoji.require_send_tokens_http(
+            current_user.id,
+            title,
+            description,
+            link_preview,
+            poll_question,
+            *(poll_options or []),
+            *(tags or []),
+        )
+    else:
+        # Admin is saving the author's text — preview, do not 403.
+        title = keep_or_preview_tokens(emoji, current_user.id, title)
+        description = keep_or_preview_tokens(emoji, current_user.id, description)
+        link_preview = keep_or_preview_tokens(emoji, current_user.id, link_preview)
+        if tags is not None:
+            tags = [
+                keep_or_preview_tokens(emoji, current_user.id, tag) or tag
+                for tag in tags
+            ]
+        if poll_question is not None:
+            poll_question = (
+                keep_or_preview_tokens(emoji, current_user.id, poll_question)
+                or poll_question
+            )
+        if poll_options is not None:
+            poll_options = [
+                keep_or_preview_tokens(emoji, current_user.id, opt) or opt
+                for opt in poll_options
+            ]
+
     # Обновляем поля поста
     if request.title is not None:
-        post.title = request.title
+        post.title = title
     if request.description is not None:
-        post.description = request.description
+        post.description = description
     if request.tags is not None:
-        post.tags = request.tags
+        post.tags = tags
     
     if request.visibility is not None and post.type != "recipe":
         post.visibility = request.visibility
@@ -1688,7 +1739,7 @@ async def update_channel_post(
         from app.services.link_preview_service import build_link_body
 
         try:
-            link_body = build_link_body(request.link.url, request.link.preview)
+            link_body = build_link_body(request.link.url, link_preview)
         except ValueError as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -1703,7 +1754,7 @@ async def update_channel_post(
 
         try:
             update_poll_in_post(
-                db, post, request.poll.question, request.poll.options
+                db, post, poll_question, poll_options
             )
         except ValueError as e:
             raise HTTPException(
