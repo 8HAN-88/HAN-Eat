@@ -785,10 +785,25 @@ async def send_miniapp_web_app_data(
     if not bot_member:
         raise HTTPException(status_code=400, detail="Bot is not in this chat")
 
-    button_text = (payload.button_text or app.name or "Mini App").strip()[:64]
-    from app.services.emoji_pack_service import EmojiPackService
+    from app.services.emoji_pack_service import (
+        EmojiPackService,
+        authored_or_peer_label,
+    )
 
-    EmojiPackService(db).require_send_tokens_http(current_user.id, data, button_text)
+    emoji = EmojiPackService(db)
+    # `data` and an explicit button are the sender's. Default button text
+    # is the miniapp name (owner-authored) — preview, do not 403.
+    emoji.require_send_tokens_http(
+        current_user.id, data, (payload.button_text or "").strip() or None
+    )
+    button_text = authored_or_peer_label(
+        emoji,
+        current_user.id,
+        payload.button_text,
+        app.name,
+        default="Mini App",
+        limit=64,
+    )
     content = json.dumps(
         {
             "data": data,

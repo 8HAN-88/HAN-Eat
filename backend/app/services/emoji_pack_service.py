@@ -92,6 +92,26 @@ def keep_or_preview_tokens(
     return text
 
 
+def authored_or_peer_label(
+    svc: "EmojiPackService",
+    user_id: int,
+    authored: Optional[str],
+    peer: Optional[str],
+    *,
+    default: str,
+    limit: int,
+) -> str:
+    """Gate user-authored text; preview a peer/app name on deny."""
+    own = (authored or "").strip()
+    cap = max(1, int(limit or 1))
+    if own:
+        svc.require_send_tokens(user_id, own)
+        return own[:cap] or default
+    previewed = keep_or_preview_tokens(svc, user_id, peer) or peer or default
+    clean = (previewed or default).strip()[:cap]
+    return clean or default
+
+
 def avatar_letter_with_custom_emoji(text: Optional[str]) -> str:
     """First letter for avatars — skip `[[e:id]]` so the glyph is not `[`."""
     raw = (text or "").strip()

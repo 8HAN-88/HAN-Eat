@@ -41,6 +41,7 @@ from app.models.chat_folder_share import ChatFolderShare
 from app.models.saved_tag import SavedTag
 from app.services.emoji_pack_service import (
     EmojiPackService,
+    authored_or_peer_label,
     authored_send_texts,
     avatar_letter_with_custom_emoji,
     keep_or_preview_tokens,
@@ -1753,6 +1754,33 @@ def test_keep_or_preview_tokens_keeps_when_allowed(db_session):
     db_session.commit()
     token = f"имя [[e:{item.id}]]"
     assert keep_or_preview_tokens(emoji, owner.id, token) == token
+
+
+def test_authored_or_peer_label_previews_default_name(db_session):
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    viewer = _user(db_session, 2)
+    _activate(db_session, viewer.id, 10)
+    emoji = EmojiPackService(db_session)
+    out = authored_or_peer_label(
+        emoji, viewer.id, None, token, default="Mini App", limit=64
+    )
+    assert "[[e:" not in out
+    assert "✦" in out
+
+
+def test_authored_or_peer_label_gates_own_button(db_session):
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    with pytest.raises(ValueError, match="custom_emoji"):
+        authored_or_peer_label(
+            EmojiPackService(db_session),
+            owner.id,
+            token,
+            "Mini App",
+            default="Mini App",
+            limit=64,
+        )
 
 
 def test_saved_tag_emoji_requires_custom_emoji(db_session):
