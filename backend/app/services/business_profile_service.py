@@ -473,14 +473,12 @@ def _auto_text_for_sender(db: Session, sender_id: int, text: str) -> str:
         return raw
     from app.services.emoji_pack_service import (
         EmojiPackService,
-        preview_text_with_custom_emoji,
+        keep_or_preview_tokens,
     )
 
-    try:
-        EmojiPackService(db).require_send_tokens(sender_id, raw)
-        return raw
-    except ValueError:
-        return preview_text_with_custom_emoji(raw)
+    # Greeting/away is the owner's — copy into the chat without 403
+    # and without chopping a 400-char text down to 120 / «Сообщение».
+    return keep_or_preview_tokens(EmojiPackService(db), sender_id, raw) or raw
 
 
 def _insert_auto_text(db: Session, conversation_id: int, sender_id: int, text: str) -> Message:

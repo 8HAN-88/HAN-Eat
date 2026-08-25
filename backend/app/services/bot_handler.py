@@ -22,14 +22,12 @@ def _text_for_bot_owner(db: Session, bot: User, text: Optional[str]) -> str:
         return raw
     from app.services.emoji_pack_service import (
         EmojiPackService,
-        preview_text_with_custom_emoji,
+        keep_or_preview_tokens,
     )
 
-    try:
-        EmojiPackService(db).require_send_tokens(owner_id, raw)
-        return raw
-    except ValueError:
-        return preview_text_with_custom_emoji(raw)
+    # Owner text copied into the chat as the bot — do not 403 the
+    # peer, and do not truncate a long reply to 120 / «Сообщение».
+    return keep_or_preview_tokens(EmojiPackService(db), owner_id, raw) or raw
 
 
 def _keyboard_for_bot_owner(

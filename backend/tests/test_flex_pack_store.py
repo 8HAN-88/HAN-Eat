@@ -1678,6 +1678,37 @@ def test_business_auto_text_previews_after_downgrade(db_session):
     assert "✦" in out
 
 
+def test_business_auto_text_keeps_long_preview_after_downgrade(db_session):
+    from app.services.business_profile_service import _auto_text_for_sender
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    long = ("Привет, это длинное приветствие бизнеса. " * 8) + token
+    assert len(long) > 120
+    out = _auto_text_for_sender(db_session, owner.id, long)
+    assert "[[e:" not in out
+    assert "✦" in out
+    assert len(out) > 120
+    assert out.startswith("Привет")
+
+
+def test_bot_owner_text_keeps_long_preview_after_downgrade(db_session):
+    from types import SimpleNamespace
+
+    from app.services.bot_handler import _text_for_bot_owner
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    bot = SimpleNamespace(created_by_user_id=owner.id)
+    long = ("Ответ бота после даунгрейда владельца. " * 8) + token
+    assert len(long) > 120
+    out = _text_for_bot_owner(db_session, bot, long)
+    assert "[[e:" not in out
+    assert "✦" in out
+    assert len(out) > 120
+    assert out.startswith("Ответ бота")
+
+
 def test_create_repost_comment_requires_custom_emoji(db_session):
     import asyncio
 
