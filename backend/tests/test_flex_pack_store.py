@@ -41,6 +41,7 @@ from app.models.chat_folder_share import ChatFolderShare
 from app.models.saved_tag import SavedTag
 from app.services.emoji_pack_service import (
     EmojiPackService,
+    authored_send_texts,
     avatar_letter_with_custom_emoji,
     preview_text_with_custom_emoji,
     text_for_moderation,
@@ -2175,6 +2176,105 @@ def test_sticker_emoji_keeps_long_token(db_session):
     db_session.commit()
     assert sticker.emoji == token
     assert len(token) > 16
+
+
+def test_authored_send_texts_skips_peer_names():
+    import json
+
+    payload = json.dumps(
+        {"story_id": 1, "text": "круто", "author_name": "Имя [[e:9]]"},
+        ensure_ascii=False,
+    )
+    assert authored_send_texts("story_reply", payload) == ["круто"]
+    card = "👤 Контакт\nИмя [[e:9]]\n@peer"
+    assert authored_send_texts("text", card) == []
+    assert authored_send_texts("text", "привет [[e:9]]") == ["привет [[e:9]]"]
+
+
+def test_story_reply_author_name_does_not_block_sender(db_session):
+    import json
+
+    author = _user(db_session, 1)
+    sender = _user(db_session, 2)
+    token = _emoji_token_after_downgrade(db_session, author.id)
+    conv = Conversation(type="group", title="Чат")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add_all(
+        [
+            ConversationMember(conversation_id=conv.id, user_id=author.id),
+            ConversationMember(conversation_id=conv.id, user_id=sender.id),
+        ]
+    )
+    db_session.commit()
+    content = json.dumps(
+        {"story_id": 7, "text": "круто", "author_id": author.id, "author_name": token},
+        ensure_ascii=False,
+    )
+    msg, _ = ChatService(db_session).send_message(
+        conversation_id=conv.id,
+        sender_id=sender.id,
+        msg_type="story_reply",
+        content=content,
+    )
+    db_session.commit()
+    assert "[[e:" not in (msg.content or "")
+    assert "круто" in (msg.content or "")
+
+
+def test_story_reply_own_text_still_requires_flex(db_session):
+    import json
+
+    author = _user(db_session, 1)
+    sender = _user(db_session, 2)
+    token = _emoji_token_after_downgrade(db_session, sender.id)
+    conv = Conversation(type="group", title="Чат")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add_all(
+        [
+            ConversationMember(conversation_id=conv.id, user_id=author.id),
+            ConversationMember(conversation_id=conv.id, user_id=sender.id),
+        ]
+    )
+    db_session.commit()
+    content = json.dumps(
+        {"story_id": 7, "text": token, "author_id": author.id, "author_name": "Анна"},
+        ensure_ascii=False,
+    )
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        ChatService(db_session).send_message(
+            conversation_id=conv.id,
+            sender_id=sender.id,
+            msg_type="story_reply",
+            content=content,
+        )
+
+
+def test_contact_card_name_does_not_block_sender(db_session):
+    peer = _user(db_session, 1)
+    sender = _user(db_session, 2)
+    token = _emoji_token_after_downgrade(db_session, peer.id)
+    conv = Conversation(type="group", title="Чат")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add_all(
+        [
+            ConversationMember(conversation_id=conv.id, user_id=peer.id),
+            ConversationMember(conversation_id=conv.id, user_id=sender.id),
+        ]
+    )
+    db_session.commit()
+    card = f"👤 Контакт\n{token}\n@peer"
+    msg, _ = ChatService(db_session).send_message(
+        conversation_id=conv.id,
+        sender_id=sender.id,
+        msg_type="text",
+        content=card,
+    )
+    db_session.commit()
+    assert "[[e:" not in (msg.content or "")
+    assert "Контакт" in (msg.content or "")
 
 
 def test_import_shared_folder_previews_tokens_without_flex(db_session):

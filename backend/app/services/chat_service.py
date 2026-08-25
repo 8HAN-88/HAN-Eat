@@ -3165,10 +3165,18 @@ class ChatService:
         is_anonymous: bool = False,
         notify: bool = True,
     ) -> tuple[Message, bool]:
-        from app.services.emoji_pack_service import EmojiPackService
+        from app.services.emoji_pack_service import (
+            EmojiPackService,
+            authored_send_texts,
+            preview_peer_tokens_in_content,
+        )
 
         emoji = EmojiPackService(self.db)
-        emoji.require_send_tokens(sender_id, content)
+        for part in authored_send_texts(msg_type, content):
+            emoji.require_send_tokens(sender_id, part)
+        content = preview_peer_tokens_in_content(
+            emoji, sender_id, msg_type, content
+        )
         for part in _inline_keyboard_text_parts(inline_keyboard_json):
             emoji.require_send_tokens(sender_id, part)
         if client_message_id:
@@ -3763,10 +3771,18 @@ class ChatService:
         effect_id: Optional[str] = None,
         topic_id: Optional[int] = None,
     ) -> ScheduledMessage:
-        from app.services.emoji_pack_service import EmojiPackService
+        from app.services.emoji_pack_service import (
+            EmojiPackService,
+            authored_send_texts,
+            preview_peer_tokens_in_content,
+        )
 
         emoji = EmojiPackService(self.db)
-        emoji.require_send_tokens(sender_id, content)
+        for part in authored_send_texts(msg_type, content):
+            emoji.require_send_tokens(sender_id, part)
+        content = preview_peer_tokens_in_content(
+            emoji, sender_id, msg_type, content
+        )
         for part in _inline_keyboard_text_parts(inline_keyboard_json):
             emoji.require_send_tokens(sender_id, part)
         now = datetime.now(timezone.utc).replace(tzinfo=None)

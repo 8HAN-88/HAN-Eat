@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../services/custom_emoji_registry.dart';
 import '../../../../services/server_config.dart';
 import '../../../../widgets/highlighted_text.dart';
 
@@ -39,7 +40,7 @@ class ChatStoryReplyPayload {
   String get previewText {
     final t = text.trim();
     if (t.isEmpty) return '🖼 Ответ на сторис';
-    return '🖼 $t';
+    return '🖼 ${previewTextWithCustomEmoji(t)}';
   }
 
   static ChatStoryReplyPayload? tryParse(String content) {

@@ -238,10 +238,12 @@ def _require_chat_search(db, user) -> None:
 
 
 def _require_send_text_tokens(db, user, body) -> None:
-    from app.services.emoji_pack_service import EmojiPackService
+    from app.services.emoji_pack_service import EmojiPackService, authored_send_texts
 
     parts: List[Optional[str]] = [
-        getattr(body, "content", None),
+        *authored_send_texts(
+            getattr(body, "type", None), getattr(body, "content", None)
+        ),
         getattr(body, "poll_question", None),
         getattr(body, "poll_description", None),
         getattr(body, "checklist_title", None),

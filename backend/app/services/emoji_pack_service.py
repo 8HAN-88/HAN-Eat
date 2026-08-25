@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime, timezone
 from typing import Iterable, List, Optional
@@ -69,6 +70,70 @@ def avatar_letter_with_custom_emoji(text: Optional[str]) -> str:
     if not stripped:
         return "✦"
     return stripped[0].upper()
+
+
+def is_contact_card_content(content: Optional[str]) -> bool:
+    first = (content or "").lstrip().split("\n", 1)[0].strip().lower()
+    if not first:
+        return False
+    return first == "han_contact" or first.endswith("контакт")
+
+
+def authored_send_texts(
+    msg_type: Optional[str], content: Optional[str]
+) -> list[Optional[str]]:
+    """Texts the sender wrote — not embedded peer names in cards/payloads."""
+    kind = (msg_type or "").strip()
+    if kind == "story_reply":
+        try:
+            data = json.loads(content or "")
+        except Exception:
+            return [content]
+        if isinstance(data, dict):
+            return [data.get("text")]
+        return [content]
+    if is_contact_card_content(content):
+        return []
+    return [content]
+
+
+def preview_peer_tokens_in_content(
+    svc: "EmojiPackService",
+    user_id: int,
+    msg_type: Optional[str],
+    content: Optional[str],
+) -> str:
+    """Keep peer names as tokens when the sender may use them; else preview.
+
+    Story reply JSON embeds the author's name; a contact card embeds the
+    peer's display name. Those are received names — do not 403 the sender.
+    """
+    text = content or ""
+    if not text:
+        return text
+    if (msg_type or "").strip() == "story_reply":
+        try:
+            data = json.loads(text)
+        except Exception:
+            return text
+        if not isinstance(data, dict):
+            return text
+        name = data.get("author_name")
+        if not (isinstance(name, str) and name.strip()):
+            return text
+        try:
+            svc.require_send_tokens(user_id, name)
+        except ValueError:
+            data["author_name"] = preview_text_with_custom_emoji(name)
+            return json.dumps(data, ensure_ascii=False)
+        return text
+    if is_contact_card_content(text):
+        try:
+            svc.require_send_tokens(user_id, text)
+        except ValueError:
+            return preview_text_with_custom_emoji(text)
+        return text
+    return text
 
 
 class EmojiPackService:
