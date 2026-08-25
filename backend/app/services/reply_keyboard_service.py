@@ -45,6 +45,43 @@ def normalize_reply_keyboard(raw: Any) -> Optional[list[list[dict[str, str]]]]:
     return rows or None
 
 
+def member_reply_keyboard_labels(member: ConversationMember | None) -> set[str]:
+    """Visible ReplyKeyboard button texts for this member."""
+    keyboard = normalize_reply_keyboard(
+        getattr(member, "reply_keyboard_json", None) if member else None
+    )
+    labels: set[str] = set()
+    if not keyboard:
+        return labels
+    for row in keyboard:
+        for btn in row:
+            text = str(btn.get("text") or "").strip()
+            if text:
+                labels.add(text)
+    return labels
+
+
+def is_reply_keyboard_label(
+    db: Session,
+    conversation_id: int,
+    user_id: int,
+    text: Optional[str],
+) -> bool:
+    """True when `text` is a tap of the member's current ReplyKeyboard."""
+    raw = (text or "").strip()
+    if not raw or conversation_id <= 0 or user_id <= 0:
+        return False
+    member = (
+        db.query(ConversationMember)
+        .filter(
+            ConversationMember.conversation_id == conversation_id,
+            ConversationMember.user_id == user_id,
+        )
+        .first()
+    )
+    return raw in member_reply_keyboard_labels(member)
+
+
 def keyboard_payload_from_member(member: ConversationMember | None) -> dict[str, Any]:
     if member is None or not getattr(member, "reply_keyboard_json", None):
         return {

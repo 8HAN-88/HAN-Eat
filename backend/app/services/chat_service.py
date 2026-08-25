@@ -3178,9 +3178,16 @@ class ChatService:
         from app.services.emoji_pack_service import (
             EmojiPackService,
             prepare_send_content,
+            preview_reply_keyboard_content,
         )
 
         emoji = EmojiPackService(self.db)
+        content = (
+            preview_reply_keyboard_content(
+                emoji, self.db, sender_id, conversation_id, msg_type, content
+            )
+            or content
+        )
         content = prepare_send_content(emoji, sender_id, msg_type, content)
         for part in _inline_keyboard_text_parts(inline_keyboard_json):
             emoji.require_send_tokens(sender_id, part)
@@ -3801,9 +3808,16 @@ class ChatService:
         from app.services.emoji_pack_service import (
             EmojiPackService,
             prepare_send_content,
+            preview_reply_keyboard_content,
         )
 
         emoji = EmojiPackService(self.db)
+        content = (
+            preview_reply_keyboard_content(
+                emoji, self.db, sender_id, conversation_id, msg_type, content
+            )
+            or content
+        )
         content = prepare_send_content(emoji, sender_id, msg_type, content)
         for part in _inline_keyboard_text_parts(inline_keyboard_json):
             emoji.require_send_tokens(sender_id, part)

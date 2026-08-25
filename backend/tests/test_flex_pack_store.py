@@ -2428,6 +2428,78 @@ def test_forward_peer_tokens_does_not_403(db_session):
     assert (out.content or "").strip()
 
 
+def test_reply_keyboard_tap_does_not_403_without_flex(db_session):
+    import json
+
+    owner = _user(db_session, 1)
+    sender = _user(db_session, 2)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    conv = Conversation(type="group", title="Чат")
+    db_session.add(conv)
+    db_session.flush()
+    member = ConversationMember(conversation_id=conv.id, user_id=sender.id)
+    member.reply_keyboard_json = json.dumps([[{"text": token}]], ensure_ascii=False)
+    db_session.add_all(
+        [
+            ConversationMember(conversation_id=conv.id, user_id=owner.id),
+            member,
+        ]
+    )
+    db_session.commit()
+    msg, _ = ChatService(db_session).send_message(
+        conversation_id=conv.id,
+        sender_id=sender.id,
+        msg_type="text",
+        content=token,
+        notify=False,
+    )
+    db_session.commit()
+    assert "[[e:" not in (msg.content or "")
+    assert (msg.content or "").strip()
+
+
+def test_reply_keyboard_unrelated_tokens_still_require_flex(db_session):
+    sender = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, sender.id)
+    conv = Conversation(type="group", title="Чат")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=sender.id))
+    db_session.commit()
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        ChatService(db_session).send_message(
+            conversation_id=conv.id,
+            sender_id=sender.id,
+            msg_type="text",
+            content=token,
+            notify=False,
+        )
+
+
+def test_http_skips_token_gate_for_reply_keyboard_label(db_session):
+    import json
+
+    from app.api.v1.chats import _require_send_text_tokens
+    from app.schemas.chat import SendMessageRequest
+
+    owner = _user(db_session, 1)
+    sender = _user(db_session, 2)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    conv = Conversation(type="direct")
+    db_session.add(conv)
+    db_session.flush()
+    member = ConversationMember(conversation_id=conv.id, user_id=sender.id)
+    member.reply_keyboard_json = json.dumps([[{"text": token}]], ensure_ascii=False)
+    db_session.add(member)
+    db_session.commit()
+    _require_send_text_tokens(
+        db_session,
+        sender,
+        SendMessageRequest(type="text", content=token),
+        conv.id,
+    )
+
+
 def test_sticker_emoji_keeps_long_token(db_session):
     owner = _user(db_session, 1)
     _activate(db_session, owner.id, 70)

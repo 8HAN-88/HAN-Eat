@@ -253,6 +253,29 @@ def prepare_send_content(
     return preview_peer_tokens_in_content(svc, user_id, msg_type, text)
 
 
+def preview_reply_keyboard_content(
+    svc: "EmojiPackService",
+    db,
+    user_id: int,
+    conversation_id: int,
+    msg_type: Optional[str],
+    content: Optional[str],
+) -> Optional[str]:
+    """Preview bot ReplyKeyboard labels so a tap does not 403 without 69.
+
+    The button text is the bot owner's — tapping sends it as the user's
+    message. Keep tokens if the user may send them; otherwise preview.
+    """
+    kind = (msg_type or "text").strip() or "text"
+    if kind != "text":
+        return content
+    from app.services.reply_keyboard_service import is_reply_keyboard_label
+
+    if not is_reply_keyboard_label(db, conversation_id, user_id, content):
+        return content
+    return keep_or_preview_tokens(svc, user_id, content)
+
+
 class EmojiPackService:
     def __init__(self, db: Session):
         self.db = db

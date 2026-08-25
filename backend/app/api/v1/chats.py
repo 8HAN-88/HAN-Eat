@@ -237,12 +237,14 @@ def _require_chat_search(db, user) -> None:
     )
 
 
-def _require_send_text_tokens(db, user, body) -> None:
+def _require_send_text_tokens(db, user, body, conversation_id: Optional[int] = None) -> None:
     from app.services.emoji_pack_service import EmojiPackService, authored_send_texts
+    from app.services.reply_keyboard_service import is_reply_keyboard_label
 
+    content = getattr(body, "content", None)
     parts: List[Optional[str]] = [
         *authored_send_texts(
-            getattr(body, "type", None), getattr(body, "content", None)
+            getattr(body, "type", None), content
         ),
         getattr(body, "poll_question", None),
         getattr(body, "poll_description", None),
@@ -250,6 +252,11 @@ def _require_send_text_tokens(db, user, body) -> None:
         *(getattr(body, "poll_options", None) or []),
         *(getattr(body, "checklist_items", None) or []),
     ]
+    if conversation_id is not None and is_reply_keyboard_label(
+        db, conversation_id, user.id, content
+    ):
+        raw = (content or "").strip()
+        parts = [p for p in parts if (p or "").strip() != raw]
     keyboard = _normalize_inline_keyboard(getattr(body, "inline_keyboard", None))
     if keyboard:
         for row in keyboard:
@@ -2416,7 +2423,7 @@ async def send_message(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    _require_send_text_tokens(db, current_user, body)
+    _require_send_text_tokens(db, current_user, body, conversation_id)
     _require_send_flex_options(db, current_user, body)
     svc = ChatService(db)
     if body.type in ("voice", "video_note"):
@@ -2802,7 +2809,7 @@ async def schedule_message(
 ):
     from app.services.subscription_service import SubscriptionService
 
-    _require_send_text_tokens(db, current_user, body)
+    _require_send_text_tokens(db, current_user, body, conversation_id)
     SubscriptionService(db).require_feature(
         current_user.id,
         "scheduled_messages",
