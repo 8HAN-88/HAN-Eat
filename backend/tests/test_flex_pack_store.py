@@ -1710,6 +1710,27 @@ def test_channel_last_post_preview_hides_custom_emoji_tokens():
     assert "✦" in out
 
 
+def test_channel_last_post_preview_empty_title_uses_description():
+    from types import SimpleNamespace
+
+    from app.api.v1.channels import _post_preview_text
+
+    post = SimpleNamespace(title="", description="Рилс про суп [[e:12]]", type="reel")
+    out = _post_preview_text(post)
+    assert out.startswith("Рилс про суп")
+    assert "[[e:" not in out
+    assert out != "Сообщение"
+
+
+def test_channel_last_post_preview_empty_falls_back_to_type():
+    from types import SimpleNamespace
+
+    from app.api.v1.channels import _post_preview_text
+
+    post = SimpleNamespace(title="", description="", type="reel")
+    assert _post_preview_text(post) == "Видео"
+
+
 def test_translate_previews_tokens_without_flex(db_session):
     import asyncio
 

@@ -2155,9 +2155,9 @@ class ChatService:
         if not self._is_member(conversation_id, actor_id):
             raise ValueError("forbidden")
         conv = self._get_group_or_error(conversation_id)
-        from app.services.emoji_pack_service import preview_text_with_custom_emoji
+        from app.services.emoji_pack_service import text_for_external
 
-        body = preview_text_with_custom_emoji((text or "").strip())
+        body = text_for_external(text)
         if not body:
             raise ValueError("empty_message")
         note = Message(

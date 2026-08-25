@@ -105,12 +105,14 @@ def assert_can_create_private_channel(is_public: bool, has_creator: bool) -> Non
 
 
 def _post_preview_text(post: Post) -> str:
-    from app.services.emoji_pack_service import preview_text_with_custom_emoji
+    from app.services.emoji_pack_service import text_for_external
 
-    title = preview_text_with_custom_emoji((post.title or "").strip())
+    # Do not use preview_text_with_custom_emoji here: empty title would
+    # become «Сообщение» and hide the description / type fallback.
+    title = text_for_external(post.title)
     if title:
         return title[:120]
-    desc = preview_text_with_custom_emoji((post.description or "").strip())
+    desc = text_for_external(post.description)
     if desc:
         return desc[:120]
     ptype = (post.type or "").lower()
@@ -1077,7 +1079,12 @@ async def approve_channel_join_request(
 
         from app.services.emoji_pack_service import preview_text_with_custom_emoji
 
-        channel_label = preview_text_with_custom_emoji(channel.name or "", limit=80)
+        raw_name = (channel.name or "").strip()
+        channel_label = (
+            preview_text_with_custom_emoji(raw_name, limit=80)
+            if raw_name
+            else "канал"
+        )
         NotificationService(db).create_notification(
             user_id=user_id,
             type="channel_join_approved",
