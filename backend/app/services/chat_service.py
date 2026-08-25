@@ -5304,11 +5304,35 @@ class ChatService:
         if not source:
             raise ValueError("folder_share_not_found")
         payload = self._folder_payload(source)
+        name = self._folder_text_for_importer(user_id, payload.get("name"))
+        icon = self._folder_text_for_importer(user_id, payload.get("icon"))
         return self.create_folder(
             user_id,
-            payload["name"],
-            payload.get("icon"),
+            name or payload["name"],
+            icon,
             payload.get("conversation_ids") or [],
             payload.get("channel_ids") or [],
             payload.get("filters") or {},
         )
+
+    def _folder_text_for_importer(
+        self, user_id: int, raw: Optional[str]
+    ) -> Optional[str]:
+        """Keep tokens if the importer may send them; otherwise preview.
+
+        Import is receiving someone else's folder title/icon — do not 403
+        a user who only has folder_share (57) and not custom_emoji (69).
+        """
+        from app.services.emoji_pack_service import (
+            EmojiPackService,
+            preview_text_with_custom_emoji,
+        )
+
+        text = raw
+        if not (text or "").strip():
+            return text
+        try:
+            EmojiPackService(self.db).require_send_tokens(user_id, text)
+        except ValueError:
+            return preview_text_with_custom_emoji(text)
+        return text

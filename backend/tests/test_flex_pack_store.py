@@ -37,6 +37,7 @@ from app.models.subscription import Subscription
 from app.models.user import User
 from app.models.user_business import UserBusinessSettings
 from app.models.chat_folder import ChatFolder, ChatFolderItem
+from app.models.chat_folder_share import ChatFolderShare
 from app.models.saved_tag import SavedTag
 from app.services.emoji_pack_service import (
     EmojiPackService,
@@ -89,6 +90,7 @@ def db_session():
             UserBusinessSettings.__table__,
             ChatFolder.__table__,
             ChatFolderItem.__table__,
+            ChatFolderShare.__table__,
             SavedTag.__table__,
         ],
     )
@@ -2173,6 +2175,58 @@ def test_sticker_emoji_keeps_long_token(db_session):
     db_session.commit()
     assert sticker.emoji == token
     assert len(token) > 16
+
+
+def test_import_shared_folder_previews_tokens_without_flex(db_session):
+    owner = _user(db_session, 1)
+    importer = _user(db_session, 2)
+    _activate(db_session, owner.id, 70)
+    _activate(db_session, importer.id, 57)
+    emoji = EmojiPackService(db_session)
+    pack = emoji.create_pack(owner.id, "Папка")
+    item = emoji.add_emoji(
+        user_id=owner.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/folder-share.webp",
+    )
+    db_session.commit()
+    token = f"[[e:{item.id}]]"
+    chats = ChatService(db_session)
+    chats.create_folder(owner.id, f"Работа {token}", token)
+    db_session.commit()
+    shared = chats.share_folder(owner.id, chats.list_folders(owner.id)[0]["id"])
+    db_session.commit()
+    imported = chats.import_shared_folder(importer.id, shared["token"])
+    db_session.commit()
+    assert "[[e:" not in (imported["name"] or "")
+    assert "[[e:" not in (imported.get("icon") or "")
+    assert "Работа" in imported["name"]
+
+
+def test_import_shared_folder_keeps_tokens_when_allowed(db_session):
+    owner = _user(db_session, 1)
+    importer = _user(db_session, 2)
+    _activate(db_session, owner.id, 70)
+    _activate(db_session, importer.id, 70)
+    emoji = EmojiPackService(db_session)
+    pack = emoji.create_pack(owner.id, "Общая")
+    item = emoji.add_emoji(
+        user_id=owner.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/folder-keep.webp",
+    )
+    emoji.install_pack(importer.id, pack.id)
+    db_session.commit()
+    token = f"[[e:{item.id}]]"
+    chats = ChatService(db_session)
+    chats.create_folder(owner.id, f"Работа {token}", token)
+    db_session.commit()
+    shared = chats.share_folder(owner.id, chats.list_folders(owner.id)[0]["id"])
+    db_session.commit()
+    imported = chats.import_shared_folder(importer.id, shared["token"])
+    db_session.commit()
+    assert imported["name"] == f"Работа {token}"
+    assert imported["icon"] == token
 
 
 def test_reaction_and_topic_schema_accepts_token():

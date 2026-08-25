@@ -979,7 +979,11 @@ class _ChannelManagementScreenState
                 ),
                 child: resolvedAvatarImage(member['avatar_url'] as String?) ==
                         null
-                    ? Text(member['name']?[0] ?? '?')
+                    ? Text(
+                        avatarLetterWithCustomEmoji(
+                          (member['name'] as String?) ?? '',
+                        ),
+                      )
                     : null,
               ),
               title: HighlightedText(

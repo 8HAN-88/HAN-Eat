@@ -1702,9 +1702,9 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                                           ) ==
                                           null
                                       ? Text(
-                                          _conversation.displayTitle.characters
-                                              .first
-                                              .toUpperCase(),
+                                          avatarLetterWithCustomEmoji(
+                                            _conversation.displayTitle,
+                                          ),
                                           style: theme.textTheme.headlineMedium,
                                         )
                                       : null,
