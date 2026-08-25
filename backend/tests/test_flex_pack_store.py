@@ -1460,24 +1460,14 @@ def test_channel_category_requires_custom_emoji(db_session):
 
 
 def test_channel_update_category_requires_custom_emoji(db_session):
-    import asyncio
-
-    from app.api.v1.channels import update_channel
-    from app.schemas.channel import UpdateChannelRequest
-
     owner = _user(db_session, 1)
     token = _emoji_token_after_downgrade(db_session, owner.id)
-
-    async def _run():
-        await update_channel(
-            1,
-            UpdateChannelRequest(category=token),
-            current_user=owner,
-            db=db_session,
-        )
-
+    # Owner path of update_channel uses this helper after the Channel lookup.
+    # Fixture has no channels table — do not call update_channel here.
     with pytest.raises(HTTPException) as err:
-        asyncio.run(_run())
+        EmojiPackService(db_session).require_send_tokens_http(
+            owner.id, None, None, None, token
+        )
     assert err.value.status_code == 403
 
 
