@@ -81,7 +81,7 @@ class StoryReaction(Base):
     user_id = Column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    emoji = Column(String(16), nullable=False)
+    emoji = Column(String(32), nullable=False)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
 
     story = relationship("Story", back_populates="reactions")

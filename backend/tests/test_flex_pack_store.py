@@ -45,6 +45,7 @@ from app.services.emoji_pack_service import (
     avatar_letter_with_custom_emoji,
     preview_text_with_custom_emoji,
     text_for_moderation,
+    text_for_translation,
 )
 from app.services.flex_subscription_service import FlexSubscriptionService
 from app.services.chat_service import ChatService
@@ -1707,7 +1708,7 @@ def test_channel_last_post_preview_hides_custom_emoji_tokens():
     assert "✦" in out
 
 
-def test_translate_requires_custom_emoji(db_session):
+def test_translate_previews_tokens_without_flex(db_session):
     import asyncio
 
     from app.api.v1.chats import translate_chat_text
@@ -1715,17 +1716,19 @@ def test_translate_requires_custom_emoji(db_session):
 
     owner = _user(db_session, 1)
     token = _emoji_token_after_downgrade(db_session, owner.id)
+    # Translation is reading — block C (level 16) is enough; do not 403 on 69.
+    _activate(db_session, owner.id, 16)
 
     async def _run():
-        await translate_chat_text(
+        return await translate_chat_text(
             TranslateTextRequest(text=token, target_lang="en"),
             current_user=owner,
             db=db_session,
         )
 
-    with pytest.raises(HTTPException) as err:
-        asyncio.run(_run())
-    assert err.value.status_code == 403
+    out = asyncio.run(_run())
+    assert "[[e:" not in out.translated
+    assert "✦" in out.translated
 
 
 def test_saved_tag_emoji_requires_custom_emoji(db_session):
@@ -1886,6 +1889,17 @@ def test_moderation_text_previews_custom_emoji():
     out = text_for_moderation("привет [[e:12]]")
     assert "[[e:" not in out
     assert "✦" in out
+    long_body = ("слово " * 40) + "[[e:12]] хвост"
+    long_out = text_for_moderation(long_body)
+    assert "хвост" in long_out
+    assert "[[e:" not in long_out
+    assert text_for_translation("имя [[e:9]]") == "имя ✦"
+
+
+def test_story_reaction_emoji_fits_ce_token():
+    from app.models.story import StoryReaction
+
+    assert StoryReaction.__table__.c.emoji.type.length >= 32
 
 
 def _assert_custom_emoji_feature(exc: HTTPException) -> None:

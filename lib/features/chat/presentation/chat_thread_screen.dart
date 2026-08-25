@@ -1494,7 +1494,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     for (final msg in List<ChatMessage>.from(_messages)) {
       if (msg.isMine || msg.id <= 0 || msg.type != 'text') continue;
       if (_autoTranslations.containsKey(msg.id)) continue;
-      final source = _copyableText(msg).trim();
+      final source = _translationSource(msg);
       if (source.isEmpty) continue;
       try {
         final translated = await ChatService.translateText(text: source);
@@ -10189,8 +10189,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
+  String _translationSource(ChatMessage msg) {
+    final raw = _copyableText(msg).trim();
+    if (raw.isEmpty) return '';
+    // Reading — preview tokens so translate/auto-translate never 403 on
+    // someone else's `[[e:id]]` and the translator does not see the token.
+    return previewTextWithCustomEmoji(raw);
+  }
+
   Future<void> _translateMessage(ChatMessage msg) async {
-    final source = _copyableText(msg).trim();
+    final source = _translationSource(msg);
     if (source.isEmpty) return;
     try {
       final translated = await ChatService.translateText(text: source);

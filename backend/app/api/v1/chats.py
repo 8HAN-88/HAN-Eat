@@ -4145,23 +4145,24 @@ async def translate_chat_text(
     text = (body.text or "").strip()
     if not text:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "empty_text")
-    from app.services.emoji_pack_service import EmojiPackService
-
-    EmojiPackService(db).require_send_tokens_http(current_user.id, text)
-    target = (body.target_lang or "ru").strip().lower()[:8] or "ru"
+    from app.services.emoji_pack_service import text_for_translation
     from app.services.text_translation import translate_text
     from app.services.subscription_service import SubscriptionService
 
+    # Translation is reading a received (or own) message — do not 403 on
+    # someone else's `[[e:id]]`. Preview tokens so the translator sees ✦.
+    source = text_for_translation(text) or text
+    target = (body.target_lang or "ru").strip().lower()[:8] or "ru"
     billing = SubscriptionService(db)
     billing.require_feature(
         current_user.id,
         "chat_translation",
         "Перевод сообщений доступен с уровня 11",
     )
-    translated = translate_text(text, target)
+    translated = translate_text(source, target)
     return TranslateTextResponse(
         text=text,
-        translated=translated or text,
+        translated=translated or source,
         target_lang=target,
         priority=billing.has_feature(current_user.id, "ai_priority_speed"),
     )

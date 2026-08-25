@@ -53,12 +53,26 @@ def strip_custom_emoji_tokens(text: Optional[str]) -> str:
     return re.sub(r"\s+", " ", cleaned).strip()
 
 
-def text_for_moderation(text: Optional[str]) -> str:
-    """Preview tokens for AI/heuristics; empty stays empty (not «Сообщение»)."""
+def text_for_external(text: Optional[str]) -> str:
+    """Replace `[[e:id]]` with ✦ without truncating or «Сообщение».
+
+    Used when text leaves the chat as input to another service
+    (translation, AI moderation). Empty stays empty.
+    """
     raw = (text or "").strip()
     if not raw:
         return ""
-    return preview_text_with_custom_emoji(raw)
+    return CE_TOKEN_RE.sub("✦", raw).strip()
+
+
+def text_for_moderation(text: Optional[str]) -> str:
+    """Preview tokens for AI/heuristics; empty stays empty (not «Сообщение»)."""
+    return text_for_external(text)
+
+
+def text_for_translation(text: Optional[str]) -> str:
+    """Preview tokens for the translator. Reading, not sending — never 403."""
+    return text_for_external(text)
 
 
 def avatar_letter_with_custom_emoji(text: Optional[str]) -> str:
