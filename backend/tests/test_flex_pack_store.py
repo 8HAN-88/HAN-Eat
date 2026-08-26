@@ -51,6 +51,8 @@ from app.services.emoji_pack_service import (
     display_name_or_default,
     editor_or_preview_tokens,
     keep_or_preview_tokens,
+    link_preview_for_persist,
+    link_preview_for_persist_http,
     prepare_forward_content,
     preview_text_with_custom_emoji,
     split_hanwe_share,
@@ -3612,3 +3614,144 @@ def test_empty_post_fields_do_not_require_custom_emoji(db_session):
         reel.description,
         *(reel.tags or []),
     )
+
+
+def test_link_preview_og_title_does_not_403_without_flex(db_session):
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    emoji = EmojiPackService(db_session)
+    # Flutter echoes the OG title when the preview field is empty.
+    out = link_preview_for_persist(
+        emoji, owner.id, token, og_title=token
+    )
+    assert out is not None
+    assert "[[e:" not in out
+    assert "✦" in out
+
+
+def test_link_preview_empty_falls_back_to_og_without_flex(db_session):
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    emoji = EmojiPackService(db_session)
+    out = link_preview_for_persist(emoji, owner.id, "", og_title=token)
+    assert out is not None
+    assert "[[e:" not in out
+
+
+def test_link_preview_resave_stored_does_not_403(db_session):
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    emoji = EmojiPackService(db_session)
+    out = link_preview_for_persist(
+        emoji, owner.id, token, stored=token, og_title="Example"
+    )
+    assert out is not None
+    assert "[[e:" not in out
+
+
+def test_link_preview_typed_tokens_still_require_flex(db_session):
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    emoji = EmojiPackService(db_session)
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        link_preview_for_persist(
+            emoji, owner.id, token, og_title="Example Domain"
+        )
+
+
+def test_http_link_preview_og_echo_does_not_403(db_session):
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    emoji = EmojiPackService(db_session)
+    out = link_preview_for_persist_http(
+        emoji, owner.id, token, og_title=token
+    )
+    assert "[[e:" not in (out or "")
+
+
+def test_http_link_preview_typed_tokens_return_flex_gate(db_session):
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    emoji = EmojiPackService(db_session)
+    with pytest.raises(HTTPException) as err:
+        link_preview_for_persist_http(
+            emoji, owner.id, token, og_title="Example Domain"
+        )
+    assert err.value.status_code == 403
+
+
+def test_http_create_link_post_og_echo_does_not_token_gate(db_session, monkeypatch):
+    import asyncio
+
+    from app.api.v1.posts import create_post
+    from app.schemas.post import CreatePostRequest, LinkCreate
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+
+    monkeypatch.setattr(
+        "app.services.link_preview_service.fetch_link_preview",
+        lambda url: {"url": url, "title": token},
+    )
+
+    async def _run():
+        await create_post(
+            CreatePostRequest(
+                type="link",
+                link=LinkCreate(url="https://example.test", preview=token),
+            ),
+            current_user=owner,
+            db=db_session,
+        )
+
+    try:
+        asyncio.run(_run())
+    except HTTPException as err:
+        assert err.status_code != 403
+    except Exception:
+        pass
+
+
+def test_http_create_link_post_typed_tokens_still_require_flex(
+    db_session, monkeypatch
+):
+    import asyncio
+
+    from app.api.v1.posts import create_post
+    from app.schemas.post import CreatePostRequest, LinkCreate
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+
+    monkeypatch.setattr(
+        "app.services.link_preview_service.fetch_link_preview",
+        lambda url: {"url": url, "title": "Example Domain"},
+    )
+
+    async def _run():
+        await create_post(
+            CreatePostRequest(
+                type="link",
+                link=LinkCreate(url="https://example.test", preview=token),
+            ),
+            current_user=owner,
+            db=db_session,
+        )
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(_run())
+    assert err.value.status_code == 403
+
+
+def test_build_link_body_does_not_fallback_to_raw_og(monkeypatch):
+    from app.services.link_preview_service import build_link_body
+
+    monkeypatch.setattr(
+        "app.services.link_preview_service.fetch_link_preview",
+        lambda url: {"url": url, "title": "имя [[e:9]]"},
+    )
+    body = build_link_body("https://example.test", "Готово ✦")
+    assert body["link_preview"] == "Готово ✦"
+    assert "[[e:" not in (body["link_preview"] or "")
+    body_empty = build_link_body("https://example.test", None)
+    assert body_empty["link_preview"] is None

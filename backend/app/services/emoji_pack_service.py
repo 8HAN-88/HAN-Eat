@@ -148,6 +148,57 @@ def authored_or_peer_label(
     return clean or default
 
 
+def link_preview_for_persist(
+    svc: "EmojiPackService",
+    user_id: int,
+    typed: Optional[str],
+    *,
+    og_title: Optional[str] = None,
+    stored: Optional[str] = None,
+) -> Optional[str]:
+    """Persist a link-post preview without 403 on the webpage title.
+
+    Flutter sends the OG title when the preview field is empty. That
+    string is the page's — not the author's. Keep tokens if the user
+    may send them; otherwise preview. A custom preview they typed is
+    authored and still requires custom_emoji (69). Resaving the stored
+    preview (edit without changing it) is receive-and-persist.
+    """
+    own = (typed or "").strip()
+    og = (og_title or "").strip()
+    prev = (stored or "").strip()
+    if not own:
+        if not og:
+            return None
+        return keep_or_preview_tokens(svc, user_id, og)
+    if own == og or own == prev:
+        return keep_or_preview_tokens(svc, user_id, own)
+    svc.require_send_tokens(user_id, own)
+    return own
+
+
+def link_preview_for_persist_http(
+    svc: "EmojiPackService",
+    user_id: int,
+    typed: Optional[str],
+    *,
+    og_title: Optional[str] = None,
+    stored: Optional[str] = None,
+) -> Optional[str]:
+    """HTTP wrapper: authored tokens become 403, OG/stored stay previewed."""
+    try:
+        return link_preview_for_persist(
+            svc,
+            user_id,
+            typed,
+            og_title=og_title,
+            stored=stored,
+        )
+    except ValueError:
+        svc.require_send_tokens_http(user_id, typed)
+        return (typed or "").strip() or None
+
+
 def display_name_or_default(
     text: Optional[str],
     *,

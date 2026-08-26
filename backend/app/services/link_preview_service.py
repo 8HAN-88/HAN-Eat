@@ -145,3 +145,21 @@ def fetch_link_preview(url: str) -> dict:
         "image_url": image,
         "site_name": site_name or host,
     }
+
+
+def build_link_body(url: str, preview: Optional[str] = None) -> dict:
+    """Build `post.body` for a link post. `preview` is already resolved.
+
+    Callers must run `link_preview_for_persist` first so an OG title
+    with `[[e:id]]` is not stored raw. This helper does not fall back
+    to `meta.title` — that would reintroduce the persist hole.
+    """
+    clean = (url or "").strip()
+    if not clean:
+        raise ValueError("Link URL is required")
+    meta = fetch_link_preview(clean)
+    return {
+        "link_url": meta.get("url") or clean,
+        "link_preview": (preview or "").strip() or None,
+        "link_meta": meta,
+    }

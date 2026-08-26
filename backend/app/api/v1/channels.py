@@ -1534,11 +1534,12 @@ async def create_channel_post(
     if getattr(request, "poll", None) is not None:
         poll_parts.append(request.poll.question)
         poll_parts.extend(request.poll.options or [])
+    # Link preview is not persisted on this endpoint (Flutter create
+    # goes through posts.create_post). Do not 403 on an OG title.
     EmojiPackService(db).require_send_tokens_http(
         current_user.id,
         request.title,
         request.description,
-        request.link.preview if getattr(request, "link", None) is not None else None,
         *poll_parts,
         *(request.tags or []),
     )
@@ -1675,6 +1676,7 @@ async def update_channel_post(
     from app.services.emoji_pack_service import (
         EmojiPackService,
         keep_or_preview_tokens,
+        link_preview_for_persist_http,
     )
 
     emoji = EmojiPackService(db)
@@ -1687,11 +1689,11 @@ async def update_channel_post(
         list(request.poll.options or []) if request.poll is not None else None
     )
     if is_author:
+        # Link preview may be the OG title Flutter echoed — handle below.
         emoji.require_send_tokens_http(
             current_user.id,
             title,
             description,
-            link_preview,
             poll_question,
             *(poll_options or []),
             *(tags or []),
@@ -1736,17 +1738,43 @@ async def update_channel_post(
 
     # Обновляем ссылку (link-пост)
     if post.type == "link" and request.link is not None:
-        from app.services.link_preview_service import build_link_body
+        from app.services.link_preview_service import fetch_link_preview
 
+        url = (request.link.url or "").strip()
+        if not url:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Link URL is required for link posts",
+            )
         try:
-            link_body = build_link_body(request.link.url, link_preview)
+            meta = fetch_link_preview(url)
         except ValueError as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(e),
             )
+        stored = (post.body or {}).get("link_preview")
+        stored_text = stored if isinstance(stored, str) else None
+        if is_author:
+            link_preview = link_preview_for_persist_http(
+                emoji,
+                current_user.id,
+                link_preview,
+                og_title=meta.get("title"),
+                stored=stored_text,
+            )
+        elif not (link_preview or "").strip():
+            link_preview = keep_or_preview_tokens(
+                emoji, current_user.id, meta.get("title")
+            )
         body = post.body or {}
-        body.update(link_body)
+        body.update(
+            {
+                "link_url": meta.get("url") or url,
+                "link_preview": link_preview,
+                "link_meta": meta,
+            }
+        )
         post.body = body
 
     if post.type == "poll" and request.poll is not None:

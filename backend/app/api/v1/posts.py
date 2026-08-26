@@ -165,17 +165,21 @@ async def create_post(
             },
         )
 
-    from app.services.emoji_pack_service import EmojiPackService
+    from app.services.emoji_pack_service import (
+        EmojiPackService,
+        link_preview_for_persist_http,
+    )
 
+    emoji = EmojiPackService(db)
     poll_parts: list[str | None] = []
     if request.poll is not None:
         poll_parts.append(request.poll.question)
         poll_parts.extend(request.poll.options or [])
-    EmojiPackService(db).require_send_tokens_http(
+    # Link preview may be the OG title Flutter echoed — not authored.
+    emoji.require_send_tokens_http(
         current_user.id,
         request.title,
         request.description,
-        request.link.preview if request.link is not None else None,
         *poll_parts,
         *(request.tags or []),
     )
@@ -202,11 +206,15 @@ async def create_post(
         from app.services.link_preview_service import fetch_link_preview
 
         meta = fetch_link_preview(request.link.url.strip())
+        preview = link_preview_for_persist_http(
+            emoji,
+            current_user.id,
+            request.link.preview,
+            og_title=meta.get("title"),
+        )
         body = {
             "link_url": meta.get("url") or request.link.url.strip(),
-            "link_preview": (request.link.preview or "").strip()
-            or meta.get("title")
-            or None,
+            "link_preview": preview,
             "link_meta": meta,
         }
     else:
@@ -520,17 +528,22 @@ async def update_post(
     db: Session = Depends(get_db),
 ):
     """Обновить пост автора (в т.ч. link-пост в ленте профиля)."""
-    from app.services.emoji_pack_service import EmojiPackService
+    from app.services.emoji_pack_service import (
+        EmojiPackService,
+        link_preview_for_persist_http,
+    )
 
+    emoji = EmojiPackService(db)
     poll_parts: list[str | None] = []
     if request.poll is not None:
         poll_parts.append(request.poll.question)
         poll_parts.extend(request.poll.options or [])
-    EmojiPackService(db).require_send_tokens_http(
+    # Link preview may be an OG title or the stored value Flutter
+    # resends on Save — not necessarily the author's text.
+    emoji.require_send_tokens_http(
         current_user.id,
         request.title,
         request.description,
-        request.link.preview if request.link is not None else None,
         *poll_parts,
         *(request.tags or []),
     )
@@ -576,17 +589,37 @@ async def update_post(
         post.body = body
 
     if post.type == "link" and request.link is not None:
-        from app.services.link_preview_service import build_link_body
+        from app.services.link_preview_service import fetch_link_preview
 
+        url = (request.link.url or "").strip()
+        if not url:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Link URL is required for link posts",
+            )
         try:
-            link_body = build_link_body(request.link.url, request.link.preview)
+            meta = fetch_link_preview(url)
         except ValueError as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(e),
             )
+        stored = (post.body or {}).get("link_preview")
+        preview = link_preview_for_persist_http(
+            emoji,
+            current_user.id,
+            request.link.preview,
+            og_title=meta.get("title"),
+            stored=stored if isinstance(stored, str) else None,
+        )
         body = post.body or {}
-        body.update(link_body)
+        body.update(
+            {
+                "link_url": meta.get("url") or url,
+                "link_preview": preview,
+                "link_meta": meta,
+            }
+        )
         post.body = body
 
     if post.type == "poll" and request.poll is not None:
