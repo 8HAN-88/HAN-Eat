@@ -3723,3 +3723,108 @@ def test_http_link_preview_typed_tokens_return_flex_gate(db_session):
             emoji, owner.id, token, og_title="Example Domain"
         )
     assert err.value.status_code == 403
+
+
+def test_resave_send_restriction_reason_does_not_403(db_session):
+    creator = _user(db_session, 1)
+    admin = _user(db_session, 2)
+    target = _user(db_session, 3)
+    _activate(db_session, creator.id, 70)
+    _activate(db_session, admin.id, 10)
+    emoji = EmojiPackService(db_session)
+    pack = emoji.create_pack(creator.id, "Гейт")
+    item = emoji.add_emoji(
+        user_id=creator.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/restrict.webp",
+    )
+    db_session.commit()
+    token = f"флуд [[e:{item.id}]]"
+    conv = Conversation(
+        type="group",
+        title="Чат",
+        created_by_user_id=creator.id,
+    )
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add(
+        ConversationMember(
+            conversation_id=conv.id,
+            user_id=creator.id,
+            is_admin=True,
+            can_manage_members=True,
+        )
+    )
+    db_session.add(
+        ConversationMember(
+            conversation_id=conv.id,
+            user_id=admin.id,
+            is_admin=True,
+            can_manage_members=True,
+        )
+    )
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=target.id))
+    db_session.commit()
+    chats = ChatService(db_session)
+    chats.set_group_member_send_restriction(
+        conv.id,
+        creator.id,
+        target.id,
+        send_restricted=True,
+        send_restricted_until=None,
+        reason=token,
+    )
+    db_session.commit()
+    # Flutter resends the stored reason when changing only the deadline.
+    updated = chats.set_group_member_send_restriction(
+        conv.id,
+        admin.id,
+        target.id,
+        send_restricted=True,
+        send_restricted_until=None,
+        reason=token,
+    )
+    db_session.commit()
+    assert "[[e:" not in (updated.send_restriction_reason or "")
+    assert "флуд" in (updated.send_restriction_reason or "")
+
+
+def test_new_send_restriction_tokens_still_require_flex(db_session):
+    creator = _user(db_session, 1)
+    admin = _user(db_session, 2)
+    target = _user(db_session, 3)
+    token = _emoji_token_after_downgrade(db_session, admin.id)
+    conv = Conversation(
+        type="group",
+        title="Чат",
+        created_by_user_id=creator.id,
+    )
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add(
+        ConversationMember(
+            conversation_id=conv.id,
+            user_id=creator.id,
+            is_admin=True,
+            can_manage_members=True,
+        )
+    )
+    db_session.add(
+        ConversationMember(
+            conversation_id=conv.id,
+            user_id=admin.id,
+            is_admin=True,
+            can_manage_members=True,
+        )
+    )
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=target.id))
+    db_session.commit()
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        ChatService(db_session).set_group_member_send_restriction(
+            conv.id,
+            admin.id,
+            target.id,
+            send_restricted=True,
+            send_restricted_until=None,
+            reason=token,
+        )

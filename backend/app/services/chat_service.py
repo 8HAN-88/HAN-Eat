@@ -2370,9 +2370,27 @@ class ChatService:
         reason: Optional[str],
     ) -> ConversationMember:
         if send_restricted:
-            from app.services.emoji_pack_service import EmojiPackService
+            from app.services.emoji_pack_service import (
+                EmojiPackService,
+                keep_or_preview_tokens,
+            )
 
-            EmojiPackService(self.db).require_send_tokens(actor_id, reason)
+            emoji = EmojiPackService(self.db)
+            incoming = (reason or "").strip()
+            existing = self._get_member_record(conversation_id, target_user_id)
+            stored = (
+                (existing.send_restriction_reason or "").strip()
+                if existing is not None
+                else ""
+            )
+            # Flutter always resends the previous admin's reason when
+            # changing the deadline. Do not 403 a manager without 69.
+            if incoming and incoming == stored:
+                reason = (
+                    keep_or_preview_tokens(emoji, actor_id, incoming) or incoming
+                )
+            else:
+                emoji.require_send_tokens(actor_id, reason)
         conv = self._get_group_or_error(conversation_id)
         if not self._is_member(conversation_id, actor_id):
             raise ValueError("forbidden")
