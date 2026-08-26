@@ -3230,3 +3230,70 @@ def test_reschedule_contact_card_previews_peer_name_without_flex(db_session):
     db_session.commit()
     assert "[[e:" not in (updated.content or "")
     assert "Контакт" in (updated.content or "")
+
+
+def test_reschedule_image_share_subject_does_not_403_without_flex(db_session):
+    from datetime import datetime, timedelta, timezone
+
+    author = _user(db_session, 1)
+    sender = _user(db_session, 2)
+    token = _emoji_token_after_downgrade(db_session, author.id)
+    conv = Conversation(type="group", title="Чат")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add_all(
+        [
+            ConversationMember(conversation_id=conv.id, user_id=author.id),
+            ConversationMember(conversation_id=conv.id, user_id=sender.id),
+        ]
+    )
+    when = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=2)
+    item = ScheduledMessage(
+        conversation_id=conv.id,
+        sender_id=sender.id,
+        type="image",
+        content="фото",
+        send_at=when,
+        status="pending",
+    )
+    db_session.add(item)
+    db_session.commit()
+    updated = ChatService(db_session).reschedule_message(
+        conversation_id=conv.id,
+        scheduled_message_id=item.id,
+        user_id=sender.id,
+        content=f"Пост {token}\n\nОткрыть в HanWe: https://haneat.app/post/7",
+    )
+    db_session.commit()
+    assert "[[e:" not in (updated.content or "")
+    assert "✦" in (updated.content or "")
+    assert "https://haneat.app/post/7" in (updated.content or "")
+
+
+def test_reschedule_image_caption_tokens_still_require_flex(db_session):
+    from datetime import datetime, timedelta, timezone
+
+    sender = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, sender.id)
+    conv = Conversation(type="group", title="Чат")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=sender.id))
+    when = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=2)
+    item = ScheduledMessage(
+        conversation_id=conv.id,
+        sender_id=sender.id,
+        type="image",
+        content="фото",
+        send_at=when,
+        status="pending",
+    )
+    db_session.add(item)
+    db_session.commit()
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        ChatService(db_session).reschedule_message(
+            conversation_id=conv.id,
+            scheduled_message_id=item.id,
+            user_id=sender.id,
+            content=f"подпись {token}",
+        )

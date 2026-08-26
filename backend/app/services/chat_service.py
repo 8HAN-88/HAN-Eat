@@ -3959,22 +3959,21 @@ class ChatService:
 
         if content is not None:
             text = (content or "").strip()
-            if item.type == "text":
-                if not text:
-                    raise ValueError("empty_content")
+            if item.type == "text" and not text:
+                raise ValueError("empty_content")
+            if item.type in ("text", "image", "video", "video_note", "file"):
                 from app.services.emoji_pack_service import (
                     EmojiPackService,
                     prepare_send_content,
                 )
 
+                # Same policy as schedule/edit: gate the user's caption;
+                # preview a share subject, quote, or contact card so
+                # editing a media caption does not 403 on someone
+                # else's `[[e:id]]`.
                 text = prepare_send_content(
                     EmojiPackService(self.db), user_id, item.type, text
                 )
-                item.content = text[:4000]
-            elif item.type in ("image", "video", "video_note", "file"):
-                from app.services.emoji_pack_service import EmojiPackService
-
-                EmojiPackService(self.db).require_send_tokens(user_id, text)
                 item.content = text[:4000]
             else:
                 raise ValueError("content_locked")
