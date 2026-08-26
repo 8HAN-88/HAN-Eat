@@ -41,6 +41,7 @@ from app.models.chat_folder import ChatFolder, ChatFolderItem
 from app.models.chat_folder_share import ChatFolderShare
 from app.models.forum_topic import ForumTopic
 from app.models.saved_tag import SavedTag
+from app.models.story import Story, StoryReaction
 from app.services.emoji_pack_service import (
     EmojiPackService,
     authored_or_peer_label,
@@ -104,6 +105,8 @@ def db_session():
             ChatFolderShare.__table__,
             ForumTopic.__table__,
             SavedTag.__table__,
+            Story.__table__,
+            StoryReaction.__table__,
         ],
     )
     Session = sessionmaker(bind=engine)
@@ -3297,3 +3300,239 @@ def test_reschedule_image_caption_tokens_still_require_flex(db_session):
             user_id=sender.id,
             content=f"подпись {token}",
         )
+
+
+def _group_chat(db, *users):
+    conv = Conversation(type="group", title="Чат")
+    db.add(conv)
+    db.flush()
+    db.add_all(
+        [ConversationMember(conversation_id=conv.id, user_id=u.id) for u in users]
+    )
+    db.commit()
+    return conv
+
+
+def test_send_text_voice_video_note_and_photo_without_flex(db_session):
+    sender = _user(db_session, 1)
+    peer = _user(db_session, 2)
+    conv = _group_chat(db_session, sender, peer)
+    chat = ChatService(db_session)
+
+    text, _ = chat.send_message(
+        conversation_id=conv.id,
+        sender_id=sender.id,
+        msg_type="text",
+        content="привет",
+        notify=False,
+    )
+    voice, _ = chat.send_message(
+        conversation_id=conv.id,
+        sender_id=sender.id,
+        msg_type="voice",
+        content="12",
+        media_url="https://cdn.test/voice.m4a",
+        notify=False,
+    )
+    note, _ = chat.send_message(
+        conversation_id=conv.id,
+        sender_id=sender.id,
+        msg_type="video_note",
+        content="3",
+        media_url="https://cdn.test/circle.mp4",
+        notify=False,
+    )
+    photo, _ = chat.send_message(
+        conversation_id=conv.id,
+        sender_id=sender.id,
+        msg_type="image",
+        content="",
+        media_url="https://cdn.test/photo.jpg",
+        notify=False,
+    )
+    db_session.commit()
+    assert text.content == "привет"
+    assert voice.type == "voice"
+    assert voice.media_url.endswith("voice.m4a")
+    assert note.type == "video_note"
+    assert note.media_url.endswith("circle.mp4")
+    assert photo.type == "image"
+    assert (photo.content or "") == ""
+
+
+def test_http_send_voice_and_video_note_do_not_token_gate(db_session):
+    from app.api.v1.chats import _require_send_flex_options, _require_send_text_tokens
+    from app.schemas.chat import SendMessageRequest
+
+    sender = _user(db_session, 1)
+    voice = SendMessageRequest(
+        type="voice",
+        content="12",
+        media_url="https://cdn.test/voice.m4a",
+    )
+    note = SendMessageRequest(
+        type="video_note",
+        content="3",
+        media_url="https://cdn.test/circle.mp4",
+    )
+    photo = SendMessageRequest(
+        type="image",
+        content="",
+        media_url="https://cdn.test/photo.jpg",
+    )
+    _require_send_text_tokens(db_session, sender, voice)
+    _require_send_text_tokens(db_session, sender, note)
+    _require_send_text_tokens(db_session, sender, photo)
+    _require_send_flex_options(db_session, sender, voice)
+    _require_send_flex_options(db_session, sender, photo)
+    with pytest.raises(HTTPException) as err:
+        _require_send_flex_options(db_session, sender, note)
+    assert err.value.status_code == 403
+    _activate(db_session, sender.id, 28)
+    _require_send_flex_options(db_session, sender, note)
+
+
+def test_http_send_voice_and_photo_persist(db_session):
+    import asyncio
+
+    from fastapi import BackgroundTasks
+
+    from app.api.v1.chats import send_message
+    from app.schemas.chat import SendMessageRequest
+
+    sender = _user(db_session, 1)
+    peer = _user(db_session, 2)
+    conv = _group_chat(db_session, sender, peer)
+
+    async def _run():
+        voice = await send_message(
+            conv.id,
+            SendMessageRequest(
+                type="voice",
+                content="8",
+                media_url="https://cdn.test/v.m4a",
+            ),
+            BackgroundTasks(),
+            current_user=sender,
+            db=db_session,
+        )
+        photo = await send_message(
+            conv.id,
+            SendMessageRequest(
+                type="image",
+                content="",
+                media_url="https://cdn.test/p.jpg",
+            ),
+            BackgroundTasks(),
+            current_user=sender,
+            db=db_session,
+        )
+        return voice, photo
+
+    voice, photo = asyncio.run(_run())
+    assert voice.type == "voice"
+    assert voice.media_url.endswith("v.m4a")
+    assert photo.type == "image"
+
+
+def test_http_send_video_note_with_flex_persists(db_session):
+    import asyncio
+
+    from fastapi import BackgroundTasks
+
+    from app.api.v1.chats import send_message
+    from app.schemas.chat import SendMessageRequest
+
+    sender = _user(db_session, 1)
+    peer = _user(db_session, 2)
+    _activate(db_session, sender.id, 28)
+    conv = _group_chat(db_session, sender, peer)
+
+    async def _run():
+        return await send_message(
+            conv.id,
+            SendMessageRequest(
+                type="video_note",
+                content="4",
+                media_url="https://cdn.test/circle.mp4",
+            ),
+            BackgroundTasks(),
+            current_user=sender,
+            db=db_session,
+        )
+
+    note = asyncio.run(_run())
+    assert note.type == "video_note"
+    assert note.media_url.endswith("circle.mp4")
+
+
+def test_create_story_without_caption_or_flex(db_session):
+    import asyncio
+
+    from app.api.v1.stories import StoryCreateRequest, create_story
+
+    owner = _user(db_session, 1)
+
+    async def _run():
+        photo = await create_story(
+            StoryCreateRequest(
+                media_url="https://cdn.test/s.jpg",
+                media_type="image",
+            ),
+            current_user=owner,
+            db=db_session,
+        )
+        video = await create_story(
+            StoryCreateRequest(
+                media_url="https://cdn.test/s.mp4",
+                media_type="video",
+                caption=None,
+            ),
+            current_user=owner,
+            db=db_session,
+        )
+        return photo, video
+
+    photo, video = asyncio.run(_run())
+    assert photo.media_type == "image"
+    assert photo.caption is None
+    assert video.media_type == "video"
+    assert db_session.query(Story).count() == 2
+
+
+def test_empty_post_fields_do_not_require_custom_emoji(db_session):
+    from app.schemas.post import CreatePostRequest, MediaItem
+
+    owner = _user(db_session, 1)
+    photo = CreatePostRequest(
+        type="photo",
+        title=None,
+        description=None,
+        media=[MediaItem(type="image", url="https://cdn.test/p.jpg")],
+    )
+    text = CreatePostRequest(type="text", title="Новость", description="текст")
+    reel = CreatePostRequest(
+        type="reel",
+        title=None,
+        description=None,
+        media=[MediaItem(type="video", url="https://cdn.test/r.mp4")],
+    )
+    emoji = EmojiPackService(db_session)
+    emoji.require_send_tokens_http(
+        owner.id,
+        photo.title,
+        photo.description,
+        *(photo.tags or []),
+    )
+    emoji.require_send_tokens_http(
+        owner.id,
+        text.title,
+        text.description,
+        *(text.tags or []),
+    )
+    emoji.require_send_tokens_http(
+        owner.id,
+        reel.title,
+        reel.description,
+        *(reel.tags or []),
+    )
