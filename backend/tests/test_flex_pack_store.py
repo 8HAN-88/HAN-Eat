@@ -20,6 +20,7 @@ from app.models.flex_subscription import (
 from app.models.paid_features import CreatorBalance, StarTransaction
 from app.models.conversation import (
     Conversation,
+    ConversationDraft,
     ConversationMember,
     Message,
     MessageEditHistory,
@@ -93,6 +94,7 @@ def db_session():
             EmojiPackPurchase.__table__,
             Conversation.__table__,
             ConversationMember.__table__,
+            ConversationDraft.__table__,
             Message.__table__,
             MessageEditHistory.__table__,
             ScheduledMessage.__table__,
@@ -1164,6 +1166,74 @@ def test_draft_requires_custom_emoji(db_session):
     token = _emoji_token_after_downgrade(db_session, owner.id)
     with pytest.raises(ValueError, match="custom_emoji_required"):
         ChatService(db_session).upsert_draft(1, owner.id, token)
+
+
+def test_draft_share_subject_does_not_403_without_flex(db_session):
+    author = _user(db_session, 1)
+    sender = _user(db_session, 2)
+    token = _emoji_token_after_downgrade(db_session, author.id)
+    conv = Conversation(type="group", title="Чат")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=sender.id))
+    db_session.commit()
+    text = f"Пост {token}\n\nОткрыть в HanWe: https://haneat.app/post/7"
+    row = ChatService(db_session).upsert_draft(conv.id, sender.id, text)
+    db_session.commit()
+    assert "[[e:" not in (row.text or "")
+    assert "✦" in (row.text or "")
+    assert "https://haneat.app/post/7" in (row.text or "")
+
+
+def test_draft_private_reply_header_does_not_403_without_flex(db_session):
+    author = _user(db_session, 1)
+    sender = _user(db_session, 2)
+    token = _emoji_token_after_downgrade(db_session, author.id)
+    conv = Conversation(type="group", title="Чат")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=sender.id))
+    db_session.commit()
+    row = ChatService(db_session).upsert_draft(
+        conv.id, sender.id, f"↩️ {token}: {token}\n\nОк"
+    )
+    db_session.commit()
+    assert "[[e:" not in (row.text or "")
+    assert "✦" in (row.text or "")
+    assert (row.text or "").endswith("Ок")
+
+
+def test_draft_contact_card_does_not_403_without_flex(db_session):
+    peer = _user(db_session, 1)
+    sender = _user(db_session, 2)
+    token = _emoji_token_after_downgrade(db_session, peer.id)
+    conv = Conversation(type="group", title="Чат")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=sender.id))
+    db_session.commit()
+    row = ChatService(db_session).upsert_draft(
+        conv.id, sender.id, f"👤 Контакт\n{token}\n@peer"
+    )
+    db_session.commit()
+    assert "[[e:" not in (row.text or "")
+    assert "Контакт" in (row.text or "")
+
+
+def test_draft_share_body_tokens_still_require_flex(db_session):
+    sender = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, sender.id)
+    conv = Conversation(type="group", title="Чат")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=sender.id))
+    db_session.commit()
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        ChatService(db_session).upsert_draft(
+            conv.id,
+            sender.id,
+            f"Пост\n\nОткрыть в HanWe: https://haneat.app/post/7\n{token}",
+        )
 
 
 def test_emoji_shortcode_requires_custom_emoji(db_session):

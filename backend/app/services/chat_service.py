@@ -4635,9 +4635,17 @@ class ChatService:
         text: str,
         reply_to_message_id: Optional[int] = None,
     ) -> ConversationDraft:
-        from app.services.emoji_pack_service import EmojiPackService
+        from app.services.emoji_pack_service import (
+            EmojiPackService,
+            prepare_send_content,
+        )
 
-        EmojiPackService(self.db).require_send_tokens(user_id, text)
+        # Same policy as send: gate the user's own text; preview a share
+        # subject, private-reply header, or contact card so cloud draft
+        # does not 403 on someone else's `[[e:id]]`.
+        text = prepare_send_content(
+            EmojiPackService(self.db), user_id, "text", text
+        )
         if not self._is_member(conversation_id, user_id):
             raise ValueError("forbidden")
         body = (text or "").strip()
