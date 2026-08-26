@@ -46,5 +46,18 @@ void main() {
         '↩️ Anna ✦: Hello there\n\nSure',
       );
     });
+
+    test('previews custom emoji in quoted preview', () {
+      const quoted = ChatPrivateReplyQuote(
+        sourceConversationId: 1,
+        sourceMessageId: 2,
+        author: 'Anna',
+        preview: 'Hello [[e:1]]',
+      );
+      expect(
+        composeTextWithPrivateReply('Sure', quoted),
+        '↩️ Anna: Hello ✦\n\nSure',
+      );
+    });
   });
 }

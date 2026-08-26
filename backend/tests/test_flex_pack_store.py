@@ -2641,6 +2641,68 @@ def test_http_skips_token_gate_for_sticker_emoji(db_session):
     )
 
 
+def test_private_reply_quote_does_not_403_without_flex(db_session):
+    author = _user(db_session, 1)
+    sender = _user(db_session, 2)
+    token = _emoji_token_after_downgrade(db_session, author.id)
+    conv = Conversation(type="group", title="Чат")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add_all(
+        [
+            ConversationMember(conversation_id=conv.id, user_id=author.id),
+            ConversationMember(conversation_id=conv.id, user_id=sender.id),
+        ]
+    )
+    db_session.commit()
+    content = f"↩️ {token}: {token}\n\nОк"
+    msg, _ = ChatService(db_session).send_message(
+        conversation_id=conv.id,
+        sender_id=sender.id,
+        msg_type="text",
+        content=content,
+        notify=False,
+    )
+    db_session.commit()
+    assert "[[e:" not in (msg.content or "")
+    assert "✦" in (msg.content or "")
+    assert (msg.content or "").endswith("Ок")
+
+
+def test_private_reply_body_tokens_still_require_flex(db_session):
+    sender = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, sender.id)
+    conv = Conversation(type="group", title="Чат")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=sender.id))
+    db_session.commit()
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        ChatService(db_session).send_message(
+            conversation_id=conv.id,
+            sender_id=sender.id,
+            msg_type="text",
+            content=f"↩️ Anna: hi\n\n{token}",
+            notify=False,
+        )
+
+
+def test_http_skips_token_gate_for_private_reply_header(db_session):
+    from app.api.v1.chats import _require_send_text_tokens
+    from app.schemas.chat import SendMessageRequest
+
+    sender = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, sender.id)
+    _require_send_text_tokens(
+        db_session,
+        sender,
+        SendMessageRequest(
+            type="text",
+            content=f"↩️ {token}: {token}\n\nОк",
+        ),
+    )
+
+
 def test_sticker_emoji_keeps_long_token(db_session):
     owner = _user(db_session, 1)
     _activate(db_session, owner.id, 70)
@@ -2678,6 +2740,10 @@ def test_authored_send_texts_skips_peer_names():
     assert authored_send_texts("text", card) == []
     assert authored_send_texts("sticker", "👍 [[e:9]]") == []
     assert authored_send_texts("text", "привет [[e:9]]") == ["привет [[e:9]]"]
+    assert authored_send_texts(
+        "text", "↩️ Anna [[e:9]]: Hello [[e:9]]\n\nSure"
+    ) == ["Sure"]
+    assert authored_send_texts("text", "↩️ Anna [[e:9]]: Hello") == [""]
 
 
 def test_story_reply_author_name_does_not_block_sender(db_session):

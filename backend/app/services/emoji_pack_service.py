@@ -179,6 +179,24 @@ def is_contact_card_content(content: Optional[str]) -> bool:
     return first == "han_contact" or first.endswith("контакт")
 
 
+def split_private_reply_quote(
+    content: Optional[str],
+) -> tuple[Optional[str], Optional[str]]:
+    """Private-reply compose: `↩️ who: preview` then an optional body.
+
+    The first line is a peer quote — not the sender's text. Returns
+    `(header, body)` or `(None, content)` if this is not that format.
+    """
+    text = content or ""
+    stripped = text.lstrip()
+    if not stripped.startswith("↩️"):
+        return None, content
+    parts = stripped.split("\n\n", 1)
+    header = parts[0]
+    body = parts[1] if len(parts) > 1 else ""
+    return header, body
+
+
 def authored_send_texts(
     msg_type: Optional[str], content: Optional[str]
 ) -> list[Optional[str]]:
@@ -197,6 +215,9 @@ def authored_send_texts(
     if kind == "sticker":
         # Associated emoji is pack metadata, not the sender's caption.
         return []
+    header, body = split_private_reply_quote(content)
+    if header is not None:
+        return [body]
     return [content]
 
 
@@ -209,8 +230,9 @@ def preview_peer_tokens_in_content(
     """Keep peer names / sticker emoji when the sender may use them; else preview.
 
     Story reply JSON embeds the author's name; a contact card embeds the
-    peer's display name; a sticker carries the pack's associated emoji.
-    Those are received texts — do not 403 the sender.
+    peer's display name; a sticker carries the pack's associated emoji;
+    a private-reply header quotes the original message. Those are
+    received texts — do not 403 the sender.
     """
     text = content or ""
     if not text:
@@ -243,6 +265,12 @@ def preview_peer_tokens_in_content(
         except ValueError:
             return preview_text_with_custom_emoji(text)
         return text
+    header, body = split_private_reply_quote(text)
+    if header is not None:
+        previewed = keep_or_preview_tokens(svc, user_id, header) or header
+        if (body or "").strip():
+            return f"{previewed}\n\n{body}"
+        return previewed
     return text
 
 
