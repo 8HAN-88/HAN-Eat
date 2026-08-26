@@ -2930,6 +2930,85 @@ def test_contact_card_name_does_not_block_sender(db_session):
     assert "Контакт" in (msg.content or "")
 
 
+def test_contact_card_keeps_long_peer_name_without_flex(db_session):
+    peer = _user(db_session, 1)
+    sender = _user(db_session, 2)
+    token = _emoji_token_after_downgrade(db_session, peer.id)
+    long_name = ("А" * 90) + f" {token}"
+    card = (
+        f"👤 Контакт\n{long_name}\n@peer_handle\n+79991234567\n"
+        f"haneat_user:{peer.id}"
+    )
+    assert len(card) > 120
+    conv = Conversation(type="group", title="Чат")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add_all(
+        [
+            ConversationMember(conversation_id=conv.id, user_id=peer.id),
+            ConversationMember(conversation_id=conv.id, user_id=sender.id),
+        ]
+    )
+    db_session.commit()
+    msg, _ = ChatService(db_session).send_message(
+        conversation_id=conv.id,
+        sender_id=sender.id,
+        msg_type="text",
+        content=card,
+        notify=False,
+    )
+    db_session.commit()
+    stored = msg.content or ""
+    assert "[[e:" not in stored
+    assert "✦" in stored
+    assert "А" * 90 in stored
+    assert "@peer_handle" in stored
+    assert "+79991234567" in stored
+    assert f"haneat_user:{peer.id}" in stored
+    assert len(stored) > 120
+
+
+def test_story_reply_keeps_long_author_name_without_flex(db_session):
+    import json
+
+    author = _user(db_session, 1)
+    sender = _user(db_session, 2)
+    token = _emoji_token_after_downgrade(db_session, author.id)
+    long_name = ("Б" * 90) + f" {token}"
+    conv = Conversation(type="group", title="Чат")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add_all(
+        [
+            ConversationMember(conversation_id=conv.id, user_id=author.id),
+            ConversationMember(conversation_id=conv.id, user_id=sender.id),
+        ]
+    )
+    db_session.commit()
+    content = json.dumps(
+        {
+            "story_id": 7,
+            "text": "круто",
+            "author_id": author.id,
+            "author_name": long_name,
+        },
+        ensure_ascii=False,
+    )
+    msg, _ = ChatService(db_session).send_message(
+        conversation_id=conv.id,
+        sender_id=sender.id,
+        msg_type="story_reply",
+        content=content,
+        notify=False,
+    )
+    db_session.commit()
+    data = json.loads(msg.content or "{}")
+    assert "[[e:" not in (data.get("author_name") or "")
+    assert "✦" in (data.get("author_name") or "")
+    assert "Б" * 90 in (data.get("author_name") or "")
+    assert data.get("text") == "круто"
+
+
 def test_import_shared_folder_previews_tokens_without_flex(db_session):
     owner = _user(db_session, 1)
     importer = _user(db_session, 2)

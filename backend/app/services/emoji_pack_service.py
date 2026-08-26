@@ -284,24 +284,15 @@ def preview_peer_tokens_in_content(
         name = data.get("author_name")
         if not (isinstance(name, str) and name.strip()):
             return text
-        try:
-            svc.require_send_tokens(user_id, name)
-        except ValueError:
-            data["author_name"] = preview_text_with_custom_emoji(name)
-            return json.dumps(data, ensure_ascii=False)
-        return text
+        previewed = keep_or_preview_tokens(svc, user_id, name) or name
+        if previewed == name:
+            return text
+        data["author_name"] = previewed
+        return json.dumps(data, ensure_ascii=False)
     if is_contact_card_content(text):
-        try:
-            svc.require_send_tokens(user_id, text)
-        except ValueError:
-            return preview_text_with_custom_emoji(text)
-        return text
+        return keep_or_preview_tokens(svc, user_id, text) or text
     if (msg_type or "").strip() == "sticker":
-        try:
-            svc.require_send_tokens(user_id, text)
-        except ValueError:
-            return preview_text_with_custom_emoji(text)
-        return text
+        return keep_or_preview_tokens(svc, user_id, text) or text
     header, body = split_private_reply_quote(text)
     if header is not None:
         previewed = keep_or_preview_tokens(svc, user_id, header) or header
