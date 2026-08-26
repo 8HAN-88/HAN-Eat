@@ -42,6 +42,7 @@ from app.models.chat_folder_share import ChatFolderShare
 from app.models.forum_topic import ForumTopic
 from app.models.saved_tag import SavedTag
 from app.models.story import Story, StoryReaction
+from app.models.quick_reply import QuickReply
 from app.services.emoji_pack_service import (
     EmojiPackService,
     authored_or_peer_label,
@@ -107,6 +108,7 @@ def db_session():
             SavedTag.__table__,
             Story.__table__,
             StoryReaction.__table__,
+            QuickReply.__table__,
         ],
     )
     Session = sessionmaker(bind=engine)
@@ -2071,6 +2073,80 @@ def test_quick_reply_service_requires_custom_emoji(db_session):
     token = _emoji_token_after_downgrade(db_session, owner.id)
     with pytest.raises(ValueError, match="custom_emoji"):
         create_reply(db_session, owner.id, "hi", token)
+
+
+def test_quick_reply_share_subject_does_not_403_without_flex(db_session):
+    from app.services.quick_reply_service import create_reply
+
+    author = _user(db_session, 1)
+    owner = _user(db_session, 2)
+    token = _emoji_token_after_downgrade(db_session, author.id)
+    row = create_reply(
+        db_session,
+        owner.id,
+        "",
+        f"Пост {token}\n\nОткрыть в HanWe: https://haneat.app/post/7",
+    )
+    db_session.commit()
+    assert "[[e:" not in (row.text or "")
+    assert "✦" in (row.text or "")
+    assert "https://haneat.app/post/7" in (row.text or "")
+
+
+def test_quick_reply_private_reply_header_does_not_403_without_flex(db_session):
+    from app.services.quick_reply_service import create_reply
+
+    author = _user(db_session, 1)
+    owner = _user(db_session, 2)
+    token = _emoji_token_after_downgrade(db_session, author.id)
+    row = create_reply(
+        db_session,
+        owner.id,
+        "цитата",
+        f"↩️ {token}: {token}\n\nОк",
+    )
+    db_session.commit()
+    assert "[[e:" not in (row.text or "")
+    assert "Ок" in (row.text or "")
+
+
+def test_quick_reply_share_body_tokens_still_require_flex(db_session):
+    from app.services.quick_reply_service import create_reply
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        create_reply(
+            db_session,
+            owner.id,
+            "",
+            f"Пост\n\nОткрыть в HanWe: https://haneat.app/post/7\n{token}",
+        )
+
+
+def test_http_quick_reply_skips_token_gate_for_share_subject(db_session):
+    import asyncio
+
+    from app.api.v1.chats import create_quick_reply
+
+    author = _user(db_session, 1)
+    owner = _user(db_session, 2)
+    token = _emoji_token_after_downgrade(db_session, author.id)
+    _activate(db_session, owner.id, 60)
+
+    async def _run():
+        return await create_quick_reply(
+            {
+                "title": "",
+                "text": f"Пост {token}\n\nОткрыть в HanWe: https://haneat.app/post/7",
+            },
+            current_user=owner,
+            db=db_session,
+        )
+
+    created = asyncio.run(_run())
+    assert "[[e:" not in (created["text"] or "")
+    assert "✦" in (created["text"] or "")
 
 
 def test_chat_tag_service_requires_custom_emoji(db_session):

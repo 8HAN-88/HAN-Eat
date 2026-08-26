@@ -1585,12 +1585,17 @@ async def create_quick_reply(
 ):
     from app.services.quick_reply_service import QuickReplyError, create_reply
     from app.services.subscription_service import SubscriptionService
-    from app.services.emoji_pack_service import EmojiPackService
+    from app.services.emoji_pack_service import (
+        EmojiPackService,
+        authored_send_texts,
+    )
 
+    title = str(body.get("title") or "")
+    text = str(body.get("text") or "")
     EmojiPackService(db).require_send_tokens_http(
         current_user.id,
-        str(body.get("title") or ""),
-        str(body.get("text") or ""),
+        title,
+        *authored_send_texts("text", text),
     )
     SubscriptionService(db).require_feature(
         current_user.id,
@@ -1601,8 +1606,8 @@ async def create_quick_reply(
         row = create_reply(
             db,
             current_user.id,
-            str(body.get("title") or ""),
-            str(body.get("text") or ""),
+            title,
+            text,
         )
         db.commit()
         db.refresh(row)

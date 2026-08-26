@@ -25,10 +25,17 @@ def list_replies(db: Session, user_id: int) -> List[QuickReply]:
 
 
 def create_reply(db: Session, user_id: int, title: str, text: str) -> QuickReply:
-    from app.services.emoji_pack_service import EmojiPackService
+    from app.services.emoji_pack_service import (
+        EmojiPackService,
+        prepare_send_content,
+    )
 
-    EmojiPackService(db).require_send_tokens(user_id, title)
-    EmojiPackService(db).require_send_tokens(user_id, text)
+    emoji = EmojiPackService(db)
+    emoji.require_send_tokens(user_id, title)
+    # Composer may hold a share / private-reply / contact card. Gate the
+    # user's own text; preview someone else's `[[e:id]]` so saving a
+    # canned reply does not 403 without custom_emoji (69).
+    text = prepare_send_content(emoji, user_id, "text", text)
     heading = (title or "").strip() or (text or "").strip()[:40]
     body = (text or "").strip()
     if not body:
