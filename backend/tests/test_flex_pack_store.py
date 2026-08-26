@@ -50,6 +50,9 @@ from app.services.emoji_pack_service import (
     avatar_letter_with_custom_emoji,
     display_name_or_default,
     editor_or_preview_tokens,
+    keep_if_unchanged,
+    keep_if_unchanged_http,
+    keep_if_unchanged_items,
     keep_or_preview_tokens,
     link_preview_for_persist,
     link_preview_for_persist_http,
@@ -3721,6 +3724,45 @@ def test_http_link_preview_typed_tokens_return_flex_gate(db_session):
     with pytest.raises(HTTPException) as err:
         link_preview_for_persist_http(
             emoji, owner.id, token, og_title="Example Domain"
+        )
+    assert err.value.status_code == 403
+
+
+def test_keep_if_unchanged_resave_does_not_403(db_session):
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    emoji = EmojiPackService(db_session)
+    out = keep_if_unchanged(emoji, owner.id, token, token)
+    assert "[[e:" not in (out or "")
+    assert "имя" in (out or "")
+    http_out = keep_if_unchanged_http(emoji, owner.id, token, token)
+    assert "[[e:" not in (http_out or "")
+
+
+def test_keep_if_unchanged_new_tokens_still_require_flex(db_session):
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    emoji = EmojiPackService(db_session)
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        keep_if_unchanged(emoji, owner.id, token, "Кухня")
+    with pytest.raises(HTTPException) as err:
+        keep_if_unchanged_http(emoji, owner.id, token, "Кухня")
+    assert err.value.status_code == 403
+
+
+def test_keep_if_unchanged_items_keeps_old_tags(db_session):
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    emoji = EmojiPackService(db_session)
+    out = keep_if_unchanged_items(
+        emoji, owner.id, [token, "новости"], [token], http=True
+    )
+    assert out is not None
+    assert "[[e:" not in (out[0] or "")
+    assert out[1] == "новости"
+    with pytest.raises(HTTPException) as err:
+        keep_if_unchanged_items(
+            emoji, owner.id, [f"новая {token}"], ["новости"], http=True
         )
     assert err.value.status_code == 403
 

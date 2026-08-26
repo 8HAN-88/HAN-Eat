@@ -92,6 +92,63 @@ def keep_or_preview_tokens(
     return text
 
 
+def keep_if_unchanged(
+    svc: "EmojiPackService",
+    user_id: int,
+    incoming: Optional[str],
+    stored: Optional[str],
+) -> Optional[str]:
+    """Flutter often resends stored text when saving any other field.
+
+    Unchanged → keep-or-preview (no 403). A new string is authored.
+    """
+    if incoming is None:
+        return None
+    if (incoming or "").strip() == (stored or "").strip():
+        return keep_or_preview_tokens(svc, user_id, incoming)
+    svc.require_send_tokens(user_id, incoming)
+    return incoming
+
+
+def keep_if_unchanged_http(
+    svc: "EmojiPackService",
+    user_id: int,
+    incoming: Optional[str],
+    stored: Optional[str],
+) -> Optional[str]:
+    """HTTP wrapper: new tokens become 403, an unchanged resave is previewed."""
+    try:
+        return keep_if_unchanged(svc, user_id, incoming, stored)
+    except ValueError:
+        svc.require_send_tokens_http(user_id, incoming)
+        return incoming
+
+
+def keep_if_unchanged_items(
+    svc: "EmojiPackService",
+    user_id: int,
+    incoming: Optional[list],
+    stored: Optional[list],
+    *,
+    http: bool = False,
+) -> Optional[list]:
+    """Per-item keep_if_unchanged so adding a tag does not 403 on old ones."""
+    if incoming is None:
+        return None
+    stored_set = {(item or "").strip() for item in (stored or [])}
+    out: list = []
+    for item in incoming:
+        if (item or "").strip() in stored_set:
+            out.append(keep_or_preview_tokens(svc, user_id, item) or item)
+            continue
+        if http:
+            svc.require_send_tokens_http(user_id, item)
+        else:
+            svc.require_send_tokens(user_id, item)
+        out.append(item)
+    return out
+
+
 def editor_or_preview_tokens(
     svc: "EmojiPackService",
     user_id: int,

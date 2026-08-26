@@ -348,6 +348,8 @@ async def update_channel(
 
     from app.services.emoji_pack_service import (
         EmojiPackService,
+        keep_if_unchanged_http,
+        keep_if_unchanged_items,
         keep_or_preview_tokens,
     )
 
@@ -358,13 +360,27 @@ async def update_channel(
     category = request.category
     tags = request.tags
     if is_channel_owner(channel, current_user):
-        emoji.require_send_tokens_http(
+        # Flutter always resends name/description/rules/tags when saving
+        # cover, comments, or other settings. Unchanged text is
+        # receive-and-persist — do not 403 after a downgrade.
+        name = keep_if_unchanged_http(
+            emoji, current_user.id, name, channel.name
+        )
+        description = keep_if_unchanged_http(
+            emoji, current_user.id, description, channel.description
+        )
+        rules = keep_if_unchanged_http(
+            emoji, current_user.id, rules, channel.rules
+        )
+        category = keep_if_unchanged_http(
+            emoji, current_user.id, category, channel.category
+        )
+        tags = keep_if_unchanged_items(
+            emoji,
             current_user.id,
-            name,
-            description,
-            rules,
-            category,
-            *(tags or []),
+            tags,
+            list(channel.tags or []) if channel.tags is not None else None,
+            http=True,
         )
     else:
         # Admin resends the owner's name/tags when saving any setting.
