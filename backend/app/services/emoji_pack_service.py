@@ -282,8 +282,9 @@ def prepare_send_content(
 ) -> str:
     """Gate the sender's own text; preview embedded peer names on deny.
 
-    Used on send, schedule, edit, and reschedule so a contact card or
-    story-reply name does not 403 a user without custom_emoji (69).
+    Used on send, schedule, edit, and reschedule so a contact card,
+    story-reply name, or private-reply quote does not 403 a user
+    without custom_emoji (69).
     """
     text = content or ""
     for part in authored_send_texts(msg_type, text):
