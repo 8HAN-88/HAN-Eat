@@ -5183,12 +5183,6 @@ class ChatService:
         channel_ids: Optional[List[int]] = None,
         filters: Optional[dict] = None,
     ) -> Optional[dict]:
-        from app.services.emoji_pack_service import EmojiPackService
-
-        if name is not None:
-            EmojiPackService(self.db).require_send_tokens(user_id, name)
-        if icon is not None:
-            EmojiPackService(self.db).require_send_tokens(user_id, icon)
         folder = (
             self.db.query(ChatFolder)
             .filter(ChatFolder.id == folder_id, ChatFolder.user_id == user_id)
@@ -5196,14 +5190,36 @@ class ChatService:
         )
         if not folder:
             return None
+        from app.services.emoji_pack_service import (
+            EmojiPackService,
+            keep_or_preview_tokens,
+        )
+
+        emoji = EmojiPackService(self.db)
         if name is not None:
-            name = name.strip()
-            if not name:
+            incoming = name.strip()
+            if not incoming:
                 raise ValueError("invalid_name")
-            folder.name = name[:64]
+            stored = (folder.name or "").strip()
+            # Flutter always resends the title. An imported folder keeps
+            # the owner's `[[e:id]]` — do not 403 a later save without 69.
+            if incoming == stored:
+                incoming = keep_or_preview_tokens(emoji, user_id, incoming) or incoming
+            else:
+                emoji.require_send_tokens(user_id, incoming)
+            folder.name = incoming[:64]
         if icon is not None:
-            self._require_folder_flex_options(user_id, icon, None)
-            folder.icon = (icon or "")[:32] or None
+            incoming_icon = (icon or "").strip()
+            stored_icon = (folder.icon or "").strip()
+            if incoming_icon == stored_icon:
+                incoming_icon = (
+                    keep_or_preview_tokens(emoji, user_id, incoming_icon)
+                    or incoming_icon
+                )
+            elif incoming_icon:
+                emoji.require_send_tokens(user_id, incoming_icon)
+            self._require_folder_flex_options(user_id, incoming_icon or None, None)
+            folder.icon = incoming_icon[:32] or None
         if filters is not None:
             norm_filters = self._normalize_filters(filters)
             self._require_folder_flex_options(user_id, None, norm_filters)

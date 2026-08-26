@@ -1430,13 +1430,12 @@ def test_folder_icon_requires_custom_emoji(db_session):
 
 def test_folder_icon_update_requires_custom_emoji(db_session):
     owner = _user(db_session, 1)
+    chats = ChatService(db_session)
+    folder = chats.create_folder(owner.id, "Папка")
+    db_session.commit()
     token = _emoji_token_after_downgrade(db_session, owner.id)
     with pytest.raises(ValueError, match="custom_emoji_required"):
-        ChatService(db_session).update_folder(
-            owner.id,
-            1,
-            icon=token,
-        )
+        chats.update_folder(owner.id, folder["id"], icon=token)
 
 
 def test_post_tags_require_custom_emoji(db_session):
@@ -3210,6 +3209,52 @@ def test_import_shared_folder_keeps_tokens_when_allowed(db_session):
     db_session.commit()
     assert imported["name"] == f"Работа {token}"
     assert imported["icon"] == token
+
+
+def test_update_imported_folder_does_not_403_after_downgrade(db_session):
+    owner = _user(db_session, 1)
+    importer = _user(db_session, 2)
+    _activate(db_session, owner.id, 70)
+    _activate(db_session, importer.id, 70)
+    emoji = EmojiPackService(db_session)
+    pack = emoji.create_pack(owner.id, "Общая")
+    item = emoji.add_emoji(
+        user_id=owner.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/folder-resave.webp",
+    )
+    emoji.install_pack(importer.id, pack.id)
+    db_session.commit()
+    token = f"[[e:{item.id}]]"
+    chats = ChatService(db_session)
+    chats.create_folder(owner.id, f"Работа {token}", token)
+    db_session.commit()
+    shared = chats.share_folder(owner.id, chats.list_folders(owner.id)[0]["id"])
+    db_session.commit()
+    imported = chats.import_shared_folder(importer.id, shared["token"])
+    db_session.commit()
+    _activate(db_session, importer.id, 57)
+    updated = chats.update_folder(
+        importer.id,
+        imported["id"],
+        name=imported["name"],
+        icon=imported["icon"],
+    )
+    db_session.commit()
+    assert updated is not None
+    assert "[[e:" not in (updated["name"] or "")
+    assert "Работа" in updated["name"]
+    assert "[[e:" not in (updated.get("icon") or "")
+
+
+def test_update_folder_new_tokens_still_require_flex(db_session):
+    owner = _user(db_session, 1)
+    chats = ChatService(db_session)
+    folder = chats.create_folder(owner.id, "Папка")
+    db_session.commit()
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        chats.update_folder(owner.id, folder["id"], name=f"Новая {token}")
 
 
 def test_reaction_and_topic_schema_accepts_token():
