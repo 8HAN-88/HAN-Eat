@@ -179,6 +179,10 @@ def is_contact_card_content(content: Optional[str]) -> bool:
     return first == "han_contact" or first.endswith("контакт")
 
 
+_HANWE_SHARE_MARKER = "\n\nОткрыть в HanWe: "
+_HANWE_SHARE_URL = "https://haneat.app/"
+
+
 def split_private_reply_quote(
     content: Optional[str],
 ) -> tuple[Optional[str], Optional[str]]:
@@ -195,6 +199,34 @@ def split_private_reply_quote(
     header = parts[0]
     body = parts[1] if len(parts) > 1 else ""
     return header, body
+
+
+def split_hanwe_share(content: Optional[str]) -> tuple[Optional[str], str]:
+    """Share-to-chat of a post/reel/channel/profile.
+
+    Flutter builds `{title}\\n\\nОткрыть в HanWe: https://haneat.app/...`.
+    The title is the author's; only extra lines after the URL are user-typed.
+    Returns `(subject, from_marker_onward)` or `(None, content)`.
+    """
+    text = content or ""
+    idx = text.find(_HANWE_SHARE_MARKER)
+    if idx < 0:
+        return None, text
+    after = text[idx + len(_HANWE_SHARE_MARKER) :]
+    url_line = after.split("\n", 1)[0].strip()
+    if not url_line.startswith(_HANWE_SHARE_URL):
+        return None, text
+    return text[:idx], text[idx:]
+
+
+def _hanwe_share_tail(rest: str) -> str:
+    after = (
+        rest[len(_HANWE_SHARE_MARKER) :]
+        if rest.startswith(_HANWE_SHARE_MARKER)
+        else rest
+    )
+    nl = after.find("\n")
+    return after[nl + 1 :] if nl >= 0 else ""
 
 
 def authored_send_texts(
@@ -218,6 +250,10 @@ def authored_send_texts(
     header, body = split_private_reply_quote(content)
     if header is not None:
         return [body]
+    share, rest = split_hanwe_share(content)
+    if share is not None:
+        tail = _hanwe_share_tail(rest)
+        return [tail] if tail.strip() else []
     return [content]
 
 
@@ -231,8 +267,9 @@ def preview_peer_tokens_in_content(
 
     Story reply JSON embeds the author's name; a contact card embeds the
     peer's display name; a sticker carries the pack's associated emoji;
-    a private-reply header quotes the original message. Those are
-    received texts — do not 403 the sender.
+    a private-reply header quotes the original message; a HanWe share
+    subject is the post/channel/profile title. Those are received texts
+    — do not 403 the sender.
     """
     text = content or ""
     if not text:
@@ -271,6 +308,10 @@ def preview_peer_tokens_in_content(
         if (body or "").strip():
             return f"{previewed}\n\n{body}"
         return previewed
+    share, rest = split_hanwe_share(text)
+    if share is not None:
+        previewed = keep_or_preview_tokens(svc, user_id, share) or share
+        return f"{previewed}{rest}"
     return text
 
 
@@ -283,8 +324,8 @@ def prepare_send_content(
     """Gate the sender's own text; preview embedded peer names on deny.
 
     Used on send, schedule, edit, and reschedule so a contact card,
-    story-reply name, or private-reply quote does not 403 a user
-    without custom_emoji (69).
+    story-reply name, private-reply quote, or HanWe share subject
+    does not 403 a user without custom_emoji (69).
     """
     text = content or ""
     for part in authored_send_texts(msg_type, text):

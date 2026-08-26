@@ -50,6 +50,7 @@ from app.services.emoji_pack_service import (
     keep_or_preview_tokens,
     prepare_forward_content,
     preview_text_with_custom_emoji,
+    split_hanwe_share,
     text_for_moderation,
     text_for_translation,
 )
@@ -2703,6 +2704,91 @@ def test_http_skips_token_gate_for_private_reply_header(db_session):
     )
 
 
+def test_hanwe_share_subject_does_not_403_without_flex(db_session):
+    author = _user(db_session, 1)
+    sender = _user(db_session, 2)
+    token = _emoji_token_after_downgrade(db_session, author.id)
+    conv = Conversation(type="group", title="Чат")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add_all(
+        [
+            ConversationMember(conversation_id=conv.id, user_id=author.id),
+            ConversationMember(conversation_id=conv.id, user_id=sender.id),
+        ]
+    )
+    db_session.commit()
+    content = f"Пост {token}\n\nОткрыть в HanWe: https://haneat.app/post/7"
+    msg, _ = ChatService(db_session).send_message(
+        conversation_id=conv.id,
+        sender_id=sender.id,
+        msg_type="text",
+        content=content,
+        notify=False,
+    )
+    db_session.commit()
+    assert "[[e:" not in (msg.content or "")
+    assert "✦" in (msg.content or "")
+    assert "https://haneat.app/post/7" in (msg.content or "")
+    assert (msg.content or "").startswith("Пост")
+
+
+def test_hanwe_share_body_tokens_still_require_flex(db_session):
+    sender = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, sender.id)
+    conv = Conversation(type="group", title="Чат")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=sender.id))
+    db_session.commit()
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        ChatService(db_session).send_message(
+            conversation_id=conv.id,
+            sender_id=sender.id,
+            msg_type="text",
+            content=(
+                f"Пост\n\nОткрыть в HanWe: https://haneat.app/post/7\n{token}"
+            ),
+            notify=False,
+        )
+
+
+def test_hanwe_share_requires_haneat_url(db_session):
+    sender = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, sender.id)
+    conv = Conversation(type="group", title="Чат")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=sender.id))
+    db_session.commit()
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        ChatService(db_session).send_message(
+            conversation_id=conv.id,
+            sender_id=sender.id,
+            msg_type="text",
+            content=(
+                f"Пост {token}\n\nОткрыть в HanWe: https://evil.example/post/7"
+            ),
+            notify=False,
+        )
+
+
+def test_http_skips_token_gate_for_hanwe_share_subject(db_session):
+    from app.api.v1.chats import _require_send_text_tokens
+    from app.schemas.chat import SendMessageRequest
+
+    sender = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, sender.id)
+    _require_send_text_tokens(
+        db_session,
+        sender,
+        SendMessageRequest(
+            type="text",
+            content=f"Пост {token}\n\nОткрыть в HanWe: https://haneat.app/post/7",
+        ),
+    )
+
+
 def test_sticker_emoji_keeps_long_token(db_session):
     owner = _user(db_session, 1)
     _activate(db_session, owner.id, 70)
@@ -2744,6 +2830,16 @@ def test_authored_send_texts_skips_peer_names():
         "text", "↩️ Anna [[e:9]]: Hello [[e:9]]\n\nSure"
     ) == ["Sure"]
     assert authored_send_texts("text", "↩️ Anna [[e:9]]: Hello") == [""]
+    share = "Пост [[e:9]]\n\nОткрыть в HanWe: https://haneat.app/post/1"
+    assert authored_send_texts("text", share) == []
+    assert authored_send_texts("text", f"{share}\nМой коммент [[e:9]]") == [
+        "Мой коммент [[e:9]]"
+    ]
+    assert split_hanwe_share("просто текст") == (None, "просто текст")
+    assert split_hanwe_share(share) == (
+        "Пост [[e:9]]",
+        "\n\nОткрыть в HanWe: https://haneat.app/post/1",
+    )
 
 
 def test_story_reply_author_name_does_not_block_sender(db_session):

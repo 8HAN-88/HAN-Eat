@@ -5400,14 +5400,7 @@ class ChatService:
         """
         from app.services.emoji_pack_service import (
             EmojiPackService,
-            preview_text_with_custom_emoji,
+            keep_or_preview_tokens,
         )
 
-        text = raw
-        if not (text or "").strip():
-            return text
-        try:
-            EmojiPackService(self.db).require_send_tokens(user_id, text)
-        except ValueError:
-            return preview_text_with_custom_emoji(text)
-        return text
+        return keep_or_preview_tokens(EmojiPackService(self.db), user_id, raw)
