@@ -107,6 +107,14 @@ def _require_flex_admin_texts(db: Session, user_id: int, *parts: Optional[str]) 
     EmojiPackService(db).require_send_tokens_http(user_id, *parts)
 
 
+def _resave_flex_admin_text(
+    db: Session, user_id: int, incoming: Optional[str], stored: Optional[str]
+) -> Optional[str]:
+    from app.services.emoji_pack_service import EmojiPackService, keep_if_unchanged_http
+
+    return keep_if_unchanged_http(EmojiPackService(db), user_id, incoming, stored)
+
+
 @router.post("/admin/features", status_code=status.HTTP_201_CREATED)
 def admin_create_feature(
     request: FlexFeatureWrite,
@@ -129,10 +137,31 @@ def admin_update_feature(
     current_user: User = Depends(get_current_admin_required),
     db: Session = Depends(get_db),
 ):
-    _require_flex_admin_texts(
-        db, current_user.id, request.title, request.description, request.icon
+    from app.models.flex_subscription import SubscriptionFeature
+
+    service = _svc(db)
+    feat = (
+        db.query(SubscriptionFeature)
+        .filter(SubscriptionFeature.id == feature_id)
+        .first()
     )
-    feat = _svc(db).update_feature(feature_id, request.model_dump(exclude_unset=True))
+    if not feat:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Feature not found")
+    data = request.model_dump(exclude_unset=True)
+    # Flutter always resends title/description/icon with level flags.
+    if "title" in data:
+        data["title"] = _resave_flex_admin_text(
+            db, current_user.id, data.get("title"), feat.title
+        )
+    if "description" in data:
+        data["description"] = _resave_flex_admin_text(
+            db, current_user.id, data.get("description"), feat.description
+        )
+    if "icon" in data:
+        data["icon"] = _resave_flex_admin_text(
+            db, current_user.id, data.get("icon"), feat.icon
+        )
+    feat = service.update_feature(feature_id, data)
     db.commit()
     db.refresh(feat)
     return FlexSubscriptionService._feature_item(feat, feat.default_level, set())
@@ -158,8 +187,21 @@ def admin_update_block(
     current_user: User = Depends(get_current_admin_required),
     db: Session = Depends(get_db),
 ):
-    _require_flex_admin_texts(db, current_user.id, request.title)
-    block = _svc(db).upsert_block(request.model_dump(exclude_unset=True), block_id=block_id)
+    from app.models.flex_subscription import SubscriptionFeatureBlock
+
+    block = (
+        db.query(SubscriptionFeatureBlock)
+        .filter(SubscriptionFeatureBlock.id == block_id)
+        .first()
+    )
+    if not block:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Block not found")
+    data = request.model_dump(exclude_unset=True)
+    if "title" in data:
+        data["title"] = _resave_flex_admin_text(
+            db, current_user.id, data.get("title"), block.title
+        )
+    block = _svc(db).upsert_block(data, block_id=block_id)
     db.commit()
     db.refresh(block)
     return FlexSubscriptionService._block_item(block)

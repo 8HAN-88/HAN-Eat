@@ -5132,7 +5132,10 @@ class ChatService:
         name = (name or "").strip()
         if not name:
             raise ValueError("invalid_name")
-        from app.services.emoji_pack_service import EmojiPackService
+        from app.services.emoji_pack_service import (
+            EmojiPackService,
+            clip_preserving_custom_emoji,
+        )
 
         EmojiPackService(self.db).require_send_tokens(user_id, name)
         EmojiPackService(self.db).require_send_tokens(user_id, icon)
@@ -5153,8 +5156,8 @@ class ChatService:
         self._require_folder_flex_options(user_id, icon, norm_filters)
         folder = ChatFolder(
             user_id=user_id,
-            name=name[:64],
-            icon=(icon or "")[:32] or None,
+            name=clip_preserving_custom_emoji(name, 64),
+            icon=clip_preserving_custom_emoji(icon or "", 32) or None,
             position=(max_pos or -1) + 1,
             filters_json=json.dumps(norm_filters) if norm_filters else None,
         )
@@ -5210,6 +5213,7 @@ class ChatService:
             return None
         from app.services.emoji_pack_service import (
             EmojiPackService,
+            clip_preserving_custom_emoji,
             keep_or_preview_tokens,
         )
 
@@ -5225,7 +5229,7 @@ class ChatService:
                 incoming = keep_or_preview_tokens(emoji, user_id, incoming) or incoming
             else:
                 emoji.require_send_tokens(user_id, incoming)
-            folder.name = incoming[:64]
+            folder.name = clip_preserving_custom_emoji(incoming, 64)
         if icon is not None:
             incoming_icon = (icon or "").strip()
             stored_icon = (folder.icon or "").strip()
@@ -5236,8 +5240,9 @@ class ChatService:
                 )
             elif incoming_icon:
                 emoji.require_send_tokens(user_id, incoming_icon)
+            incoming_icon = clip_preserving_custom_emoji(incoming_icon, 32)
             self._require_folder_flex_options(user_id, incoming_icon or None, None)
-            folder.icon = incoming_icon[:32] or None
+            folder.icon = incoming_icon or None
         if filters is not None:
             norm_filters = self._normalize_filters(filters)
             self._require_folder_flex_options(user_id, None, norm_filters)

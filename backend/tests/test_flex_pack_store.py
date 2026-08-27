@@ -48,6 +48,7 @@ from app.services.emoji_pack_service import (
     authored_or_peer_label,
     authored_send_texts,
     avatar_letter_with_custom_emoji,
+    clip_preserving_custom_emoji,
     display_name_or_default,
     editor_or_preview_tokens,
     keep_if_unchanged,
@@ -4068,4 +4069,58 @@ def test_update_bot_resave_name_does_not_403(db_session):
 
     with pytest.raises(HTTPException) as err:
         asyncio.run(_new())
+    assert err.value.status_code == 403
+
+
+def test_clip_preserving_custom_emoji_does_not_split_token():
+    token = "[[e:123]]"
+    prefix = "п" * 58
+    raw = prefix + token
+    assert len(raw) > 64
+    clipped = clip_preserving_custom_emoji(raw, 64)
+    assert "[[e:" not in clipped
+    assert clipped == prefix
+    assert clip_preserving_custom_emoji("короткое " + token, 64) == "короткое " + token
+    assert clip_preserving_custom_emoji("abcdef", 3) == "abc"
+
+
+def test_folder_create_does_not_persist_split_token(db_session):
+    owner = _user(db_session, 1)
+    token = _token_while_flex(db_session, owner.id)
+    long_name = ("п" * 58) + token
+    row = ChatService(db_session).create_folder(owner.id, long_name)
+    assert "[[e:" not in row["name"]
+    assert row["name"] == "п" * 58
+
+
+def test_admin_flex_feature_resave_title_does_not_403(db_session):
+    from app.api.v1.flex_subscription import admin_update_feature
+    from app.models.flex_subscription import SubscriptionFeature
+    from app.schemas.flex_subscription import FlexFeatureWrite
+
+    admin = _user(db_session, 1)
+    token = _token_while_flex(db_session, admin.id)
+    FlexSubscriptionService(db_session).ensure_catalog()
+    feat = db_session.query(SubscriptionFeature).first()
+    assert feat is not None
+    feat.title = token
+    feat.description = "старое"
+    db_session.commit()
+    _activate(db_session, 1, 10)
+    out = admin_update_feature(
+        feat.id,
+        FlexFeatureWrite(title=token, description="новое", movable=False),
+        admin,
+        db_session,
+    )
+    assert "[[e:" not in (out["title"] or "")
+    assert "имя" in out["title"]
+    assert out["description"] == "новое"
+    with pytest.raises(HTTPException) as err:
+        admin_update_feature(
+            feat.id,
+            FlexFeatureWrite(title=f"новое {token}"),
+            admin,
+            db_session,
+        )
     assert err.value.status_code == 403
