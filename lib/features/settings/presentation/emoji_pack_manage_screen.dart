@@ -251,7 +251,6 @@ class _EmojiPackManageScreenState extends State<EmojiPackManageScreen> {
             children: [
               TextField(
                 controller: titleCtrl,
-                maxLength: 120,
                 decoration: const InputDecoration(labelText: 'Название'),
               ),
               SwitchListTile(

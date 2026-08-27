@@ -75,17 +75,20 @@ class StickerService:
     def create_pack(
         self, user_id: int, title: str, is_public: bool, is_premium: bool = False
     ) -> StickerPack:
-        clean_title = (title or "").strip()
+        from app.services.emoji_pack_service import (
+            EmojiPackService,
+            clip_preserving_custom_emoji,
+        )
+
+        clean_title = clip_preserving_custom_emoji((title or "").strip(), 120)
         if len(clean_title) < 2:
             raise ValueError("invalid_title")
-        from app.services.emoji_pack_service import EmojiPackService
-
         EmojiPackService(self.db).require_send_tokens(user_id, clean_title)
         premium = bool(is_premium)
         if premium:
             self._require_premium_stickers(user_id)
         pack = StickerPack(
-            title=clean_title[:120],
+            title=clean_title,
             slug=self._make_unique_slug(clean_title, user_id),
             owner_user_id=user_id,
             is_public=bool(is_public),
@@ -105,8 +108,12 @@ class StickerService:
         emoji: Optional[str] = None,
         sticker_type: str = "static",
     ) -> Sticker:
-        from app.services.emoji_pack_service import EmojiPackService
+        from app.services.emoji_pack_service import (
+            EmojiPackService,
+            clip_preserving_custom_emoji,
+        )
 
+        emoji = clip_preserving_custom_emoji((emoji or "").strip(), 32) or None
         EmojiPackService(self.db).require_send_tokens(user_id, emoji)
         pack = self.db.query(StickerPack).filter(StickerPack.id == pack_id).first()
         if not pack:
@@ -128,7 +135,7 @@ class StickerService:
         item = Sticker(
             pack_id=pack_id,
             media_url=clean_url[:512],
-            emoji=(emoji or "").strip()[:32] or None,
+            emoji=emoji,
             sticker_type=clean_type,
             order_index=next_order,
         )
@@ -155,15 +162,20 @@ class StickerService:
             clean_title = title.strip()
             if len(clean_title) < 2:
                 raise ValueError("invalid_title")
-            from app.services.emoji_pack_service import EmojiPackService, keep_if_unchanged
+            from app.services.emoji_pack_service import (
+                EmojiPackService,
+                clip_preserving_custom_emoji,
+                keep_if_unchanged,
+            )
 
             # Flutter always resends title with is_public / is_premium.
-            pack.title = (
+            pack.title = clip_preserving_custom_emoji(
                 keep_if_unchanged(
                     EmojiPackService(self.db), user_id, clean_title, pack.title
                 )
-                or clean_title
-            )[:120]
+                or clean_title,
+                120,
+            )
         if is_public is not None:
             pack.is_public = bool(is_public)
         if is_premium is not None:

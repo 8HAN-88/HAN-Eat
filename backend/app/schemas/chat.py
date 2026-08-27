@@ -248,7 +248,7 @@ class SendMessageRequest(BaseModel):
     media_url: Optional[str] = Field(default=None, max_length=512)
     reply_to_message_id: Optional[int] = None
     client_message_id: Optional[str] = Field(default=None, max_length=64)
-    poll_question: Optional[str] = Field(default=None, max_length=300)
+    poll_question: Optional[str] = Field(default=None, max_length=320)
     poll_description: Optional[str] = Field(default=None, max_length=500)
     poll_options: Optional[List[str]] = None
     poll_settings: Optional[dict] = None
@@ -278,7 +278,7 @@ class ScheduleMessageRequest(BaseModel):
     media_url: Optional[str] = Field(default=None, max_length=512)
     reply_to_message_id: Optional[int] = None
     client_message_id: Optional[str] = Field(default=None, max_length=64)
-    poll_question: Optional[str] = Field(default=None, max_length=300)
+    poll_question: Optional[str] = Field(default=None, max_length=320)
     poll_description: Optional[str] = Field(default=None, max_length=500)
     poll_options: Optional[List[str]] = None
     poll_settings: Optional[dict] = None
@@ -329,10 +329,10 @@ class RescheduleMessageRequest(BaseModel):
 
 
 class InlineKeyboardButton(BaseModel):
-    text: str = Field(..., min_length=1, max_length=64)
+    text: str = Field(..., min_length=1, max_length=80)
     callback_data: Optional[str] = Field(default=None, max_length=128)
     url: Optional[str] = Field(default=None, max_length=512)
-    callback_text: Optional[str] = Field(default=None, max_length=300)
+    callback_text: Optional[str] = Field(default=None, max_length=320)
     miniapp_id: Optional[int] = Field(default=None, gt=0)
     web_app: Optional[dict] = None
 
@@ -371,7 +371,7 @@ class SavedMessageTagsRequest(BaseModel):
 
 
 class ChatPollAddOptionRequest(BaseModel):
-    text: str = Field(..., min_length=1, max_length=120)
+    text: str = Field(..., min_length=1, max_length=140)
 
 
 class LiveLocationStartRequest(BaseModel):

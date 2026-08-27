@@ -68,7 +68,7 @@ class EmojiPackListOut(BaseModel):
 
 
 class CreateEmojiPackIn(BaseModel):
-    title: str = Field(..., min_length=2, max_length=120)
+    title: str = Field(..., min_length=2, max_length=140)
     is_public: bool = True
 
 
@@ -82,7 +82,7 @@ class ListPriceIn(BaseModel):
 
 
 class UpdateEmojiPackIn(BaseModel):
-    title: str | None = Field(default=None, min_length=2, max_length=120)
+    title: str | None = Field(default=None, min_length=2, max_length=140)
     is_public: bool | None = None
 
 

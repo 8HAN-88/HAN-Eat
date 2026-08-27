@@ -12,6 +12,8 @@ from app.models.user import User
 
 def normalize_reply_keyboard(raw: Any) -> Optional[list[list[dict[str, str]]]]:
     """Normalize List[List[{text}]] — text-only buttons for MVP."""
+    from app.services.emoji_pack_service import clip_preserving_custom_emoji
+
     if raw is None:
         return None
     if isinstance(raw, str):
@@ -33,9 +35,10 @@ def normalize_reply_keyboard(raw: Any) -> Optional[list[list[dict[str, str]]]]:
                 text = str(btn.get("text") or "").strip()
             else:
                 continue
+            text = clip_preserving_custom_emoji(text, 64)
             if not text:
                 continue
-            out_row.append({"text": text[:64]})
+            out_row.append({"text": text})
             if len(out_row) >= 12:
                 break
         if out_row:
@@ -138,7 +141,9 @@ def set_member_reply_keyboard(
         member.reply_keyboard_json = json.dumps(keyboard, ensure_ascii=False)
         member.reply_keyboard_one_time = bool(one_time)
         member.reply_keyboard_resize = bool(resize)
-        ph = (placeholder or "").strip()[:64] or None
+        from app.services.emoji_pack_service import clip_preserving_custom_emoji
+
+        ph = clip_preserving_custom_emoji((placeholder or "").strip(), 64) or None
         member.reply_keyboard_placeholder = ph
     db.flush()
     return member

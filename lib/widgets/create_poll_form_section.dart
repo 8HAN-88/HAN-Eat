@@ -33,7 +33,6 @@ class CreatePollFormSection extends StatelessWidget {
             hintText: 'Например: Куда идём в выходные?',
             border: OutlineInputBorder(),
           ),
-          maxLength: 300,
         ),
         const SizedBox(height: 16),
         Text(
@@ -55,7 +54,6 @@ class CreatePollFormSection extends StatelessWidget {
                       labelText: 'Вариант ${i + 1}',
                       border: const OutlineInputBorder(),
                     ),
-                    maxLength: 120,
                   ),
                 ),
                 if (optionControllers.length > 2)

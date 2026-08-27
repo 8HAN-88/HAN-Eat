@@ -61,41 +61,45 @@ def _bot_response(bot: User, *, token: Optional[str] = None) -> "BotResponse":
 # === Schemas ===
 
 class BotReplyButton(BaseModel):
-    text: str = Field(..., min_length=1, max_length=64)
+    text: str = Field(..., min_length=1, max_length=80)
 
 
 class BotCommandCreate(BaseModel):
     command: str = Field(..., min_length=1, max_length=32)
     description: str = Field(..., min_length=1, max_length=256)
-    response_text: Optional[str] = Field(None, max_length=2000)
+    response_text: Optional[str] = Field(None, max_length=2024)
     inline_buttons: Optional[List["BotInlineButton"]] = None
     inline_button_rows: Optional[List[List["BotInlineButton"]]] = None
     reply_buttons: Optional[List[BotReplyButton]] = None
     reply_button_rows: Optional[List[List[BotReplyButton]]] = None
     reply_keyboard_one_time: bool = False
     reply_keyboard_resize: bool = True
-    reply_keyboard_placeholder: Optional[str] = Field(None, max_length=64)
+    reply_keyboard_placeholder: Optional[str] = Field(None, max_length=80)
     remove_reply_keyboard: bool = False
 
 
 class BotInlineButton(BaseModel):
-    text: str = Field(..., min_length=1, max_length=64)
+    text: str = Field(..., min_length=1, max_length=80)
     callback_data: Optional[str] = Field(None, max_length=128)
     url: Optional[str] = Field(None, max_length=512)
-    callback_text: Optional[str] = Field(None, max_length=300)
+    callback_text: Optional[str] = Field(None, max_length=320)
     # Telegram WebApp button: open mini app by id (or nested {"url": "..."}).
     web_app: Optional[dict] = None
     miniapp_id: Optional[int] = Field(None, gt=0)
 
 
 def _button_item_from_inline(btn: BotInlineButton) -> dict:
-    item: dict = {"text": btn.text.strip()[:64]}
+    from app.services.emoji_pack_service import clip_preserving_custom_emoji
+
+    item: dict = {"text": clip_preserving_custom_emoji(btn.text.strip(), 64)}
     if btn.callback_data and btn.callback_data.strip():
         item["callback_data"] = btn.callback_data.strip()[:128]
     if btn.url and btn.url.strip():
         item["url"] = btn.url.strip()[:512]
     if btn.callback_text and btn.callback_text.strip():
-        item["callback_text"] = btn.callback_text.strip()[:300]
+        item["callback_text"] = clip_preserving_custom_emoji(
+            btn.callback_text.strip(), 300
+        )
     miniapp_id = btn.miniapp_id
     if miniapp_id is None and isinstance(btn.web_app, dict):
         raw_id = btn.web_app.get("miniapp_id") or btn.web_app.get("id")
@@ -119,6 +123,18 @@ def _button_item_from_inline(btn: BotInlineButton) -> dict:
             detail="Each inline button requires callback_data, url, or web_app/miniapp_id",
         )
     return item
+
+
+def _clip_bot_response_text(text: Optional[str]) -> Optional[str]:
+    from app.services.emoji_pack_service import clip_preserving_custom_emoji
+
+    return clip_preserving_custom_emoji((text or "").strip(), 2000) or None
+
+
+def _clip_reply_placeholder(text: Optional[str]) -> Optional[str]:
+    from app.services.emoji_pack_service import clip_preserving_custom_emoji
+
+    return clip_preserving_custom_emoji((text or "").strip(), 64) or None
 
 
 def _normalize_inline_buttons(
@@ -352,13 +368,13 @@ async def create_bot(
             bot_id=bot_user.id,
             command=command_name,
             description=cmd.description,
-            response_text=cmd.response_text.strip()[:2000] if cmd.response_text else None,
+            response_text=_clip_bot_response_text(cmd.response_text),
             inline_buttons_json=json.dumps(inline_buttons, ensure_ascii=False) if inline_buttons else None,
             reply_buttons_json=json.dumps(reply_buttons, ensure_ascii=False) if reply_buttons else None,
             reply_keyboard_one_time=bool(cmd.reply_keyboard_one_time),
             reply_keyboard_resize=bool(cmd.reply_keyboard_resize),
-            reply_keyboard_placeholder=(
-                (cmd.reply_keyboard_placeholder or "").strip()[:64] or None
+            reply_keyboard_placeholder=_clip_reply_placeholder(
+                cmd.reply_keyboard_placeholder
             ),
             remove_reply_keyboard=bool(cmd.remove_reply_keyboard),
         ))
@@ -716,13 +732,13 @@ async def add_bot_command(
             bot_id=bot_id,
             command=cmd.command,
             description=cmd.description,
-            response_text=cmd.response_text.strip()[:2000] if cmd.response_text else None,
+            response_text=_clip_bot_response_text(cmd.response_text),
             inline_buttons_json=json.dumps(inline_buttons, ensure_ascii=False) if inline_buttons else None,
             reply_buttons_json=json.dumps(reply_buttons, ensure_ascii=False) if reply_buttons else None,
             reply_keyboard_one_time=bool(cmd.reply_keyboard_one_time),
             reply_keyboard_resize=bool(cmd.reply_keyboard_resize),
-            reply_keyboard_placeholder=(
-                (cmd.reply_keyboard_placeholder or "").strip()[:64] or None
+            reply_keyboard_placeholder=_clip_reply_placeholder(
+                cmd.reply_keyboard_placeholder
             ),
             remove_reply_keyboard=bool(cmd.remove_reply_keyboard),
         )
@@ -733,7 +749,7 @@ async def add_bot_command(
 
 class BotCommandUpdateRequest(BaseModel):
     description: Optional[str] = Field(None, min_length=1, max_length=256)
-    response_text: Optional[str] = Field(None, max_length=2000)
+    response_text: Optional[str] = Field(None, max_length=2024)
     inline_buttons: Optional[List["BotInlineButton"]] = None
     inline_button_rows: Optional[List[List["BotInlineButton"]]] = None
     clear_inline_buttons: bool = False
@@ -742,7 +758,7 @@ class BotCommandUpdateRequest(BaseModel):
     clear_reply_buttons: bool = False
     reply_keyboard_one_time: Optional[bool] = None
     reply_keyboard_resize: Optional[bool] = None
-    reply_keyboard_placeholder: Optional[str] = Field(None, max_length=64)
+    reply_keyboard_placeholder: Optional[str] = Field(None, max_length=80)
     remove_reply_keyboard: Optional[bool] = None
 
 
@@ -785,7 +801,7 @@ async def update_bot_command(
         resolved = keep_if_unchanged_http(
             emoji, current_user.id, payload.response_text, cmd.response_text
         )
-        cmd.response_text = (resolved or "").strip()[:2000] or None
+        cmd.response_text = _clip_bot_response_text(resolved)
     if payload.reply_keyboard_placeholder is not None:
         resolved = keep_if_unchanged_http(
             emoji,
@@ -793,7 +809,7 @@ async def update_bot_command(
             payload.reply_keyboard_placeholder,
             cmd.reply_keyboard_placeholder,
         )
-        cmd.reply_keyboard_placeholder = (resolved or "").strip()[:64] or None
+        cmd.reply_keyboard_placeholder = _clip_reply_placeholder(resolved)
     incoming_buttons = [
         part
         for part in _bot_command_text_parts(payload)[3:]

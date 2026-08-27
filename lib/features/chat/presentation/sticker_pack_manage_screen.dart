@@ -73,7 +73,6 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
             children: [
               TextField(
                 controller: titleCtrl,
-                maxLength: 120,
                 decoration: const InputDecoration(labelText: 'Название'),
               ),
               SwitchListTile(

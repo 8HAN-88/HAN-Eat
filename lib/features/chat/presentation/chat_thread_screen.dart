@@ -14742,7 +14742,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           content: TextField(
             controller: controller,
             autofocus: true,
-            maxLength: 120,
             decoration: const InputDecoration(
               hintText: 'Текст варианта',
             ),

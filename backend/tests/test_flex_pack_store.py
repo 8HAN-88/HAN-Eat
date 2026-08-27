@@ -4486,3 +4486,91 @@ def test_invoice_and_giveaway_title_clip_does_not_split_token():
     split_desc = ("д" * 507) + token
     assert clip_paid_text(split_desc, 512) == "д" * 507
     assert clip_paid_text("  счёт " + token + "  ", 512) == "счёт " + token
+
+
+def test_poll_option_does_not_persist_split_token(db_session):
+    from app.services.chat_poll_service import (
+        add_option_to_message_poll,
+        build_poll_content,
+        parse_poll_content,
+    )
+    from app.services.post_poll_service import build_poll_body
+
+    owner = _user(db_session, 1)
+    token = _token_while_flex(db_session, owner.id)
+    bare = _bare_ce_token(token)
+    question = ("п" * 295) + bare
+    option = ("в" * 115) + bare
+    content = build_poll_content(
+        question,
+        ["A", option],
+        settings={"allow_add_options": True},
+    )
+    data = parse_poll_content(content)
+    assert data["poll"]["question"] == "п" * 295
+    assert "[[e:" not in data["poll"]["question"]
+    assert data["poll"]["options"][1]["text"] == "в" * 115
+    assert "[[e:" not in data["poll"]["options"][1]["text"]
+
+    feed = build_poll_body(question, ["A", option])
+    assert feed["poll"]["question"] == "п" * 295
+    assert feed["poll"]["options"][1]["text"] == "в" * 115
+
+    conv = Conversation(type="direct", created_by_user_id=owner.id)
+    db_session.add(conv)
+    db_session.flush()
+    msg = Message(
+        conversation_id=conv.id,
+        sender_id=owner.id,
+        type="poll",
+        content=content,
+    )
+    db_session.add(msg)
+    db_session.commit()
+
+    add_option_to_message_poll(db_session, msg.id, owner.id, ("о" * 115) + bare)
+    db_session.commit()
+    stored = db_session.query(Message).filter(Message.id == msg.id).first()
+    added = parse_poll_content(stored.content)["poll"]["options"][-1]["text"]
+    assert added == "о" * 115
+    assert "[[e:" not in added
+
+
+def test_keyboard_button_does_not_persist_split_token():
+    from app.api.v1.bots import BotInlineButton, _button_item_from_inline
+    from app.services.reply_keyboard_service import normalize_reply_keyboard
+
+    token = "[[e:123]]"
+    label = ("к" * 58) + token
+    rows = normalize_reply_keyboard([[{"text": label}]])
+    assert rows[0][0]["text"] == "к" * 58
+    assert "[[e:" not in rows[0][0]["text"]
+
+    already = ("к" * 58) + "[[e:12"
+    rows2 = normalize_reply_keyboard([[{"text": already}]])
+    assert rows2[0][0]["text"] == "к" * 58
+
+    item = _button_item_from_inline(
+        BotInlineButton(
+            text=("к" * 58) + token,
+            callback_data="cb",
+            callback_text=("о" * 295) + token,
+        )
+    )
+    assert item["text"] == "к" * 58
+    assert item["callback_text"] == "о" * 295
+    assert "[[e:" not in item["text"]
+    assert "[[e:" not in item["callback_text"]
+
+
+def test_pack_title_does_not_persist_split_token(db_session):
+    owner = _user(db_session, 1)
+    token = _token_while_flex(db_session, owner.id)
+    bare = _bare_ce_token(token)
+    title = ("п" * 115) + bare
+    pack = EmojiPackService(db_session).create_pack(owner.id, title)
+    assert pack.title == "п" * 115
+    assert "[[e:" not in pack.title
+    sticker = StickerService(db_session).create_pack(owner.id, title, True)
+    assert sticker.title == "п" * 115
+    assert "[[e:" not in sticker.title

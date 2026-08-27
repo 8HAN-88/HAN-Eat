@@ -89,6 +89,8 @@ def _bot_for_callback(db: Session, source_message: Message) -> Optional[User]:
 
 
 def _normalize_inline_buttons(raw: Any) -> Optional[List[List[Dict[str, Any]]]]:
+    from app.services.emoji_pack_service import clip_preserving_custom_emoji
+
     if not raw:
         return None
     source = raw
@@ -107,7 +109,7 @@ def _normalize_inline_buttons(raw: Any) -> Optional[List[List[Dict[str, Any]]]]:
         for btn in row:
             if not isinstance(btn, dict):
                 continue
-            text = str(btn.get("text") or "").strip()[:64]
+            text = clip_preserving_custom_emoji(str(btn.get("text") or "").strip(), 64)
             if not text:
                 continue
             callback_data = btn.get("callback_data")
@@ -121,7 +123,9 @@ def _normalize_inline_buttons(raw: Any) -> Optional[List[List[Dict[str, Any]]]]:
             if isinstance(url, str) and url.strip():
                 clean["url"] = url.strip()[:512]
             if isinstance(callback_text, str) and callback_text.strip():
-                clean["callback_text"] = callback_text.strip()[:300]
+                clean["callback_text"] = clip_preserving_custom_emoji(
+                    callback_text.strip(), 300
+                )
             if miniapp_id is None and isinstance(web_app, dict):
                 raw_id = web_app.get("miniapp_id") or web_app.get("id")
                 try:

@@ -247,7 +247,6 @@ class _PackStoreScreenState extends State<PackStoreScreen>
         content: TextField(
           controller: titleCtrl,
           autofocus: true,
-          maxLength: 120,
           decoration: const InputDecoration(labelText: 'Название'),
         ),
         actions: [

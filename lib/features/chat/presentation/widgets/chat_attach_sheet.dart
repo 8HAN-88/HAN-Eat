@@ -725,7 +725,6 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
         content: TextField(
           controller: controller,
           autofocus: true,
-          maxLength: 120,
           decoration: const InputDecoration(
             hintText: 'Название пака',
           ),

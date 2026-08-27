@@ -500,7 +500,7 @@ class EmojiPackService:
         return slug
 
     def create_pack(self, user_id: int, title: str, is_public: bool = True) -> EmojiPack:
-        clean = (title or "").strip()
+        clean = clip_preserving_custom_emoji((title or "").strip(), 120)
         if len(clean) < 2:
             raise ValueError("invalid_title")
         self.require_send_tokens(user_id, clean)
@@ -510,7 +510,7 @@ class EmojiPackService:
             "Публикация эмодзи-паков доступна с уровня 70",
         )
         pack = EmojiPack(
-            title=clean[:120],
+            title=clean,
             slug=self._make_unique_slug(clean, user_id),
             owner_user_id=user_id,
             is_public=bool(is_public),
@@ -539,7 +539,10 @@ class EmojiPackService:
                 raise ValueError("invalid_title")
             # Flutter always resends title with is_public. Unchanged
             # title is keep-if-unchanged — do not 403 after a downgrade.
-            pack.title = (keep_if_unchanged(self, user_id, clean, pack.title) or clean)[:120]
+            pack.title = clip_preserving_custom_emoji(
+                keep_if_unchanged(self, user_id, clean, pack.title) or clean,
+                120,
+            )
         if is_public is not None:
             pack.is_public = bool(is_public)
         pack.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
