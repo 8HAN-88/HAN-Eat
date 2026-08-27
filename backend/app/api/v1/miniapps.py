@@ -527,19 +527,24 @@ async def update_miniapp(
     if not bot or bot.created_by_user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    from app.services.emoji_pack_service import EmojiPackService
+    from app.services.emoji_pack_service import EmojiPackService, keep_if_unchanged_http
 
-    EmojiPackService(db).require_send_tokens_http(
-        current_user.id,
-        payload.name,
-        payload.description,
-    )
+    emoji = EmojiPackService(db)
+    # Flutter always resends name + description with url / category / icon.
     requires_re_moderation = False
     if payload.name is not None:
-        app.name = payload.name.strip()
+        app.name = (
+            keep_if_unchanged_http(
+                emoji, current_user.id, payload.name, app.name
+            )
+            or payload.name
+        ).strip()
         requires_re_moderation = True
     if payload.description is not None:
-        app.description = payload.description.strip() or None
+        resolved = keep_if_unchanged_http(
+            emoji, current_user.id, payload.description, app.description
+        )
+        app.description = (resolved or "").strip() or None
         requires_re_moderation = True
     if payload.category is not None:
         app.category = _normalize_category(payload.category)

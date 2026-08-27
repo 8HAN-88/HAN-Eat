@@ -192,6 +192,28 @@ def _require_bot_texts(db: Session, user_id: int, *parts: Optional[str]) -> None
     EmojiPackService(db).require_send_tokens_http(user_id, *parts)
 
 
+def _stored_button_texts(*blobs: Optional[str]) -> list:
+    texts: list = []
+    for blob in blobs:
+        if not blob:
+            continue
+        try:
+            data = json.loads(blob)
+        except (TypeError, ValueError):
+            continue
+        stack = [data]
+        while stack:
+            cur = stack.pop()
+            if isinstance(cur, list):
+                stack.extend(cur)
+            elif isinstance(cur, dict):
+                for key in ("text", "callback_text"):
+                    val = cur.get(key)
+                    if isinstance(val, str) and val.strip():
+                        texts.append(val)
+    return texts
+
+
 class BotCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=64)
     username: str = Field(..., min_length=3, max_length=32)
@@ -394,20 +416,32 @@ async def update_bot(
     db: Session = Depends(get_db),
 ):
     bot = _bot_or_404(db, bot_id, current_user.id)
-    _require_bot_texts(
-        db,
-        current_user.id,
-        payload.name,
-        payload.description,
-        payload.short_description,
-    )
+    from app.services.emoji_pack_service import EmojiPackService, keep_if_unchanged_http
 
+    emoji = EmojiPackService(db)
+    # Flutter always resends name + descriptions together.
     if payload.name is not None:
-        bot.name = payload.name.strip() or bot.name
+        bot.name = (
+            keep_if_unchanged_http(
+                emoji, current_user.id, payload.name, bot.name
+            )
+            or ""
+        ).strip() or bot.name
     if payload.description is not None:
-        bot.bot_description = payload.description.strip() or None
+        bot.bot_description = keep_if_unchanged_http(
+            emoji, current_user.id, payload.description, bot.bot_description
+        )
+        if bot.bot_description is not None:
+            bot.bot_description = bot.bot_description.strip() or None
     if payload.short_description is not None:
-        bot.bot_short_description = payload.short_description.strip() or None
+        bot.bot_short_description = keep_if_unchanged_http(
+            emoji,
+            current_user.id,
+            payload.short_description,
+            bot.bot_short_description,
+        )
+        if bot.bot_short_description is not None:
+            bot.bot_short_description = bot.bot_short_description.strip() or None
 
     db.commit()
     db.refresh(bot)
@@ -732,11 +766,47 @@ async def update_bot_command(
     ).first()
     if not cmd:
         raise HTTPException(status_code=404, detail="Command not found")
-    _require_bot_texts(db, current_user.id, *_bot_command_text_parts(payload))
+    from app.services.emoji_pack_service import (
+        EmojiPackService,
+        keep_if_unchanged_http,
+        keep_if_unchanged_items,
+    )
+
+    emoji = EmojiPackService(db)
+    # Flutter always resends description / response / buttons together.
     if payload.description is not None:
-        cmd.description = payload.description.strip()
+        cmd.description = (
+            keep_if_unchanged_http(
+                emoji, current_user.id, payload.description, cmd.description
+            )
+            or payload.description
+        ).strip()
     if payload.response_text is not None:
-        cmd.response_text = payload.response_text.strip()[:2000] or None
+        resolved = keep_if_unchanged_http(
+            emoji, current_user.id, payload.response_text, cmd.response_text
+        )
+        cmd.response_text = (resolved or "").strip()[:2000] or None
+    if payload.reply_keyboard_placeholder is not None:
+        resolved = keep_if_unchanged_http(
+            emoji,
+            current_user.id,
+            payload.reply_keyboard_placeholder,
+            cmd.reply_keyboard_placeholder,
+        )
+        cmd.reply_keyboard_placeholder = (resolved or "").strip()[:64] or None
+    incoming_buttons = [
+        part
+        for part in _bot_command_text_parts(payload)[3:]
+        if part
+    ]
+    if incoming_buttons:
+        keep_if_unchanged_items(
+            emoji,
+            current_user.id,
+            incoming_buttons,
+            _stored_button_texts(cmd.inline_buttons_json, cmd.reply_buttons_json),
+            http=True,
+        )
     if payload.clear_inline_buttons:
         cmd.inline_buttons_json = None
     elif payload.inline_button_rows is not None or payload.inline_buttons is not None:
@@ -761,10 +831,6 @@ async def update_bot_command(
         cmd.reply_keyboard_one_time = bool(payload.reply_keyboard_one_time)
     if payload.reply_keyboard_resize is not None:
         cmd.reply_keyboard_resize = bool(payload.reply_keyboard_resize)
-    if payload.reply_keyboard_placeholder is not None:
-        cmd.reply_keyboard_placeholder = (
-            payload.reply_keyboard_placeholder.strip()[:64] or None
-        )
     if payload.remove_reply_keyboard is not None:
         cmd.remove_reply_keyboard = bool(payload.remove_reply_keyboard)
     db.commit()

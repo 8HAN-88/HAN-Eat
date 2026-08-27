@@ -511,8 +511,9 @@ class EmojiPackService:
             clean = title.strip()
             if len(clean) < 2:
                 raise ValueError("invalid_title")
-            self.require_send_tokens(user_id, clean)
-            pack.title = clean[:120]
+            # Flutter always resends title with is_public. Unchanged
+            # title is keep-if-unchanged — do not 403 after a downgrade.
+            pack.title = (keep_if_unchanged(self, user_id, clean, pack.title) or clean)[:120]
         if is_public is not None:
             pack.is_public = bool(is_public)
         pack.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)

@@ -3894,3 +3894,178 @@ def test_new_send_restriction_tokens_still_require_flex(db_session):
             send_restricted_until=None,
             reason=token,
         )
+
+
+def _token_while_flex(db, user_id: int) -> str:
+    _activate(db, user_id, 70)
+    emoji = EmojiPackService(db)
+    pack = emoji.create_pack(user_id, "Пак")
+    item = emoji.add_emoji(
+        user_id=user_id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/resave.webp",
+    )
+    db.commit()
+    return f"имя [[e:{item.id}]]"
+
+
+def test_emoji_pack_resave_title_does_not_403(db_session):
+    owner = _user(db_session, 1)
+    token = _token_while_flex(db_session, owner.id)
+    emoji = EmojiPackService(db_session)
+    pack = emoji.create_pack(owner.id, token)
+    db_session.commit()
+    _activate(db_session, 1, 10)
+    updated = emoji.update_pack(
+        user_id=owner.id, pack_id=pack.id, title=token, is_public=False
+    )
+    assert updated.is_public is False
+    assert "[[e:" not in updated.title
+    assert "имя" in updated.title
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        emoji.update_pack(
+            user_id=owner.id,
+            pack_id=pack.id,
+            title=f"новое {token}",
+        )
+
+
+def test_sticker_pack_resave_title_does_not_403(db_session):
+    owner = _user(db_session, 1)
+    token = _token_while_flex(db_session, owner.id)
+    stickers = StickerService(db_session)
+    pack = stickers.create_pack(owner.id, token, True)
+    db_session.commit()
+    _activate(db_session, 1, 10)
+    updated = stickers.update_pack(
+        user_id=owner.id, pack_id=pack.id, title=token, is_public=False
+    )
+    assert updated.is_public is False
+    assert "[[e:" not in updated.title
+    assert "имя" in updated.title
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        stickers.update_pack(
+            user_id=owner.id,
+            pack_id=pack.id,
+            title=f"новое {token}",
+        )
+
+
+def test_business_greeting_resave_does_not_403(db_session):
+    from app.services.business_profile_service import update_settings
+
+    owner = _user(db_session, 1)
+    token = _token_while_flex(db_session, owner.id)
+    update_settings(
+        db_session,
+        owner,
+        {"greeting_enabled": True, "greeting_text": token},
+    )
+    db_session.commit()
+    _activate(db_session, 1, 68)
+    update_settings(
+        db_session,
+        owner,
+        {
+            "greeting_enabled": False,
+            "greeting_text": token,
+            "greeting_inactivity_days": 14,
+        },
+    )
+    row = (
+        db_session.query(UserBusinessSettings)
+        .filter(UserBusinessSettings.user_id == owner.id)
+        .first()
+    )
+    assert row is not None
+    assert row.greeting_enabled is False
+    assert "[[e:" not in (row.greeting_text or "")
+    assert "имя" in (row.greeting_text or "")
+    with pytest.raises(HTTPException) as err:
+        update_settings(
+            db_session,
+            owner,
+            {"greeting_enabled": True, "greeting_text": f"новое {token}"},
+        )
+    assert err.value.status_code == 403
+
+
+def test_business_away_resave_does_not_403(db_session):
+    from app.services.business_profile_service import update_settings
+
+    owner = _user(db_session, 1)
+    token = _token_while_flex(db_session, owner.id)
+    update_settings(
+        db_session,
+        owner,
+        {"away_enabled": True, "away_text": token, "away_mode": "manual"},
+    )
+    db_session.commit()
+    _activate(db_session, 1, 68)
+    update_settings(
+        db_session,
+        owner,
+        {"away_enabled": False, "away_text": token, "away_mode": "outside_hours"},
+    )
+    row = (
+        db_session.query(UserBusinessSettings)
+        .filter(UserBusinessSettings.user_id == owner.id)
+        .first()
+    )
+    assert row is not None
+    assert "[[e:" not in (row.away_text or "")
+    with pytest.raises(HTTPException) as err:
+        update_settings(
+            db_session,
+            owner,
+            {"away_enabled": True, "away_text": f"новое {token}", "away_mode": "manual"},
+        )
+    assert err.value.status_code == 403
+
+
+def test_update_bot_resave_name_does_not_403(db_session):
+    import asyncio
+
+    from app.api.v1.bots import BotUpdateRequest, update_bot
+
+    owner = _user(db_session, 1)
+    token = _token_while_flex(db_session, owner.id)
+    bot = User(
+        id=10,
+        email="bot@t.test",
+        password_hash="h",
+        name=token,
+        is_bot=True,
+        bot_username="cookbot",
+        bot_token="tok-resave",
+        created_by_user_id=owner.id,
+        bot_description="старое",
+    )
+    db_session.add(bot)
+    db_session.commit()
+    _activate(db_session, 1, 10)
+
+    async def _run():
+        return await update_bot(
+            bot_id=10,
+            payload=BotUpdateRequest(name=token, description="новое"),
+            current_user=owner,
+            db=db_session,
+        )
+
+    result = asyncio.run(_run())
+    assert "[[e:" not in result.name
+    assert "имя" in result.name
+    assert result.description == "новое"
+
+    async def _new():
+        return await update_bot(
+            bot_id=10,
+            payload=BotUpdateRequest(name=f"новое {token}"),
+            current_user=owner,
+            db=db_session,
+        )
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(_new())
+    assert err.value.status_code == 403

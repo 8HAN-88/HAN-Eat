@@ -290,18 +290,31 @@ def _own_bot(db: Session, owner_id: int, bot_id: int) -> User:
 
 
 def update_settings(db: Session, user: User, body: dict[str, Any]) -> dict[str, Any]:
-    from app.services.emoji_pack_service import EmojiPackService
+    from app.services.emoji_pack_service import (
+        EmojiPackService,
+        keep_if_unchanged_http,
+        keep_or_preview_tokens,
+    )
 
     billing = SubscriptionService(db)
     row = get_or_create_settings(db, user.id)
+    emoji = EmojiPackService(db)
 
     if "greeting_enabled" in body or "greeting_text" in body or "greeting_inactivity_days" in body:
         enabled = _bool(body["greeting_enabled"]) if "greeting_enabled" in body else _bool(row.greeting_enabled)
-        text = (
-            str(body.get("greeting_text") or "").strip()[:400]
-            if "greeting_text" in body
-            else (row.greeting_text or "")
-        )
+        # Flutter resends greeting_text when toggling enabled or days.
+        if "greeting_text" in body:
+            text = (
+                keep_if_unchanged_http(
+                    emoji,
+                    user.id,
+                    str(body.get("greeting_text") or "").strip()[:400],
+                    row.greeting_text,
+                )
+                or ""
+            )
+        else:
+            text = keep_or_preview_tokens(emoji, user.id, row.greeting_text) or ""
         days = int(row.greeting_inactivity_days or 7)
         if "greeting_inactivity_days" in body:
             try:
@@ -310,7 +323,6 @@ def update_settings(db: Session, user: User, body: dict[str, Any]) -> dict[str, 
                 raise BusinessError("invalid_greeting_days") from exc
             if days not in GREETING_DAYS:
                 raise BusinessError("invalid_greeting_days")
-        EmojiPackService(db).require_send_tokens_http(user.id, text)
         if (enabled or text) and not billing.has_feature(user.id, "business_greeting"):
             billing.require_feature(
                 user.id,
@@ -323,15 +335,21 @@ def update_settings(db: Session, user: User, body: dict[str, Any]) -> dict[str, 
 
     if "away_enabled" in body or "away_text" in body or "away_mode" in body:
         enabled = _bool(body["away_enabled"]) if "away_enabled" in body else _bool(row.away_enabled)
-        text = (
-            str(body.get("away_text") or "").strip()[:400]
-            if "away_text" in body
-            else (row.away_text or "")
-        )
+        if "away_text" in body:
+            text = (
+                keep_if_unchanged_http(
+                    emoji,
+                    user.id,
+                    str(body.get("away_text") or "").strip()[:400],
+                    row.away_text,
+                )
+                or ""
+            )
+        else:
+            text = keep_or_preview_tokens(emoji, user.id, row.away_text) or ""
         mode = str(body.get("away_mode") or row.away_mode or "manual").strip()
         if mode not in AWAY_MODES:
             raise BusinessError("invalid_away_mode")
-        EmojiPackService(db).require_send_tokens_http(user.id, text)
         if (enabled or text or mode != "manual") and not billing.has_feature(
             user.id, "business_away"
         ):
@@ -357,12 +375,18 @@ def update_settings(db: Session, user: User, body: dict[str, Any]) -> dict[str, 
     if any(k in body for k in ("location_lat", "location_lng", "location_address")):
         lat = body.get("location_lat", row.location_lat)
         lng = body.get("location_lng", row.location_lng)
-        address = (
-            str(body.get("location_address") or "").strip()[:120]
-            if "location_address" in body
-            else (row.location_address or "")
-        )
-        EmojiPackService(db).require_send_tokens_http(user.id, address)
+        if "location_address" in body:
+            address = (
+                keep_if_unchanged_http(
+                    emoji,
+                    user.id,
+                    str(body.get("location_address") or "").strip()[:120],
+                    row.location_address,
+                )
+                or ""
+            )
+        else:
+            address = keep_or_preview_tokens(emoji, user.id, row.location_address) or ""
         if lat is None or lng is None or lat == "" or lng == "":
             row.location_lat = None
             row.location_lng = None
@@ -386,22 +410,35 @@ def update_settings(db: Session, user: User, body: dict[str, Any]) -> dict[str, 
             row.location_address = address or None
 
     if any(k in body for k in ("intro_title", "intro_text", "intro_sticker_url")):
-        title = (
-            str(body.get("intro_title") or "").strip()[:40]
-            if "intro_title" in body
-            else (row.intro_title or "")
-        )
-        text = (
-            str(body.get("intro_text") or "").strip()[:200]
-            if "intro_text" in body
-            else (row.intro_text or "")
-        )
+        if "intro_title" in body:
+            title = (
+                keep_if_unchanged_http(
+                    emoji,
+                    user.id,
+                    str(body.get("intro_title") or "").strip()[:40],
+                    row.intro_title,
+                )
+                or ""
+            )
+        else:
+            title = keep_or_preview_tokens(emoji, user.id, row.intro_title) or ""
+        if "intro_text" in body:
+            text = (
+                keep_if_unchanged_http(
+                    emoji,
+                    user.id,
+                    str(body.get("intro_text") or "").strip()[:200],
+                    row.intro_text,
+                )
+                or ""
+            )
+        else:
+            text = keep_or_preview_tokens(emoji, user.id, row.intro_text) or ""
         sticker = (
             str(body.get("intro_sticker_url") or "").strip()[:1024]
             if "intro_sticker_url" in body
             else (row.intro_sticker_url or "")
         )
-        EmojiPackService(db).require_send_tokens_http(user.id, title, text)
         if (title or text or sticker) and not billing.has_feature(user.id, "business_intro"):
             billing.require_feature(
                 user.id,

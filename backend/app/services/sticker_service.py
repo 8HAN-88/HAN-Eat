@@ -155,10 +155,15 @@ class StickerService:
             clean_title = title.strip()
             if len(clean_title) < 2:
                 raise ValueError("invalid_title")
-            from app.services.emoji_pack_service import EmojiPackService
+            from app.services.emoji_pack_service import EmojiPackService, keep_if_unchanged
 
-            EmojiPackService(self.db).require_send_tokens(user_id, clean_title)
-            pack.title = clean_title[:120]
+            # Flutter always resends title with is_public / is_premium.
+            pack.title = (
+                keep_if_unchanged(
+                    EmojiPackService(self.db), user_id, clean_title, pack.title
+                )
+                or clean_title
+            )[:120]
         if is_public is not None:
             pack.is_public = bool(is_public)
         if is_premium is not None:
