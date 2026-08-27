@@ -3579,7 +3579,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         content: TextField(
           controller: controller,
           autofocus: true,
-          maxLength: 128,
           decoration: const InputDecoration(
             labelText: 'Название',
             hintText: 'Например: Новости',
@@ -3646,7 +3645,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         content: TextField(
           controller: controller,
           autofocus: true,
-          maxLength: 128,
           decoration: const InputDecoration(labelText: 'Название'),
           onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
         ),

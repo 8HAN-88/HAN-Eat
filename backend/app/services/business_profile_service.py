@@ -292,6 +292,7 @@ def _own_bot(db: Session, owner_id: int, bot_id: int) -> User:
 def update_settings(db: Session, user: User, body: dict[str, Any]) -> dict[str, Any]:
     from app.services.emoji_pack_service import (
         EmojiPackService,
+        clip_preserving_custom_emoji,
         keep_if_unchanged_http,
         keep_or_preview_tokens,
     )
@@ -308,7 +309,9 @@ def update_settings(db: Session, user: User, body: dict[str, Any]) -> dict[str, 
                 keep_if_unchanged_http(
                     emoji,
                     user.id,
-                    str(body.get("greeting_text") or "").strip()[:400],
+                    clip_preserving_custom_emoji(
+                        str(body.get("greeting_text") or "").strip(), 400
+                    ),
                     row.greeting_text,
                 )
                 or ""
@@ -340,7 +343,9 @@ def update_settings(db: Session, user: User, body: dict[str, Any]) -> dict[str, 
                 keep_if_unchanged_http(
                     emoji,
                     user.id,
-                    str(body.get("away_text") or "").strip()[:400],
+                    clip_preserving_custom_emoji(
+                        str(body.get("away_text") or "").strip(), 400
+                    ),
                     row.away_text,
                 )
                 or ""
@@ -380,7 +385,9 @@ def update_settings(db: Session, user: User, body: dict[str, Any]) -> dict[str, 
                 keep_if_unchanged_http(
                     emoji,
                     user.id,
-                    str(body.get("location_address") or "").strip()[:120],
+                    clip_preserving_custom_emoji(
+                        str(body.get("location_address") or "").strip(), 120
+                    ),
                     row.location_address,
                 )
                 or ""
@@ -415,7 +422,9 @@ def update_settings(db: Session, user: User, body: dict[str, Any]) -> dict[str, 
                 keep_if_unchanged_http(
                     emoji,
                     user.id,
-                    str(body.get("intro_title") or "").strip()[:40],
+                    clip_preserving_custom_emoji(
+                        str(body.get("intro_title") or "").strip(), 40
+                    ),
                     row.intro_title,
                 )
                 or ""
@@ -427,7 +436,9 @@ def update_settings(db: Session, user: User, body: dict[str, Any]) -> dict[str, 
                 keep_if_unchanged_http(
                     emoji,
                     user.id,
-                    str(body.get("intro_text") or "").strip()[:200],
+                    clip_preserving_custom_emoji(
+                        str(body.get("intro_text") or "").strip(), 200
+                    ),
                     row.intro_text,
                 )
                 or ""

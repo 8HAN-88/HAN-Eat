@@ -978,7 +978,6 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                     ),
                   TextField(
                     controller: reasonController,
-                    maxLength: 240,
                     decoration: const InputDecoration(
                       labelText: 'Причина (опционально)',
                       hintText: 'Например: флуд / спам',
@@ -1102,7 +1101,6 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                   ),
                 TextField(
                   controller: reasonController,
-                  maxLength: 240,
                   decoration: const InputDecoration(
                     labelText: 'Причина (опционально)',
                     hintText: 'Например: спам / токсичность',

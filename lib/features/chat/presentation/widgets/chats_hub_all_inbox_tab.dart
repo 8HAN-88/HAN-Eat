@@ -2035,7 +2035,6 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                   TextField(
                     controller: titleCtrl,
                     autofocus: true,
-                    maxLength: 40,
                     decoration: const InputDecoration(labelText: 'Название'),
                   ),
                   const SizedBox(height: 8),

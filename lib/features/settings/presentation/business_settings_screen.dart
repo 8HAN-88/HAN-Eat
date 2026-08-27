@@ -496,7 +496,6 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
                               const SizedBox(height: 8),
                               TextField(
                                 controller: _introTitleCtrl,
-                                maxLength: 40,
                                 decoration: const InputDecoration(
                                   labelText: 'Заголовок',
                                 ),

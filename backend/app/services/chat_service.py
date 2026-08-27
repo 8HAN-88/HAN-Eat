@@ -1529,13 +1529,17 @@ class ChatService:
         title: str,
         icon_emoji: Optional[str] = None,
     ) -> ForumTopic:
-        clean = (title or "").strip()[:128]
+        from app.services.emoji_pack_service import (
+            EmojiPackService,
+            clip_preserving_custom_emoji,
+        )
+
+        clean = clip_preserving_custom_emoji((title or "").strip(), 128)
         if not clean:
             raise ValueError("empty_title")
-        from app.services.emoji_pack_service import EmojiPackService
-
+        icon = clip_preserving_custom_emoji((icon_emoji or "").strip(), 32) or None
         EmojiPackService(self.db).require_send_tokens(actor_id, clean)
-        EmojiPackService(self.db).require_send_tokens(actor_id, icon_emoji)
+        EmojiPackService(self.db).require_send_tokens(actor_id, icon)
         if not self._is_member(conversation_id, actor_id):
             raise ValueError("forbidden")
         conv = self._get_group_or_error(conversation_id)
@@ -1544,7 +1548,7 @@ class ChatService:
         if not self._can_change_group_info(conversation_id, actor_id):
             raise ValueError("forbidden")
         self.ensure_general_topic(conversation_id, actor_id)
-        emoji = (icon_emoji or "").strip()[:32] or None
+        emoji = icon
         topic = ForumTopic(
             conversation_id=conversation_id,
             title=clean,
@@ -1582,6 +1586,7 @@ class ChatService:
             raise ValueError("topic_not_found")
         from app.services.emoji_pack_service import (
             EmojiPackService,
+            clip_preserving_custom_emoji,
             editor_or_preview_tokens,
         )
 
@@ -1590,24 +1595,26 @@ class ChatService:
         emoji = EmojiPackService(self.db)
         own = int(topic.created_by_user_id or 0) == int(actor_id)
         if title is not None:
-            clean = title.strip()[:128]
+            clean = clip_preserving_custom_emoji(title.strip(), 128)
             if not clean:
                 raise ValueError("empty_title")
-            clean = (
+            clean = clip_preserving_custom_emoji(
                 editor_or_preview_tokens(emoji, actor_id, clean, own=own)
-                or clean
-            )[:128]
+                or clean,
+                128,
+            )
             if topic.is_general and clean.lower() not in ("general", "общий"):
                 # Allow rename of General but keep is_general.
                 pass
             topic.title = clean
         if icon_emoji is not None:
-            icon = icon_emoji.strip()[:32] or None
+            icon = clip_preserving_custom_emoji(icon_emoji.strip(), 32) or None
             if icon:
-                icon = (
+                icon = clip_preserving_custom_emoji(
                     editor_or_preview_tokens(emoji, actor_id, icon, own=own)
-                    or icon
-                ).strip()[:32] or None
+                    or icon,
+                    32,
+                ) or None
             topic.icon_emoji = icon
         if closed is not None:
             if topic.is_general and closed:
@@ -2428,7 +2435,11 @@ class ChatService:
                     raise ValueError("invalid_restriction_until")
             target_member.send_restricted = True
             target_member.send_restricted_until = until_naive
-            target_member.send_restriction_reason = (reason or "").strip()[:240] or None
+            from app.services.emoji_pack_service import clip_preserving_custom_emoji
+
+            target_member.send_restriction_reason = (
+                clip_preserving_custom_emoji((reason or "").strip(), 240) or None
+            )
         else:
             target_member.send_restricted = False
             target_member.send_restricted_until = None
@@ -2492,7 +2503,9 @@ class ChatService:
             self.db.add(row)
         row.banned = True
         row.banned_by_user_id = actor_id
-        row.reason = (reason or "").strip()[:240] or None
+        from app.services.emoji_pack_service import clip_preserving_custom_emoji
+
+        row.reason = clip_preserving_custom_emoji((reason or "").strip(), 240) or None
         row.banned_until = until_naive
 
         if target_member is not None:

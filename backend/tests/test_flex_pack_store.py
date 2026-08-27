@@ -40,6 +40,7 @@ from app.models.user_business import UserBusinessSettings
 from app.models.chat_folder import ChatFolder, ChatFolderItem
 from app.models.chat_folder_share import ChatFolderShare
 from app.models.forum_topic import ForumTopic
+from app.models.chat_tag import ChatTag
 from app.models.saved_tag import SavedTag
 from app.models.story import Story, StoryReaction
 from app.models.quick_reply import QuickReply
@@ -111,6 +112,7 @@ def db_session():
             ChatFolderItem.__table__,
             ChatFolderShare.__table__,
             ForumTopic.__table__,
+            ChatTag.__table__,
             SavedTag.__table__,
             Story.__table__,
             StoryReaction.__table__,
@@ -4297,6 +4299,49 @@ def test_clip_preserving_custom_emoji_does_not_split_token():
     assert clipped == prefix
     assert clip_preserving_custom_emoji("короткое " + token, 64) == "короткое " + token
     assert clip_preserving_custom_emoji("abcdef", 3) == "abc"
+    already_cut = ("п" * 35) + "[[e:12"
+    assert clip_preserving_custom_emoji(already_cut, 40) == "п" * 35
+
+
+def test_chat_tag_does_not_persist_split_token(db_session):
+    from app.services.chat_tag_service import create_tag
+
+    owner = _user(db_session, 1)
+    token = _token_while_flex(db_session, owner.id)
+    bare = _bare_ce_token(token)
+    title = ("п" * 35) + bare
+    tag = create_tag(db_session, owner.id, title)
+    db_session.commit()
+    assert "[[e:" not in tag.title
+    assert tag.title == "п" * 35
+
+
+def test_forum_topic_does_not_persist_split_token(db_session):
+    owner = _user(db_session, 1)
+    token = _token_while_flex(db_session, owner.id)
+    bare = _bare_ce_token(token)
+    conv = Conversation(
+        type="group",
+        title="Форум",
+        created_by_user_id=owner.id,
+        is_forum=True,
+    )
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add(
+        ConversationMember(
+            conversation_id=conv.id,
+            user_id=owner.id,
+            is_admin=True,
+            can_change_info=True,
+        )
+    )
+    db_session.commit()
+    topic = ChatService(db_session).create_forum_topic(
+        conv.id, owner.id, ("п" * 123) + bare
+    )
+    assert "[[e:" not in (topic.title or "")
+    assert topic.title == "п" * 123
 
 
 def _bare_ce_token(token: str) -> str:

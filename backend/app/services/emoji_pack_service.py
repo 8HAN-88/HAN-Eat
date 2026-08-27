@@ -38,23 +38,30 @@ def parse_custom_reaction_id(emoji: Optional[str]) -> Optional[int]:
         return None
 
 
+_INCOMPLETE_CE_SUFFIX_RE = re.compile(r"\[\[e:\d*\]?\]?\s*$")
+
+
 def clip_preserving_custom_emoji(text: Optional[str], limit: int) -> str:
     """Truncate without slicing a `[[e:id]]` token in half.
 
     Folder names (64) and similar tight columns used to persist `[[e:12`.
     An incomplete token is dropped so later saves do not store garbage.
+    Also drops a trailing `[[e:` / `[[e:12` left by a client maxLength cut.
     """
     raw = text or ""
     if limit <= 0:
         return ""
-    if len(raw) <= limit:
-        return raw
+    clipped = raw if len(raw) <= limit else raw[:limit]
     for match in CE_TOKEN_RE.finditer(raw):
         if match.start() >= limit:
             break
         if match.end() > limit:
-            return raw[: match.start()].rstrip()
-    return raw[:limit]
+            clipped = raw[: match.start()].rstrip()
+            break
+    incomplete = _INCOMPLETE_CE_SUFFIX_RE.search(clipped)
+    if incomplete and not CE_TOKEN_RE.search(incomplete.group(0)):
+        return clipped[: incomplete.start()].rstrip()
+    return clipped
 
 
 def preview_text_with_custom_emoji(text: Optional[str], *, limit: int = 120) -> str:

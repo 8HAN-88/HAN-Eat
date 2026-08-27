@@ -457,12 +457,12 @@ class UpdateGroupChatRequest(BaseModel):
 
 
 class ForumTopicCreateRequest(BaseModel):
-    title: str = Field(..., min_length=1, max_length=128)
+    title: str = Field(..., min_length=1, max_length=160)
     icon_emoji: Optional[str] = Field(None, max_length=32)
 
 
 class ForumTopicUpdateRequest(BaseModel):
-    title: Optional[str] = Field(None, min_length=1, max_length=128)
+    title: Optional[str] = Field(None, min_length=1, max_length=160)
     icon_emoji: Optional[str] = Field(None, max_length=32)
     closed: Optional[bool] = None
 
@@ -529,11 +529,11 @@ class GroupMemberPermissionsRequest(BaseModel):
 class GroupMemberSendRestrictionRequest(BaseModel):
     send_restricted: bool = True
     send_restricted_until: Optional[datetime] = None
-    reason: Optional[str] = Field(default=None, max_length=240)
+    reason: Optional[str] = Field(default=None, max_length=256)
 
 
 class GroupMemberBanRequest(BaseModel):
-    reason: Optional[str] = Field(default=None, max_length=240)
+    reason: Optional[str] = Field(default=None, max_length=256)
     banned_until: Optional[datetime] = None
 
 
@@ -722,7 +722,7 @@ class ChatTagListResponse(BaseModel):
 
 
 class CreateChatTagRequest(BaseModel):
-    title: str = Field(..., min_length=1, max_length=40)
+    title: str = Field(..., min_length=1, max_length=64)
     color: str = Field(default="blue", max_length=16)
 
 
