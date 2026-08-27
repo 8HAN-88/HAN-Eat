@@ -1905,6 +1905,24 @@ def test_authored_or_peer_label_gates_own_button(db_session):
         )
 
 
+def test_miniapp_chrome_title_is_peer_button_label(db_session):
+    """Flutter sendData always posts WebView title as button_text."""
+    owner = _user(db_session, 1)
+    peer = _user(db_session, 2)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    EmojiPackService(db_session).require_send_tokens_http(peer.id, '{"ok":true}')
+    out = authored_or_peer_label(
+        EmojiPackService(db_session),
+        peer.id,
+        None,
+        token,
+        default="Mini App",
+        limit=64,
+    )
+    assert "[[e:" not in out
+    assert "✦" in out
+
+
 def test_editor_or_preview_tokens_gates_own(db_session):
     owner = _user(db_session, 1)
     token = _emoji_token_after_downgrade(db_session, owner.id)

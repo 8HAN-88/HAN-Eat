@@ -796,16 +796,15 @@ async def send_miniapp_web_app_data(
     )
 
     emoji = EmojiPackService(db)
-    # `data` and an explicit button are the sender's. Default button text
-    # is the miniapp name (owner-authored) — preview, do not 403.
-    emoji.require_send_tokens_http(
-        current_user.id, data, (payload.button_text or "").strip() or None
-    )
+    # `data` is the webapp payload the user confirmed. Flutter always
+    # sends the chrome title (app name or inline-button label) as
+    # button_text — that is the owner's, not authored. Preview, do not 403.
+    emoji.require_send_tokens_http(current_user.id, data)
     button_text = authored_or_peer_label(
         emoji,
         current_user.id,
-        payload.button_text,
-        app.name,
+        None,
+        (payload.button_text or "").strip() or app.name,
         default="Mini App",
         limit=64,
     )

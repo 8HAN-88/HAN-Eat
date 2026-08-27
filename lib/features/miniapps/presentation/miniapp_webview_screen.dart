@@ -6,7 +6,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../utils/session_snackbar.dart';
 import '../../../widgets/highlighted_text.dart';
+import '../../subscription/creator_upsell.dart';
 import '../data/miniapps_service.dart';
 
 /// Полноценный экран запуска мини-приложения с WebView + JS bridge (как Telegram WebApp).
@@ -366,8 +368,12 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _sendingData = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось отправить данные: $e')),
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось отправить данные',
       );
     }
   }
