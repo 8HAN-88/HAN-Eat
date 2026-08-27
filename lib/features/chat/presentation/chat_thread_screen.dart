@@ -17720,7 +17720,7 @@ class _ChatVideoPlayerPageState extends State<_ChatVideoPlayerPage> {
     try {
       final c = await VideoPlayerHelper.createPreparedController(
         widget.videoUrl,
-        muted: false,
+        muted: kIsWeb,
         autoPlay: true,
       );
       if (!mounted) {

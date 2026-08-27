@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/web/boot_ready_signal.dart';
 import '../services/auth_service.dart';
 import '../services/web_app_update_service.dart';
 import '../utils/api_error_parser.dart';
@@ -36,10 +37,6 @@ class _StartupShellState extends State<StartupShell> {
     if (AppBootstrapState.authReady.value) return;
     AppBootstrapState.authReady.value = true;
     AuthService.sessionRevision.value++;
-    // Keep WEB_BUILD_ID in the cold-start JS chunk (not only in deferred full app).
-    if (kIsWeb) {
-      WebAppUpdateService.start();
-    }
     // Native / already signed-in web: go straight to the full app chunk.
     if (!kIsWeb || AuthService.instance.currentUser != null) {
       AppBootstrapState.enterFullApp();
@@ -56,6 +53,9 @@ class _StartupShellState extends State<StartupShell> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_runBootstrapInBackground());
     });
+    if (kIsWeb) {
+      notifyPrimaryUiReady();
+    }
     Future<void>.delayed(const Duration(seconds: 12), () {
       if (mounted && !AppBootstrapState.authReady.value) {
         debugPrint('⚠️ StartupShell: timeout 12s — открываем UI');
@@ -86,6 +86,9 @@ class _StartupShellState extends State<StartupShell> {
         _fullAppLibraryLoaded = true;
         _fullAppLoadError = null;
       });
+      if (kIsWeb) {
+        WebAppUpdateService.start();
+      }
       unawaited(_loadHeavyAndBootstrap());
     } catch (e, st) {
       debugPrint('full_app.loadLibrary failed: $e\n$st');
@@ -146,6 +149,7 @@ class _StartupShellState extends State<StartupShell> {
       AppBootstrapState.loadFullApp.value = false;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_ensureFullAppLoaded());
       unawaited(_runBootstrapInBackground());
     });
   }

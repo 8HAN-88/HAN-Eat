@@ -13,6 +13,7 @@ void main() {
   test('strips /app prefix from deep links', () {
     expect(parseDeepLinkToGoPath('https://haneat.app/app/feed'), '/feed');
     expect(parseDeepLinkToGoPath('https://haneat.app/feed'), '/feed');
+    expect(parseDeepLinkToGoPath('https://haneat.app/app/feed?go=1'), '/feed');
   });
 
   test('username links still resolve', () {

@@ -54,4 +54,25 @@ void main() {
       expect(browserPathToGoPath('/@bob'), '/@bob');
     });
   });
+
+  group('routerQueryFromUri', () {
+    test('drops PWA boot query keys', () {
+      expect(
+        routerQueryFromUri(Uri.parse('https://haneat.app/app/feed?go=1&v=2&_cb=9')),
+        isNull,
+      );
+      expect(
+        routerQueryFromUri(Uri.parse('https://haneat.app/feed?go=1&ref=alice')),
+        'ref=alice',
+      );
+    });
+  });
+
+  group('FeedShellLaunch', () {
+    test('takeSkipReelsTab is one-shot', () {
+      FeedShellLaunch.skipReelsTab = true;
+      expect(FeedShellLaunch.takeSkipReelsTab(), isTrue);
+      expect(FeedShellLaunch.takeSkipReelsTab(), isFalse);
+    });
+  });
 }

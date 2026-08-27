@@ -108,8 +108,8 @@ String? parseDeepLinkToGoPath(String raw) {
           }
         }
         if (path.isNotEmpty && path != '/') {
-          final q = uri.query;
-          return q.isEmpty ? path : '$path?$q';
+          final q = routerQueryFromUri(uri);
+          return q == null ? path : '$path?$q';
         }
         if (uri.queryParameters.containsKey('ref')) {
           final ref = uri.queryParameters['ref'];
@@ -256,9 +256,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         // PWA /app/?go=1 при base-href=/app/ приходит в роутер как `/`.
         // Смотрим uri.path: matchedLocation на промежуточном кадре бывает пустым.
         if (isGoRouterShellLocation(incoming)) {
-          return AuthService.instance.currentUser == null
-              ? LoginRoute.path
-              : stableHomePath;
+          if (AuthService.instance.currentUser == null) {
+            return LoginRoute.path;
+          }
+          FeedShellLaunch.skipReelsTab = true;
+          return stableHomePath;
         }
         if (loc == BootScreen.path) {
           if (AuthService.instance.currentUser == null) {
@@ -324,9 +326,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/',
         redirect: (context, state) {
-          return AuthService.instance.currentUser == null
-              ? LoginRoute.path
-              : FeedRoute.path;
+          if (AuthService.instance.currentUser == null) {
+            return LoginRoute.path;
+          }
+          FeedShellLaunch.skipReelsTab = true;
+          return FeedRoute.path;
         },
       ),
       GoRoute(
@@ -1213,6 +1217,7 @@ class _SilentShellRedirectState extends State<_SilentShellRedirect> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final user = AuthService.instance.currentUser;
+      if (user != null) FeedShellLaunch.skipReelsTab = true;
       context.go(user == null ? LoginRoute.path : FeedRoute.path);
     });
   }

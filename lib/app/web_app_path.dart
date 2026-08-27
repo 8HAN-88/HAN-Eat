@@ -1,3 +1,5 @@
+const _bootQueryKeys = {'go', 'v', '_cb', 'retry'};
+
 String _normalizedPath(String path) {
   var p = path.trim();
   if (p.contains('?')) {
@@ -46,4 +48,26 @@ String? browserPathToGoPath(String path) {
   }
   if (p.isEmpty || p == '/') return null;
   return p;
+}
+
+/// Query для GoRouter: выкидываем служебные `go=1`, `v`, `_cb`, `retry`.
+String? routerQueryFromUri(Uri uri) {
+  final keep = <String, String>{};
+  uri.queryParameters.forEach((key, value) {
+    if (_bootQueryKeys.contains(key)) return;
+    keep[key] = value;
+  });
+  if (keep.isEmpty) return null;
+  return Uri(queryParameters: keep).query;
+}
+
+/// One-shot: PWA открыли с HTML-шелла (`/app/?go=1` → `/`), не с сохранённого /feed.
+class FeedShellLaunch {
+  static bool skipReelsTab = false;
+
+  static bool takeSkipReelsTab() {
+    final value = skipReelsTab;
+    skipReelsTab = false;
+    return value;
+  }
 }

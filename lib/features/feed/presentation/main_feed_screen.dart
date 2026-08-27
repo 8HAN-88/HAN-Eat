@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'dart:async';
 
 import '../../../app/app_router.dart';
+import '../../../app/web_app_path.dart';
 import '../../../core/app/kitchen_removed_notice.dart';
 import '../../../services/feed_ui_prefs.dart';
 import '../../../models/post_types.dart';
@@ -65,7 +66,11 @@ class _MainFeedScreenState extends ConsumerState<MainFeedScreen>
       FeedUiPrefs.loadReelsFollowingOnly(),
     ]);
     if (!mounted) return;
-    final tab = results[0] as int;
+    var tab = results[0] as int;
+    // Холодный старт с /app/?go=1: не прыгаем в рилсы, пока роутер не стабилен.
+    if (kIsWeb && FeedShellLaunch.takeSkipReelsTab() && tab == 2) {
+      tab = 1;
+    }
     setState(() {
       _subsFeedType = results[1] as String;
       _subsSortMode = results[2] as FeedSortMode;

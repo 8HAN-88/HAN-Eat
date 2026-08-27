@@ -1272,14 +1272,14 @@ class _ReelCardState extends ConsumerState<ReelCard>
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (widget.videoController != null)
+          Container(
+            color: Colors.black,
+            child: Center(child: _buildVideoPlaceholder()),
+          ),
+          if (widget.videoController != null &&
+              widget.videoController!.value.isInitialized)
             SizedBox.expand(
               child: CoverNetworkVideo(controller: widget.videoController!),
-            )
-          else
-            Container(
-              color: Colors.black,
-              child: Center(child: _buildVideoPlaceholder()),
             ),
           if (widget.isPaused)
             Positioned.fill(
