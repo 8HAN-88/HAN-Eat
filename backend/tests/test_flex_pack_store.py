@@ -3643,6 +3643,66 @@ def test_empty_post_fields_do_not_require_custom_emoji(db_session):
     )
 
 
+def test_http_send_plain_text_persists_without_flex(db_session):
+    import asyncio
+
+    from fastapi import BackgroundTasks
+
+    from app.api.v1.chats import send_message
+    from app.schemas.chat import SendMessageRequest
+
+    sender = _user(db_session, 1)
+    peer = _user(db_session, 2)
+    conv = _group_chat(db_session, sender, peer)
+
+    async def _run():
+        return await send_message(
+            conv.id,
+            SendMessageRequest(type="text", content="привет"),
+            BackgroundTasks(),
+            current_user=sender,
+            db=db_session,
+        )
+
+    msg = asyncio.run(_run())
+    assert msg.type == "text"
+    assert msg.content == "привет"
+
+
+def test_comment_and_channel_post_without_tokens_do_not_403(db_session):
+    from app.schemas.comment import CreateCommentRequest
+    from app.schemas.post import CreatePostRequest, MediaItem
+
+    owner = _user(db_session, 1)
+    emoji = EmojiPackService(db_session)
+    comment = CreateCommentRequest(text="классный пост")
+    rating_only = CreateCommentRequest(text=None, rating=5)
+    # create_comment gates `text_value`; empty + rating is allowed.
+    emoji.require_send_tokens_http(owner.id, (comment.text or "").strip())
+    emoji.require_send_tokens_http(owner.id, (rating_only.text or "").strip())
+    # create_channel_post uses the same fields as feed create_post.
+    photo = CreatePostRequest(
+        type="photo",
+        title=None,
+        description=None,
+        media=[MediaItem(type="image", url="https://cdn.test/ch.jpg")],
+    )
+    text = CreatePostRequest(type="text", title="Новость", description="текст")
+    reel = CreatePostRequest(
+        type="reel",
+        title=None,
+        description=None,
+        media=[MediaItem(type="video", url="https://cdn.test/ch.mp4")],
+    )
+    for req in (photo, text, reel):
+        emoji.require_send_tokens_http(
+            owner.id,
+            req.title,
+            req.description,
+            *(req.tags or []),
+        )
+
+
 def test_link_preview_og_title_does_not_403_without_flex(db_session):
     owner = _user(db_session, 1)
     token = _emoji_token_after_downgrade(db_session, owner.id)
