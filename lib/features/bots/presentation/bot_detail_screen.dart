@@ -260,6 +260,8 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
       );
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Не удалось сохранить: $e')),
       );
@@ -1155,6 +1157,8 @@ class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
       await _reload();
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Ошибка: $e')),
       );
@@ -1189,6 +1193,8 @@ class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
       await _reload();
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Ошибка: $e')),
       );

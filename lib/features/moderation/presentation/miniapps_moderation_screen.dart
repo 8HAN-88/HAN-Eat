@@ -5,6 +5,7 @@ import '../../../features/miniapps/data/miniapps_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/highlighted_text.dart';
+import '../../subscription/creator_upsell.dart';
 
 class MiniAppsModerationScreen extends StatefulWidget {
   const MiniAppsModerationScreen({super.key});
@@ -79,6 +80,8 @@ class _MiniAppsModerationScreenState extends State<MiniAppsModerationScreen> {
       await _load();
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );

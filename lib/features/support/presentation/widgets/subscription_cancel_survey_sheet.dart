@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../utils/api_error_parser.dart';
 import '../../../../services/subscription_service.dart';
 import '../../../../widgets/survey_section_card.dart';
+import '../../../subscription/creator_upsell.dart';
 
 /// Причина отмены подписки (id + подпись для тикета).
 class SubscriptionCancelReason {
@@ -86,6 +87,8 @@ Future<bool> runSubscriptionCancelFlow(BuildContext context) async {
     return true;
   } catch (e) {
     if (context.mounted) {
+      if (offerFlexIfRequired(context, e)) return false;
+      if (offerPackStoreIfRequired(context, e)) return false;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(userVisibleError(e)),

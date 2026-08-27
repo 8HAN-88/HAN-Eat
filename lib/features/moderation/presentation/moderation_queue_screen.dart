@@ -8,6 +8,7 @@ import '../../../app/app_router.dart';
 import '../../../../services/moderation_service.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/highlighted_text.dart';
+import '../../subscription/creator_upsell.dart';
 
 class ModerationQueueScreen extends ConsumerStatefulWidget {
   const ModerationQueueScreen({super.key});
@@ -166,6 +167,8 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
       }
     } catch (e) {
       if (mounted) {
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(userVisibleError(e))),
         );
@@ -197,6 +200,8 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
       }
     } catch (e) {
       if (mounted) {
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(userVisibleError(e))),
         );
@@ -293,6 +298,8 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
       }
     } catch (e) {
       if (mounted) {
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(userVisibleError(e))),
         );

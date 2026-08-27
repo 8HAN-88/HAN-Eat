@@ -4,6 +4,7 @@ import '../../../services/flex_subscription_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/highlighted_text.dart';
+import '../creator_upsell.dart';
 
 class AdminFlexFeaturesScreen extends StatefulWidget {
   const AdminFlexFeaturesScreen({super.key});
@@ -188,6 +189,8 @@ class _AdminFlexFeaturesScreenState extends State<AdminFlexFeaturesScreen> {
       await _load();
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );

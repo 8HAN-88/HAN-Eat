@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../services/paid_features_service.dart';
 import '../../../widgets/telegram_ui.dart';
+import '../../subscription/creator_upsell.dart';
 
 class CreatorRevenueScreen extends StatefulWidget {
   const CreatorRevenueScreen({super.key});
@@ -260,6 +261,8 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
       );
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
       );

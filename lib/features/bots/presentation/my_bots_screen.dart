@@ -10,6 +10,7 @@ import '../../../widgets/highlighted_text.dart';
 import '../../../widgets/telegram_ui.dart';
 import '../data/bot_models.dart';
 import '../data/bot_token_storage.dart';
+import '../../subscription/creator_upsell.dart';
 import 'bot_detail_screen.dart';
 
 /// «Мои боты» — аналог списка ботов в @BotFather.
@@ -105,6 +106,8 @@ class _MyBotsScreenState extends State<MyBotsScreen> {
       );
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Не удалось создать бота: $e')),
       );
