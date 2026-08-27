@@ -28,6 +28,7 @@ import '../../../app/app_router.dart';
 import '../../../services/subscription_service.dart';
 import '../../../widgets/report_content_dialog.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../subscription/creator_upsell.dart';
 import '../../../utils/session_snackbar.dart';
 import '../../../widgets/highlighted_text.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -400,6 +401,8 @@ class _ChannelPostCardState extends State<ChannelPostCard>
       });
 
       if (mounted) {
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         showErrorSnackBar(context, e, fallback: 'Не удалось сделать репост');
       }
     } finally {

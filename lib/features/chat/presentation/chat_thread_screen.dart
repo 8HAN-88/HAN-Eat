@@ -14043,6 +14043,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       unawaited(_refreshScheduledPendingCount());
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       showErrorSnackBar(context, e,
           fallback: 'Не удалось запланировать медиа');
     } finally {
@@ -14793,6 +14795,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           if (i >= 0) _messages[i] = previous;
           if (_isMessagePinned(previous.id)) _replacePinnedMessage(previous);
         });
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         showErrorSnackBar(context, e, fallback: 'Не удалось добавить вариант');
       }
     }

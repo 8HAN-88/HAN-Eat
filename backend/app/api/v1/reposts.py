@@ -52,7 +52,9 @@ def _title_from_post_body(body: Any) -> Optional[str]:
         line = text.strip().splitlines()[0].strip()
         mt = _meaningful_text(line)
         if mt:
-            return line[:120] if len(line) > 120 else line
+            from app.services.emoji_pack_service import clip_preserving_custom_emoji
+
+            return clip_preserving_custom_emoji(line, 120)
     media = body.get("media")
     if isinstance(media, list) and len(media) > 0:
         return "Медиа"
@@ -66,7 +68,12 @@ def effective_repost_source_title(post: Post) -> str:
         return t
     d = _meaningful_text(post.description)
     if d:
-        return d[:77] + "…" if len(d) > 80 else d
+        if len(d) > 80:
+            from app.services.emoji_pack_service import clip_preserving_custom_emoji
+
+            clipped = clip_preserving_custom_emoji(d, 77)
+            return f"{clipped}…" if clipped else "…"
+        return d
     body = post.body
     if isinstance(body, dict):
         bt = _title_from_post_body(body)

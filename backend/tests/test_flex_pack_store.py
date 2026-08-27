@@ -4399,3 +4399,32 @@ def test_admin_flex_feature_resave_title_does_not_403(db_session):
             db_session,
         )
     assert err.value.status_code == 403
+
+
+def test_repost_source_title_does_not_split_custom_emoji_token():
+    from app.api.v1.reposts import _title_from_post_body, effective_repost_source_title
+
+    token = "[[e:99]]"
+    split_line = ("а" * 115) + token + " хвост"
+    assert _title_from_post_body({"text": split_line}) == "а" * 115
+
+    kept = "привет " + token + " мир"
+    assert _title_from_post_body({"text": kept}) == kept
+
+    class _Post:
+        title = None
+        description = ("б" * 70) + " " + token + " ещё текст после лимита"
+        body = None
+
+    title = effective_repost_source_title(_Post())
+    assert "[[e:" not in title
+    assert title == ("б" * 70) + "…"
+
+    class _Fits:
+        title = None
+        description = "привет " + token + ("х" * 80)
+        body = None
+
+    fits = effective_repost_source_title(_Fits())
+    assert token in fits
+    assert fits.endswith("…")

@@ -1034,6 +1034,8 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -1148,6 +1150,8 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
