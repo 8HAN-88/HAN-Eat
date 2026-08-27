@@ -1,10 +1,28 @@
-/// PWA отдаётся с `/app/`. Это HTML-шелл, а не маршрут GoRouter.
-bool isWebAppShellPath(String path) {
+String _normalizedPath(String path) {
   var p = path.trim();
+  if (p.contains('?')) {
+    p = p.split('?').first;
+  }
   if (p.length > 1 && p.endsWith('/')) {
     p = p.substring(0, p.length - 1);
   }
+  return p;
+}
+
+/// PWA отдаётся с `/app/`. Это HTML-шелл, а не маршрут GoRouter.
+bool isWebAppShellPath(String path) {
+  final p = _normalizedPath(path);
   return p == '/app' || p == '/app/index.html';
+}
+
+/// То, что видит GoRouter после `--base-href /app/`.
+///
+/// Браузер: `https://haneat.app/app/?go=1` → локация роутера `/` (не `/app`).
+/// `/` не является маршрутом ленты (`/feed`) — без редиректа будет
+/// «ошибка маршрута».
+bool isGoRouterShellLocation(String path) {
+  final p = _normalizedPath(path);
+  return p.isEmpty || p == '/' || isWebAppShellPath(p);
 }
 
 /// Путь браузера → путь GoRouter.

@@ -1244,7 +1244,17 @@ class _ReelCardState extends ConsumerState<ReelCard>
       );
     }
 
-    return const CircularProgressIndicator(color: Colors.white);
+    return const Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        CircularProgressIndicator(color: Colors.white),
+        SizedBox(height: 12),
+        Text(
+          'Загружаем видео',
+          style: TextStyle(color: Colors.white70, fontSize: 14),
+        ),
+      ],
+    );
   }
 
   @override

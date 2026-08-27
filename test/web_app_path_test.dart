@@ -16,6 +16,22 @@ void main() {
     });
   });
 
+  group('isGoRouterShellLocation', () {
+    test('base-href /app/ arrives as /', () {
+      expect(isGoRouterShellLocation('/'), isTrue);
+      expect(isGoRouterShellLocation(''), isTrue);
+      expect(isGoRouterShellLocation('/?go=1'), isTrue);
+      expect(isGoRouterShellLocation('/app'), isTrue);
+      expect(isGoRouterShellLocation('/app/?go=1'), isTrue);
+    });
+
+    test('real routes stay real', () {
+      expect(isGoRouterShellLocation('/feed'), isFalse);
+      expect(isGoRouterShellLocation('/app/feed'), isFalse);
+      expect(isGoRouterShellLocation('/chats'), isFalse);
+    });
+  });
+
   group('browserPathToGoPath', () {
     test('PWA shell is not a GoRouter location', () {
       expect(browserPathToGoPath('/app'), isNull);

@@ -248,9 +248,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       try {
         final loc = state.matchedLocation;
+        final incoming = state.uri.path;
         if (!AppBootstrapState.authReady.value) {
           if (loc == BootScreen.path) return null;
           return BootScreen.path;
+        }
+        // PWA /app/?go=1 при base-href=/app/ приходит в роутер как `/`.
+        // Смотрим uri.path: matchedLocation на промежуточном кадре бывает пустым.
+        if (isGoRouterShellLocation(incoming)) {
+          return AuthService.instance.currentUser == null
+              ? LoginRoute.path
+              : stableHomePath;
         }
         if (loc == BootScreen.path) {
           if (AuthService.instance.currentUser == null) {
@@ -313,6 +321,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
     },
     routes: [
+      GoRoute(
+        path: '/',
+        redirect: (context, state) {
+          return AuthService.instance.currentUser == null
+              ? LoginRoute.path
+              : FeedRoute.path;
+        },
+      ),
       GoRoute(
         path: BootScreen.path,
         name: 'boot',
@@ -1171,7 +1187,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
     ],
     errorPageBuilder: (context, state) {
-      if (isWebAppShellPath(state.uri.path)) {
+      if (isGoRouterShellLocation(state.uri.path) ||
+          isGoRouterShellLocation(state.matchedLocation)) {
         return const MaterialPage(child: _SilentShellRedirect());
       }
       return MaterialPage(
@@ -1241,14 +1258,13 @@ class _RouterRecoveryScreenState extends State<_RouterRecoveryScreen> {
       final user = AuthService.instance.currentUser;
       context.go(user == null ? LoginRoute.path : _stableHomePath);
     });
-    Future<void>.delayed(const Duration(seconds: 12), () async {
+    Future<void>.delayed(const Duration(seconds: 12), () {
       if (!mounted || _forcedLogout) return;
-      // Last-resort recovery: if this screen still exists after two redirects,
-      // reset session and force a clean login path.
+      // Ещё одна попытка домой. Logout здесь выкидывал из сессии на
+      // медленном Safari, если / ещё не успел средиректить.
       _forcedLogout = true;
-      await AuthService.logout();
-      if (!mounted) return;
-      context.go(LoginRoute.path);
+      final user = AuthService.instance.currentUser;
+      context.go(user == null ? LoginRoute.path : _stableHomePath);
     });
   }
 

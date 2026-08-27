@@ -6,6 +6,8 @@ void main() {
     expect(parseDeepLinkToGoPath('https://haneat.app/app/'), isNull);
     expect(parseDeepLinkToGoPath('https://haneat.app/app/?go=1'), isNull);
     expect(parseDeepLinkToGoPath('https://www.haneat.app/app/index.html'), isNull);
+    expect(parseDeepLinkToGoPath('https://haneat.app/'), isNull);
+    expect(parseDeepLinkToGoPath('https://haneat.app/?go=1'), isNull);
   });
 
   test('strips /app prefix from deep links', () {
