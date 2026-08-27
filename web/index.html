@@ -637,7 +637,7 @@
 
           // One in-place retry on /app/ — never location.replace (Safari white-screen).
           // Wipe Cache API first: stale main.dart.js_*.part.js after deploy → white screen.
-          if (!bootRetry && hasSession() && isAppPath()) {
+          if (!bootRetry && hasSession()) {
             sub.textContent = 'Повторная загрузка…';
             bootRetry = true;
             flutterStarted = false;
@@ -647,6 +647,10 @@
             settled = false;
             try {
               var u = new URL(location.href);
+              if (u.pathname === '/' || u.pathname === '/index.html') {
+                u.pathname = '/app/';
+                u.searchParams.set('go', '1');
+              }
               u.searchParams.set('retry', '1');
               history.replaceState(null, '', u.pathname + u.search + u.hash);
               params = u.searchParams;
@@ -710,6 +714,22 @@
         });
       }
 
+      function startFlutterAtApp() {
+        markGoQueryInPlace();
+        try {
+          if (!isAppPath()) {
+            // Already-installed iOS icons still open /. A second document
+            // load to /app/ was the «Открываем…» hop. Only rewrite the URL.
+            history.replaceState(
+              null,
+              '',
+              '/app/?go=1&v=' + encodeURIComponent(BUILD)
+            );
+          }
+        } catch (e) {}
+        startFlutter();
+      }
+
       function openContinueOrAuto() {
         // Обычный пользователь видит только «Открываем…» — без технических текстов.
         showOnly('continue-gate');
@@ -721,17 +741,9 @@
         ping(hasBootOk() ? 'continue=1&auto=1' : 'continue=1&first=1');
 
         ensureLatestShellThen(function () {
-          // Already on /app/ → start Flutter in place (no document reload).
-          if (isAppPath()) {
-            markGoQueryInPlace();
-            setTimeout(function () { startFlutter(); }, hasBootOk() ? 40 : 100);
-            return;
-          }
-
-          // From site root → soft assign (not replace).
           setTimeout(function () {
-            softGoApp();
-          }, hasBootOk() ? 80 : 160);
+            startFlutterAtApp();
+          }, hasBootOk() ? 40 : 100);
         });
       }
 
@@ -752,14 +764,8 @@
           btn.textContent = 'Открываем…';
         }
         function go() {
-          // User gesture: in-place start if already under /app/.
-          if (isAppPath()) {
-            markGoQueryInPlace();
-            flutterStarted = false;
-            startFlutter();
-            return;
-          }
-          softGoApp();
+          flutterStarted = false;
+          startFlutterAtApp();
         }
         // Drop stale deferred chunks before retry (common after a web deploy).
         try {
@@ -824,8 +830,7 @@
           }
           saveSession(data);
           ping('authed=1');
-          // User-gesture navigation after login (assign, never replace).
-          softGoApp();
+          startFlutterAtApp();
         } catch (err) {
           showError((err && err.message) ? err.message : 'Не удалось войти');
           btn.disabled = false;
@@ -834,8 +839,8 @@
       });
 
       // Boot decision
-      // Site root (/) is HTML-only: never load CanvasKit there (kills stuck PWA shells).
-      // Flutter loads only under /app/?go=1 after auth / continue tap.
+      // Root / and /app/ share this HTML. With a session we start Flutter
+      // in place and only rewrite the URL to /app/?go=1 (no second load).
       var path = location.pathname || '';
       var atRoot = path === '/' || path === '/index.html' || path === '/login.html';
 

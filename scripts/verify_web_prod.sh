@@ -45,7 +45,9 @@ import json,sys
 m=json.load(sys.stdin)
 assert m.get('display')=='standalone', m.get('display')
 assert m.get('start_url'), 'no start_url'
-print('standalone manifest OK')
+su = str(m.get('start_url') or '')
+assert su.startswith('/app/'), su
+print('standalone manifest OK', su)
 " 2>/dev/null; then
   check "manifest display=standalone"
 else
