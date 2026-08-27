@@ -4087,7 +4087,8 @@ def test_clip_preserving_custom_emoji_does_not_split_token():
 def test_folder_create_does_not_persist_split_token(db_session):
     owner = _user(db_session, 1)
     token = _token_while_flex(db_session, owner.id)
-    long_name = ("п" * 58) + token
+    bare = "[[e:" + token.split("[[e:", 1)[1]
+    long_name = ("п" * 58) + bare
     row = ChatService(db_session).create_folder(owner.id, long_name)
     assert "[[e:" not in row["name"]
     assert row["name"] == "п" * 58
