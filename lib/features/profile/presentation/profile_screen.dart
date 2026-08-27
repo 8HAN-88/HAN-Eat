@@ -32,6 +32,7 @@ import 'package:han_eat/widgets/app_empty_state.dart';
 import 'package:han_eat/widgets/app_gradient_background.dart';
 import 'package:han_eat/widgets/telegram_ui.dart';
 import '../../content/create_content_actions.dart';
+import '../../subscription/creator_upsell.dart';
 import '../../chat/presentation/widgets/star_gift_picker_sheet.dart';
 import '../../../utils/post_publisher_display.dart';
 
@@ -546,6 +547,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           );
         } catch (e) {
           if (!mounted) return;
+          if (offerFlexIfRequired(context, e)) return;
+          if (offerPackStoreIfRequired(context, e)) return;
           await showStarsRequiredSnack(context, e);
         }
       }());
@@ -561,6 +564,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       context.push(ChatThreadRoute.pathFor(conv), extra: conv);
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       await showStarsRequiredSnack(context, e);
     } finally {
       if (mounted) setState(() => _isSendingGift = false);
@@ -597,6 +602,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       }
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       await showStarsRequiredSnack(context, e);
     } finally {
       if (mounted) setState(() => _isSendingTip = false);

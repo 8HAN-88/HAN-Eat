@@ -16,6 +16,7 @@ import '../../../widgets/highlighted_text.dart';
 import '../../../services/auth_service.dart';
 import '../application/community_controller.dart';
 import '../application/community_upload_controller.dart';
+import '../../subscription/creator_upsell.dart';
 
 class CommunityUploadScreen extends ConsumerStatefulWidget {
   const CommunityUploadScreen({
@@ -216,6 +217,14 @@ class _CommunityUploadScreenState
         ),
       );
       context.pop(true);
+    } else if (state.lastError != null) {
+      if (offerFlexIfRequired(context, state.lastError!)) return;
+      if (offerPackStoreIfRequired(context, state.lastError!)) return;
+      if (state.error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(state.error!)),
+        );
+      }
     } else if (state.error != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(state.error!)),

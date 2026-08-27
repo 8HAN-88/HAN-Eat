@@ -8,6 +8,7 @@ import '../../../services/channel_cache_service.dart';
 import '../../../app/app_router.dart';
 import '../../../widgets/highlighted_text.dart';
 import '../application/channels_list_refresh_provider.dart';
+import '../../subscription/creator_upsell.dart';
 
 class ChannelSettingsScreen extends ConsumerStatefulWidget {
   final int channelId;
@@ -116,6 +117,8 @@ class _ChannelSettingsScreenState extends ConsumerState<ChannelSettingsScreen> {
       }
     } catch (e) {
       if (mounted) {
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content:

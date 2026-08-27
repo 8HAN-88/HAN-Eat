@@ -19,6 +19,7 @@ import '../../chat/application/join_requests_bulk.dart';
 import '../../settings/application/subscription_status_provider.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/highlighted_text.dart';
+import '../../subscription/creator_upsell.dart';
 
 const _permissionLabels = <String, (String, String)>{
   'manage_channel_settings': (
@@ -425,6 +426,8 @@ class _ChannelManagementScreenState
       }
     } catch (e) {
       if (mounted) {
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content:

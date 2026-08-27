@@ -12,6 +12,7 @@ import '../../../utils/url_validator.dart';
 import '../../../widgets/create_poll_form_section.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/highlighted_text.dart';
+import '../../subscription/creator_upsell.dart';
 
 class EditProfilePostScreen extends ConsumerStatefulWidget {
   final int postId;
@@ -283,6 +284,8 @@ class _EditProfilePostScreenState extends ConsumerState<EditProfilePostScreen> {
       context.pop(true);
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       final msg = e is ApiClientException
           ? e.message
           : e.toString().replaceAll('Exception: ', '');
