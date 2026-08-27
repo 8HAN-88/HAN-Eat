@@ -4428,3 +4428,16 @@ def test_repost_source_title_does_not_split_custom_emoji_token():
     fits = effective_repost_source_title(_Fits())
     assert token in fits
     assert fits.endswith("…")
+
+
+def test_invoice_and_giveaway_title_clip_does_not_split_token():
+    from app.services.paid_features_service import clip_paid_text
+
+    token = "[[e:99]]"
+    split_title = ("п" * 155) + token
+    assert clip_paid_text(split_title, 160) == "п" * 155
+    assert clip_paid_text("приз " + token, 160) == "приз " + token
+
+    split_desc = ("д" * 507) + token
+    assert clip_paid_text(split_desc, 512) == "д" * 507
+    assert clip_paid_text("  счёт " + token + "  ", 512) == "счёт " + token

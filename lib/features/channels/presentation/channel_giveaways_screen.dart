@@ -10,6 +10,7 @@ import '../../../services/custom_emoji_registry.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/stars_pay_helper.dart';
 import '../../../widgets/highlighted_text.dart';
+import '../../subscription/creator_upsell.dart';
 
 /// Telegram-like channel Stars giveaways manage / join screen.
 class ChannelGiveawaysScreen extends StatefulWidget {
@@ -243,6 +244,8 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
       );
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       await showStarsRequiredSnack(context, e);
     }
   }

@@ -9,6 +9,7 @@ import '../../../services/api_service.dart';
 import '../../../services/chat_service.dart';
 import '../../../services/paid_features_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../subscription/creator_upsell.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../services/custom_emoji_registry.dart';
 import '../../../widgets/highlighted_text.dart';
@@ -620,6 +621,8 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
       );
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );

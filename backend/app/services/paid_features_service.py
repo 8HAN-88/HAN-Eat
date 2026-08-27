@@ -31,6 +31,13 @@ from app.models.post import Post
 from app.models.user import User
 
 
+def clip_paid_text(text: Optional[str], limit: int) -> str:
+    """Truncate invoice/giveaway copy without slicing `[[e:id]]` in half."""
+    from app.services.emoji_pack_service import clip_preserving_custom_emoji
+
+    return clip_preserving_custom_emoji((text or "").strip(), limit)
+
+
 def _invalidate_user_feed_cache(db: Session, user_id: int) -> None:
     try:
         from app.core.redis_client import get_redis
@@ -2316,7 +2323,7 @@ class PaidFeaturesService:
             ends_at=datetime.utcnow() + timedelta(hours=int(duration_hours)),
             require_membership=True,
             participants_count=0,
-            title=(title or "").strip()[:160] or None,
+            title=clip_paid_text(title, 160) or None,
             prize_type=kind,
             premium_months=months if kind == "premium" else 0,
         )
@@ -2731,8 +2738,8 @@ class PaidFeaturesService:
         invoice = StarInvoice(
             bot_id=bot_id,
             creator_user_id=creator_user_id,
-            title=clean_title[:160],
-            description=((description or "").strip()[:512] or None),
+            title=clip_paid_text(clean_title, 160),
+            description=(clip_paid_text(description, 512) or None),
             amount_stars=int(amount_stars),
             payload=((payload or "").strip()[:256] or None),
             status="pending",

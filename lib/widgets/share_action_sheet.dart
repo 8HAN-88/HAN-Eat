@@ -16,6 +16,7 @@ import '../services/channel_service.dart';
 import '../services/repost_service.dart';
 import '../services/custom_emoji_registry.dart';
 import '../services/share_link_service.dart';
+import '../features/subscription/creator_upsell.dart';
 import '../utils/api_error_parser.dart';
 import 'app_avatar.dart';
 import 'highlighted_text.dart';
@@ -272,6 +273,8 @@ class _PostShareSheetState extends State<_PostShareSheet> {
       );
     } on ApiClientException catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(this.context, e)) return;
+      if (offerPackStoreIfRequired(this.context, e)) return;
       ScaffoldMessenger.of(this.context).showSnackBar(
         SnackBar(
             content: Text(
@@ -280,6 +283,8 @@ class _PostShareSheetState extends State<_PostShareSheet> {
       );
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(this.context, e)) return;
+      if (offerPackStoreIfRequired(this.context, e)) return;
       ScaffoldMessenger.of(this.context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
