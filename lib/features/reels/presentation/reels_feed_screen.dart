@@ -74,7 +74,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
   Object? _cacheLoadError;
   DateTime? _currentReelStartedAt;
   final Set<int> _impressedReelIds = {};
-  bool _sessionMuted = false;
+  bool _sessionMuted = kIsWeb;
   bool _appVisible = true;
 
   static const Duration _likeTouchGrace = Duration(seconds: 20);

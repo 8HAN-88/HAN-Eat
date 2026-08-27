@@ -50,6 +50,9 @@ class _StartupShellState extends State<StartupShell> {
   void initState() {
     super.initState();
     AppBootstrapState.loadFullApp.addListener(_onLoadFullAppChanged);
+    // Качаем deferred-чанк сразу, параллельно с auth — иначе iPhone Safari
+    // сидит 20–30 с на «Загружаем приложение…» после восстановления сессии.
+    unawaited(_ensureFullAppLoaded());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_runBootstrapInBackground());
     });
@@ -77,10 +80,26 @@ class _StartupShellState extends State<StartupShell> {
     if (_fullAppLibraryLoaded || _fullAppLoadStarted) return;
     _fullAppLoadStarted = true;
     try {
-      final loaders = <Future<void>>[
-        full_app.loadLibrary(),
-        heavy_boot.loadLibrary(),
-      ];
+      await full_app.loadLibrary();
+      if (!mounted) return;
+      setState(() {
+        _fullAppLibraryLoaded = true;
+        _fullAppLoadError = null;
+      });
+      unawaited(_loadHeavyAndBootstrap());
+    } catch (e, st) {
+      debugPrint('full_app.loadLibrary failed: $e\n$st');
+      if (!mounted) return;
+      setState(() {
+        _fullAppLoadStarted = false;
+        _fullAppLoadError = e;
+      });
+    }
+  }
+
+  Future<void> _loadHeavyAndBootstrap() async {
+    try {
+      final loaders = <Future<void>>[heavy_boot.loadLibrary()];
       if (kIsWeb) {
         loaders.add(heavy_plugins.loadLibrary());
       }
@@ -89,18 +108,10 @@ class _StartupShellState extends State<StartupShell> {
         heavy_plugins.registerHeavyWebPlugins();
       }
       if (!mounted) return;
-      setState(() {
-        _fullAppLibraryLoaded = true;
-        _fullAppLoadError = null;
-      });
-      unawaited(_runHeavyBootstrap());
+      await _runHeavyBootstrap();
     } catch (e, st) {
-      debugPrint('full_app.loadLibrary failed: $e\n$st');
-      if (!mounted) return;
-      setState(() {
-        _fullAppLoadStarted = false;
-        _fullAppLoadError = e;
-      });
+      debugPrint('heavy load/bootstrap failed: $e\n$st');
+      AppBootstrapState.servicesReady.value = true;
     }
   }
 

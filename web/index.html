@@ -600,7 +600,9 @@
         var scriptEl = null;
 
         function maybeHideSplash() {
-          if (splashHidden || !firstFrame || !primaryUiReady) return;
+          // Hide as soon as Flutter paints StartupShell. Waiting for the
+          // deferred home route kept the HTML splash on iPhone for 20–30s.
+          if (splashHidden || !firstFrame) return;
           splashHidden = true;
           settled = true;
           markBootOk();
@@ -611,7 +613,7 @@
             setTimeout(function () {
               if (splash && splash.parentNode) splash.remove();
             }, 260);
-          }, 400);
+          }, 200);
         }
 
         function wipeStaleFlutterCaches() {

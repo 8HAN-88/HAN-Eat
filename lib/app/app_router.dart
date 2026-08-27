@@ -86,6 +86,7 @@ import 'auth_route_paths.dart';
 import 'boot_screen.dart';
 import 'bootstrap.dart';
 import 'router_keys.dart';
+import 'web_app_path.dart';
 import 'web_session_landing_screen.dart';
 import 'invalid_link_screen.dart';
 import '../widgets/app_empty_state.dart';
@@ -97,7 +98,8 @@ String? parseDeepLinkToGoPath(String raw) {
     if (uri.scheme == 'https' || uri.scheme == 'http') {
       final host = uri.host.toLowerCase();
       if (host == 'haneat.app' || host == 'www.haneat.app') {
-        final path = uri.path;
+        // PWA живёт на /app/ — это HTML-шелл, не маршрут GoRouter.
+        final path = browserPathToGoPath(uri.path) ?? '';
         // https://haneat.app/@username → /u/username
         if (path.startsWith('/@') && path.length > 2) {
           final handle = path.substring(2).split('/').first;
@@ -1168,11 +1170,44 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
     ],
-    errorPageBuilder: (context, state) => MaterialPage(
-      child: _RouterRecoveryScreen(error: state.error),
-    ),
+    errorPageBuilder: (context, state) {
+      if (isWebAppShellPath(state.uri.path)) {
+        return const MaterialPage(child: _SilentShellRedirect());
+      }
+      return MaterialPage(
+        child: _RouterRecoveryScreen(error: state.error),
+      );
+    },
   );
 });
+
+/// `/app/` попал в GoRouter — сразу домой, без экрана «ошибка маршрута».
+class _SilentShellRedirect extends StatefulWidget {
+  const _SilentShellRedirect();
+
+  @override
+  State<_SilentShellRedirect> createState() => _SilentShellRedirectState();
+}
+
+class _SilentShellRedirectState extends State<_SilentShellRedirect> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final user = AuthService.instance.currentUser;
+      context.go(user == null ? LoginRoute.path : FeedRoute.path);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const ColoredBox(
+      color: Color(0xFF0F1319),
+      child: SizedBox.expand(),
+    );
+  }
+}
 
 class _RouterRecoveryScreen extends StatefulWidget {
   const _RouterRecoveryScreen({this.error});

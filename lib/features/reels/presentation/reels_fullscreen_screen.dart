@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import '../../../utils/api_error_parser.dart';
 import '../../../utils/session_snackbar.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -48,7 +49,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
   int _currentIndex = 0;
   DateTime? _currentReelStartedAt;
   final Set<int> _impressedReelIds = {};
-  bool _sessionMuted = false;
+  bool _sessionMuted = kIsWeb;
   bool _appVisible = true;
 
   static const Duration _likeTouchGrace = Duration(seconds: 20);

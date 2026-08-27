@@ -203,12 +203,18 @@ class VideoPlayerHelper {
     }
 
     await controller.setLooping(loop);
-    if (muted) {
+    // iOS Safari / Flutter web блокирует unmuted autoplay — стартуем без звука.
+    if (muted || kIsWeb) {
       await controller.setVolume(0);
     }
 
     if (autoPlay) {
       await ensurePlaying(controller);
+    }
+    if (kIsWeb && !muted && controller.value.isPlaying) {
+      try {
+        await controller.setVolume(1);
+      } catch (_) {}
     }
   }
 
@@ -224,7 +230,21 @@ class VideoPlayerHelper {
         debugPrint('VideoPlayer error: ${controller.value.errorDescription}');
         return;
       }
-      await controller.play();
+      try {
+        await controller.play();
+      } catch (e) {
+        debugPrint('VideoPlayer play failed: $e');
+      }
+      if (kIsWeb &&
+          !controller.value.isPlaying &&
+          controller.value.volume > 0) {
+        try {
+          await controller.setVolume(0);
+          await controller.play();
+        } catch (e) {
+          debugPrint('VideoPlayer muted retry failed: $e');
+        }
+      }
       if (shouldContinue != null && !shouldContinue()) {
         await controller.pause();
         return;
