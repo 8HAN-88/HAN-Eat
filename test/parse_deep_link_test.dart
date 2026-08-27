@@ -16,6 +16,14 @@ void main() {
     expect(parseDeepLinkToGoPath('https://haneat.app/app/feed?go=1'), '/feed');
   });
 
+  test('reads hash routes on the PWA shell', () {
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/stories'),
+      '/stories',
+    );
+    expect(parseDeepLinkToGoPath('https://haneat.app/app/#/'), isNull);
+  });
+
   test('username links still resolve', () {
     expect(
       parseDeepLinkToGoPath('https://haneat.app/@alice'),

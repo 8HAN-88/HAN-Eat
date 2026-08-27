@@ -104,6 +104,7 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
         return;
       }
 
+      controller.addListener(_onVideoTick);
       setState(() {
         _controller = controller;
         _initialized = true;
@@ -128,6 +129,17 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
     }
   }
 
+  void _onVideoTick() {
+    if (mounted) setState(() {});
+  }
+
+  bool get _hasVideoFrame {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return false;
+    return controller.value.isPlaying ||
+        controller.value.position > Duration.zero;
+  }
+
   void _pause() {
     _controller?.pause();
   }
@@ -137,6 +149,7 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
     _disposeWhenHiddenTimer = Timer(const Duration(seconds: 4), () {
       if (!mounted || _isVisible) return;
       final controller = _controller;
+      controller?.removeListener(_onVideoTick);
       _controller = null;
       _initialized = false;
       _initKey = null;
@@ -180,6 +193,7 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _disposeWhenHiddenTimer?.cancel();
+    _controller?.removeListener(_onVideoTick);
     _controller?.dispose();
     _controller = null;
     super.dispose();
@@ -200,22 +214,21 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
             fit: StackFit.expand,
             alignment: Alignment.center,
             children: [
-              if (!_initialized || _controller == null) ...[
-                if (widget.thumbnailUrl != null)
-                  CachedNetworkImage(
-                    imageUrl: ServerConfig.resolvePublisherAvatarUrl(
-                      widget.thumbnailUrl!,
-                    ),
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    height: double.infinity,
-                    memCacheWidth: 640,
-                    placeholder: (_, __) => _placeholder(),
-                    errorWidget: (_, __, ___) => _placeholder(),
-                  )
-                else
-                  _placeholder(),
-              ] else if (!_hasError && _controller != null)
+              if (widget.thumbnailUrl != null)
+                CachedNetworkImage(
+                  imageUrl: ServerConfig.resolvePublisherAvatarUrl(
+                    widget.thumbnailUrl!,
+                  ),
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  height: double.infinity,
+                  memCacheWidth: 640,
+                  placeholder: (_, __) => _placeholder(),
+                  errorWidget: (_, __, ___) => _placeholder(),
+                )
+              else
+                _placeholder(),
+              if (!_hasError && _hasVideoFrame)
                 CoverNetworkVideo(controller: _controller!),
               if (_hasError)
                 Stack(
@@ -229,6 +242,7 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
                             _hasError = false;
                             _initialized = false;
                             _initKey = null;
+                            _controller?.removeListener(_onVideoTick);
                             _controller?.dispose();
                             _controller = null;
                           });

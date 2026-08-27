@@ -54,8 +54,8 @@
       box-sizing: border-box;
       text-align: center;
     }
-    /* Never leave iPhone on a blank black page before JS runs. */
-    #auth-gate { display: flex; }
+    /* Until JS runs: splash, not the login form (returning users have a session). */
+    #boot-splash { display: flex; }
     #boot-splash.is-visible,
     #continue-gate.is-visible { display: flex; }
     #auth-gate.is-hidden { display: none !important; }

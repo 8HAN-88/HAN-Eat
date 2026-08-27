@@ -99,7 +99,11 @@ String? parseDeepLinkToGoPath(String raw) {
       final host = uri.host.toLowerCase();
       if (host == 'haneat.app' || host == 'www.haneat.app') {
         // PWA живёт на /app/ — это HTML-шелл, не маршрут GoRouter.
-        final path = browserPathToGoPath(uri.path) ?? '';
+        var path = browserPathToGoPath(uri.path) ?? '';
+        // Hash-стратегия: https://haneat.app/app/#/stories
+        if (path.isEmpty && uri.fragment.isNotEmpty) {
+          path = hashFragmentToGoPath(uri.fragment) ?? '';
+        }
         // https://haneat.app/@username → /u/username
         if (path.startsWith('/@') && path.length > 2) {
           final handle = path.substring(2).split('/').first;

@@ -116,8 +116,8 @@ if index_html.exists():
 manifest = pathlib.Path("${MANIFEST}")
 if manifest.exists():
     data = json.loads(manifest.read_text(encoding="utf-8"))
-    # PWA must open HTML auth at /, not cold-boot Flutter under /app/.
-    data["start_url"] = f"/?v={build_id}"
+    # PWA opens Flutter under /app/ — root / is an extra «Открываем…» hop.
+    data["start_url"] = f"/app/?go=1&v={build_id}"
     data["scope"] = "/"
     data["id"] = "https://haneat.app/"
     for icon in data.get("icons", []):

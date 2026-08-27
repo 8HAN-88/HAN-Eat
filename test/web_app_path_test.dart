@@ -70,6 +70,21 @@ void main() {
     });
   });
 
+  group('hashFragmentToGoPath', () {
+    test('reads Flutter hash routes', () {
+      expect(hashFragmentToGoPath('/stories'), '/stories');
+      expect(hashFragmentToGoPath('#/feed'), '/feed');
+      expect(hashFragmentToGoPath('chats'), '/chats');
+    });
+
+    test('empty hash is the shell', () {
+      expect(hashFragmentToGoPath(''), isNull);
+      expect(hashFragmentToGoPath('/'), isNull);
+      expect(hashFragmentToGoPath('#/'), isNull);
+      expect(hashFragmentToGoPath('#/app'), isNull);
+    });
+  });
+
   group('FeedShellLaunch', () {
     test('takeSkipReelsTab is one-shot', () {
       FeedShellLaunch.skipReelsTab = true;

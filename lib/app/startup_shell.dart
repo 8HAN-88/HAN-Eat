@@ -33,13 +33,24 @@ class _StartupShellState extends State<StartupShell> {
   bool _fullAppLibraryLoaded = false;
   bool _fullAppLoadStarted = false;
 
-  void _openMainUi() {
-    if (AppBootstrapState.authReady.value) return;
-    AppBootstrapState.authReady.value = true;
-    AuthService.sessionRevision.value++;
-    // Native / already signed-in web: go straight to the full app chunk.
+  void _enterFullAppIfSessionReady() {
     if (!kIsWeb || AuthService.instance.currentUser != null) {
       AppBootstrapState.enterFullApp();
+    }
+  }
+
+  void _openMainUi() {
+    if (!AppBootstrapState.authReady.value) {
+      AppBootstrapState.authReady.value = true;
+      AuthService.sessionRevision.value++;
+    }
+    _enterFullAppIfSessionReady();
+  }
+
+  void _onSessionRevision() {
+    if (!mounted) return;
+    if (AppBootstrapState.authReady.value) {
+      _enterFullAppIfSessionReady();
     }
   }
 
@@ -47,6 +58,7 @@ class _StartupShellState extends State<StartupShell> {
   void initState() {
     super.initState();
     AppBootstrapState.loadFullApp.addListener(_onLoadFullAppChanged);
+    AuthService.sessionRevision.addListener(_onSessionRevision);
     // Качаем deferred-чанк сразу, параллельно с auth — иначе iPhone Safari
     // сидит 20–30 с на «Загружаем приложение…» после восстановления сессии.
     unawaited(_ensureFullAppLoaded());
@@ -67,6 +79,7 @@ class _StartupShellState extends State<StartupShell> {
   @override
   void dispose() {
     AppBootstrapState.loadFullApp.removeListener(_onLoadFullAppChanged);
+    AuthService.sessionRevision.removeListener(_onSessionRevision);
     super.dispose();
   }
 

@@ -50,6 +50,21 @@ String? browserPathToGoPath(String path) {
   return p;
 }
 
+/// Hash-стратегия Flutter: `#/stories` → `/stories`. `#/` и пустой hash — шелл.
+String? hashFragmentToGoPath(String fragment) {
+  var frag = fragment.trim();
+  if (frag.isEmpty || frag == '#' || frag == '/' || frag == '#/') {
+    return null;
+  }
+  if (frag.startsWith('#')) {
+    frag = frag.substring(1);
+  }
+  if (!frag.startsWith('/')) {
+    frag = '/$frag';
+  }
+  return browserPathToGoPath(frag);
+}
+
 /// Query для GoRouter: выкидываем служебные `go=1`, `v`, `_cb`, `retry`.
 String? routerQueryFromUri(Uri uri) {
   final keep = <String, String>{};

@@ -45,16 +45,13 @@ self.addEventListener('activate', (event) => {
       } catch (e) {
         console.warn('HAN Eat: service worker unregister failed', e);
       }
-      // Kick stuck PWA/Safari tabs out of /app/ into HTML auth at /.
+      // Stay on the Flutter shell. Navigating to / reopened «Открываем…».
       await Promise.all(
         clients.map((client) => {
           try {
             if (typeof client.navigate === 'function') {
-              return client.navigate('/?sw=1');
+              return client.navigate('/app/?go=1&sw=1');
             }
-          } catch (e) {}
-          try {
-            client.postMessage({ type: 'HAN_EAT_FORCE_ROOT' });
           } catch (e) {}
           return Promise.resolve();
         })
