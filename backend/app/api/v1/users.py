@@ -439,14 +439,22 @@ async def update_user_profile(
     db: Session = Depends(get_db)
 ):
     """Обновить профиль текущего пользователя"""
-    from app.services.emoji_pack_service import EmojiPackService
+    from app.services.emoji_pack_service import (
+        EmojiPackService,
+        keep_if_unchanged_http,
+    )
 
+    emoji = EmojiPackService(db)
     if request.name is not None:
-        EmojiPackService(db).require_send_tokens_http(current_user.id, request.name)
-        current_user.name = request.name
+        # Flutter always resends name together with bio. Unchanged
+        # name is receive-and-persist — do not 403 after a downgrade.
+        current_user.name = keep_if_unchanged_http(
+            emoji, current_user.id, request.name, current_user.name
+        )
     if request.bio is not None:
-        EmojiPackService(db).require_send_tokens_http(current_user.id, request.bio)
-        current_user.bio = request.bio
+        current_user.bio = keep_if_unchanged_http(
+            emoji, current_user.id, request.bio, current_user.bio
+        )
     if request.is_private is not None:
         current_user.is_private = request.is_private
     if request.last_seen_privacy is not None or request.show_last_seen is not None:

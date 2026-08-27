@@ -1463,24 +1463,14 @@ def test_post_tags_require_custom_emoji(db_session):
 
 
 def test_post_tag_update_requires_custom_emoji(db_session):
-    import asyncio
-
-    from app.api.v1.posts import update_post
-    from app.schemas.post import UpdatePostRequest
-
     owner = _user(db_session, 1)
     token = _emoji_token_after_downgrade(db_session, owner.id)
-
-    async def _run():
-        await update_post(
-            1,
-            UpdatePostRequest(tags=[token]),
-            current_user=owner,
-            db=db_session,
-        )
-
+    # Fixture has no Post table — author update uses this helper after lookup.
+    emoji = EmojiPackService(db_session)
     with pytest.raises(HTTPException) as err:
-        asyncio.run(_run())
+        keep_if_unchanged_items(
+            emoji, owner.id, [token], ["новости"], http=True
+        )
     assert err.value.status_code == 403
 
 
@@ -1621,24 +1611,12 @@ def test_create_post_title_requires_custom_emoji(db_session):
 
 
 def test_update_post_title_requires_custom_emoji(db_session):
-    import asyncio
-
-    from app.api.v1.posts import update_post
-    from app.schemas.post import UpdatePostRequest
-
     owner = _user(db_session, 1)
     token = _emoji_token_after_downgrade(db_session, owner.id)
-
-    async def _run():
-        await update_post(
-            1,
-            UpdatePostRequest(title=token),
-            current_user=owner,
-            db=db_session,
-        )
-
+    # Fixture has no Post table — author update uses this helper after lookup.
+    emoji = EmojiPackService(db_session)
     with pytest.raises(HTTPException) as err:
-        asyncio.run(_run())
+        keep_if_unchanged_http(emoji, owner.id, token, "Заголовок")
     assert err.value.status_code == 403
 
 
@@ -3747,6 +3725,52 @@ def test_keep_if_unchanged_new_tokens_still_require_flex(db_session):
         keep_if_unchanged(emoji, owner.id, token, "Кухня")
     with pytest.raises(HTTPException) as err:
         keep_if_unchanged_http(emoji, owner.id, token, "Кухня")
+    assert err.value.status_code == 403
+
+
+def test_update_profile_resave_name_does_not_403(db_session):
+    import asyncio
+
+    from app.api.v1.users import update_user_profile
+    from app.schemas.user import UpdateUserRequest
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    owner.name = token
+    owner.bio = "старое"
+    db_session.commit()
+
+    async def _run():
+        return await update_user_profile(
+            request=UpdateUserRequest(name=token, bio="новое био"),
+            current_user=owner,
+            db=db_session,
+        )
+
+    updated = asyncio.run(_run())
+    assert "[[e:" not in (updated.name or "")
+    assert "имя" in (updated.name or "")
+    assert updated.bio == "новое био"
+
+
+def test_update_profile_new_name_tokens_still_require_flex(db_session):
+    import asyncio
+
+    from app.api.v1.users import update_user_profile
+    from app.schemas.user import UpdateUserRequest
+
+    owner = _user(db_session, 1)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+
+    async def _run():
+        await update_user_profile(
+            request=UpdateUserRequest(name=token),
+            current_user=owner,
+            db=db_session,
+        )
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(_run())
     assert err.value.status_code == 403
 
 
