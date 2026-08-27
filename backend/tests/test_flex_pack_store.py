@@ -4084,14 +4084,73 @@ def test_clip_preserving_custom_emoji_does_not_split_token():
     assert clip_preserving_custom_emoji("abcdef", 3) == "abc"
 
 
+def _bare_ce_token(token: str) -> str:
+    return "[[e:" + token.split("[[e:", 1)[1]
+
+
 def test_folder_create_does_not_persist_split_token(db_session):
     owner = _user(db_session, 1)
     token = _token_while_flex(db_session, owner.id)
-    bare = "[[e:" + token.split("[[e:", 1)[1]
+    bare = _bare_ce_token(token)
     long_name = ("п" * 58) + bare
     row = ChatService(db_session).create_folder(owner.id, long_name)
     assert "[[e:" not in row["name"]
     assert row["name"] == "п" * 58
+
+
+def test_quick_reply_does_not_persist_split_token(db_session):
+    from app.services.quick_reply_service import create_reply
+
+    owner = _user(db_session, 1)
+    token = _token_while_flex(db_session, owner.id)
+    bare = _bare_ce_token(token)
+    long_title = ("п" * 34) + bare
+    long_text = ("т" * 394) + bare
+    row = create_reply(db_session, owner.id, long_title, long_text)
+    assert "[[e:" not in row.title
+    assert row.title == "п" * 34
+    assert "[[e:" not in row.text
+    assert row.text == "т" * 394
+
+
+def test_quick_reply_auto_title_does_not_persist_split_token(db_session):
+    from app.services.quick_reply_service import create_reply
+
+    owner = _user(db_session, 1)
+    token = _token_while_flex(db_session, owner.id)
+    bare = _bare_ce_token(token)
+    row = create_reply(db_session, owner.id, "", ("п" * 34) + bare)
+    assert "[[e:" not in row.title
+    assert row.title == "п" * 34
+
+
+def test_saved_tag_does_not_persist_split_token(db_session):
+    from app.services.saved_tag_service import create_tag
+
+    owner = _user(db_session, 1)
+    token = _token_while_flex(db_session, owner.id)
+    bare = _bare_ce_token(token)
+    tag = create_tag(db_session, owner.id, ("п" * 34) + bare, ("и" * 26) + bare)
+    assert "[[e:" not in tag.title
+    assert tag.title == "п" * 34
+    assert "[[e:" not in (tag.emoji or "")
+    assert tag.emoji == "и" * 26
+
+
+def test_checklist_does_not_persist_split_token():
+    from app.services.chat_checklist_service import (
+        build_checklist_content,
+        parse_checklist,
+    )
+
+    token = "[[e:12]]"
+    raw = build_checklist_content(("п" * 194) + token, [("т" * 114) + token])
+    parsed = parse_checklist(raw)
+    assert parsed is not None
+    assert "[[e:" not in parsed["title"]
+    assert parsed["title"] == "п" * 194
+    assert "[[e:" not in parsed["items"][0]["text"]
+    assert parsed["items"][0]["text"] == "т" * 114
 
 
 def test_admin_flex_feature_resave_title_does_not_403(db_session):

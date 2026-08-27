@@ -43,7 +43,10 @@ def list_tags(db: Session, user_id: int) -> List[SavedTag]:
 
 
 def create_tag(db: Session, user_id: int, title: str, emoji: Optional[str] = None) -> SavedTag:
-    from app.services.emoji_pack_service import EmojiPackService
+    from app.services.emoji_pack_service import (
+        EmojiPackService,
+        clip_preserving_custom_emoji,
+    )
 
     EmojiPackService(db).require_send_tokens(user_id, title)
     EmojiPackService(db).require_send_tokens(user_id, emoji)
@@ -55,8 +58,8 @@ def create_tag(db: Session, user_id: int, title: str, emoji: Optional[str] = Non
         raise SavedTagError("tag_limit")
     tag = SavedTag(
         user_id=user_id,
-        title=heading[:40],
-        emoji=(emoji or "").strip()[:32] or None,
+        title=clip_preserving_custom_emoji(heading, 40),
+        emoji=clip_preserving_custom_emoji((emoji or "").strip(), 32) or None,
         sort_order=count,
     )
     db.add(tag)

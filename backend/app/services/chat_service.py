@@ -381,7 +381,10 @@ class ChatService:
         clean_title = title.strip()
         if not clean_title:
             raise ValueError("empty_title")
-        from app.services.emoji_pack_service import EmojiPackService
+        from app.services.emoji_pack_service import (
+            EmojiPackService,
+            clip_preserving_custom_emoji,
+        )
 
         EmojiPackService(self.db).require_send_tokens(creator_id, clean_title)
         others = {uid for uid in member_ids if uid != creator_id}
@@ -398,7 +401,7 @@ class ChatService:
 
         conv = Conversation(
             type="group",
-            title=clean_title[:120],
+            title=clip_preserving_custom_emoji(clean_title, 120),
             created_by_user_id=creator_id,
         )
         self.db.add(conv)
@@ -1423,6 +1426,7 @@ class ChatService:
             raise ValueError("empty_title")
         from app.services.emoji_pack_service import (
             EmojiPackService,
+            clip_preserving_custom_emoji,
             editor_or_preview_tokens,
         )
 
@@ -1434,7 +1438,7 @@ class ChatService:
             )
             or clean
         )
-        conv.title = clean[:120]
+        conv.title = clip_preserving_custom_emoji(clean, 120)
         conv.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         return conv
 

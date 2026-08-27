@@ -27,6 +27,7 @@ def list_replies(db: Session, user_id: int) -> List[QuickReply]:
 def create_reply(db: Session, user_id: int, title: str, text: str) -> QuickReply:
     from app.services.emoji_pack_service import (
         EmojiPackService,
+        clip_preserving_custom_emoji,
         prepare_send_content,
     )
 
@@ -36,7 +37,7 @@ def create_reply(db: Session, user_id: int, title: str, text: str) -> QuickReply
     # user's own text; preview someone else's `[[e:id]]` so saving a
     # canned reply does not 403 without custom_emoji (69).
     text = prepare_send_content(emoji, user_id, "text", text)
-    heading = (title or "").strip() or (text or "").strip()[:40]
+    heading = (title or "").strip() or (text or "").strip()
     body = (text or "").strip()
     if not body:
         raise QuickReplyError("reply_text_required")
@@ -45,8 +46,8 @@ def create_reply(db: Session, user_id: int, title: str, text: str) -> QuickReply
         raise QuickReplyError("quick_reply_limit")
     row = QuickReply(
         user_id=user_id,
-        title=heading[:40],
-        text=body[:400],
+        title=clip_preserving_custom_emoji(heading, 40),
+        text=clip_preserving_custom_emoji(body, 400),
         sort_order=count,
     )
     db.add(row)
