@@ -8,6 +8,7 @@ import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/stars_pay_helper.dart';
 import '../../../widgets/highlighted_text.dart';
+import '../../subscription/creator_upsell.dart';
 
 /// Telegram-like paid suggested posts for a channel.
 class ChannelSuggestedPostsScreen extends StatefulWidget {
@@ -172,6 +173,8 @@ class _ChannelSuggestedPostsScreenState
       );
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       await showStarsRequiredSnack(context, e);
     }
   }

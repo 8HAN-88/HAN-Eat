@@ -7,6 +7,7 @@ import '../../../services/comment_service.dart';
 import '../../../services/auth_service.dart';
 import '../../../models/post_model.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../subscription/creator_upsell.dart';
 import '../../../utils/session_snackbar.dart';
 import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_empty_state.dart';
@@ -143,6 +144,8 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
       }
     } on ApiClientException catch (e) {
       if (mounted) {
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         final text = e.isContentBlocked
             ? 'Комментарий не прошёл модерацию.'
             : e.isRateLimited
@@ -154,6 +157,8 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
       }
     } catch (e) {
       if (mounted) {
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         showErrorSnackBar(
           context,
           e,

@@ -34,6 +34,7 @@ import '../../comments/presentation/show_post_comments_sheet.dart';
 import 'widgets/paid_content_paywall_card.dart';
 import 'widgets/show_post_likers_sheet.dart';
 import '../../../widgets/stars_pay_helper.dart';
+import '../../subscription/creator_upsell.dart';
 import '../../../widgets/highlighted_text.dart';
 import '../../../services/custom_emoji_registry.dart';
 
@@ -480,6 +481,8 @@ class _NewPostCardState extends State<NewPostCard>
       });
 
       if (mounted) {
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         showErrorSnackBar(
           context,
           e,

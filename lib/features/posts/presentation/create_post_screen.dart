@@ -19,6 +19,7 @@ import 'package:han_eat/widgets/telegram_photo_grid.dart';
 import 'package:han_eat/widgets/create_poll_form_section.dart';
 import 'package:han_eat/utils/url_validator.dart';
 import '../../reels/application/reels_feed_refresh_provider.dart';
+import '../../subscription/creator_upsell.dart';
 
 class CreatePostScreen extends ConsumerStatefulWidget {
   const CreatePostScreen({
@@ -635,6 +636,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       }
     } on ApiClientException catch (e) {
       if (mounted) {
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         final text = e.isContentBlocked
             ? 'Контент не прошёл модерацию и не будет опубликован.'
             : e.isRateLimited
@@ -646,6 +649,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       }
     } catch (e) {
       if (mounted) {
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content: Text(

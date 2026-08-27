@@ -1054,6 +1054,8 @@ class _CreateChannelPostScreenState
       }
     } on ApiClientException catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       if (e.code == 'HAN_CREATOR_REQUIRED') {
         await showCreatorUpsell(context);
         return;
@@ -1068,6 +1070,8 @@ class _CreateChannelPostScreenState
       );
     } catch (e) {
       if (mounted) {
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(

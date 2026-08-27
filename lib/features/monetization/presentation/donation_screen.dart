@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../services/api_service.dart';
 import '../../../widgets/highlighted_text.dart';
 import '../../../widgets/stars_pay_helper.dart';
+import '../../subscription/creator_upsell.dart';
 import '../data/donation_models.dart';
 
 /// Экран отправки доната
@@ -66,6 +67,8 @@ class _DonationScreenState extends State<DonationScreen> {
       );
     } catch (e) {
       if (mounted) {
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         await showStarsRequiredSnack(context, e, fallback: 'Не удалось отправить донат');
       }
     } finally {
