@@ -253,6 +253,22 @@ class VideoPlayerHelper {
     }
   }
 
+  /// Web: play muted first (Safari autoplay), then restore session volume.
+  static Future<void> ensurePlayingWithVolume(
+    VideoPlayerController controller, {
+    required bool muted,
+    bool Function()? shouldContinue,
+  }) async {
+    await ensurePlaying(controller, shouldContinue: shouldContinue);
+    if (shouldContinue != null && !shouldContinue()) return;
+    if (!controller.value.isInitialized) return;
+    final target = muted ? 0.0 : 1.0;
+    if ((controller.value.volume < 0.5) == muted) return;
+    try {
+      await controller.setVolume(target);
+    } catch (_) {}
+  }
+
   static Future<bool> toggleMute(VideoPlayerController controller) async {
     if (!controller.value.isInitialized) return true;
     final isMuted = controller.value.volume < 0.5;

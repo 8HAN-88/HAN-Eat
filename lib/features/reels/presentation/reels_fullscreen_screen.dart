@@ -66,8 +66,9 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
     final controller = _videoControllers[index];
     if (controller == null) return;
     unawaited(
-      VideoPlayerHelper.ensurePlaying(
+      VideoPlayerHelper.ensurePlayingWithVolume(
         controller,
+        muted: _sessionMuted,
         shouldContinue: () => mounted && _shouldPlayReelAt(index),
       ),
     );
