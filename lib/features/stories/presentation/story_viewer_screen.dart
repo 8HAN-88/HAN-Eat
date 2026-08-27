@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:video_player/video_player.dart';
@@ -12,6 +13,7 @@ import '../../../models/chat_models.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/server_config.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../utils/video_player_helper.dart';
 import '../../chat/application/chat_open_direct.dart';
 import '../../chat/application/chat_ready_outgoing.dart';
 import '../../chat/presentation/widgets/chat_story_reply_bubble.dart';
@@ -130,16 +132,36 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
 
   Future<void> _initVideo() async {
     _videoController?.dispose();
+    _videoController = null;
 
     final url = ServerConfig.resolveMediaUrl(_currentStory.mediaUrl);
-    _videoController = VideoPlayerController.networkUrl(Uri.parse(url));
-
-    await _videoController!.initialize();
-    await _videoController!.play();
-
-    _videoController!.addListener(_onVideoProgress);
-
-    if (mounted) setState(() {});
+    try {
+      final controller = await VideoPlayerHelper.createPreparedController(
+        url,
+        loop: false,
+        muted: kIsWeb,
+        autoPlay: false,
+      );
+      if (!mounted) {
+        await controller.dispose();
+        return;
+      }
+      _videoController = controller;
+      controller.addListener(_onVideoProgress);
+      await VideoPlayerHelper.ensurePlaying(
+        controller,
+        shouldContinue: () => mounted && !_isPaused,
+      );
+      if (kIsWeb && controller.value.isPlaying) {
+        try {
+          await controller.setVolume(1);
+        } catch (_) {}
+      }
+      if (mounted) setState(() {});
+    } catch (_) {
+      // Safari/сеть: не зависаем на чёрном кадре — идём дальше как фото.
+      if (mounted) _startPhotoTimer();
+    }
   }
 
   void _onVideoProgress() {
@@ -184,7 +206,15 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
   void _resume() {
     setState(() => _isPaused = false);
     if (_currentStory.isVideo) {
-      _videoController?.play();
+      final controller = _videoController;
+      if (controller != null) {
+        unawaited(
+          VideoPlayerHelper.ensurePlaying(
+            controller,
+            shouldContinue: () => mounted && !_isPaused,
+          ),
+        );
+      }
     } else {
       _startPhotoTimer();
     }

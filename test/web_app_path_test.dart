@@ -7,6 +7,7 @@ void main() {
       expect(isWebAppShellPath('/app'), isTrue);
       expect(isWebAppShellPath('/app/'), isTrue);
       expect(isWebAppShellPath('/app/index.html'), isTrue);
+      expect(isWebAppShellPath('/index.html'), isTrue);
     });
 
     test('does not treat real app routes as the shell', () {
@@ -23,6 +24,7 @@ void main() {
       expect(isGoRouterShellLocation('/?go=1'), isTrue);
       expect(isGoRouterShellLocation('/app'), isTrue);
       expect(isGoRouterShellLocation('/app/?go=1'), isTrue);
+      expect(isGoRouterShellLocation('/index.html'), isTrue);
     });
 
     test('real routes stay real', () {

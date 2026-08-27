@@ -14,7 +14,7 @@ String _normalizedPath(String path) {
 /// PWA отдаётся с `/app/`. Это HTML-шелл, а не маршрут GoRouter.
 bool isWebAppShellPath(String path) {
   final p = _normalizedPath(path);
-  return p == '/app' || p == '/app/index.html';
+  return p == '/app' || p == '/app/index.html' || p == '/index.html';
 }
 
 /// То, что видит GoRouter после `--base-href /app/`.
