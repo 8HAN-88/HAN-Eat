@@ -2717,6 +2717,143 @@ def test_http_skips_token_gate_for_reply_keyboard_label(db_session):
     )
 
 
+def _bot(db, bot_id: int, owner_id: int, name: str = "Bot") -> User:
+    bot = User(
+        id=bot_id,
+        email=f"bot{bot_id}@t.test",
+        password_hash="h",
+        name=name,
+        is_bot=True,
+        created_by_user_id=owner_id,
+    )
+    db.add(bot)
+    db.commit()
+    return bot
+
+
+def test_inline_callback_tap_does_not_403_without_flex(db_session):
+    import json
+
+    from app.services.bot_handler import process_callback_for_bot
+
+    owner = _user(db_session, 1)
+    peer = _user(db_session, 2)
+    token = _emoji_token_after_downgrade(db_session, owner.id)
+    bot = _bot(db_session, 10, owner.id)
+    conv = Conversation(type="direct")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add_all(
+        [
+            ConversationMember(conversation_id=conv.id, user_id=peer.id),
+            ConversationMember(conversation_id=conv.id, user_id=bot.id),
+        ]
+    )
+    src = Message(
+        conversation_id=conv.id,
+        sender_id=bot.id,
+        type="text",
+        content="меню",
+        inline_keyboard_json=json.dumps(
+            [[{"text": token, "callback_data": "ok", "callback_text": token}]],
+            ensure_ascii=False,
+        ),
+    )
+    db_session.add(src)
+    db_session.commit()
+    result = process_callback_for_bot(
+        db_session,
+        conversation_id=conv.id,
+        source_message=src,
+        callback_data="ok",
+    )
+    assert result is not None
+    bot_msg, status = result
+    assert status == "ok"
+    assert bot_msg.sender_id == bot.id
+    assert "[[e:" not in (bot_msg.content or "")
+    assert (bot_msg.content or "").strip()
+
+
+def test_inline_callback_replies_as_keyboard_bot(db_session):
+    import json
+
+    from app.services.bot_handler import process_callback_for_bot
+
+    owner = _user(db_session, 1)
+    peer = _user(db_session, 2)
+    first = _bot(db_session, 10, owner.id, "First")
+    author = _bot(db_session, 11, owner.id, "Author")
+    conv = Conversation(type="group", title="Чат")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add_all(
+        [
+            ConversationMember(conversation_id=conv.id, user_id=peer.id),
+            ConversationMember(conversation_id=conv.id, user_id=first.id),
+            ConversationMember(conversation_id=conv.id, user_id=author.id),
+        ]
+    )
+    src = Message(
+        conversation_id=conv.id,
+        sender_id=author.id,
+        type="text",
+        content="меню",
+        inline_keyboard_json=json.dumps(
+            [[{"text": "Да", "callback_data": "yes", "callback_text": "ок"}]],
+            ensure_ascii=False,
+        ),
+    )
+    db_session.add(src)
+    db_session.commit()
+    result = process_callback_for_bot(
+        db_session,
+        conversation_id=conv.id,
+        source_message=src,
+        callback_data="yes",
+    )
+    assert result is not None
+    bot_msg, _ = result
+    assert bot_msg.sender_id == author.id
+    assert bot_msg.content == "ок"
+
+
+def test_inline_callback_works_after_bot_left(db_session):
+    import json
+
+    from app.services.bot_handler import process_callback_for_bot
+
+    owner = _user(db_session, 1)
+    peer = _user(db_session, 2)
+    bot = _bot(db_session, 10, owner.id)
+    conv = Conversation(type="direct")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=peer.id))
+    src = Message(
+        conversation_id=conv.id,
+        sender_id=bot.id,
+        type="text",
+        content="меню",
+        inline_keyboard_json=json.dumps(
+            [[{"text": "Да", "callback_data": "yes"}]],
+            ensure_ascii=False,
+        ),
+    )
+    db_session.add(src)
+    db_session.commit()
+    result = process_callback_for_bot(
+        db_session,
+        conversation_id=conv.id,
+        source_message=src,
+        callback_data="yes",
+    )
+    assert result is not None
+    bot_msg, _ = result
+    assert bot_msg.sender_id == bot.id
+    assert "Нажата кнопка" in (bot_msg.content or "")
+
+
 def test_sticker_associated_emoji_does_not_block_sender(db_session):
     owner = _user(db_session, 1)
     sender = _user(db_session, 2)

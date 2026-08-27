@@ -11787,13 +11787,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Future<void> _tapReplyKeyboardButton(String text) async {
     final label = text.trim();
-    if (label.isEmpty) return;
+    if (label.isEmpty || _recording) return;
+    // A keyboard tap always sends a new message — not an edit, and not
+    // the composer `@bot query` inline intercept.
+    if (_editingMessage != null) {
+      setState(() => _editingMessage = null);
+    }
     _controller.text = label;
     _controller.selection = TextSelection.collapsed(offset: label.length);
     if (_replyKeyboard?.oneTime == true) {
       setState(() => _replyKeyboard = null);
     }
-    await _sendText();
+    await _sendText(fromReplyKeyboard: true);
   }
 
   Widget _compactComposerStrip({
@@ -12536,7 +12541,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return false;
   }
 
-  Future<void> _sendText({bool silent = false, String? effectId}) async {
+  Future<void> _sendText({
+    bool silent = false,
+    String? effectId,
+    bool fromReplyKeyboard = false,
+  }) async {
     if (!await _allowSilent(silent)) return;
     final text = _controller.text.trim();
     final editingMedia = _editingMessage != null &&
@@ -12588,7 +12597,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _hideBotAutocompleteOverlay();
 
     // === Inline Mode: @bot query ===
-    if (text.startsWith('@')) {
+    // ReplyKeyboard labels are sent as-is — `@name` is not an inline query.
+    if (!fromReplyKeyboard && text.startsWith('@')) {
       final match = RegExp(r'^@([a-zA-Z0-9_]+)\s*(.*)$').firstMatch(text);
       if (match != null) {
         final botUsername = match.group(1)!;
@@ -12650,7 +12660,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       }
       return;
     }
-    final editing = _editingMessage;
+    final editing = fromReplyKeyboard ? null : _editingMessage;
     if (editing != null) {
       final previous = editing;
       _controller.clear();
@@ -14588,6 +14598,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           final i = _messages.indexWhere((m) => m.id == previous.id);
           if (i >= 0) _messages[i] = previous;
         });
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         showErrorSnackBar(context, e, fallback: 'Не удалось отметить пункт');
       }
     } finally {
@@ -14651,6 +14663,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           final i = _messages.indexWhere((m) => m.id == previous.id);
           if (i >= 0) _messages[i] = previous;
         });
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         showErrorSnackBar(context, e, fallback: 'Не удалось проголосовать');
       }
     } finally {
@@ -14854,6 +14868,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
       } catch (e) {
         if (mounted) {
+          if (offerFlexIfRequired(context, e)) return;
+          if (offerPackStoreIfRequired(context, e)) return;
           showErrorSnackBar(context, e,
               fallback: 'Не удалось выполнить действие');
         }

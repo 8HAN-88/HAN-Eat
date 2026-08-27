@@ -72,6 +72,22 @@ def _find_bot_in_conversation(db: Session, conversation_id: int) -> Optional[Use
     return None
 
 
+def _bot_for_callback(db: Session, source_message: Message) -> Optional[User]:
+    """Prefer the bot that sent the keyboard, not the first bot in the chat.
+
+    Groups can have several bots. Old messages stay tappable after the bot
+    leaves — look up the sender even if they are no longer a member.
+    """
+    sender = (
+        db.query(User)
+        .filter(User.id == source_message.sender_id, User.is_bot == True)
+        .first()
+    )
+    if sender:
+        return sender
+    return _find_bot_in_conversation(db, source_message.conversation_id)
+
+
 def _normalize_inline_buttons(raw: Any) -> Optional[List[List[Dict[str, Any]]]]:
     if not raw:
         return None
@@ -367,7 +383,7 @@ def process_callback_for_bot(
     source_message: Message,
     callback_data: str,
 ) -> Optional[Tuple[Message, str]]:
-    bot = _find_bot_in_conversation(db, conversation_id)
+    bot = _bot_for_callback(db, source_message)
     if not bot:
         return None
     keyboard = _normalize_inline_buttons(source_message.inline_keyboard_json)

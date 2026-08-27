@@ -3103,7 +3103,11 @@ async def callback_query(
     if not result:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "callback_not_found")
     bot_reply, _ = result
-    bot_user = _find_chat_bot(db, conversation_id)
+    bot_user = (
+        db.query(User)
+        .filter(User.id == msg.sender_id, User.is_bot.is_(True))
+        .first()
+    ) or _find_chat_bot(db, conversation_id)
     if bot_user:
         AnalyticsService(db).log_event(
             event_type="bot_callback_click",
