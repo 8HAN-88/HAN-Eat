@@ -4486,6 +4486,8 @@ def test_invoice_and_giveaway_title_clip_does_not_split_token():
     split_desc = ("д" * 507) + token
     assert clip_paid_text(split_desc, 512) == "д" * 507
     assert clip_paid_text("  счёт " + token + "  ", 512) == "счёт " + token
+    assert clip_paid_text(("п" * 495) + token, 500) == "п" * 495
+    assert clip_paid_text(("п" * 1995) + token, 2000) == "п" * 1995
 
 
 def test_poll_option_does_not_persist_split_token(db_session):
@@ -4551,3 +4553,32 @@ def test_pack_title_does_not_persist_split_token(db_session):
     sticker = StickerService(db_session).create_pack(owner.id, title, True)
     assert sticker.title == "п" * 115
     assert "[[e:" not in sticker.title
+
+
+def test_bot_about_does_not_persist_split_token():
+    from app.api.v1.bots import _clip_bot_about
+
+    token = "[[e:123]]"
+    assert _clip_bot_about(("п" * 115) + token) == "п" * 115
+    already = ("п" * 115) + "[[e:12"
+    assert _clip_bot_about(already) == "п" * 115
+
+
+def test_donation_note_does_not_persist_split_token(db_session):
+    sender = _user(db_session, 1)
+    recipient = _user(db_session, 2)
+    token = _token_while_flex(db_session, sender.id)
+    bare = _bare_ce_token(token)
+    PaidFeaturesService(db_session).add_stars(sender.id, 50, tx_type="admin_adjust")
+    db_session.commit()
+    tx, msg = PaidFeaturesService(db_session).donate(
+        sender.id,
+        recipient.id,
+        10,
+        message=("п" * 495) + bare,
+        create_chat_message=False,
+    )
+    stored = (tx.meta or {}).get("message")
+    assert stored == "п" * 495
+    assert "[[e:" not in stored
+    assert msg is None

@@ -310,7 +310,7 @@ class PaidFeaturesService:
         create_chat_message: bool = True,
     ) -> tuple[StarTransaction, Optional[Message]]:
         """Send Stars tip. Optionally posts a Telegram-like tip bubble in the DM."""
-        note = (message or "").strip() or None
+        note = clip_paid_text(message, 500) or None
         from app.services.emoji_pack_service import EmojiPackService
 
         EmojiPackService(self.db).require_send_tokens_http(sender_id, note)
@@ -1219,7 +1219,7 @@ class PaidFeaturesService:
         hide_name: bool = False,
         idempotency_key: Optional[str] = None,
     ) -> Message:
-        note = (message or "").strip()
+        note = clip_paid_text(message, 500)
         from app.services.emoji_pack_service import EmojiPackService
 
         EmojiPackService(self.db).require_send_tokens_http(sender_id, note)
@@ -2528,7 +2528,7 @@ class PaidFeaturesService:
         amount_stars: int,
         media_url: Optional[str] = None,
     ) -> ChannelSuggestedPost:
-        clean = (text or "").strip()
+        clean = clip_paid_text(text, 2000)
         if not clean:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Text required")
         from app.services.emoji_pack_service import EmojiPackService
@@ -2550,7 +2550,7 @@ class PaidFeaturesService:
         row = ChannelSuggestedPost(
             channel_id=channel_id,
             author_id=user_id,
-            text=clean[:2000],
+            text=clean,
             media_url=(media_url or "").strip()[:1024] or None,
             amount_stars=int(amount_stars),
             status="pending",

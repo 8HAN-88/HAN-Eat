@@ -351,10 +351,8 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
             const SizedBox(height: 10),
             TextField(
               controller: _aboutController,
-              maxLength: 120,
               decoration: const InputDecoration(
                 labelText: 'About (коротко)',
-                hintText: 'до 120 символов',
               ),
             ),
             TextField(

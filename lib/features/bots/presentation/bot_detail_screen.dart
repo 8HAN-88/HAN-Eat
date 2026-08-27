@@ -1027,7 +1027,6 @@ class _EditBotProfileDialogState extends State<_EditBotProfileDialog> {
             const SizedBox(height: 10),
             TextField(
               controller: _about,
-              maxLength: 120,
               decoration: const InputDecoration(
                 labelText: 'About',
                 helperText: 'Короткое описание в профиле бота',

@@ -393,7 +393,7 @@ class DirectChatRequest(BaseModel):
 
 
 class CreateGroupChatRequest(BaseModel):
-    title: str = Field(..., min_length=1, max_length=120)
+    title: str = Field(..., min_length=1, max_length=140)
     member_ids: List[int] = Field(..., min_length=1)
 
 
@@ -443,7 +443,7 @@ class BubbleAccentRequest(BaseModel):
 
 
 class UpdateGroupChatRequest(BaseModel):
-    title: Optional[str] = Field(None, min_length=1, max_length=120)
+    title: Optional[str] = Field(None, min_length=1, max_length=140)
     avatar_url: Optional[str] = Field(None, max_length=512)
     only_admins_can_post: Optional[bool] = None
     is_forum: Optional[bool] = None

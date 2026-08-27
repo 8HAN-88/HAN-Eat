@@ -137,6 +137,12 @@ def _clip_reply_placeholder(text: Optional[str]) -> Optional[str]:
     return clip_preserving_custom_emoji((text or "").strip(), 64) or None
 
 
+def _clip_bot_about(text: Optional[str]) -> Optional[str]:
+    from app.services.emoji_pack_service import clip_preserving_custom_emoji
+
+    return clip_preserving_custom_emoji((text or "").strip(), 120) or None
+
+
 def _normalize_inline_buttons(
     buttons: Optional[List[BotInlineButton]],
     rows: Optional[List[List[BotInlineButton]]] = None,
@@ -234,7 +240,7 @@ class BotCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=64)
     username: str = Field(..., min_length=3, max_length=32)
     description: Optional[str] = Field(None, max_length=1000)
-    short_description: Optional[str] = Field(None, max_length=120)
+    short_description: Optional[str] = Field(None, max_length=140)
     commands: List[BotCommandCreate] = Field(default_factory=list)
 
 
@@ -322,7 +328,7 @@ async def create_bot(
         bot_token=bot_token,
         bot_username=username,
         bot_description=payload.description,
-        bot_short_description=payload.short_description,
+        bot_short_description=_clip_bot_about(payload.short_description),
         created_by_user_id=current_user.id,
     )
     db.add(bot_user)
@@ -411,7 +417,7 @@ async def list_my_bots(
 class BotUpdateRequest(BaseModel):
     name: Optional[str] = Field(None, max_length=64)
     description: Optional[str] = Field(None, max_length=1000)
-    short_description: Optional[str] = Field(None, max_length=120)
+    short_description: Optional[str] = Field(None, max_length=140)
 
 
 @router.get("/{bot_id}", response_model=BotResponse)
@@ -457,7 +463,9 @@ async def update_bot(
             bot.bot_short_description,
         )
         if bot.bot_short_description is not None:
-            bot.bot_short_description = bot.bot_short_description.strip() or None
+            bot.bot_short_description = (
+                _clip_bot_about(bot.bot_short_description)
+            )
 
     db.commit()
     db.refresh(bot)

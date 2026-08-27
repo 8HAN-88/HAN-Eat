@@ -177,7 +177,6 @@ class _DonationScreenState extends State<DonationScreen> {
             TextField(
               controller: _messageController,
               maxLines: 3,
-              maxLength: 500,
               decoration: const InputDecoration(
                 hintText: 'Спасибо за контент!',
                 border: OutlineInputBorder(),

@@ -561,7 +561,6 @@ class _NewPostCardState extends State<NewPostCard>
             const SizedBox(height: 12),
             TextField(
               controller: messageController,
-              maxLength: 160,
               decoration: const InputDecoration(
                 labelText: 'Сообщение автору',
                 hintText: 'Спасибо за классный пост!',
@@ -609,6 +608,8 @@ class _NewPostCardState extends State<NewPostCard>
       );
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       if (isStarsRequiredError(e)) {
         await showStarsRequiredSnack(context, e, fallback: 'Не удалось отправить донат');
       } else {

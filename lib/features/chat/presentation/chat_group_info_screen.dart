@@ -164,7 +164,6 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
         content: TextField(
           controller: controller,
           autofocus: true,
-          maxLength: 120,
           decoration: const InputDecoration(hintText: 'Название'),
         ),
         actions: [

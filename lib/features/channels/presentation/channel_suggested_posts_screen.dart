@@ -105,7 +105,6 @@ class _ChannelSuggestedPostsScreenState
                     controller: textController,
                     minLines: 3,
                     maxLines: 6,
-                    maxLength: 2000,
                     decoration: const InputDecoration(
                       labelText: 'Текст поста',
                     ),
