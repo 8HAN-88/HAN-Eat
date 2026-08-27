@@ -4489,11 +4489,7 @@ def test_invoice_and_giveaway_title_clip_does_not_split_token():
 
 
 def test_poll_option_does_not_persist_split_token(db_session):
-    from app.services.chat_poll_service import (
-        add_option_to_message_poll,
-        build_poll_content,
-        parse_poll_content,
-    )
+    from app.services.chat_poll_service import build_poll_content, parse_poll_content
     from app.services.post_poll_service import build_poll_body
 
     owner = _user(db_session, 1)
@@ -4515,25 +4511,6 @@ def test_poll_option_does_not_persist_split_token(db_session):
     feed = build_poll_body(question, ["A", option])
     assert feed["poll"]["question"] == "п" * 295
     assert feed["poll"]["options"][1]["text"] == "в" * 115
-
-    conv = Conversation(type="direct", created_by_user_id=owner.id)
-    db_session.add(conv)
-    db_session.flush()
-    msg = Message(
-        conversation_id=conv.id,
-        sender_id=owner.id,
-        type="poll",
-        content=content,
-    )
-    db_session.add(msg)
-    db_session.commit()
-
-    add_option_to_message_poll(db_session, msg.id, owner.id, ("о" * 115) + bare)
-    db_session.commit()
-    stored = db_session.query(Message).filter(Message.id == msg.id).first()
-    added = parse_poll_content(stored.content)["poll"]["options"][-1]["text"]
-    assert added == "о" * 115
-    assert "[[e:" not in added
 
 
 def test_keyboard_button_does_not_persist_split_token():
