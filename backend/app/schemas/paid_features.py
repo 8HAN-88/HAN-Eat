@@ -35,7 +35,7 @@ class PurchasePostResponse(BaseModel):
 class DonateStarsRequest(BaseModel):
     recipient_id: int
     amount_stars: int = Field(gt=0, le=100000)
-    message: Optional[str] = None
+    message: Optional[str] = Field(default=None, max_length=520)
 
 
 class DonateStarsResponse(BaseModel):
@@ -177,7 +177,7 @@ class StarGiftsResponse(BaseModel):
 
 class SendStarGiftRequest(BaseModel):
     conversation_id: int
-    message: Optional[str] = Field(default=None, max_length=500)
+    message: Optional[str] = Field(default=None, max_length=520)
     # Telegram "Hide my name" — hide sender on the recipient's public gift wall.
     hide_name: bool = False
     idempotency_key: Optional[str] = Field(default=None, max_length=128)
@@ -353,7 +353,7 @@ class RefundPaidMediaResponse(BaseModel):
 
 
 class SuggestChannelPostRequest(BaseModel):
-    text: str = Field(min_length=1, max_length=2000)
+    text: str = Field(min_length=1, max_length=2024)
     amount_stars: int = Field(ge=10, le=100000)
     media_url: Optional[str] = None
 

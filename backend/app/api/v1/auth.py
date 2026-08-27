@@ -85,17 +85,20 @@ _AUTH_OPEN_PURPOSES = frozenset(
 )
 
 
-def _user_response(user: User) -> UserResponse:
+def _user_response(user: User, db: Session | None = None) -> UserResponse:
     from app.services.legal_consent_service import user_legal_fields
 
     data = UserResponse.model_validate(user, context={"include_phone": True})
     legal = user_legal_fields(user)
-    return data.model_copy(
-        update={
-            "email_verified": is_email_verified(user),
-            **legal,
-        }
-    )
+    updates = {
+        "email_verified": is_email_verified(user),
+        **legal,
+    }
+    if db is not None:
+        from app.services.emoji_pack_service import EmojiPackService
+
+        updates["emoji_status"] = EmojiPackService(db).visible_emoji_status(user)
+    return data.model_copy(update=updates)
 
 
 
@@ -155,11 +158,12 @@ def _auth_response(
     refresh_token: str,
     message: str | None = None,
     session_id: int | None = None,
+    db: Session | None = None,
 ) -> AuthResponse:
     return AuthResponse(
         token=access_token,
         refresh_token=refresh_token,
-        user=_user_response(user),
+        user=_user_response(user, db),
         message=message,
         session_id=session_id,
     )
@@ -291,6 +295,21 @@ async def register(
                 ),
             },
         )
+
+    from app.core.entitlements import feature_required_detail
+    from app.services.emoji_pack_service import parse_custom_emoji_ids
+
+    # New accounts have no flex — custom-emoji tokens are always forbidden.
+    if parse_custom_emoji_ids(request.name) or parse_custom_emoji_ids(
+        request.username
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=feature_required_detail(
+                "custom_emoji",
+                "Кастомные эмодзи в тексте доступны с уровня 69",
+            ),
+        )
     
     # Создаем пользователя (scan_credits поле legacy; kitchen AI-scan retired)
     from datetime import datetime
@@ -341,7 +360,9 @@ async def register(
         )
 
     try:
-        return _auth_response(user, access_token, refresh_token, verify_msg, session_id)
+        return _auth_response(
+            user, access_token, refresh_token, verify_msg, session_id, db=db
+        )
     except Exception as validation_error:
         logger.error(f"UserResponse validation error during registration: {validation_error}")
         raise HTTPException(
@@ -416,7 +437,9 @@ async def login(
         access_token, refresh_token, session_id = _issue_auth_tokens(db, user, http_request)
 
         try:
-            return _auth_response(user, access_token, refresh_token, session_id=session_id)
+            return _auth_response(
+                user, access_token, refresh_token, session_id=session_id, db=db
+            )
         except Exception as validation_error:
             logger.error(f"UserResponse validation error: {validation_error}")
             raise HTTPException(
@@ -552,8 +575,10 @@ async def google_auth(request: GoogleAuthRequest, http_request: Request, db: Ses
     try:
         claims = await _resolve_google_claims(request.id_token)
 
+        from app.services.emoji_pack_service import strip_custom_emoji_tokens
+
         google_email = claims.get("email")
-        google_name = claims.get("name", "Google User")
+        google_name = strip_custom_emoji_tokens(claims.get("name") or "") or "Google User"
 
         if not google_email:
             raise HTTPException(
@@ -617,7 +642,9 @@ async def google_auth(request: GoogleAuthRequest, http_request: Request, db: Ses
             mark_email_verified(user)
             db.commit()
 
-        return _auth_response(user, access_token, refresh_token, session_id=session_id)
+        return _auth_response(
+            user, access_token, refresh_token, session_id=session_id, db=db
+        )
 
     except HTTPException:
         raise
@@ -659,8 +686,10 @@ async def yandex_auth(request: YandexAuthRequest, http_request: Request, db: Ses
             request.code.strip(),
             request.redirect_uri.strip(),
         )
+        from app.services.emoji_pack_service import strip_custom_emoji_tokens
+
         yandex_email = profile["email"]
-        yandex_name = profile["name"]
+        yandex_name = strip_custom_emoji_tokens(profile.get("name") or "") or "Yandex User"
 
         user = db.query(User).filter(User.email == yandex_email).first()
 
@@ -717,7 +746,9 @@ async def yandex_auth(request: YandexAuthRequest, http_request: Request, db: Ses
             mark_email_verified(user)
             db.commit()
 
-        return _auth_response(user, access_token, refresh_token, session_id=session_id)
+        return _auth_response(
+            user, access_token, refresh_token, session_id=session_id, db=db
+        )
 
     except HTTPException:
         raise
@@ -1105,4 +1136,6 @@ async def totp_verify_login(
         user.is_private = False
         db.commit()
     access_token, refresh_token, session_id = _issue_auth_tokens(db, user, http_request)
-    return _auth_response(user, access_token, refresh_token, session_id=session_id)
+    return _auth_response(
+        user, access_token, refresh_token, session_id=session_id, db=db
+    )

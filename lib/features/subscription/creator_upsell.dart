@@ -38,3 +38,37 @@ bool offerFlexIfRequired(BuildContext context, Object error) {
   );
   return true;
 }
+
+bool offerPackStoreIfRequired(BuildContext context, Object error) {
+  String? message;
+  if (error is ApiClientException &&
+      (error.code == 'pack_purchase_required' ||
+          error.code == 'custom_emoji_denied')) {
+    message = error.message;
+  } else {
+    final raw = error.toString();
+    if (raw.contains('pack_purchase_required') ||
+        raw.contains('custom_emoji_denied') ||
+        raw.contains('купите пак')) {
+      message = raw.contains('купите пак')
+          ? raw
+          : 'Этот эмодзи недоступен — купите пак';
+    }
+  }
+  if (message == null) return false;
+  if (!context.mounted) return true;
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(message),
+      action: SnackBarAction(
+        label: 'Магазин',
+        onPressed: () {
+          if (context.mounted) {
+            context.push(PackStoreRoute.path);
+          }
+        },
+      ),
+    ),
+  );
+  return true;
+}

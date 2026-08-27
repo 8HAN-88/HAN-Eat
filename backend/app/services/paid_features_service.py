@@ -31,6 +31,13 @@ from app.models.post import Post
 from app.models.user import User
 
 
+def clip_paid_text(text: Optional[str], limit: int) -> str:
+    """Truncate invoice/giveaway copy without slicing `[[e:id]]` in half."""
+    from app.services.emoji_pack_service import clip_preserving_custom_emoji
+
+    return clip_preserving_custom_emoji((text or "").strip(), limit)
+
+
 def _invalidate_user_feed_cache(db: Session, user_id: int) -> None:
     try:
         from app.core.redis_client import get_redis
@@ -303,12 +310,15 @@ class PaidFeaturesService:
         create_chat_message: bool = True,
     ) -> tuple[StarTransaction, Optional[Message]]:
         """Send Stars tip. Optionally posts a Telegram-like tip bubble in the DM."""
+        note = clip_paid_text(message, 500) or None
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(self.db).require_send_tokens_http(sender_id, note)
         if sender_id == recipient_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot donate to yourself")
         recipient_exists = self.db.query(User.id).filter(User.id == recipient_id, User.deleted_at.is_(None)).first()
         if not recipient_exists:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recipient not found")
-        note = (message or "").strip() or None
         tx = self._spend_stars(
             sender_id,
             amount,
@@ -842,6 +852,9 @@ class PaidFeaturesService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Amount must be positive",
             )
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(self.db).require_send_tokens_http(user_id, note)
         balance = self.creator_balance(user_id)
         available = int(balance.available_stars or 0)
         if amount_stars > available:
@@ -911,6 +924,9 @@ class PaidFeaturesService:
         approve: bool,
         note: Optional[str] = None,
     ) -> CreatorPayoutRequest:
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(self.db).require_send_tokens_http(reviewer_user_id, note)
         payout = (
             self.db.query(CreatorPayoutRequest)
             .filter(CreatorPayoutRequest.id == payout_id)
@@ -1203,6 +1219,10 @@ class PaidFeaturesService:
         hide_name: bool = False,
         idempotency_key: Optional[str] = None,
     ) -> Message:
+        note = clip_paid_text(message, 500)
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(self.db).require_send_tokens_http(sender_id, note)
         gift = (
             self.db.query(StarGift)
             .filter(StarGift.id == gift_id, StarGift.is_active.is_(True))
@@ -1279,7 +1299,6 @@ class PaidFeaturesService:
 
         import json as _json
 
-        note = (message or "").strip()
         # Create message first so we can bind inventory + spend idempotently.
         msg = Message(
             conversation_id=conversation_id,
@@ -2276,6 +2295,9 @@ class PaidFeaturesService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Duration must be between 1 hour and 30 days",
             )
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(self.db).require_send_tokens_http(user_id, title)
         self._channel_manage_access(user_id, channel_id)
         active = (
             self.db.query(StarGiveaway.id)
@@ -2301,7 +2323,7 @@ class PaidFeaturesService:
             ends_at=datetime.utcnow() + timedelta(hours=int(duration_hours)),
             require_membership=True,
             participants_count=0,
-            title=(title or "").strip()[:160] or None,
+            title=clip_paid_text(title, 160) or None,
             prize_type=kind,
             premium_months=months if kind == "premium" else 0,
         )
@@ -2506,9 +2528,12 @@ class PaidFeaturesService:
         amount_stars: int,
         media_url: Optional[str] = None,
     ) -> ChannelSuggestedPost:
-        clean = (text or "").strip()
+        clean = clip_paid_text(text, 2000)
         if not clean:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Text required")
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(self.db).require_send_tokens_http(user_id, clean)
         if amount_stars < 10 or amount_stars > 100_000:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -2525,7 +2550,7 @@ class PaidFeaturesService:
         row = ChannelSuggestedPost(
             channel_id=channel_id,
             author_id=user_id,
-            text=clean[:2000],
+            text=clean,
             media_url=(media_url or "").strip()[:1024] or None,
             amount_stars=int(amount_stars),
             status="pending",
@@ -2612,6 +2637,19 @@ class PaidFeaturesService:
                 body = {"media": [{"type": "image", "url": row.media_url}]}
             import json as _json
             from sqlalchemy import text as sa_text
+            from app.services.emoji_pack_service import (
+                EmojiPackService,
+                keep_or_preview_tokens,
+            )
+
+            # Suggestion text is the author's — preview if the reviewing
+            # admin cannot send those tokens (post is stored as admin).
+            description = (
+                keep_or_preview_tokens(
+                    EmojiPackService(self.db), user_id, row.text
+                )
+                or row.text
+            )
 
             inserted = self.db.execute(
                 sa_text(
@@ -2624,7 +2662,7 @@ class PaidFeaturesService:
                     "user_id": user_id,
                     "channel_id": row.channel_id,
                     "type": "photo" if row.media_url else "text",
-                    "description": row.text,
+                    "description": description,
                     "body": _json.dumps(body) if body else None,
                     "status": "published",
                     "visibility": "public",
@@ -2668,6 +2706,13 @@ class PaidFeaturesService:
         payload: Optional[str] = None,
         expires_in_hours: int = 24,
     ) -> StarInvoice:
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(self.db).require_send_tokens_http(
+            creator_user_id,
+            title,
+            description,
+        )
         bot = (
             self.db.query(User)
             .filter(User.id == bot_id, User.is_bot.is_(True), User.deleted_at.is_(None))
@@ -2693,8 +2738,8 @@ class PaidFeaturesService:
         invoice = StarInvoice(
             bot_id=bot_id,
             creator_user_id=creator_user_id,
-            title=clean_title[:160],
-            description=((description or "").strip()[:512] or None),
+            title=clip_paid_text(clean_title, 160),
+            description=(clip_paid_text(description, 512) or None),
             amount_stars=int(amount_stars),
             payload=((payload or "").strip()[:256] or None),
             status="pending",

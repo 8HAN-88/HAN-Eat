@@ -221,7 +221,7 @@ class EditMessageRequest(BaseModel):
 
 
 class MessageReactionRequest(BaseModel):
-    emoji: str = Field(..., min_length=1, max_length=16)
+    emoji: str = Field(..., min_length=1, max_length=32)
     # Optional Stars to attach (Telegram paid reaction).
     stars: int = Field(default=0, ge=0, le=100000)
     idempotency_key: Optional[str] = Field(default=None, max_length=128)
@@ -248,7 +248,7 @@ class SendMessageRequest(BaseModel):
     media_url: Optional[str] = Field(default=None, max_length=512)
     reply_to_message_id: Optional[int] = None
     client_message_id: Optional[str] = Field(default=None, max_length=64)
-    poll_question: Optional[str] = Field(default=None, max_length=300)
+    poll_question: Optional[str] = Field(default=None, max_length=320)
     poll_description: Optional[str] = Field(default=None, max_length=500)
     poll_options: Optional[List[str]] = None
     poll_settings: Optional[dict] = None
@@ -278,7 +278,7 @@ class ScheduleMessageRequest(BaseModel):
     media_url: Optional[str] = Field(default=None, max_length=512)
     reply_to_message_id: Optional[int] = None
     client_message_id: Optional[str] = Field(default=None, max_length=64)
-    poll_question: Optional[str] = Field(default=None, max_length=300)
+    poll_question: Optional[str] = Field(default=None, max_length=320)
     poll_description: Optional[str] = Field(default=None, max_length=500)
     poll_options: Optional[List[str]] = None
     poll_settings: Optional[dict] = None
@@ -312,6 +312,7 @@ class ScheduledMessageResponse(BaseModel):
     effect_id: Optional[str] = None
     topic_id: Optional[int] = None
     status: str
+    error_text: Optional[str] = None
     created_at: datetime
 
     class Config:
@@ -328,10 +329,10 @@ class RescheduleMessageRequest(BaseModel):
 
 
 class InlineKeyboardButton(BaseModel):
-    text: str = Field(..., min_length=1, max_length=64)
+    text: str = Field(..., min_length=1, max_length=80)
     callback_data: Optional[str] = Field(default=None, max_length=128)
     url: Optional[str] = Field(default=None, max_length=512)
-    callback_text: Optional[str] = Field(default=None, max_length=300)
+    callback_text: Optional[str] = Field(default=None, max_length=320)
     miniapp_id: Optional[int] = Field(default=None, gt=0)
     web_app: Optional[dict] = None
 
@@ -358,7 +359,7 @@ class SavedTagItem(BaseModel):
 
 class SavedTagCreateRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=40)
-    emoji: Optional[str] = Field(default=None, max_length=8)
+    emoji: Optional[str] = Field(default=None, max_length=32)
 
 
 class SavedTagListResponse(BaseModel):
@@ -370,7 +371,7 @@ class SavedMessageTagsRequest(BaseModel):
 
 
 class ChatPollAddOptionRequest(BaseModel):
-    text: str = Field(..., min_length=1, max_length=120)
+    text: str = Field(..., min_length=1, max_length=140)
 
 
 class LiveLocationStartRequest(BaseModel):
@@ -392,7 +393,7 @@ class DirectChatRequest(BaseModel):
 
 
 class CreateGroupChatRequest(BaseModel):
-    title: str = Field(..., min_length=1, max_length=120)
+    title: str = Field(..., min_length=1, max_length=140)
     member_ids: List[int] = Field(..., min_length=1)
 
 
@@ -442,7 +443,7 @@ class BubbleAccentRequest(BaseModel):
 
 
 class UpdateGroupChatRequest(BaseModel):
-    title: Optional[str] = Field(None, min_length=1, max_length=120)
+    title: Optional[str] = Field(None, min_length=1, max_length=140)
     avatar_url: Optional[str] = Field(None, max_length=512)
     only_admins_can_post: Optional[bool] = None
     is_forum: Optional[bool] = None
@@ -456,13 +457,13 @@ class UpdateGroupChatRequest(BaseModel):
 
 
 class ForumTopicCreateRequest(BaseModel):
-    title: str = Field(..., min_length=1, max_length=128)
-    icon_emoji: Optional[str] = Field(None, max_length=16)
+    title: str = Field(..., min_length=1, max_length=160)
+    icon_emoji: Optional[str] = Field(None, max_length=32)
 
 
 class ForumTopicUpdateRequest(BaseModel):
-    title: Optional[str] = Field(None, min_length=1, max_length=128)
-    icon_emoji: Optional[str] = Field(None, max_length=16)
+    title: Optional[str] = Field(None, min_length=1, max_length=160)
+    icon_emoji: Optional[str] = Field(None, max_length=32)
     closed: Optional[bool] = None
 
 
@@ -528,11 +529,11 @@ class GroupMemberPermissionsRequest(BaseModel):
 class GroupMemberSendRestrictionRequest(BaseModel):
     send_restricted: bool = True
     send_restricted_until: Optional[datetime] = None
-    reason: Optional[str] = Field(default=None, max_length=240)
+    reason: Optional[str] = Field(default=None, max_length=256)
 
 
 class GroupMemberBanRequest(BaseModel):
-    reason: Optional[str] = Field(default=None, max_length=240)
+    reason: Optional[str] = Field(default=None, max_length=256)
     banned_until: Optional[datetime] = None
 
 
@@ -679,7 +680,7 @@ class ChatFolderListResponse(BaseModel):
 
 class CreateChatFolderRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=64)
-    icon: Optional[str] = Field(None, max_length=8)
+    icon: Optional[str] = Field(None, max_length=32)
     conversation_ids: List[int] = []
     channel_ids: List[int] = []
     filters: dict = Field(default_factory=dict)
@@ -687,7 +688,7 @@ class CreateChatFolderRequest(BaseModel):
 
 class UpdateChatFolderRequest(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=64)
-    icon: Optional[str] = Field(None, max_length=8)
+    icon: Optional[str] = Field(None, max_length=32)
     conversation_ids: Optional[List[int]] = None
     channel_ids: Optional[List[int]] = None
     filters: Optional[dict] = None
@@ -721,7 +722,7 @@ class ChatTagListResponse(BaseModel):
 
 
 class CreateChatTagRequest(BaseModel):
-    title: str = Field(..., min_length=1, max_length=40)
+    title: str = Field(..., min_length=1, max_length=64)
     color: str = Field(default="blue", max_length=16)
 
 

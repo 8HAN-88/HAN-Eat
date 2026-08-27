@@ -1,6 +1,8 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../utils/api_error_parser.dart';
@@ -30,7 +32,9 @@ class FlexSubscriptionApi {
   static Future<FlexMe> me() async {
     final response = await http.get(Uri.parse('$baseUrl/me'), headers: await _headers());
     if (response.statusCode == 200) {
-      return FlexMe.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      await FlexMeCache.save(json);
+      return FlexMe.fromJson(json);
     }
     _throw(response, 'Не удалось загрузить подписку');
   }
@@ -279,7 +283,7 @@ class FlexFeature {
         icon: json['icon'] as String?,
         assignedLevel: json['assigned_level'] as int? ?? json['default_level'] as int? ?? 1,
         minLevel: json['min_level'] as int? ?? 1,
-        maxLevel: json['max_level'] as int? ?? 68,
+        maxLevel: json['max_level'] as int? ?? 72,
         featureType: json['feature_type'] as String? ?? 'movable',
         movable: json['movable'] as bool? ?? true,
         required: json['required'] as bool? ?? false,
@@ -326,6 +330,31 @@ class FlexBlock {
         minLevel: json['min_level'] as int? ?? 1,
         maxLevel: json['max_level'] as int? ?? 3,
       );
+}
+
+class FlexMeCache {
+  static const _key = 'flex_me_cache_v1';
+  static FlexMe? _memory;
+
+  static Future<void> save(Map<String, dynamic> json) async {
+    _memory = FlexMe.fromJson(json);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_key, jsonEncode(json));
+  }
+
+  static Future<FlexMe?> load() async {
+    if (_memory != null) return _memory;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_key);
+      if (raw == null || raw.isEmpty) return null;
+      _memory = FlexMe.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+      return _memory;
+    } catch (e) {
+      if (kDebugMode) debugPrint('FlexMeCache.load: $e');
+      return null;
+    }
+  }
 }
 
 class FlexMe {
@@ -406,7 +435,7 @@ class FlexMe {
   factory FlexMe.fromJson(Map<String, dynamic> json) => FlexMe(
         currentLevel: json['current_level'] as int? ?? 0,
         priceRub: json['price_rub'] as int? ?? 0,
-        maxLevel: json['max_level'] as int? ?? 68,
+        maxLevel: json['max_level'] as int? ?? 72,
         active: json['active'] as bool? ?? false,
         basePriceRub: json['base_price_rub'] as int? ?? 39,
         stepPriceRub: json['step_price_rub'] as int? ?? 10,

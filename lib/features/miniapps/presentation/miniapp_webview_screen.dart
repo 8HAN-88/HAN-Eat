@@ -6,6 +6,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../utils/session_snackbar.dart';
+import '../../../widgets/highlighted_text.dart';
+import '../../subscription/creator_upsell.dart';
 import '../data/miniapps_service.dart';
 
 /// Полноценный экран запуска мини-приложения с WebView + JS bridge (как Telegram WebApp).
@@ -157,19 +160,22 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              widget.title,
+            HighlightedText(
+              text: widget.title,
+              style: theme.textTheme.titleLarge ??
+                  const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
             if (subtitle.isNotEmpty)
-              Text(
-                subtitle,
+              HighlightedText(
+                text: subtitle,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.labelSmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
+                      color: colorScheme.onSurfaceVariant,
+                    ) ??
+                    const TextStyle(fontSize: 11),
               ),
           ],
         ),
@@ -362,8 +368,12 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _sendingData = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось отправить данные: $e')),
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось отправить данные',
       );
     }
   }
@@ -614,7 +624,14 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
                     height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : Text(_mainButtonText),
+                : HighlightedText(
+                    text: _mainButtonText,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
           ),
         ),
       ),

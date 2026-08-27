@@ -5,6 +5,7 @@ import '../../../app/app_router.dart';
 import '../../../services/channel_service.dart';
 import '../../../services/subscription_service.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../../widgets/highlighted_text.dart';
 
 /// Продвигаемые посты (Creator / Pro), до 5 одновременно.
 class PromotedPostsScreen extends StatefulWidget {
@@ -156,7 +157,13 @@ class _PromotedPostsScreenState extends State<PromotedPostsScreen> {
           return Card(
             child: ListTile(
               leading: const Icon(Icons.trending_up, color: Colors.amber),
-              title: Text(title),
+              title: HighlightedText(
+                text: title,
+                style: Theme.of(context).textTheme.bodyLarge ??
+                    const TextStyle(fontSize: 16),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
               subtitle: Text(p.type),
               trailing: IconButton(
                 tooltip: 'Снять продвижение',

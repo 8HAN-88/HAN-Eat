@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/app_router.dart';
 import '../../settings/application/subscription_status_provider.dart';
 import '../../../../services/support_service.dart';
+import '../../subscription/creator_upsell.dart';
 import 'widgets/subscription_cancel_survey_sheet.dart';
 
 const _supportTicketTypes = {
@@ -89,6 +90,8 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
       }
     } catch (e) {
       if (mounted) {
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(userVisibleError(e)),

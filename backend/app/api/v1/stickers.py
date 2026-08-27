@@ -20,6 +20,8 @@ from app.schemas.sticker import (
     ToggleStickerFavoriteRequest,
     UpdateStickerPackRequest,
 )
+from app.services.pack_marketplace_service import owner_labels
+from app.services.paid_features_service import PaidFeaturesService
 from app.services.sticker_service import StickerService
 
 router = APIRouter()
@@ -37,8 +39,40 @@ def _raise_premium_sticker() -> None:
     )
 
 
+def _raise_emoji_token(code: str) -> None:
+    from app.core.entitlements import feature_required_detail
+
+    if code == "custom_emoji_required":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            feature_required_detail(
+                "custom_emoji",
+                "Кастомные эмодзи в тексте доступны с уровня 69",
+            ),
+        )
+    if code == "custom_emoji_denied":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            {
+                "code": "custom_emoji_denied",
+                "message": "Этот эмодзи недоступен — купите пак",
+            },
+        )
+
+
 def _pack_share_link(slug: str) -> str:
     return f"https://haneat.app/stickers/{slug}"
+
+
+def _sticker_is_listed(pack: StickerPack) -> bool:
+    from sqlalchemy.orm import object_session
+
+    from app.services.pack_marketplace_service import PackMarketplaceService
+
+    sess = object_session(pack)
+    if sess is None:
+        return int(getattr(pack, "price_stars", 0) or 0) > 0
+    return PackMarketplaceService(sess).is_actively_listed(pack, kind="sticker")
 
 
 def _pack_response(
@@ -47,16 +81,36 @@ def _pack_response(
     installed_pack_ids: set[int],
     stickers_by_pack_id: dict[int, list],
     sticker_counts: dict[int, int],
+    purchased_pack_ids: set[int] | None = None,
+    viewer_user_id: int | None = None,
+    authors: dict[int, str] | None = None,
 ) -> StickerPackResponse:
+    purchased_pack_ids = purchased_pack_ids or set()
     stickers = stickers_by_pack_id.get(pack.id, [])
+    owner_id = int(pack.owner_user_id)
+    owner_name = (authors or {}).get(owner_id, "")
+    if not owner_name:
+        from sqlalchemy.orm import object_session
+
+        sess = object_session(pack)
+        if sess is not None:
+            owner_name = owner_labels(sess, [owner_id]).get(owner_id, "")
     return StickerPackResponse(
         id=pack.id,
         title=pack.title,
         slug=pack.slug,
-        owner_user_id=pack.owner_user_id,
+        owner_user_id=owner_id,
+        owner_name=owner_name,
         is_public=pack.is_public,
         is_premium=bool(getattr(pack, "is_premium", False)),
         is_installed=pack.id in installed_pack_ids,
+        is_owned=bool(viewer_user_id and int(pack.owner_user_id) == int(viewer_user_id)),
+        is_purchased=pack.id in purchased_pack_ids,
+        is_listed=_sticker_is_listed(pack),
+        price_stars=int(getattr(pack, "price_stars", 0) or 0),
+        fee_stars=PaidFeaturesService.resale_fee_stars(
+            int(getattr(pack, "price_stars", 0) or 0)
+        ),
         stickers=[
             StickerItemResponse(
                 id=item.id,
@@ -84,8 +138,10 @@ async def list_my_sticker_packs(
     packs = svc.list_my_packs(current_user.id)
     pack_ids = [p.id for p in packs]
     installed = svc.installed_pack_ids(current_user.id)
+    purchased = svc.purchased_pack_ids(current_user.id)
     stickers_by_pack_id = svc.stickers_by_pack_ids(pack_ids)
     sticker_counts = svc.stickers_count_by_pack_ids(pack_ids)
+    authors = owner_labels(db, [p.owner_user_id for p in packs])
     return StickerPackListResponse(
         items=[
             _pack_response(
@@ -93,10 +149,105 @@ async def list_my_sticker_packs(
                 installed_pack_ids=installed,
                 stickers_by_pack_id=stickers_by_pack_id,
                 sticker_counts=sticker_counts,
+                purchased_pack_ids=purchased,
+                viewer_user_id=current_user.id,
+                authors=authors,
             )
             for p in packs
         ]
     )
+
+
+@router.get("/stickers/marketplace", response_model=StickerPackListResponse)
+async def list_sticker_marketplace(
+    q: str = Query("", max_length=120),
+    limit: int = Query(60, ge=1, le=120),
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = StickerService(db)
+    packs = svc.list_marketplace_packs(query=q, limit=limit)
+    pack_ids = [p.id for p in packs]
+    installed = svc.installed_pack_ids(current_user.id)
+    purchased = svc.purchased_pack_ids(current_user.id)
+    stickers_by_pack_id = svc.stickers_by_pack_ids(pack_ids)
+    sticker_counts = svc.stickers_count_by_pack_ids(pack_ids)
+    authors = owner_labels(db, [p.owner_user_id for p in packs])
+    return StickerPackListResponse(
+        items=[
+            _pack_response(
+                p,
+                installed_pack_ids=installed,
+                stickers_by_pack_id=stickers_by_pack_id,
+                sticker_counts=sticker_counts,
+                purchased_pack_ids=purchased,
+                viewer_user_id=current_user.id,
+                authors=authors,
+            )
+            for p in packs
+        ]
+    )
+
+
+@router.post("/stickers/packs/{pack_id}/list")
+async def list_sticker_pack_for_sale(
+    pack_id: int,
+    body: dict,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.services.pack_marketplace_service import PackMarketplaceService
+
+    try:
+        pack = PackMarketplaceService(db).list_sticker_pack(
+            current_user.id,
+            pack_id,
+            int((body or {}).get("price_stars") or 0),
+        )
+        db.commit()
+        db.refresh(pack)
+    except HTTPException:
+        db.rollback()
+        raise
+    except ValueError as exc:
+        db.rollback()
+        code = str(exc)
+        if code == "pack_not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, code)
+        if code == "forbidden":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, code)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, code) from exc
+    svc = StickerService(db)
+    return _pack_response(
+        pack,
+        installed_pack_ids=svc.installed_pack_ids(current_user.id),
+        stickers_by_pack_id=svc.stickers_by_pack_ids([pack.id]),
+        sticker_counts=svc.stickers_count_by_pack_ids([pack.id]),
+        purchased_pack_ids=svc.purchased_pack_ids(current_user.id),
+        viewer_user_id=current_user.id,
+    )
+
+
+@router.post("/stickers/packs/{pack_id}/buy")
+async def buy_sticker_pack(
+    pack_id: int,
+    expected_price_stars: int | None = Query(None),
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.services.pack_marketplace_service import PackMarketplaceService
+
+    try:
+        result = PackMarketplaceService(db).buy_sticker_pack(
+            current_user.id,
+            pack_id,
+            expected_price_stars=expected_price_stars,
+        )
+        db.commit()
+        return result
+    except HTTPException:
+        db.rollback()
+        raise
 
 
 @router.get("/stickers/catalog", response_model=StickerPackListResponse)
@@ -110,8 +261,10 @@ async def list_sticker_catalog(
     packs = svc.list_catalog_packs(user_id=current_user.id, query=q, limit=limit)
     pack_ids = [p.id for p in packs]
     installed = svc.installed_pack_ids(current_user.id)
+    purchased = svc.purchased_pack_ids(current_user.id)
     stickers_by_pack_id = svc.stickers_by_pack_ids(pack_ids)
     sticker_counts = svc.stickers_count_by_pack_ids(pack_ids)
+    authors = owner_labels(db, [p.owner_user_id for p in packs])
     return StickerPackListResponse(
         items=[
             _pack_response(
@@ -119,6 +272,9 @@ async def list_sticker_catalog(
                 installed_pack_ids=installed,
                 stickers_by_pack_id=stickers_by_pack_id,
                 sticker_counts=sticker_counts,
+                purchased_pack_ids=purchased,
+                viewer_user_id=current_user.id,
+                authors=authors,
             )
             for p in packs
         ]
@@ -143,6 +299,8 @@ async def get_sticker_pack(
         installed_pack_ids=installed,
         stickers_by_pack_id=stickers_by_pack_id,
         sticker_counts=sticker_counts,
+        purchased_pack_ids=svc.purchased_pack_ids(current_user.id),
+        viewer_user_id=current_user.id,
     )
 
 
@@ -153,7 +311,7 @@ async def get_sticker_pack_by_slug(
     db: Session = Depends(get_db),
 ):
     svc = StickerService(db)
-    pack = svc.get_public_pack_by_slug(slug)
+    pack = svc.get_pack_by_slug_for_user(current_user.id, slug)
     if not pack:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "pack_not_found")
     installed = svc.installed_pack_ids(current_user.id)
@@ -164,6 +322,8 @@ async def get_sticker_pack_by_slug(
         installed_pack_ids=installed,
         stickers_by_pack_id=stickers_by_pack_id,
         sticker_counts=sticker_counts,
+        purchased_pack_ids=svc.purchased_pack_ids(current_user.id),
+        viewer_user_id=current_user.id,
     )
 
 
@@ -190,6 +350,7 @@ async def create_sticker_pack(
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code == "premium_sticker":
             _raise_premium_sticker()
+        _raise_emoji_token(code)
         raise
     installed = svc.installed_pack_ids(current_user.id)
     stickers_by_pack_id = svc.stickers_by_pack_ids([pack.id])
@@ -199,6 +360,8 @@ async def create_sticker_pack(
         installed_pack_ids=installed,
         stickers_by_pack_id=stickers_by_pack_id,
         sticker_counts=sticker_counts,
+        purchased_pack_ids=svc.purchased_pack_ids(current_user.id),
+        viewer_user_id=current_user.id,
     )
 
 
@@ -209,6 +372,9 @@ async def add_sticker_to_pack(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(current_user.id, body.emoji)
     if (body.sticker_type or "").strip().lower() == "animated":
         from app.services.subscription_service import SubscriptionService
 
@@ -236,6 +402,7 @@ async def add_sticker_to_pack(
             raise HTTPException(status.HTTP_403_FORBIDDEN, code)
         if code in ("missing_media", "invalid_sticker_type"):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        _raise_emoji_token(code)
         raise
     pack = svc.get_pack_for_user(current_user.id, pack_id)
     if not pack:
@@ -248,6 +415,8 @@ async def add_sticker_to_pack(
         installed_pack_ids=installed,
         stickers_by_pack_id=stickers_by_pack_id,
         sticker_counts=sticker_counts,
+        purchased_pack_ids=svc.purchased_pack_ids(current_user.id),
+        viewer_user_id=current_user.id,
     )
 
 
@@ -282,6 +451,7 @@ async def update_sticker_pack(
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code == "premium_sticker":
             _raise_premium_sticker()
+        _raise_emoji_token(code)
         raise
     installed = svc.installed_pack_ids(current_user.id)
     stickers_by_pack_id = svc.stickers_by_pack_ids([pack.id])
@@ -291,6 +461,8 @@ async def update_sticker_pack(
         installed_pack_ids=installed,
         stickers_by_pack_id=stickers_by_pack_id,
         sticker_counts=sticker_counts,
+        purchased_pack_ids=svc.purchased_pack_ids(current_user.id),
+        viewer_user_id=current_user.id,
     )
 
 
@@ -365,6 +537,11 @@ async def install_sticker_pack(
             raise HTTPException(status.HTTP_403_FORBIDDEN, code)
         if code == "premium_sticker":
             _raise_premium_sticker()
+        if code == "pack_purchase_required":
+            raise HTTPException(
+                status.HTTP_402_PAYMENT_REQUIRED,
+                {"code": "pack_purchase_required", "message": "Сначала купите пак"},
+            )
         raise
     return {"ok": True}
 
@@ -376,7 +553,7 @@ async def import_sticker_pack_by_slug(
     db: Session = Depends(get_db),
 ):
     svc = StickerService(db)
-    pack = svc.get_public_pack_by_slug(slug)
+    pack = svc.get_pack_by_slug_for_user(current_user.id, slug)
     if not pack:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "pack_not_found")
     try:
@@ -386,6 +563,11 @@ async def import_sticker_pack_by_slug(
         db.rollback()
         if str(e) == "premium_sticker":
             _raise_premium_sticker()
+        if str(e) == "pack_purchase_required":
+            raise HTTPException(
+                status.HTTP_402_PAYMENT_REQUIRED,
+                {"code": "pack_purchase_required", "message": "Сначала купите пак"},
+            )
         raise
     return {"ok": True, "pack_id": pack.id}
 
@@ -446,6 +628,13 @@ async def toggle_sticker_favorite(
         code = str(e)
         if code == "sticker_not_found":
             raise HTTPException(status.HTTP_404_NOT_FOUND, code)
+        if code == "premium_sticker":
+            _raise_premium_sticker()
+        if code == "pack_purchase_required":
+            raise HTTPException(
+                status.HTTP_402_PAYMENT_REQUIRED,
+                {"code": "pack_purchase_required", "message": "Сначала купите пак"},
+            )
         raise
     return {
         "ok": True,
@@ -516,5 +705,7 @@ async def toggle_pinned_sticker_pack(
         code = str(e)
         if code == "pack_not_found":
             raise HTTPException(status.HTTP_404_NOT_FOUND, code)
+        if code == "pack_not_installed":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, code)
         raise
     return {"ok": True, "pinned": pinned, "pack_ids": pack_ids}

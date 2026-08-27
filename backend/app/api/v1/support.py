@@ -53,7 +53,13 @@ async def create_support_ticket(
     
     is_priority = SubscriptionService(db).has_priority_support(current_user.id)
 
-    # Создаем обращение
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(
+        current_user.id,
+        request.subject,
+        request.message,
+    )
     ticket = SupportTicket(
         user_id=current_user.id,
         type=request.type,
@@ -157,7 +163,12 @@ async def resolve_ticket(
     db: Session = Depends(get_db)
 ):
     """Обработать обращение (только для админов)"""
-    
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(
+        current_user.id,
+        request.resolution_comment,
+    )
     ticket = db.query(SupportTicket).filter(
         SupportTicket.id == ticket_id
     ).first()

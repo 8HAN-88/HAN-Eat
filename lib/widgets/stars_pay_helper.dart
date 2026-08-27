@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../app/app_router.dart';
 import '../services/paid_features_service.dart';
 import '../utils/api_error_parser.dart' show ApiClientException, userVisibleError;
+import 'highlighted_text.dart';
 
 /// Shared Stars UX: confirm spend + recover from insufficient balance.
 Future<bool> confirmStarsSpend(
@@ -26,19 +27,21 @@ Future<bool> confirmStarsSpend(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                title,
+              HighlightedText(
+                text: title,
                 style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w800,
-                    ),
+                    ) ??
+                    const TextStyle(fontWeight: FontWeight.w800, fontSize: 22),
               ),
               const SizedBox(height: 8),
-              Text(
-                body,
+              HighlightedText(
+                text: body,
                 style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
                       color: scheme.onSurfaceVariant,
                       height: 1.35,
-                    ),
+                    ) ??
+                    TextStyle(color: scheme.onSurfaceVariant, height: 1.35),
               ),
               const SizedBox(height: 16),
               Container(
@@ -86,14 +89,17 @@ Future<bool> confirmStarsSpend(
 
 bool isStarsRequiredError(Object error) {
   if (error is ApiClientException) {
+    if (error.code == 'pack_purchase_required' ||
+        error.code == 'custom_emoji_denied') {
+      return false;
+    }
     if (error.code == 'STARS_REQUIRED') return true;
-    if (error.statusCode == 402) return true;
+    if (error.statusCode == 402 && error.code == null) return true;
   }
   final raw = error.toString().toLowerCase();
   return raw.contains('stars_required') ||
       raw.contains('недостаточно звёзд') ||
-      raw.contains('недостаточно звезд') ||
-      raw.contains('402');
+      raw.contains('недостаточно звезд');
 }
 
 Future<void> showStarsRequiredSnack(
@@ -198,14 +204,18 @@ Future<StarsTipDraft?> pickStarsTipDraft(
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setLocal) => AlertDialog(
-        title: Text(title),
+        title: HighlightedText(
+          text: title,
+          style: Theme.of(ctx).textTheme.titleLarge ??
+              const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (subtitle != null && subtitle.trim().isNotEmpty) ...[
-              Text(
-                subtitle.trim(),
+              HighlightedText(
+                text: subtitle.trim(),
                 style: TextStyle(
                   color: Theme.of(ctx).colorScheme.onSurfaceVariant,
                   fontSize: 13,
@@ -372,8 +382,8 @@ Future<ChannelSubscribeChoice?> showChannelSubscribeSheet(
                         ),
                   ),
                   const SizedBox(height: 6),
-                  Text(
-                    '«$channelName» · $monthlyPriceStars ★/мес',
+                  HighlightedText(
+                    text: '«$channelName» · $monthlyPriceStars ★/мес',
                     style: TextStyle(
                       color: scheme.onSurfaceVariant,
                       height: 1.35,
@@ -518,8 +528,8 @@ Future<bool> showChannelManageSubscriptionSheet(
                         ),
                   ),
                   const SizedBox(height: 6),
-                  Text(
-                    '«$channelName»',
+                  HighlightedText(
+                    text: '«$channelName»',
                     style: TextStyle(
                       color: scheme.onSurfaceVariant,
                       height: 1.35,

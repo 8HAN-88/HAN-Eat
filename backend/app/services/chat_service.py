@@ -32,6 +32,31 @@ from app.models.user_block import UserBlock
 from app.services.notification_service import NotificationService
 
 
+def _inline_keyboard_text_parts(inline_keyboard_json: Optional[str]) -> List[str]:
+    if not inline_keyboard_json:
+        return []
+    try:
+        source = json.loads(inline_keyboard_json)
+    except Exception:
+        return []
+    if not isinstance(source, list):
+        return []
+    parts: List[str] = []
+    for row in source:
+        if not isinstance(row, list):
+            continue
+        for btn in row:
+            if not isinstance(btn, dict):
+                continue
+            text = str(btn.get("text") or "").strip()
+            if text:
+                parts.append(text)
+            callback_text = str(btn.get("callback_text") or "").strip()
+            if callback_text:
+                parts.append(callback_text)
+    return parts
+
+
 class ChatService:
     def __init__(self, db: Session):
         self.db = db
@@ -356,6 +381,12 @@ class ChatService:
         clean_title = title.strip()
         if not clean_title:
             raise ValueError("empty_title")
+        from app.services.emoji_pack_service import (
+            EmojiPackService,
+            clip_preserving_custom_emoji,
+        )
+
+        EmojiPackService(self.db).require_send_tokens(creator_id, clean_title)
         others = {uid for uid in member_ids if uid != creator_id}
         if not others:
             raise ValueError("need_members")
@@ -370,7 +401,7 @@ class ChatService:
 
         conv = Conversation(
             type="group",
-            title=clean_title[:120],
+            title=clip_preserving_custom_emoji(clean_title, 120),
             created_by_user_id=creator_id,
         )
         self.db.add(conv)
@@ -1393,7 +1424,21 @@ class ChatService:
         clean = title.strip()
         if not clean:
             raise ValueError("empty_title")
-        conv.title = clean[:120]
+        from app.services.emoji_pack_service import (
+            EmojiPackService,
+            clip_preserving_custom_emoji,
+            editor_or_preview_tokens,
+        )
+
+        # Creator authored the title; another admin may resend it on Save.
+        own = int(conv.created_by_user_id or 0) == int(user_id)
+        clean = (
+            editor_or_preview_tokens(
+                EmojiPackService(self.db), user_id, clean, own=own
+            )
+            or clean
+        )
+        conv.title = clip_preserving_custom_emoji(clean, 120)
         conv.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         return conv
 
@@ -1484,6 +1529,17 @@ class ChatService:
         title: str,
         icon_emoji: Optional[str] = None,
     ) -> ForumTopic:
+        from app.services.emoji_pack_service import (
+            EmojiPackService,
+            clip_preserving_custom_emoji,
+        )
+
+        clean = clip_preserving_custom_emoji((title or "").strip(), 128)
+        if not clean:
+            raise ValueError("empty_title")
+        icon = clip_preserving_custom_emoji((icon_emoji or "").strip(), 32) or None
+        EmojiPackService(self.db).require_send_tokens(actor_id, clean)
+        EmojiPackService(self.db).require_send_tokens(actor_id, icon)
         if not self._is_member(conversation_id, actor_id):
             raise ValueError("forbidden")
         conv = self._get_group_or_error(conversation_id)
@@ -1491,11 +1547,8 @@ class ChatService:
             raise ValueError("not_a_forum")
         if not self._can_change_group_info(conversation_id, actor_id):
             raise ValueError("forbidden")
-        clean = (title or "").strip()[:128]
-        if not clean:
-            raise ValueError("empty_title")
         self.ensure_general_topic(conversation_id, actor_id)
-        emoji = (icon_emoji or "").strip()[:16] or None
+        emoji = icon
         topic = ForumTopic(
             conversation_id=conversation_id,
             title=clean,
@@ -1531,16 +1584,38 @@ class ChatService:
         )
         if topic is None:
             raise ValueError("topic_not_found")
+        from app.services.emoji_pack_service import (
+            EmojiPackService,
+            clip_preserving_custom_emoji,
+            editor_or_preview_tokens,
+        )
+
+        # Topic author wrote the title/icon; another admin may resend
+        # them when renaming. Do not 403 a manager without 69.
+        emoji = EmojiPackService(self.db)
+        own = int(topic.created_by_user_id or 0) == int(actor_id)
         if title is not None:
-            clean = title.strip()[:128]
+            clean = clip_preserving_custom_emoji(title.strip(), 128)
             if not clean:
                 raise ValueError("empty_title")
+            clean = clip_preserving_custom_emoji(
+                editor_or_preview_tokens(emoji, actor_id, clean, own=own)
+                or clean,
+                128,
+            )
             if topic.is_general and clean.lower() not in ("general", "общий"):
                 # Allow rename of General but keep is_general.
                 pass
             topic.title = clean
         if icon_emoji is not None:
-            topic.icon_emoji = icon_emoji.strip()[:16] or None
+            icon = clip_preserving_custom_emoji(icon_emoji.strip(), 32) or None
+            if icon:
+                icon = clip_preserving_custom_emoji(
+                    editor_or_preview_tokens(emoji, actor_id, icon, own=own)
+                    or icon,
+                    32,
+                ) or None
+            topic.icon_emoji = icon
         if closed is not None:
             if topic.is_general and closed:
                 raise ValueError("cannot_close_general")
@@ -2114,7 +2189,9 @@ class ChatService:
         if not self._is_member(conversation_id, actor_id):
             raise ValueError("forbidden")
         conv = self._get_group_or_error(conversation_id)
-        body = (text or "").strip()
+        from app.services.emoji_pack_service import text_for_external
+
+        body = text_for_external(text)
         if not body:
             raise ValueError("empty_message")
         note = Message(
@@ -2303,6 +2380,28 @@ class ChatService:
         send_restricted_until: Optional[datetime],
         reason: Optional[str],
     ) -> ConversationMember:
+        if send_restricted:
+            from app.services.emoji_pack_service import (
+                EmojiPackService,
+                keep_or_preview_tokens,
+            )
+
+            emoji = EmojiPackService(self.db)
+            incoming = (reason or "").strip()
+            existing = self._get_member_record(conversation_id, target_user_id)
+            stored = (
+                (existing.send_restriction_reason or "").strip()
+                if existing is not None
+                else ""
+            )
+            # Flutter always resends the previous admin's reason when
+            # changing the deadline. Do not 403 a manager without 69.
+            if incoming and incoming == stored:
+                reason = (
+                    keep_or_preview_tokens(emoji, actor_id, incoming) or incoming
+                )
+            else:
+                emoji.require_send_tokens(actor_id, reason)
         conv = self._get_group_or_error(conversation_id)
         if not self._is_member(conversation_id, actor_id):
             raise ValueError("forbidden")
@@ -2336,7 +2435,11 @@ class ChatService:
                     raise ValueError("invalid_restriction_until")
             target_member.send_restricted = True
             target_member.send_restricted_until = until_naive
-            target_member.send_restriction_reason = (reason or "").strip()[:240] or None
+            from app.services.emoji_pack_service import clip_preserving_custom_emoji
+
+            target_member.send_restriction_reason = (
+                clip_preserving_custom_emoji((reason or "").strip(), 240) or None
+            )
         else:
             target_member.send_restricted = False
             target_member.send_restricted_until = None
@@ -2354,6 +2457,9 @@ class ChatService:
         reason: Optional[str],
         banned_until: Optional[datetime],
     ) -> GroupMemberBan:
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(self.db).require_send_tokens(actor_id, reason)
         conv = self._get_group_or_error(conversation_id)
         if not self._is_member(conversation_id, actor_id):
             raise ValueError("forbidden")
@@ -2397,7 +2503,9 @@ class ChatService:
             self.db.add(row)
         row.banned = True
         row.banned_by_user_id = actor_id
-        row.reason = (reason or "").strip()[:240] or None
+        from app.services.emoji_pack_service import clip_preserving_custom_emoji
+
+        row.reason = clip_preserving_custom_emoji((reason or "").strip(), 240) or None
         row.banned_until = until_naive
 
         if target_member is not None:
@@ -3115,6 +3223,22 @@ class ChatService:
         is_anonymous: bool = False,
         notify: bool = True,
     ) -> tuple[Message, bool]:
+        from app.services.emoji_pack_service import (
+            EmojiPackService,
+            prepare_send_content,
+            preview_reply_keyboard_content,
+        )
+
+        emoji = EmojiPackService(self.db)
+        content = (
+            preview_reply_keyboard_content(
+                emoji, self.db, sender_id, conversation_id, msg_type, content
+            )
+            or content
+        )
+        content = prepare_send_content(emoji, sender_id, msg_type, content)
+        for part in _inline_keyboard_text_parts(inline_keyboard_json):
+            emoji.require_send_tokens(sender_id, part)
         if client_message_id:
             existing = (
                 self.db.query(Message)
@@ -3338,6 +3462,21 @@ class ChatService:
                     raise ValueError("paid_media_locked")
             if not media_url:
                 raise ValueError("paid_media_locked")
+        from app.services.emoji_pack_service import (
+            EmojiPackService,
+            prepare_forward_content,
+        )
+
+        original_author_id = getattr(src, "forward_from_user_id", None) or src.sender_id
+        content = (
+            prepare_forward_content(
+                EmojiPackService(self.db),
+                sender_id,
+                content,
+                original_author_id=original_author_id,
+            )
+            or content
+        )
         msg, _ = self.send_message(
             conversation_id=target_conversation_id,
             sender_id=sender_id,
@@ -3364,13 +3503,23 @@ class ChatService:
             else:
                 forward_user_id = src.sender_id
                 author = self.db.query(User).filter(User.id == src.sender_id).first()
-                forward_name = (
-                    (author.name or author.username or "Пользователь")
-                    if author
-                    else "Пользователь"
-                )
+                if author:
+                    forward_name = (
+                        (author.name or "").strip()
+                        or (author.username or "").strip()
+                        or "Пользователь"
+                    )
+                else:
+                    forward_name = "Пользователь"
+            from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
+            raw_forward = (forward_name or "").strip()
             msg.forward_from_user_id = forward_user_id
-            msg.forward_from_name = (forward_name or "")[:120] or None
+            msg.forward_from_name = (
+                preview_text_with_custom_emoji(raw_forward, limit=120)
+                if raw_forward
+                else None
+            )
             msg.forwarded_from_message_id = src.id
         self.db.flush()
         return msg
@@ -3479,18 +3628,21 @@ class ChatService:
             .all()
         )
         sender = self.db.query(User).filter(User.id == sender_id).first()
-        sender_name = (
-            (sender.name or sender.username or "Пользователь")
+        from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
+        sender_label = (
+            ((sender.name or "").strip() or (sender.username or "").strip() or "Пользователь")
             if sender
             else "Пользователь"
         )
+        sender_name = preview_text_with_custom_emoji(sender_label, limit=80)
         if msg_type == "voice":
             preview = "🎤 Голосовое"
         elif msg_type == "image":
             preview = "📷 Фото"
         elif msg_type == "file":
-            name = content.strip() if content else "Файл"
-            preview = f"📎 {name[:80]}"
+            name = (content or "").strip() or "Файл"
+            preview = f"📎 {preview_text_with_custom_emoji(name, limit=80)}"
         elif msg_type == "video":
             preview = "🎬 Видео"
         elif msg_type == "video_note":
@@ -3507,7 +3659,11 @@ class ChatService:
                 data = _json.loads(content or "{}")
                 text = (data.get("text") or "").strip()
                 if text:
-                    preview = f"🖼 {text[:100]}"
+                    from app.services.emoji_pack_service import (
+                        preview_text_with_custom_emoji,
+                    )
+
+                    preview = f"🖼 {preview_text_with_custom_emoji(text, limit=100)}"
             except Exception:
                 pass
         elif msg_type == "call":
@@ -3533,8 +3689,12 @@ class ChatService:
             from app.services.chat_poll_service import poll_preview_text
 
             preview = poll_preview_text(content)
+        elif msg_type == "checklist":
+            from app.services.chat_checklist_service import checklist_preview_text
+
+            preview = checklist_preview_text(content)
         else:
-            preview = content[:120] if content else ""
+            preview = preview_text_with_custom_emoji(content) if content else ""
 
         mentioned_ids = self._mentioned_member_ids(conversation_id, content or "")
         mentioned_ids.discard(sender_id)
@@ -3586,8 +3746,14 @@ class ChatService:
         if msg_type == "image":
             return "📷 Фото"
         if msg_type == "file":
-            name = content.strip() if content else "Файл"
-            return f"📎 {name[:80]}"
+            from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
+            name = (content or "").strip() or "Файл"
+            return f"📎 {preview_text_with_custom_emoji(name, limit=80)}"
+        if msg_type == "checklist":
+            from app.services.chat_checklist_service import checklist_preview_text
+
+            return checklist_preview_text(content)
         if msg_type == "video":
             return "🎬 Видео"
         if msg_type == "video_note":
@@ -3600,7 +3766,9 @@ class ChatService:
             from app.services.chat_poll_service import poll_preview_text
 
             return poll_preview_text(content)
-        return content[:120] if content else "Сообщение"
+        from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
+        return preview_text_with_custom_emoji(content)
 
     def notify_pinned_message(
         self,
@@ -3615,12 +3783,15 @@ class ChatService:
             .filter(ConversationMember.conversation_id == conversation_id)
             .all()
         )
+        from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
         actor = self.db.query(User).filter(User.id == actor_id).first()
-        actor_name = (
-            (actor.name or actor.username or "Пользователь")
+        actor_label = (
+            ((actor.name or "").strip() or (actor.username or "").strip() or "Пользователь")
             if actor
             else "Пользователь"
         )
+        actor_name = preview_text_with_custom_emoji(actor_label, limit=80)
         msg = (
             self.db.query(Message)
             .filter(
@@ -3682,6 +3853,22 @@ class ChatService:
         effect_id: Optional[str] = None,
         topic_id: Optional[int] = None,
     ) -> ScheduledMessage:
+        from app.services.emoji_pack_service import (
+            EmojiPackService,
+            prepare_send_content,
+            preview_reply_keyboard_content,
+        )
+
+        emoji = EmojiPackService(self.db)
+        content = (
+            preview_reply_keyboard_content(
+                emoji, self.db, sender_id, conversation_id, msg_type, content
+            )
+            or content
+        )
+        content = prepare_send_content(emoji, sender_id, msg_type, content)
+        for part in _inline_keyboard_text_parts(inline_keyboard_json):
+            emoji.require_send_tokens(sender_id, part)
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         conv = (
             self.db.query(Conversation)
@@ -3751,10 +3938,14 @@ class ChatService:
             .filter(
                 ScheduledMessage.conversation_id == conversation_id,
                 ScheduledMessage.sender_id == user_id,
-                ScheduledMessage.status == "pending",
+                ScheduledMessage.status.in_(("pending", "failed")),
                 ScheduledMessage.canceled_at.is_(None),
             )
-            .order_by(ScheduledMessage.send_at.asc(), ScheduledMessage.id.asc())
+            .order_by(
+                ScheduledMessage.status.asc(),
+                ScheduledMessage.send_at.asc(),
+                ScheduledMessage.id.asc(),
+            )
             .limit(limit)
             .all()
         )
@@ -3773,7 +3964,7 @@ class ChatService:
         )
         if not item:
             raise ValueError("not_found")
-        if item.status != "pending" or item.canceled_at is not None:
+        if item.status not in ("pending", "failed") or item.canceled_at is not None:
             raise ValueError("already_processed")
         item.status = "canceled"
         item.canceled_at = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -3798,17 +3989,26 @@ class ChatService:
         )
         if not item:
             raise ValueError("not_found")
-        if item.status != "pending" or item.canceled_at is not None:
+        if item.status not in ("pending", "failed") or item.canceled_at is not None:
             raise ValueError("already_processed")
 
         if content is not None:
             text = (content or "").strip()
-            if item.type == "text":
-                if not text:
-                    raise ValueError("empty_content")
-                item.content = text[:4000]
-            elif item.type in ("image", "video", "video_note", "file"):
-                # Caption edit for media scheduled messages.
+            if item.type == "text" and not text:
+                raise ValueError("empty_content")
+            if item.type in ("text", "image", "video", "video_note", "file"):
+                from app.services.emoji_pack_service import (
+                    EmojiPackService,
+                    prepare_send_content,
+                )
+
+                # Same policy as schedule/edit: gate the user's caption;
+                # preview a share subject, quote, or contact card so
+                # editing a media caption does not 403 on someone
+                # else's `[[e:id]]`.
+                text = prepare_send_content(
+                    EmojiPackService(self.db), user_id, item.type, text
+                )
                 item.content = text[:4000]
             else:
                 raise ValueError("content_locked")
@@ -3827,6 +4027,9 @@ class ChatService:
 
         if send_at is None and content is None:
             raise ValueError("empty_patch")
+        if item.status == "failed":
+            item.status = "pending"
+            item.error_text = None
         return item
 
     def dispatch_scheduled_messages(
@@ -3866,6 +4069,17 @@ class ChatService:
             .all()
         )
         return self._dispatch_scheduled_items(due, now=now, limit=limit)
+
+    @staticmethod
+    def _scheduled_fail_text(code: str) -> str:
+        mapping = {
+            "pack_purchase_required": "Нужно купить пак",
+            "custom_emoji_denied": "Эмодзи недоступен — купите пак",
+            "custom_emoji_required": "Кастомные эмодзи с уровня 69",
+            "premium_sticker": "Нужны премиум-стикеры",
+            "paid_message_fee_failed": "Недостаточно звёзд",
+        }
+        return mapping.get(code, code)[:120]
 
     def _dispatch_scheduled_items(
         self,
@@ -3925,7 +4139,7 @@ class ChatService:
                 sent_messages.append(msg)
             except ValueError as e:
                 item.status = "failed"
-                item.error_text = str(e)[:120]
+                item.error_text = self._scheduled_fail_text(str(e))
         return sent_messages
 
     def purge_due_auto_deleted_messages(
@@ -4052,6 +4266,14 @@ class ChatService:
         clean = (content or "").strip()
         if msg.type == "text" and not clean:
             raise ValueError("empty_message")
+        from app.services.emoji_pack_service import (
+            EmojiPackService,
+            prepare_send_content,
+        )
+
+        clean = prepare_send_content(
+            EmojiPackService(self.db), user_id, msg.type, clean
+        )
         previous = (msg.content or "")[:4000]
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         if previous != clean[:4000]:
@@ -4191,16 +4413,22 @@ class ChatService:
     ) -> Optional[str]:
         self._get_active_message(conversation_id, message_id, user_id)
         clean = emoji.strip()
-        if not clean or len(clean) > 16:
+        if not clean or len(clean) > 32:
             raise ValueError("invalid_emoji")
         from app.core.entitlements import (
             EXCLUSIVE_CHAT_REACTIONS,
             FREE_CHAT_REACTIONS,
         )
+        from app.services.emoji_pack_service import EmojiPackService
         from app.services.subscription_service import SubscriptionService
 
+        custom = EmojiPackService(self.db).require_reaction(user_id, clean)
+        if custom:
+            clean = custom
         billing = SubscriptionService(self.db)
-        if clean in EXCLUSIVE_CHAT_REACTIONS:
+        if custom:
+            pass
+        elif clean in EXCLUSIVE_CHAT_REACTIONS:
             if not (
                 billing.has_feature(user_id, "exclusive_reactions")
                 or billing.has_feature(user_id, "any_emoji_reactions")
@@ -4441,6 +4669,17 @@ class ChatService:
         text: str,
         reply_to_message_id: Optional[int] = None,
     ) -> ConversationDraft:
+        from app.services.emoji_pack_service import (
+            EmojiPackService,
+            prepare_send_content,
+        )
+
+        # Same policy as send: gate the user's own text; preview a share
+        # subject, private-reply header, or contact card so cloud draft
+        # does not 403 on someone else's `[[e:id]]`.
+        text = prepare_send_content(
+            EmojiPackService(self.db), user_id, "text", text
+        )
         if not self._is_member(conversation_id, user_id):
             raise ValueError("forbidden")
         body = (text or "").strip()
@@ -4910,6 +5149,13 @@ class ChatService:
         name = (name or "").strip()
         if not name:
             raise ValueError("invalid_name")
+        from app.services.emoji_pack_service import (
+            EmojiPackService,
+            clip_preserving_custom_emoji,
+        )
+
+        EmojiPackService(self.db).require_send_tokens(user_id, name)
+        EmojiPackService(self.db).require_send_tokens(user_id, icon)
         existing = (
             self.db.query(func.count(ChatFolder.id))
             .filter(ChatFolder.user_id == user_id)
@@ -4927,8 +5173,8 @@ class ChatService:
         self._require_folder_flex_options(user_id, icon, norm_filters)
         folder = ChatFolder(
             user_id=user_id,
-            name=name[:64],
-            icon=(icon or "")[:8] or None,
+            name=clip_preserving_custom_emoji(name, 64),
+            icon=clip_preserving_custom_emoji(icon or "", 32) or None,
             position=(max_pos or -1) + 1,
             filters_json=json.dumps(norm_filters) if norm_filters else None,
         )
@@ -4982,14 +5228,38 @@ class ChatService:
         )
         if not folder:
             return None
+        from app.services.emoji_pack_service import (
+            EmojiPackService,
+            clip_preserving_custom_emoji,
+            keep_or_preview_tokens,
+        )
+
+        emoji = EmojiPackService(self.db)
         if name is not None:
-            name = name.strip()
-            if not name:
+            incoming = name.strip()
+            if not incoming:
                 raise ValueError("invalid_name")
-            folder.name = name[:64]
+            stored = (folder.name or "").strip()
+            # Flutter always resends the title. An imported folder keeps
+            # the owner's `[[e:id]]` — do not 403 a later save without 69.
+            if incoming == stored:
+                incoming = keep_or_preview_tokens(emoji, user_id, incoming) or incoming
+            else:
+                emoji.require_send_tokens(user_id, incoming)
+            folder.name = clip_preserving_custom_emoji(incoming, 64)
         if icon is not None:
-            self._require_folder_flex_options(user_id, icon, None)
-            folder.icon = icon[:8] if icon else None
+            incoming_icon = (icon or "").strip()
+            stored_icon = (folder.icon or "").strip()
+            if incoming_icon == stored_icon:
+                incoming_icon = (
+                    keep_or_preview_tokens(emoji, user_id, incoming_icon)
+                    or incoming_icon
+                )
+            elif incoming_icon:
+                emoji.require_send_tokens(user_id, incoming_icon)
+            incoming_icon = clip_preserving_custom_emoji(incoming_icon, 32)
+            self._require_folder_flex_options(user_id, incoming_icon or None, None)
+            folder.icon = incoming_icon or None
         if filters is not None:
             norm_filters = self._normalize_filters(filters)
             self._require_folder_flex_options(user_id, None, norm_filters)
@@ -5172,11 +5442,28 @@ class ChatService:
         if not source:
             raise ValueError("folder_share_not_found")
         payload = self._folder_payload(source)
+        name = self._folder_text_for_importer(user_id, payload.get("name"))
+        icon = self._folder_text_for_importer(user_id, payload.get("icon"))
         return self.create_folder(
             user_id,
-            payload["name"],
-            payload.get("icon"),
+            name or payload["name"],
+            icon,
             payload.get("conversation_ids") or [],
             payload.get("channel_ids") or [],
             payload.get("filters") or {},
         )
+
+    def _folder_text_for_importer(
+        self, user_id: int, raw: Optional[str]
+    ) -> Optional[str]:
+        """Keep tokens if the importer may send them; otherwise preview.
+
+        Import is receiving someone else's folder title/icon — do not 403
+        a user who only has folder_share (57) and not custom_emoji (69).
+        """
+        from app.services.emoji_pack_service import (
+            EmojiPackService,
+            keep_or_preview_tokens,
+        )
+
+        return keep_or_preview_tokens(EmojiPackService(self.db), user_id, raw)

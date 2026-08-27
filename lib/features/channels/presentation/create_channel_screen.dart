@@ -12,6 +12,7 @@ import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/telegram_ui.dart';
 import 'package:go_router/go_router.dart';
+import '../../subscription/creator_upsell.dart';
 
 class CreateChannelScreen extends ConsumerStatefulWidget {
   const CreateChannelScreen({super.key});
@@ -179,6 +180,12 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
       }
     } catch (e) {
       if (mounted) {
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
+        if (e is ApiClientException && e.code == 'HAN_CREATOR_REQUIRED') {
+          await showCreatorUpsell(context);
+          return;
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content: Text(

@@ -14,7 +14,9 @@ import '../application/chat_thread_prefetch.dart';
 import '../../../services/chat_thread_ui_prefs.dart';
 import '../../../services/user_realtime_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../../../widgets/telegram_ui.dart';
 import 'widgets/chats_hub_tiles.dart';
 
@@ -649,8 +651,8 @@ class _ArchivedChatTile extends StatelessWidget {
                                 ? Icons.groups_rounded
                                 : Icons.person_rounded,
                       )),
-            title: Text(
-              chat.displayTitle,
+            title: HighlightedText(
+              text: chat.displayTitle,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -661,8 +663,8 @@ class _ArchivedChatTile extends StatelessWidget {
                 ? Row(
                     children: [
                       Flexible(
-                        child: Text(
-                          preview,
+                        child: HighlightedText(
+                          text: preview,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -678,8 +680,8 @@ class _ArchivedChatTile extends StatelessWidget {
                       ),
                     ],
                   )
-                : Text(
-                    prefix == null ? preview : '$prefix$preview',
+                : HighlightedText(
+                    text: prefix == null ? preview : '$prefix$preview',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -782,9 +784,9 @@ class _ArchivedChannelTile extends StatelessWidget {
     final unread = channel.inboxUnreadPosts;
     final hasUnread = unread > 0;
     final preview = (channel.lastPostPreview?.trim().isNotEmpty ?? false)
-        ? channel.lastPostPreview!.trim()
+        ? previewTextWithCustomEmoji(channel.lastPostPreview!.trim())
         : ((channel.description?.trim().isNotEmpty ?? false)
-            ? channel.description!.trim()
+            ? previewTextWithCustomEmoji(channel.description!.trim())
             : 'Канал');
 
     final tile = Material(
@@ -800,8 +802,8 @@ class _ArchivedChannelTile extends StatelessWidget {
                     onChanged: (_) => onToggleSelect(),
                   )
                 : const Icon(Icons.campaign_outlined),
-            title: Text(
-              channel.name,
+            title: HighlightedText(
+              text: channel.name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(

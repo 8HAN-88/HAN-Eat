@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../widgets/highlighted_text.dart';
+
 /// Compact top banner while an in-app call UI is minimized.
 class MinimizedCallBanner extends StatelessWidget {
   const MinimizedCallBanner({
@@ -53,8 +55,8 @@ class MinimizedCallBanner extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          title,
+                        HighlightedText(
+                          text: title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(

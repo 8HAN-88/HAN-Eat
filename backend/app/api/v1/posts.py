@@ -165,6 +165,25 @@ async def create_post(
             },
         )
 
+    from app.services.emoji_pack_service import (
+        EmojiPackService,
+        link_preview_for_persist_http,
+    )
+
+    emoji = EmojiPackService(db)
+    poll_parts: list[str | None] = []
+    if request.poll is not None:
+        poll_parts.append(request.poll.question)
+        poll_parts.extend(request.poll.options or [])
+    # Link preview may be the OG title Flutter echoed — not authored.
+    emoji.require_send_tokens_http(
+        current_user.id,
+        request.title,
+        request.description,
+        *poll_parts,
+        *(request.tags or []),
+    )
+
     if request.type == "poll":
         if not request.poll:
             raise HTTPException(
@@ -187,11 +206,15 @@ async def create_post(
         from app.services.link_preview_service import fetch_link_preview
 
         meta = fetch_link_preview(request.link.url.strip())
+        preview = link_preview_for_persist_http(
+            emoji,
+            current_user.id,
+            request.link.preview,
+            og_title=meta.get("title"),
+        )
         body = {
             "link_url": meta.get("url") or request.link.url.strip(),
-            "link_preview": (request.link.preview or "").strip()
-            or meta.get("title")
-            or None,
+            "link_preview": preview,
             "link_meta": meta,
         }
     else:
@@ -505,6 +528,14 @@ async def update_post(
     db: Session = Depends(get_db),
 ):
     """Обновить пост автора (в т.ч. link-пост в ленте профиля)."""
+    from app.services.emoji_pack_service import (
+        EmojiPackService,
+        keep_if_unchanged_http,
+        keep_if_unchanged_items,
+        link_preview_for_persist_http,
+    )
+
+    emoji = EmojiPackService(db)
     post = (
         db.query(Post)
         .filter(Post.id == post_id, Post.deleted_at.is_(None))
@@ -521,12 +552,53 @@ async def update_post(
             detail="Not allowed",
         )
 
+    stored_poll = (post.body or {}).get("poll") if isinstance(post.body, dict) else None
+    stored_question = (
+        stored_poll.get("question") if isinstance(stored_poll, dict) else None
+    )
+    stored_options = None
+    if isinstance(stored_poll, dict) and request.poll is not None:
+        stored_options = []
+        for item in stored_poll.get("options") or []:
+            if isinstance(item, dict):
+                stored_options.append(item.get("text") or "")
+            else:
+                stored_options.append(str(item) if item is not None else "")
+    # Flutter always resends title/description/tags on Save.
+    # Unchanged text is receive-and-persist — do not 403 after a downgrade.
+    title = keep_if_unchanged_http(
+        emoji, current_user.id, request.title, post.title
+    )
+    description = keep_if_unchanged_http(
+        emoji, current_user.id, request.description, post.description
+    )
+    tags = keep_if_unchanged_items(
+        emoji,
+        current_user.id,
+        request.tags,
+        list(post.tags or []) if post.tags is not None else None,
+        http=True,
+    )
+    poll_question = None
+    poll_options = None
+    if request.poll is not None:
+        poll_question = keep_if_unchanged_http(
+            emoji, current_user.id, request.poll.question, stored_question
+        )
+        poll_options = keep_if_unchanged_items(
+            emoji,
+            current_user.id,
+            list(request.poll.options or []),
+            stored_options,
+            http=True,
+        )
+
     if request.title is not None:
-        post.title = request.title
+        post.title = title
     if request.description is not None:
-        post.description = request.description
+        post.description = description
     if request.tags is not None:
-        post.tags = request.tags
+        post.tags = tags
     if (
         request.is_paid is not None
         or request.price_stars is not None
@@ -547,17 +619,37 @@ async def update_post(
         post.body = body
 
     if post.type == "link" and request.link is not None:
-        from app.services.link_preview_service import build_link_body
+        from app.services.link_preview_service import fetch_link_preview
 
+        url = (request.link.url or "").strip()
+        if not url:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Link URL is required for link posts",
+            )
         try:
-            link_body = build_link_body(request.link.url, request.link.preview)
+            meta = fetch_link_preview(url)
         except ValueError as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(e),
             )
+        stored = (post.body or {}).get("link_preview")
+        preview = link_preview_for_persist_http(
+            emoji,
+            current_user.id,
+            request.link.preview,
+            og_title=meta.get("title"),
+            stored=stored if isinstance(stored, str) else None,
+        )
         body = post.body or {}
-        body.update(link_body)
+        body.update(
+            {
+                "link_url": meta.get("url") or url,
+                "link_preview": preview,
+                "link_meta": meta,
+            }
+        )
         post.body = body
 
     if post.type == "poll" and request.poll is not None:
@@ -565,7 +657,10 @@ async def update_post(
 
         try:
             update_poll_in_post(
-                db, post, request.poll.question, request.poll.options
+                db,
+                post,
+                poll_question if poll_question is not None else request.poll.question,
+                poll_options if poll_options is not None else request.poll.options,
             )
         except ValueError as e:
             raise HTTPException(

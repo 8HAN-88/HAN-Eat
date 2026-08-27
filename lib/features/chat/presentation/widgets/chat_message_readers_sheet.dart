@@ -6,6 +6,7 @@ import '../../../../utils/api_error_parser.dart';
 import '../../../../utils/chat_time_format.dart';
 import '../../../subscription/creator_upsell.dart';
 import '../../../../widgets/app_avatar.dart';
+import '../../../../widgets/highlighted_text.dart';
 
 Future<void> showChatMessageReadersSheet(
   BuildContext context, {
@@ -178,7 +179,15 @@ class _ChatMessageReadersSheetState extends State<_ChatMessageReadersSheet> {
                                       displayName: user.displayName,
                                       radius: 22,
                                     ),
-                                    title: Text(user.displayName),
+                                    title: HighlightedText(
+                                      text: user.displayName,
+                                      style: Theme.of(context)
+                                              .textTheme
+                                              .bodyLarge ??
+                                          const TextStyle(fontSize: 16),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                     subtitle: timeLabel != null || handle != null
                                         ? Text(
                                             [

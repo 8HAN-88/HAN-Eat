@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/chat_service.dart';
 import '../../../services/close_friends_service.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/highlighted_text.dart';
 
 /// Manage Telegram-like close friends list for story privacy.
 class CloseFriendsScreen extends StatefulWidget {
@@ -90,7 +92,9 @@ class _CloseFriendsScreenState extends State<CloseFriendsScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${user.name ?? user.username ?? 'Пользователь'} добавлен(а)'),
+          content: Text(
+            '${previewTextWithCustomEmoji(user.name ?? user.username ?? 'Пользователь')} добавлен(а)',
+          ),
         ),
       );
     } catch (e) {
@@ -167,7 +171,13 @@ class _CloseFriendsScreenState extends State<CloseFriendsScreen> {
                           leading: const CircleAvatar(
                             child: Icon(Icons.person_outline),
                           ),
-                          title: Text(u.name ?? u.username ?? 'Пользователь'),
+                          title: HighlightedText(
+                            text: u.name ?? u.username ?? 'Пользователь',
+                            style: Theme.of(context).textTheme.bodyLarge ??
+                                const TextStyle(fontSize: 16),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                           subtitle: Text(
                             (u.username ?? '').isNotEmpty
                                 ? '@${u.username}'
@@ -202,7 +212,13 @@ class _CloseFriendsScreenState extends State<CloseFriendsScreen> {
                           leading: const CircleAvatar(
                             child: Icon(Icons.favorite_outline),
                           ),
-                          title: Text(f.name),
+                          title: HighlightedText(
+                            text: f.name,
+                            style: Theme.of(context).textTheme.bodyLarge ??
+                                const TextStyle(fontSize: 16),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                           subtitle: Text(f.subtitle),
                           trailing: IconButton(
                             tooltip: 'Убрать',

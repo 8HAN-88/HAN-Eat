@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../services/custom_emoji_registry.dart';
 import '../../../../services/server_config.dart';
+import '../../../../widgets/highlighted_text.dart';
 
 class ChatStoryReplyPayload {
   const ChatStoryReplyPayload({
@@ -38,7 +40,7 @@ class ChatStoryReplyPayload {
   String get previewText {
     final t = text.trim();
     if (t.isEmpty) return '🖼 Ответ на сторис';
-    return '🖼 $t';
+    return '🖼 ${previewTextWithCustomEmoji(t)}';
   }
 
   static ChatStoryReplyPayload? tryParse(String content) {
@@ -145,8 +147,8 @@ class ChatStoryReplyBubble extends StatelessWidget {
                         ),
                       ),
                       if ((payload.authorName ?? '').trim().isNotEmpty)
-                        Text(
-                          payload.authorName!.trim(),
+                        HighlightedText(
+                          text: payload.authorName!.trim(),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -162,8 +164,8 @@ class ChatStoryReplyBubble extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-            child: Text(
-              payload.text,
+            child: HighlightedText(
+              text: payload.text,
               style: TextStyle(
                 color: foregroundColor,
                 fontSize: 15,

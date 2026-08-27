@@ -20,6 +20,7 @@ import '../../../utils/post_display_title.dart';
 import '../../../widgets/post_card_container.dart';
 import '../../../widgets/share_action_sheet.dart';
 import '../../../widgets/post_poll_section.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../widgets/app_avatar.dart';
 import '../../../services/channel_service.dart';
 import '../../../services/api_service.dart';
@@ -27,7 +28,9 @@ import '../../../app/app_router.dart';
 import '../../../services/subscription_service.dart';
 import '../../../widgets/report_content_dialog.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../subscription/creator_upsell.dart';
 import '../../../utils/session_snackbar.dart';
+import '../../../widgets/highlighted_text.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 int? _channelRepostOriginalPostId(Map<String, dynamic>? body) {
@@ -398,6 +401,8 @@ class _ChannelPostCardState extends State<ChannelPostCard>
       });
 
       if (mounted) {
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         showErrorSnackBar(context, e, fallback: 'Не удалось сделать репост');
       }
     } finally {
@@ -893,8 +898,7 @@ class _ChannelPostCardState extends State<ChannelPostCard>
 
         final avatarUrl = sourceAvatarUrl();
         final name = sourceName();
-        final initial =
-            name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?';
+        final initial = avatarLetterWithCustomEmoji(name);
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -966,8 +970,8 @@ class _ChannelPostCardState extends State<ChannelPostCard>
                           const SizedBox(height: 2),
                           GestureDetector(
                             onTap: openSource,
-                            child: Text(
-                              name,
+                            child: HighlightedText(
+                              text: name,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -987,8 +991,8 @@ class _ChannelPostCardState extends State<ChannelPostCard>
             if (comment != null && comment.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                child: Text(
-                  comment,
+                child: HighlightedText(
+                  text: comment,
                   style: const TextStyle(fontSize: 14, height: 1.35),
                 ),
               ),
@@ -1013,8 +1017,8 @@ class _ChannelPostCardState extends State<ChannelPostCard>
               if (resolvePostDisplayTitle(title: orig.title, body: orig.body) != null)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                  child: Text(
-                    displayTitleForPost(orig),
+                  child: HighlightedText(
+                    text: displayTitleForPost(orig),
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -1025,8 +1029,8 @@ class _ChannelPostCardState extends State<ChannelPostCard>
                   orig.description!.trim().isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-                  child: Text(
-                    orig.description!,
+                  child: HighlightedText(
+                    text: orig.description!,
                     style: const TextStyle(fontSize: 14),
                   ),
                 ),
@@ -1059,8 +1063,8 @@ class _ChannelPostCardState extends State<ChannelPostCard>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      child: Text(
-                        displayTitleForPost(post),
+                      child: HighlightedText(
+                        text: displayTitleForPost(post),
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -1133,8 +1137,8 @@ class _ChannelPostCardState extends State<ChannelPostCard>
             if (post.description != null && post.description!.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-                child: Text(
-                  post.description!,
+                child: HighlightedText(
+                  text: post.description!,
                   style: const TextStyle(fontSize: 14),
                 ),
               ),
@@ -1173,8 +1177,8 @@ class _ChannelPostCardState extends State<ChannelPostCard>
                             const Icon(Icons.link, size: 18),
                             const SizedBox(width: 8),
                             Expanded(
-                              child: Text(
-                                post.linkTitle ?? post.linkUrl!,
+                              child: HighlightedText(
+                                text: post.linkTitle ?? post.linkUrl!,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
@@ -1187,8 +1191,8 @@ class _ChannelPostCardState extends State<ChannelPostCard>
                             post.linkDescription!.isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(top: 6),
-                            child: Text(
-                              post.linkDescription!,
+                            child: HighlightedText(
+                              text: post.linkDescription!,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(

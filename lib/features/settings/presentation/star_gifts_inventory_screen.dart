@@ -9,9 +9,11 @@ import '../../../models/chat_models.dart';
 import '../../../services/chat_service.dart';
 import '../../../services/paid_features_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/stars_pay_helper.dart';
+import '../../../widgets/highlighted_text.dart';
 
 /// Telegram-like received Star gifts: keep, convert, upgrade, transfer.
 class StarGiftsInventoryScreen extends StatefulWidget {
@@ -93,7 +95,7 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('Конвертировать подарок'),
         content: Text(
-          '«${gift.title}» будет убран с профиля. Вы получите ${gift.stars} ★ на баланс.',
+          '«${previewTextWithCustomEmoji(gift.title)}» будет убран с профиля. Вы получите ${gift.stars} ★ на баланс.',
         ),
         actions: [
           TextButton(
@@ -179,7 +181,7 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
       context,
       title: 'Улучшить до коллекционного',
       body:
-          '«${gift.title}» получит уникальный номер. Стоимость улучшения: ${gift.upgradeStars} ★.',
+          '«${previewTextWithCustomEmoji(gift.title)}» получит уникальный номер. Стоимость улучшения: ${gift.upgradeStars} ★.',
       amountStars: gift.upgradeStars,
       confirmLabel: 'Улучшить',
     );
@@ -229,7 +231,7 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
       final ok = await confirmStarsSpend(
         context,
         title: 'Передать подарок',
-        body: '«${gift.title}» будет передан другому пользователю.',
+        body: '«${previewTextWithCustomEmoji(gift.title)}» будет передан другому пользователю.',
         amountStars: fee,
         confirmLabel: 'Передать',
       );
@@ -260,31 +262,56 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
     );
     final next = await showDialog<int>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Выставить на витрину'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Цена в ★',
-            hintText: 'Например: 250',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final price = int.tryParse(controller.text.trim()) ?? 0;
-              Navigator.pop(ctx, price);
-            },
-            child: const Text('Выставить'),
-          ),
-        ],
-      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            final price = int.tryParse(controller.text.trim()) ?? 0;
+            final fee = PaidFeaturesService.resaleFeeStars(price);
+            final net = price > fee ? price - fee : 0;
+            return AlertDialog(
+              title: const Text('Выставить на витрину'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Цена в ★',
+                      hintText: 'Например: 250',
+                    ),
+                    onChanged: (_) => setDialogState(() {}),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    price < 1
+                        ? 'Комиссия 5%, до 20 ★ — бесплатно'
+                        : fee == 0
+                            ? 'Комиссия 0 ★ (до 20 ★)'
+                            : 'Комиссия $fee ★ · вам $net ★',
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Отмена'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    final parsed = int.tryParse(controller.text.trim()) ?? 0;
+                    Navigator.pop(ctx, parsed);
+                  },
+                  child: const Text('Выставить'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
     controller.dispose();
     if (next == null || !mounted) return;
@@ -307,8 +334,15 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
             .toList(growable: false);
         _busy.remove(gift.id);
       });
+      final fee = PaidFeaturesService.resaleFeeStars(next);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('На витрине за $next ★')),
+        SnackBar(
+          content: Text(
+            fee > 0
+                ? 'На витрине за $next ★ · комиссия $fee ★'
+                : 'На витрине за $next ★',
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -510,8 +544,8 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            gift.title,
+                          HighlightedText(
+                            text: gift.title,
                             style: const TextStyle(fontWeight: FontWeight.w800),
                           ),
                           Text(
@@ -519,8 +553,8 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
                             style: TextStyle(color: scheme.onSurfaceVariant),
                           ),
                           if (gift.senderLabel.isNotEmpty)
-                            Text(
-                              gift.isAnonymous && gift.senderId != null
+                            HighlightedText(
+                              text: gift.isAnonymous && gift.senderId != null
                                   ? 'От ${gift.senderLabel} · имя скрыто на профиле'
                                   : 'От ${gift.senderLabel}',
                               style: TextStyle(
@@ -561,8 +595,8 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
                 ),
                 if (gift.note != null && gift.note!.trim().isNotEmpty) ...[
                   const SizedBox(height: 8),
-                  Text(
-                    gift.note!.trim(),
+                  HighlightedText(
+                    text: gift.note!.trim(),
                     style: TextStyle(color: scheme.onSurfaceVariant),
                   ),
                 ],
@@ -710,11 +744,12 @@ class _GiftTransferUserPickerState extends State<_GiftTransferUserPicker> {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-                child: Text(
-                  'Кому передать «${widget.giftTitle}»?',
+                child: HighlightedText(
+                  text: 'Кому передать «${widget.giftTitle}»?',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w800,
-                      ),
+                      ) ??
+                      const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
                 ),
               ),
               if (widget.feeStars > 0)
@@ -761,7 +796,15 @@ class _GiftTransferUserPickerState extends State<_GiftTransferUserPicker> {
                                       displayName: name,
                                       radius: 20,
                                     ),
-                                    title: Text(name),
+                                    title: HighlightedText(
+                                      text: name,
+                                      style: Theme.of(context)
+                                              .textTheme
+                                              .bodyLarge ??
+                                          const TextStyle(fontSize: 16),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                     subtitle: item.username != null
                                         ? Text('@${item.username}')
                                         : null,

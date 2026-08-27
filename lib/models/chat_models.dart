@@ -92,8 +92,9 @@ class ChatUserBrief {
 
   String get displayTitle {
     final emoji = emojiStatus?.trim();
-    if (emoji != null && emoji.isNotEmpty) return '$displayName $emoji';
-    return displayName;
+    if (emoji == null || emoji.isEmpty) return displayName;
+    if (emoji.startsWith('ce:') || emoji.contains('[[e:')) return displayName;
+    return '$displayName $emoji';
   }
 
   factory ChatUserBrief.fromJson(Map<String, dynamic> json) {
@@ -1519,6 +1520,7 @@ class ScheduledChatMessage {
     this.effectId,
     this.topicId,
     required this.status,
+    this.errorText,
     required this.createdAt,
   });
 
@@ -1537,6 +1539,7 @@ class ScheduledChatMessage {
   final String? effectId;
   final int? topicId;
   final String status;
+  final String? errorText;
   final DateTime createdAt;
 
   factory ScheduledChatMessage.fromJson(Map<String, dynamic> json) {
@@ -1561,6 +1564,9 @@ class ScheduledChatMessage {
       effectId: (effectRaw == null || effectRaw.isEmpty) ? null : effectRaw,
       topicId: json['topic_id'] != null ? _parseInt(json['topic_id']) : null,
       status: json['status'] as String? ?? 'pending',
+      errorText: (json['error_text'] as String?)?.trim().isEmpty == true
+          ? null
+          : (json['error_text'] as String?)?.trim(),
       createdAt: _parseDate(json['created_at']),
     );
   }
@@ -1585,6 +1591,7 @@ class ScheduledChatMessage {
       effectId: effectId,
       topicId: topicId,
       status: status,
+      errorText: errorText,
       createdAt: createdAt,
     );
   }

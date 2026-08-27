@@ -16,6 +16,7 @@ import 'package:han_eat/models/post_model.dart';
 import 'package:han_eat/models/chat_models.dart';
 import '../../feed/presentation/new_post_card.dart';
 import 'package:han_eat/widgets/post_card_skeleton.dart';
+import 'package:han_eat/services/custom_emoji_registry.dart';
 import 'package:han_eat/widgets/highlighted_text.dart';
 import 'package:han_eat/widgets/app_gradient_background.dart';
 import 'package:han_eat/app/app_router.dart';
@@ -635,7 +636,15 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                               final suggestion = _suggestions[index];
                               return ListTile(
                                 leading: const Icon(Icons.search, size: 20),
-                                title: Text(suggestion),
+                                title: HighlightedText(
+                                  text: suggestion,
+                                  style: Theme.of(context)
+                                          .textTheme
+                                          .bodyLarge ??
+                                      const TextStyle(fontSize: 16),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                                 onTap: () {
                                   _searchController.text = suggestion;
                                   setState(() => _showSuggestions = false);
@@ -1161,9 +1170,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             : null,
         child: resolved == null
             ? Text(
-                displayName.isNotEmpty
-                    ? displayName.characters.first.toUpperCase()
-                    : '?',
+                avatarLetterWithCustomEmoji(displayName),
                 style: const TextStyle(fontWeight: FontWeight.w600),
               )
             : null,
@@ -1203,9 +1210,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             : null,
         child: resolved == null
             ? Text(
-                channel.name.isNotEmpty
-                    ? channel.name.characters.first.toUpperCase()
-                    : '?',
+                avatarLetterWithCustomEmoji(channel.name),
                 style: const TextStyle(fontWeight: FontWeight.w600),
               )
             : null,

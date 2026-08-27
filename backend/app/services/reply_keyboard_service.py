@@ -12,6 +12,8 @@ from app.models.user import User
 
 def normalize_reply_keyboard(raw: Any) -> Optional[list[list[dict[str, str]]]]:
     """Normalize List[List[{text}]] — text-only buttons for MVP."""
+    from app.services.emoji_pack_service import clip_preserving_custom_emoji
+
     if raw is None:
         return None
     if isinstance(raw, str):
@@ -33,9 +35,10 @@ def normalize_reply_keyboard(raw: Any) -> Optional[list[list[dict[str, str]]]]:
                 text = str(btn.get("text") or "").strip()
             else:
                 continue
+            text = clip_preserving_custom_emoji(text, 64)
             if not text:
                 continue
-            out_row.append({"text": text[:64]})
+            out_row.append({"text": text})
             if len(out_row) >= 12:
                 break
         if out_row:
@@ -43,6 +46,43 @@ def normalize_reply_keyboard(raw: Any) -> Optional[list[list[dict[str, str]]]]:
         if len(rows) >= 8:
             break
     return rows or None
+
+
+def member_reply_keyboard_labels(member: ConversationMember | None) -> set[str]:
+    """Visible ReplyKeyboard button texts for this member."""
+    keyboard = normalize_reply_keyboard(
+        getattr(member, "reply_keyboard_json", None) if member else None
+    )
+    labels: set[str] = set()
+    if not keyboard:
+        return labels
+    for row in keyboard:
+        for btn in row:
+            text = str(btn.get("text") or "").strip()
+            if text:
+                labels.add(text)
+    return labels
+
+
+def is_reply_keyboard_label(
+    db: Session,
+    conversation_id: int,
+    user_id: int,
+    text: Optional[str],
+) -> bool:
+    """True when `text` is a tap of the member's current ReplyKeyboard."""
+    raw = (text or "").strip()
+    if not raw or conversation_id <= 0 or user_id <= 0:
+        return False
+    member = (
+        db.query(ConversationMember)
+        .filter(
+            ConversationMember.conversation_id == conversation_id,
+            ConversationMember.user_id == user_id,
+        )
+        .first()
+    )
+    return raw in member_reply_keyboard_labels(member)
 
 
 def keyboard_payload_from_member(member: ConversationMember | None) -> dict[str, Any]:
@@ -101,7 +141,9 @@ def set_member_reply_keyboard(
         member.reply_keyboard_json = json.dumps(keyboard, ensure_ascii=False)
         member.reply_keyboard_one_time = bool(one_time)
         member.reply_keyboard_resize = bool(resize)
-        ph = (placeholder or "").strip()[:64] or None
+        from app.services.emoji_pack_service import clip_preserving_custom_emoji
+
+        ph = clip_preserving_custom_emoji((placeholder or "").strip(), 64) or None
         member.reply_keyboard_placeholder = ph
     db.flush()
     return member

@@ -1,5 +1,7 @@
 // Telegram-like "Reply privately" seed for opening a DM with a quote strip.
 
+import '../../../services/custom_emoji_registry.dart';
+
 class ChatPrivateReplyQuote {
   const ChatPrivateReplyQuote({
     required this.sourceConversationId,
@@ -25,10 +27,19 @@ class ChatPrivateReplyQuote {
 }
 
 /// Embeds a private-reply quote into outgoing text (no cross-chat reply_to yet).
+///
+/// Author name and quoted preview are peer texts — preview tokens so a
+/// user without custom_emoji (69) is not 403'd for someone else's `[[e:id]]`.
 String composeTextWithPrivateReply(String text, ChatPrivateReplyQuote quote) {
   final body = text.trim();
-  final who = quote.author.trim().isEmpty ? 'Участник' : quote.author.trim();
-  var clipped = quote.preview.trim();
+  final rawWho = quote.author.trim();
+  final who = rawWho.isEmpty
+      ? 'Участник'
+      : previewTextWithCustomEmoji(rawWho);
+  final rawPreview = quote.preview.trim();
+  var clipped = rawPreview.isEmpty
+      ? ''
+      : previewTextWithCustomEmoji(rawPreview);
   if (clipped.length > 180) {
     clipped = '${clipped.substring(0, 180)}…';
   }

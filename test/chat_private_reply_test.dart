@@ -33,5 +33,31 @@ void main() {
     test('stripAuthor includes chat title', () {
       expect(quote.stripAuthor, 'Anna · Team');
     });
+
+    test('previews custom emoji in peer author name', () {
+      const named = ChatPrivateReplyQuote(
+        sourceConversationId: 1,
+        sourceMessageId: 2,
+        author: 'Anna [[e:1]]',
+        preview: 'Hello there',
+      );
+      expect(
+        composeTextWithPrivateReply('Sure', named),
+        '↩️ Anna ✦: Hello there\n\nSure',
+      );
+    });
+
+    test('previews custom emoji in quoted preview', () {
+      const quoted = ChatPrivateReplyQuote(
+        sourceConversationId: 1,
+        sourceMessageId: 2,
+        author: 'Anna',
+        preview: 'Hello [[e:1]]',
+      );
+      expect(
+        composeTextWithPrivateReply('Sure', quoted),
+        '↩️ Anna: Hello ✦\n\nSure',
+      );
+    });
   });
 }

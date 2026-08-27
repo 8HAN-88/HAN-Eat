@@ -1,7 +1,9 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../services/custom_emoji_registry.dart';
 import '../services/server_config.dart';
+import 'highlighted_text.dart';
 import 'inline_video_player.dart';
 
 /// Автор / канал для оверлея на видео в ленте.
@@ -46,8 +48,7 @@ class FeedVideoPlayer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final initial =
-        author.name.isNotEmpty ? author.name[0].toUpperCase() : '?';
+    final initial = avatarLetterWithCustomEmoji(author.name);
     final avatar = author.avatarUrl != null && author.avatarUrl!.isNotEmpty
         ? ServerConfig.resolvePublisherAvatarUrl(author.avatarUrl!)
         : null;
@@ -118,8 +119,8 @@ class FeedVideoPlayer extends StatelessWidget {
                                 Row(
                                   children: [
                                     Flexible(
-                                      child: Text(
-                                        author.name,
+                                      child: HighlightedText(
+                                        text: author.name,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: const TextStyle(
@@ -169,8 +170,8 @@ class FeedVideoPlayer extends StatelessWidget {
                                 ),
                                 if (author.subtitle != null &&
                                     author.subtitle!.isNotEmpty)
-                                  Text(
-                                    author.subtitle!,
+                                  HighlightedText(
+                                    text: author.subtitle!,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(

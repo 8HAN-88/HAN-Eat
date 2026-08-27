@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/chat_service.dart';
 import '../../../services/flex_subscription_service.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/highlighted_text.dart';
 
 Future<void> showFlexGiftSheet(
   BuildContext context, {
@@ -95,6 +97,29 @@ class _FlexGiftSheetState extends State<_FlexGiftSheet> {
   Future<void> _pay() async {
     final picked = _picked;
     if (picked == null || _paying) return;
+    final price = widget.me.priceForPlan(_level, _plan);
+    final period = widget.me.periodLabel(_plan);
+    final name = picked.name ?? picked.username ?? '#${picked.id}';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Подарить подписку?'),
+        content: Text(
+          'Уровень $_level · $price ₽ / $period\nПолучатель: ${previewTextWithCustomEmoji(name)}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Подарить за $price ₽'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
     setState(() => _paying = true);
     try {
       await FlexSubscriptionApi.giftCheckout(
@@ -176,8 +201,9 @@ class _FlexGiftSheetState extends State<_FlexGiftSheet> {
                 ),
                 if (_picked != null) ...[
                   const SizedBox(height: 8),
-                  Text(
-                    'Получатель: ${_picked!.name ?? _picked!.username ?? '#${_picked!.id}'}',
+                  HighlightedText(
+                    text:
+                        'Получатель: ${_picked!.name ?? _picked!.username ?? '#${_picked!.id}'}',
                     style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ],
@@ -194,7 +220,13 @@ class _FlexGiftSheetState extends State<_FlexGiftSheet> {
                           itemBuilder: (context, index) {
                             final user = _results[index];
                             return ListTile(
-                              title: Text(user.name ?? user.username ?? '#${user.id}'),
+                              title: HighlightedText(
+                                text: user.name ?? user.username ?? '#${user.id}',
+                                style: Theme.of(context).textTheme.bodyLarge ??
+                                    const TextStyle(fontSize: 16),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                               subtitle: user.username != null ? Text('@${user.username}') : null,
                               selected: _picked?.id == user.id,
                               onTap: () => setState(() => _picked = user),

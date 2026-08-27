@@ -7,7 +7,9 @@ import '../../../app/app_router.dart';
 import '../../../services/channel_service.dart';
 import '../../../services/subscription_service.dart';
 import '../../settings/application/subscription_status_provider.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../../widgets/highlighted_text.dart';
 
 /// Запланированные публикации (Creator / Pro).
 class ScheduledPostsScreen extends ConsumerStatefulWidget {
@@ -113,7 +115,7 @@ class _ScheduledPostsScreenState extends ConsumerState<ScheduledPostsScreen> {
         title: const Text('Отменить публикацию?'),
         content: Text(
           post.title?.isNotEmpty == true
-              ? '«${post.title}» не будет опубликован.'
+              ? '«${previewTextWithCustomEmoji(post.title!)}» не будет опубликован.'
               : 'Пост не будет опубликован по расписанию.',
         ),
         actions: [
@@ -239,10 +241,12 @@ class _ScheduledPostsScreenState extends ConsumerState<ScheduledPostsScreen> {
               leading: CircleAvatar(
                 child: Icon(_iconForType(post.type)),
               ),
-              title: Text(
-                post.title?.isNotEmpty == true
+              title: HighlightedText(
+                text: post.title?.isNotEmpty == true
                     ? post.title!
                     : 'Пост #${post.id}',
+                style: Theme.of(context).textTheme.bodyLarge ??
+                    const TextStyle(fontSize: 16),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),

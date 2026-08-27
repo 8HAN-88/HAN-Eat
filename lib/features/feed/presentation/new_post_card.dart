@@ -34,6 +34,9 @@ import '../../comments/presentation/show_post_comments_sheet.dart';
 import 'widgets/paid_content_paywall_card.dart';
 import 'widgets/show_post_likers_sheet.dart';
 import '../../../widgets/stars_pay_helper.dart';
+import '../../subscription/creator_upsell.dart';
+import '../../../widgets/highlighted_text.dart';
+import '../../../services/custom_emoji_registry.dart';
 
 int? _repostOriginalPostIdFromBody(Map<String, dynamic>? body) {
   final raw = body?['repost_original_post_id'];
@@ -478,6 +481,8 @@ class _NewPostCardState extends State<NewPostCard>
       });
 
       if (mounted) {
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         showErrorSnackBar(
           context,
           e,
@@ -539,7 +544,7 @@ class _NewPostCardState extends State<NewPostCard>
         title: Text(
           authorName == null || authorName.isEmpty
               ? 'Поддержать автора'
-              : 'Поддержать $authorName',
+              : 'Поддержать ${previewTextWithCustomEmoji(authorName)}',
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -556,7 +561,6 @@ class _NewPostCardState extends State<NewPostCard>
             const SizedBox(height: 12),
             TextField(
               controller: messageController,
-              maxLength: 160,
               decoration: const InputDecoration(
                 labelText: 'Сообщение автору',
                 hintText: 'Спасибо за классный пост!',
@@ -604,6 +608,8 @@ class _NewPostCardState extends State<NewPostCard>
       );
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       if (isStarsRequiredError(e)) {
         await showStarsRequiredSnack(context, e, fallback: 'Не удалось отправить донат');
       } else {
@@ -862,8 +868,7 @@ class _NewPostCardState extends State<NewPostCard>
 
         final name = sourceName(orig);
         final url = sourceAvatar(orig);
-        final initial =
-            name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?';
+        final initial = avatarLetterWithCustomEmoji(name);
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -936,8 +941,8 @@ class _NewPostCardState extends State<NewPostCard>
                           const SizedBox(height: 2),
                           GestureDetector(
                             onTap: () => openSource(orig),
-                            child: Text(
-                              name,
+                            child: HighlightedText(
+                              text: name,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -957,8 +962,8 @@ class _NewPostCardState extends State<NewPostCard>
             if (comment != null && comment.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                child: Text(
-                  comment,
+                child: HighlightedText(
+                  text: comment,
                   style: const TextStyle(fontSize: 14, height: 1.35),
                 ),
               ),
@@ -990,8 +995,8 @@ class _NewPostCardState extends State<NewPostCard>
               if (resolvePostDisplayTitle(title: orig.title, body: orig.body) != null)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                  child: Text(
-                    displayTitleForPost(orig),
+                  child: HighlightedText(
+                    text: displayTitleForPost(orig),
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -1002,8 +1007,8 @@ class _NewPostCardState extends State<NewPostCard>
                   orig.description!.trim().isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-                  child: Text(
-                    orig.description!,
+                  child: HighlightedText(
+                    text: orig.description!,
                     style: const TextStyle(fontSize: 14),
                   ),
                 ),
@@ -1091,8 +1096,7 @@ class _NewPostCardState extends State<NewPostCard>
       displayAvatar = author?.avatarUrl ?? post.author?.avatarUrl;
     }
 
-    final displayInitial =
-        displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
+    final displayInitial = avatarLetterWithCustomEmoji(displayName);
 
     final hasFeedVideo =
         post.videoUrl != null && post.videoUrl!.trim().isNotEmpty;
@@ -1146,10 +1150,9 @@ class _NewPostCardState extends State<NewPostCard>
                           child: originalAuthorAvatar == null ||
                                   originalAuthorAvatar.isEmpty
                               ? Text(
-                                  (originalAuthorName != null &&
-                                          originalAuthorName.isNotEmpty)
-                                      ? originalAuthorName[0].toUpperCase()
-                                      : '?',
+                                  avatarLetterWithCustomEmoji(
+                                    originalAuthorName,
+                                  ),
                                   style: const TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
@@ -1168,30 +1171,30 @@ class _NewPostCardState extends State<NewPostCard>
                                 context
                                     .push('/profile?userId=${repostedBy.id}');
                               },
-                              child: Text.rich(
-                                TextSpan(
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
-                                  ),
-                                  children: [
-                                    const TextSpan(text: 'Репост · '),
-                                    TextSpan(
-                                      text: repostedBy.name,
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w600),
-                                    ),
-                                  ],
+                              child: HighlightedText(
+                                text: repostedBy.name,
+                                leading: 'Репост · ',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                                leadingStyle: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w400,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
                                 ),
                               ),
                             ),
                             if (repostedBy.comment != null &&
                                 repostedBy.comment!.trim().isNotEmpty) ...[
                               const SizedBox(height: 6),
-                              Text(
-                                repostedBy.comment!.trim(),
+                              HighlightedText(
+                                text: repostedBy.comment!.trim(),
                                 style: TextStyle(
                                   fontSize: 14,
                                   height: 1.35,
@@ -1247,8 +1250,8 @@ class _NewPostCardState extends State<NewPostCard>
                             Flexible(
                               child: GestureDetector(
                                 onTap: widget.onAuthorTap,
-                                child: Text(
-                                  displayName,
+                                child: HighlightedText(
+                                  text: displayName,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
@@ -1334,7 +1337,9 @@ class _NewPostCardState extends State<NewPostCard>
                                         radius: 10,
                                         backgroundColor: Colors.grey[400],
                                         child: Text(
-                                          originalAuthorName[0].toUpperCase(),
+                                          avatarLetterWithCustomEmoji(
+                                            originalAuthorName,
+                                          ),
                                           style: const TextStyle(
                                             fontSize: 10,
                                             color: Colors.white,
@@ -1356,8 +1361,8 @@ class _NewPostCardState extends State<NewPostCard>
                                         .push('/profile?userId=${post.userId}');
                                   }
                                 },
-                                child: Text(
-                                  originalAuthorName,
+                                child: HighlightedText(
+                                  text: originalAuthorName,
                                   style: TextStyle(
                                     color: scheme.onSurfaceVariant,
                                     fontSize: 12,
@@ -1390,8 +1395,8 @@ class _NewPostCardState extends State<NewPostCard>
                           if (repostedBy.comment != null &&
                               repostedBy.comment!.trim().isNotEmpty) ...[
                             const SizedBox(height: 6),
-                            Text(
-                              repostedBy.comment!.trim(),
+                            HighlightedText(
+                              text: repostedBy.comment!.trim(),
                               style: TextStyle(
                                 fontSize: 14,
                                 height: 1.35,
@@ -1402,8 +1407,8 @@ class _NewPostCardState extends State<NewPostCard>
                         ]
                         // Для постов из каналов показываем описание канала или "Канал"
                         else if (isFromChannel && !isFeedChannelRepostWrapper)
-                          Text(
-                            channel?.description ?? 'Канал',
+                          HighlightedText(
+                            text: channel?.description ?? 'Канал',
                             style: TextStyle(
                               color: scheme.onSurfaceVariant,
                               fontSize: 12,
@@ -1499,8 +1504,8 @@ class _NewPostCardState extends State<NewPostCard>
                             const Icon(Icons.link, size: 18),
                             const SizedBox(width: 8),
                             Expanded(
-                              child: Text(
-                                post.linkTitle ?? post.linkUrl!,
+                              child: HighlightedText(
+                                text: post.linkTitle ?? post.linkUrl!,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
@@ -1513,8 +1518,8 @@ class _NewPostCardState extends State<NewPostCard>
                             post.linkDescription!.isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(top: 6),
-                            child: Text(
-                              post.linkDescription!,
+                            child: HighlightedText(
+                              text: post.linkDescription!,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -1641,24 +1646,18 @@ class _NewPostCardState extends State<NewPostCard>
                       padding: const EdgeInsets.only(bottom: 3),
                       child: GestureDetector(
                         onTap: () => unawaited(_openComments()),
-                        child: RichText(
+                        child: HighlightedText(
+                          text: preview.text,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          text: TextSpan(
-                            style: TextStyle(
-                              fontSize: 13.5,
-                              height: 1.3,
-                              color: scheme.onSurface,
-                            ),
-                            children: [
-                              TextSpan(
-                                text: '${preview.authorName} ',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              TextSpan(text: preview.text),
-                            ],
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            height: 1.3,
+                            color: scheme.onSurface,
+                          ),
+                          leading: '${preview.authorName} ',
+                          leadingStyle: const TextStyle(
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
                       ),
@@ -1767,7 +1766,7 @@ class _NewPostCardState extends State<NewPostCard>
       }
     }
 
-    return Text(line, style: style);
+    return HighlightedText(text: line, style: style);
   }
 
   Widget _buildInstagramCaption({
@@ -1785,42 +1784,32 @@ class _NewPostCardState extends State<NewPostCard>
     if (full.isEmpty) return const SizedBox.shrink();
 
     const previewLimit = 120;
-    final needsMore = full.length > previewLimit;
-    final shown = !_captionExpanded && needsMore
-        ? '${full.substring(0, previewLimit).trimRight()}…'
-        : full;
+    final collapsed = truncateKeepingCustomEmojiTokens(full, previewLimit);
+    final needsMore = collapsed != full;
+    final shown = !_captionExpanded && needsMore ? collapsed : full;
 
-    return RichText(
-      text: TextSpan(
-        style: TextStyle(
-          fontSize: 14,
-          height: 1.35,
-          color: scheme.onSurface,
-        ),
-        children: [
-          TextSpan(
-            text: '$authorName ',
-            style: const TextStyle(fontWeight: FontWeight.w800),
-          ),
-          TextSpan(text: shown),
-          if (needsMore && !_captionExpanded)
-            WidgetSpan(
-              alignment: PlaceholderAlignment.baseline,
-              baseline: TextBaseline.alphabetic,
-              child: GestureDetector(
-                onTap: () => setState(() => _captionExpanded = true),
-                child: Text(
-                  ' ещё',
-                  style: TextStyle(
-                    color: scheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
+    return HighlightedText(
+      text: shown,
+      style: TextStyle(
+        fontSize: 14,
+        height: 1.35,
+        color: scheme.onSurface,
+      ),
+      leading: '$authorName ',
+      leadingStyle: const TextStyle(fontWeight: FontWeight.w800),
+      trailing: needsMore && !_captionExpanded
+          ? GestureDetector(
+              onTap: () => setState(() => _captionExpanded = true),
+              child: Text(
+                ' ещё',
+                style: TextStyle(
+                  color: scheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
                 ),
               ),
-            ),
-        ],
-      ),
+            )
+          : null,
     );
   }
 

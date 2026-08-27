@@ -9,6 +9,8 @@ import 'package:flutter_callkit_incoming/entities/ios_params.dart';
 import 'package:flutter_callkit_incoming/entities/notification_params.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 
+import '../services/custom_emoji_registry.dart';
+
 /// Native CallKit (iOS) / full-screen incoming (Android) bridge.
 class CallKitBridge {
   CallKitBridge._();
@@ -46,12 +48,13 @@ class CallKitBridge {
     int durationMs = 60000,
   }) async {
     if (!isSupported) return;
+    final label = previewTextWithCustomEmoji(callerName);
     final params = CallKitParams(
       id: uuidForCallId(callId),
-      nameCaller: callerName,
+      nameCaller: label,
       appName: 'HanWe',
       avatar: avatarUrl,
-      handle: callerName,
+      handle: label,
       type: media == 'video' ? 1 : 0,
       textAccept: 'Ответить',
       textDecline: 'Отклонить',
@@ -61,7 +64,7 @@ class CallKitBridge {
         'media': media,
         'call_kind': callKind,
         if (conversationId != null) 'conversation_id': conversationId,
-        'caller_name': callerName,
+        'caller_name': label,
       },
       missedCallNotification: const NotificationParams(
         showNotification: true,
@@ -127,11 +130,12 @@ class CallKitBridge {
     String media = 'voice',
   }) async {
     if (!isSupported) return;
+    final label = previewTextWithCustomEmoji(peerName);
     final params = CallKitParams(
       id: uuidForCallId(callId),
-      nameCaller: peerName,
+      nameCaller: label,
       appName: 'HanWe',
-      handle: peerName,
+      handle: label,
       type: media == 'video' ? 1 : 0,
       extra: <String, dynamic>{
         'call_id': callId,

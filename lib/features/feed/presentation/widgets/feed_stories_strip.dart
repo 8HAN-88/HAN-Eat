@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../services/custom_emoji_registry.dart';
 import '../../../../services/auth_service.dart';
 import '../../../../services/server_config.dart';
 import '../../../stories/data/story_models.dart';
@@ -99,6 +100,7 @@ class _FeedStoriesStripState extends State<FeedStoriesStrip> {
         viewsCount: story.viewsCount,
         myReaction: story.myReaction,
         reactions: story.reactions,
+        caption: story.caption,
         duration: story.isVideo
             ? const Duration(seconds: 60)
             : const Duration(seconds: 5),
@@ -132,7 +134,9 @@ class _FeedStoriesStripState extends State<FeedStoriesStrip> {
             _StoryRing(
               label: 'Ваша история',
               avatarUrl: me.avatarUrl,
-              initial: me.name.isNotEmpty ? me.name[0].toUpperCase() : '+',
+              initial: me.name.isNotEmpty
+                  ? avatarLetterWithCustomEmoji(me.name)
+                  : '+',
               hasStory: myGroup != null,
               isOwn: true,
               unseen: myGroup != null && !_seenAuthorIds.contains(me.id),
@@ -177,7 +181,7 @@ class _FeedStoriesStripState extends State<FeedStoriesStrip> {
                 label: group.author.name,
                 avatarUrl: group.author.avatarUrl,
                 initial: group.author.name.isNotEmpty
-                    ? group.author.name[0].toUpperCase()
+                    ? avatarLetterWithCustomEmoji(group.author.name)
                     : '?',
                 hasStory: true,
                 isOwn: false,
@@ -302,7 +306,7 @@ class _StoryRing extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                label,
+                previewTextWithCustomEmoji(label),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,

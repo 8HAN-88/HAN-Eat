@@ -26,6 +26,7 @@ import '../../../widgets/app_gradient_background.dart';
 import '../../monetization/presentation/support_button.dart';
 import '../../monetization/presentation/channel_subscription_button.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../../../widgets/stars_pay_helper.dart';
 import '../../../core/theme/app_card_decorations.dart';
 import '../../../core/format/russian_count_labels.dart';
@@ -329,7 +330,7 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
                           : null,
                   child: c.avatarUrl == null || c.avatarUrl!.isEmpty
                       ? Text(
-                          c.name.isNotEmpty ? c.name[0].toUpperCase() : '?',
+                          avatarLetterWithCustomEmoji(c.name),
                           style: const TextStyle(fontWeight: FontWeight.w600),
                         )
                       : null,
@@ -341,13 +342,14 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        c.name,
+                      HighlightedText(
+                        text: c.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
+                              fontWeight: FontWeight.w600,
+                            ) ??
+                            const TextStyle(fontWeight: FontWeight.w600),
                       ),
                       InkWell(
                         borderRadius: BorderRadius.circular(8),
@@ -516,7 +518,7 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
     await SystemShare.shareText(
       context,
       text: text,
-      subject: name,
+      subject: ShareLinkService.channelShareSubject(name),
     );
   }
 

@@ -58,6 +58,7 @@ async def get_current_user_profile(
 ):
     """Получить профиль текущего пользователя."""
     payload = UserResponse.model_validate(current_user, context=_USER_ME_CONTEXT)
+    from app.services.emoji_pack_service import EmojiPackService
     from app.services.subscription_service import SubscriptionService
 
     from app.services.business_profile_service import public_payload
@@ -68,6 +69,7 @@ async def get_current_user_profile(
                 current_user.id, "profile_decoration"
             ),
             "business": public_payload(db, current_user),
+            "emoji_status": EmojiPackService(db).visible_emoji_status(current_user),
         }
     )
 
@@ -411,12 +413,14 @@ async def get_user_profile(
     if not current_user or current_user.id != user_id:
         stats = stats.model_copy(update={"saved_count": 0})
 
+    from app.services.emoji_pack_service import EmojiPackService
     from app.services.subscription_service import SubscriptionService
 
     user_payload = UserResponse.model_validate(user).model_dump()
     user_payload["profile_decoration"] = SubscriptionService(db).has_feature(
         user.id, "profile_decoration"
     )
+    user_payload["emoji_status"] = EmojiPackService(db).visible_emoji_status(user)
     from app.services.business_profile_service import public_payload
 
     user_payload["business"] = public_payload(db, user)
@@ -435,10 +439,22 @@ async def update_user_profile(
     db: Session = Depends(get_db)
 ):
     """Обновить профиль текущего пользователя"""
+    from app.services.emoji_pack_service import (
+        EmojiPackService,
+        keep_if_unchanged_http,
+    )
+
+    emoji = EmojiPackService(db)
     if request.name is not None:
-        current_user.name = request.name
+        # Flutter always resends name together with bio. Unchanged
+        # name is receive-and-persist — do not 403 after a downgrade.
+        current_user.name = keep_if_unchanged_http(
+            emoji, current_user.id, request.name, current_user.name
+        )
     if request.bio is not None:
-        current_user.bio = request.bio
+        current_user.bio = keep_if_unchanged_http(
+            emoji, current_user.id, request.bio, current_user.bio
+        )
     if request.is_private is not None:
         current_user.is_private = request.is_private
     if request.last_seen_privacy is not None or request.show_last_seen is not None:
@@ -473,10 +489,31 @@ async def update_user_profile(
             )
         current_user.avatar_url = request.avatar_url
     if request.emoji_status is not None:
-        from app.services.profile_style import normalize_emoji_status
+        from app.services.emoji_pack_service import EmojiPackService
         from app.services.subscription_service import SubscriptionService
 
-        next_status = normalize_emoji_status(request.emoji_status)
+        try:
+            next_status = EmojiPackService(db).require_status(
+                current_user.id, request.emoji_status
+            )
+        except ValueError as exc:
+            code = str(exc)
+            if code == "custom_emoji_required":
+                SubscriptionService(db).require_feature(
+                    current_user.id,
+                    "custom_emoji",
+                    "Кастомный эмодзи-статус доступен с уровня 69",
+                )
+            elif code == "custom_emoji_denied":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={
+                        "code": "custom_emoji_denied",
+                        "message": "Нет доступа к этому эмодзи",
+                    },
+                ) from exc
+            else:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, code) from exc
         if next_status and not SubscriptionService(db).has_feature(
             current_user.id, "emoji_status"
         ):
@@ -667,8 +704,16 @@ async def update_user_profile(
     
     db.commit()
     db.refresh(current_user)
-    
-    return UserResponse.model_validate(current_user, context=_USER_ME_CONTEXT)
+
+    from app.services.emoji_pack_service import EmojiPackService
+
+    return UserResponse.model_validate(
+        current_user, context=_USER_ME_CONTEXT
+    ).model_copy(
+        update={
+            "emoji_status": EmojiPackService(db).visible_emoji_status(current_user),
+        }
+    )
 
 
 @router.get("/{user_id}/posts")

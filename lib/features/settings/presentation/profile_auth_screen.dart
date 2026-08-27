@@ -15,6 +15,10 @@ import '../../../widgets/account/profile_password_tile.dart';
 import '../../../models/chat_checklist.dart';
 import '../../subscription/creator_upsell.dart';
 import '../../../utils/session_snackbar.dart';
+import '../../../models/emoji_pack_models.dart';
+import '../../../services/custom_emoji_registry.dart';
+import '../../../services/emoji_pack_service.dart';
+import '../../../widgets/custom_emoji_view.dart';
 
 class ProfileAuthScreen extends ConsumerStatefulWidget {
   const ProfileAuthScreen({super.key});
@@ -144,13 +148,14 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
         );
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content:
-                  Text(userVisibleError(e, fallback: 'Не удалось обновить'))),
-        );
-      }
+      if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content:
+                Text(userVisibleError(e, fallback: 'Не удалось обновить'))),
+      );
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -186,12 +191,32 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
       await showCreatorUpsell(context);
       return;
     }
+    final customId = parseCustomEmojiTokenId(emoji);
+    if (customId != null && !hasFlexFeature('custom_emoji')) {
+      await showCreatorUpsell(context);
+      return;
+    }
+    if (customId != null) {
+      var allowed = false;
+      try {
+        final packs = await EmojiPackService.listMyPacks();
+        allowed = packs.any(
+          (pack) => pack.canUse && pack.items.any((item) => item.id == customId),
+        );
+      } catch (_) {}
+      if (!allowed) {
+        if (!mounted) return;
+        offerPackStoreIfRequired(context, 'pack_purchase_required');
+        return;
+      }
+    }
     try {
       await UserService.instance.updateProfileStyle(emojiStatus: emoji ?? '');
       if (mounted) setState(() {});
     } catch (e) {
       if (!mounted) return;
       if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       showErrorSnackBar(context, e, fallback: 'Не удалось сохранить статус');
     }
   }
@@ -212,9 +237,19 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
   }
 
   Future<void> _pickEmojiStatus() async {
+    List<CustomEmojiItem> custom = const [];
+    try {
+      final packs = await EmojiPackService.listMyPacks();
+      custom = [
+        for (final pack in packs)
+          if (pack.canUse) ...pack.items,
+      ];
+    } catch (_) {}
+    if (!mounted) return;
     final selected = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (ctx) {
         return SafeArea(
           child: Padding(
@@ -236,6 +271,23 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
                       ActionChip(
                         label: Text(emoji, style: const TextStyle(fontSize: 20)),
                         onPressed: () => Navigator.pop(ctx, emoji),
+                      ),
+                    for (final item in custom)
+                      ActionChip(
+                        avatar: CustomEmojiView(id: item.id, size: 20),
+                        label: Text(
+                          item.shortcode?.isNotEmpty == true
+                              ? item.shortcode!
+                              : '#${item.id}',
+                        ),
+                        onPressed: () {
+                          if (!hasFlexFeature('custom_emoji')) {
+                            Navigator.pop(ctx);
+                            showCreatorUpsell(context);
+                            return;
+                          }
+                          Navigator.pop(ctx, customEmojiReaction(item.id));
+                        },
                       ),
                     ActionChip(
                       label: const Text('Убрать'),
@@ -426,12 +478,30 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.mood_outlined),
                     title: const Text('Emoji-статус'),
-                    subtitle: Text(
-                      (user.emojiStatus ?? '').isNotEmpty
-                          ? user.emojiStatus!
-                          : 'Эмодзи рядом с именем',
-                    ),
-                    onTap: _loading ? null : _pickEmojiStatus,
+                    subtitle: (user.emojiStatus ?? '').trim().isEmpty
+                        ? const Text('Эмодзи рядом с именем')
+                        : Row(
+                            children: [
+                              StatusEmojiView(
+                                status: user.emojiStatus,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 6),
+                              const Text('рядом с именем'),
+                            ],
+                          ),
+                    trailing: hasFlexFeature('emoji_status')
+                        ? null
+                        : const Icon(Icons.lock_outline),
+                    onTap: _loading
+                        ? null
+                        : () {
+                            if (!hasFlexFeature('emoji_status')) {
+                              showCreatorUpsell(context);
+                              return;
+                            }
+                            _pickEmojiStatus();
+                          },
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -506,10 +576,19 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
   }
 
   String _initials(String? name) {
-    if (name == null || name.isEmpty) return '?';
-    final parts = name.trim().split(' ');
-    if (parts.length == 1) return parts[0][0].toUpperCase();
-    return (parts[0][0] + parts[parts.length > 1 ? 1 : 0][0]).toUpperCase();
+    final stripped =
+        (name ?? '').replaceAll(RegExp(r'\[\[e:\d+\]\]'), ' ').trim();
+    if (stripped.isEmpty) {
+      return (name ?? '').trim().isEmpty ? '?' : '✦';
+    }
+    final parts =
+        stripped.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return '✦';
+    if (parts.length == 1) {
+      return avatarLetterWithCustomEmoji(parts[0]);
+    }
+    return avatarLetterWithCustomEmoji(parts[0]) +
+        avatarLetterWithCustomEmoji(parts[1]);
   }
 }
 

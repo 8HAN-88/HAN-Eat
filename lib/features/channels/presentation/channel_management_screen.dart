@@ -13,10 +13,13 @@ import '../../../services/media_upload_service.dart';
 import '../../../app/app_router.dart';
 import '../application/channels_list_refresh_provider.dart';
 import '../../../core/layout/long_label_tab_bar.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../widgets/app_avatar.dart';
 import '../../chat/application/join_requests_bulk.dart';
 import '../../settings/application/subscription_status_provider.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../../widgets/highlighted_text.dart';
+import '../../subscription/creator_upsell.dart';
 
 const _permissionLabels = <String, (String, String)>{
   'manage_channel_settings': (
@@ -423,6 +426,8 @@ class _ChannelManagementScreenState
       }
     } catch (e) {
       if (mounted) {
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content:
@@ -644,7 +649,7 @@ class _ChannelManagementScreenState
                         _newAvatarUrl == null &&
                         _channel?.avatarUrl == null)
                     ? Text(
-                        _channel?.name[0].toUpperCase() ?? '?',
+                        avatarLetterWithCustomEmoji(_channel?.name),
                         style: const TextStyle(fontSize: 40),
                       )
                     : null,
@@ -923,10 +928,16 @@ class _ChannelManagementScreenState
                 leading: CircleAvatar(
                   backgroundImage: resolvedAvatarImage(avatar, decodeWidth: 96),
                   child: resolvedAvatarImage(avatar) == null
-                      ? Text(name.isNotEmpty ? name[0].toUpperCase() : '?')
+                      ? Text(avatarLetterWithCustomEmoji(name))
                       : null,
                 ),
-                title: Text(name),
+                title: HighlightedText(
+                  text: name,
+                  style: Theme.of(context).textTheme.bodyLarge ??
+                      const TextStyle(fontSize: 16),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 subtitle: Text(user?['username'] as String? ?? ''),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -971,10 +982,20 @@ class _ChannelManagementScreenState
                 ),
                 child: resolvedAvatarImage(member['avatar_url'] as String?) ==
                         null
-                    ? Text(member['name']?[0] ?? '?')
+                    ? Text(
+                        avatarLetterWithCustomEmoji(
+                          (member['name'] as String?) ?? '',
+                        ),
+                      )
                     : null,
               ),
-              title: Text(member['name'] ?? 'Без имени'),
+              title: HighlightedText(
+                text: (member['name'] as String?) ?? 'Без имени',
+                style: Theme.of(context).textTheme.bodyLarge ??
+                    const TextStyle(fontSize: 16),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
               subtitle: Text(member['username'] ?? ''),
               trailing: Chip(
                 label: Text(member['role'] ?? 'member'),

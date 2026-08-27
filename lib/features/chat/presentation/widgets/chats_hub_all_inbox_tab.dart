@@ -17,12 +17,14 @@ import '../../../../services/chat_folder_store.dart';
 import '../../../../services/chat_hub_ui_prefs.dart';
 import '../../../../services/chat_service.dart';
 import '../../../../services/auth_service.dart';
+import '../../../../services/custom_emoji_registry.dart';
 import '../../../../services/chat_thread_ui_prefs.dart';
 import '../../../../services/user_realtime_service.dart';
 import '../../../subscription/creator_upsell.dart';
 import '../../../../utils/api_error_parser.dart';
 import '../../../../widgets/app_empty_state.dart';
 import '../../../../widgets/chat_inbox_skeleton.dart';
+import '../../../../widgets/highlighted_text.dart';
 import '../../../../widgets/telegram_ui.dart';
 import '../../../channels/application/channels_list_refresh_provider.dart';
 import '../../../navigation/application/shell_chat_badge_refresh_provider.dart';
@@ -210,7 +212,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                   : channelId != null && folder.containsChannel(channelId);
               return ListTile(
                 leading: const Icon(Icons.folder_outlined),
-                title: Text(folder.displayLabel),
+                title: HighlightedText(
+                  text: folder.displayLabel,
+                  style: Theme.of(ctx).textTheme.bodyLarge ??
+                      const TextStyle(fontSize: 16),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 trailing: inFolder
                     ? Icon(Icons.check,
                         color: Theme.of(ctx).colorScheme.primary)
@@ -237,8 +245,8 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                       SnackBar(
                         content: Text(
                           inFolder
-                              ? 'Убрано из «${folder.name}»'
-                              : 'Добавлено в «${folder.name}»',
+                              ? 'Убрано из «${previewTextWithCustomEmoji(folder.name)}»'
+                              : 'Добавлено в «${previewTextWithCustomEmoji(folder.name)}»',
                         ),
                       ),
                     );
@@ -1335,8 +1343,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                     itemBuilder: (context, index) {
                       final item = _joinRequestsInbox[index];
                       return ListTile(
-                        title: Text(
-                          '${item.user.displayName} → ${item.conversation.displayTitle}',
+                        title: HighlightedText(
+                          text:
+                              '${item.user.displayName} → ${item.conversation.displayTitle}',
+                          style: Theme.of(context).textTheme.bodyLarge ??
+                              const TextStyle(fontSize: 16),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         subtitle: Text(
                           '${item.requestedAt.day.toString().padLeft(2, '0')}.'
@@ -1436,7 +1449,11 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     }
     setState(() => _removeChannelEntry(channel.id));
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('«${channel.name}» в архиве')),
+      SnackBar(
+        content: Text(
+          '«${previewTextWithCustomEmoji(channel.name)}» в архиве',
+        ),
+      ),
     );
     try {
       await ChannelSheetPrefs.setArchived(channel.id, true);
@@ -1477,8 +1494,8 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       SnackBar(
         content: Text(
           enabled
-              ? '«${channel.name}» без звука'
-              : 'Уведомления «${channel.name}» включены',
+              ? '«${previewTextWithCustomEmoji(channel.name)}» без звука'
+              : 'Уведомления «${previewTextWithCustomEmoji(channel.name)}» включены',
         ),
       ),
     );
@@ -1525,8 +1542,8 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       SnackBar(
         content: Text(
           isFav
-              ? '«${channel.name}» убран из избранного'
-              : '«${channel.name}» в избранном',
+              ? '«${previewTextWithCustomEmoji(channel.name)}» убран из избранного'
+              : '«${previewTextWithCustomEmoji(channel.name)}» в избранном',
         ),
       ),
     );
@@ -1621,7 +1638,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       builder: (ctx) => AlertDialog(
         title: const Text('Отписаться от канала?'),
         content: Text(
-          '«${channel.name}» исчезнет из списка. Вы сможете подписаться снова.',
+          '«${previewTextWithCustomEmoji(channel.name)}» исчезнет из списка. Вы сможете подписаться снова.',
         ),
         actions: [
           TextButton(
@@ -1645,7 +1662,11 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     }
     setState(() => _removeChannelEntry(channel.id));
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Вы вышли из «${channel.name}»')),
+      SnackBar(
+        content: Text(
+          'Вы вышли из «${previewTextWithCustomEmoji(channel.name)}»',
+        ),
+      ),
     );
     try {
       await ChannelService.leaveChannel(channel.id);
@@ -1677,7 +1698,11 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     unawaited(ChatCacheService.upsertConversation(archived));
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('«${chat.displayTitle}» в архиве')),
+        SnackBar(
+          content: Text(
+            '«${previewTextWithCustomEmoji(chat.displayTitle)}» в архиве',
+          ),
+        ),
       );
     }
     try {
@@ -1808,10 +1833,10 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
             children: [
               Text(
                 chat.isGroup
-                    ? 'Вы выйдете из «${chat.displayTitle}». История останется у других участников.'
+                    ? 'Вы выйдете из «${previewTextWithCustomEmoji(chat.displayTitle)}». История останется у других участников.'
                     : (alsoForPeer
-                        ? 'Чат «${chat.displayTitle}» будет удалён у вас и у собеседника.'
-                        : 'Чат «${chat.displayTitle}» исчезнет из списка. При новом сообщении диалог можно начать снова.'),
+                        ? 'Чат «${previewTextWithCustomEmoji(chat.displayTitle)}» будет удалён у вас и у собеседника.'
+                        : 'Чат «${previewTextWithCustomEmoji(chat.displayTitle)}» исчезнет из списка. При новом сообщении диалог можно начать снова.'),
               ),
               if (isDirect) ...[
                 const SizedBox(height: 12),
@@ -1821,7 +1846,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                   onChanged: (v) => setLocal(() => alsoForPeer = v ?? false),
                   title: Text(
                     (peerName != null && peerName.isNotEmpty)
-                        ? 'Также удалить у $peerName'
+                        ? 'Также удалить у ${previewTextWithCustomEmoji(peerName)}'
                         : 'Также удалить у собеседника',
                   ),
                   controlAffinity: ListTileControlAffinity.leading,
@@ -1852,10 +1877,10 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       SnackBar(
         content: Text(
           chat.isGroup
-              ? 'Вы вышли из «${chat.displayTitle}»'
+              ? 'Вы вышли из «${previewTextWithCustomEmoji(chat.displayTitle)}»'
               : (alsoForPeer
-                  ? '«${chat.displayTitle}» удалён у обоих'
-                  : '«${chat.displayTitle}» удалён'),
+                  ? '«${previewTextWithCustomEmoji(chat.displayTitle)}» удалён у обоих'
+                  : '«${previewTextWithCustomEmoji(chat.displayTitle)}» удалён'),
         ),
       ),
     );
@@ -1924,7 +1949,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'Метки «${chat.displayTitle}»',
+                      'Метки «${previewTextWithCustomEmoji(chat.displayTitle)}»',
                       style: Theme.of(ctx).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 8),
@@ -1943,7 +1968,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                             }
                           });
                         },
-                        title: Text(tag.title),
+                        title: HighlightedText(
+                          text: tag.title,
+                          style: Theme.of(ctx).textTheme.bodyLarge ??
+                              const TextStyle(fontSize: 16),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                         secondary: CircleAvatar(
                           radius: 8,
                           backgroundColor:
@@ -2004,7 +2035,6 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                   TextField(
                     controller: titleCtrl,
                     autofocus: true,
-                    maxLength: 40,
                     decoration: const InputDecoration(labelText: 'Название'),
                   ),
                   const SizedBox(height: 8),
@@ -2054,6 +2084,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     } catch (e) {
       if (!mounted) return null;
       if (offerFlexIfRequired(context, e)) return null;
+      if (offerPackStoreIfRequired(context, e)) return null;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -2143,7 +2174,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${peer.displayName} не сможет писать вам и видеть ваш профиль в чатах.',
+                  '${previewTextWithCustomEmoji(peer.displayName)} не сможет писать вам и видеть ваш профиль в чатах.',
                 ),
                 const SizedBox(height: 12),
                 CheckboxListTile(
@@ -2192,10 +2223,10 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       SnackBar(
         content: Text(
           chat.peerBlockedByMe
-              ? '${peer.displayName} разблокирован'
+              ? '${previewTextWithCustomEmoji(peer.displayName)} разблокирован'
               : (deleteHistory
-                  ? '${peer.displayName} заблокирован, история удалена'
-                  : '${peer.displayName} заблокирован'),
+                  ? '${previewTextWithCustomEmoji(peer.displayName)} заблокирован, история удалена'
+                  : '${previewTextWithCustomEmoji(peer.displayName)} заблокирован'),
         ),
       ),
     );
@@ -2431,7 +2462,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                               Theme.of(context).colorScheme,
                             ),
                           ),
-                          label: Text(tag.title),
+                          label: HighlightedText(
+                            text: tag.title,
+                            style: Theme.of(context).textTheme.labelLarge ??
+                                const TextStyle(fontSize: 14),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                           selected: _selectedTagId == tag.id,
                           onSelected: (_) => setState(
                             () => _selectedTagId =
@@ -2503,8 +2540,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                         ..._joinRequestsInbox.take(3).map((item) {
                           return ListTile(
                             dense: true,
-                            title: Text(
-                              '${item.user.displayName} -> ${item.conversation.displayTitle}',
+                            title: HighlightedText(
+                              text:
+                                  '${item.user.displayName} → ${item.conversation.displayTitle}',
+                              style: Theme.of(context).textTheme.bodyLarge ??
+                                  const TextStyle(fontSize: 16),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             subtitle: Text(
                               '${item.requestedAt.day.toString().padLeft(2, '0')}.${item.requestedAt.month.toString().padLeft(2, '0')}.${item.requestedAt.year}',

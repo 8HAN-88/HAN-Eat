@@ -8,8 +8,10 @@ import '../../../app/app_router.dart';
 import '../../../core/theme/app_card_decorations.dart';
 import '../../../services/channel_service.dart';
 import '../../../widgets/channel_list_badges.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../../widgets/highlighted_text.dart';
 
 class ChannelsManagementScreen extends ConsumerStatefulWidget {
   const ChannelsManagementScreen({super.key});
@@ -302,7 +304,13 @@ class _ChannelsManagementScreenState
                     final category = _availableCategories[i];
                     final selected = _selectedCategory == category;
                     return ListTile(
-                      title: Text(category),
+                      title: HighlightedText(
+                        text: category,
+                        style: Theme.of(context).textTheme.bodyLarge ??
+                            const TextStyle(fontSize: 16),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       trailing: selected
                           ? Icon(Icons.check,
                               color: Theme.of(context).colorScheme.primary)
@@ -556,7 +564,15 @@ class _ManagementHeader extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 children: [
                   FilterChip(
-                    label: Text(selectedCategory ?? 'Категория'),
+                    label: selectedCategory == null
+                        ? const Text('Категория')
+                        : HighlightedText(
+                            text: selectedCategory!,
+                            style: Theme.of(context).textTheme.labelLarge ??
+                                const TextStyle(fontSize: 14),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                     avatar: Icon(
                       Icons.category_outlined,
                       size: 18,
@@ -636,9 +652,7 @@ class _ManagementChannelCard extends StatelessWidget {
                   ),
                   child: resolvedAvatarImage(channel.avatarUrl) == null
                       ? Text(
-                          channel.name.isNotEmpty
-                              ? channel.name[0].toUpperCase()
-                              : '?',
+                          avatarLetterWithCustomEmoji(channel.name),
                           style: textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
@@ -650,11 +664,12 @@ class _ManagementChannelCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        channel.name,
+                      HighlightedText(
+                        text: channel.name,
                         style: textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                              fontWeight: FontWeight.w700,
+                            ) ??
+                            const TextStyle(fontWeight: FontWeight.w700),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -662,11 +677,12 @@ class _ManagementChannelCard extends StatelessWidget {
                       if (channel.description != null &&
                           channel.description!.trim().isNotEmpty) ...[
                         const SizedBox(height: 4),
-                        Text(
-                          channel.description!,
+                        HighlightedText(
+                          text: channel.description!,
                           style: textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
+                                color: scheme.onSurfaceVariant,
+                              ) ??
+                              TextStyle(color: scheme.onSurfaceVariant),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),

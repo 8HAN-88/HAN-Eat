@@ -18,9 +18,15 @@ class StickerPackResponse(BaseModel):
     title: str
     slug: str
     owner_user_id: int
+    owner_name: str = ""
     is_public: bool
     is_premium: bool = False
     is_installed: bool = False
+    is_owned: bool = False
+    is_purchased: bool = False
+    is_listed: bool = False
+    price_stars: int = 0
+    fee_stars: int = 0
     stickers: List[StickerItemResponse] = []
     stickers_count: int = 0
     share_link: Optional[str] = None
@@ -33,21 +39,22 @@ class StickerPackListResponse(BaseModel):
 
 
 class CreateStickerPackRequest(BaseModel):
-    title: str = Field(..., min_length=2, max_length=120)
+    title: str = Field(..., min_length=2, max_length=140)
     is_public: bool = True
     is_premium: bool = False
 
 
 class AddStickerRequest(BaseModel):
     media_url: str = Field(..., min_length=1, max_length=512)
-    emoji: Optional[str] = Field(default=None, max_length=16)
+    emoji: Optional[str] = Field(default=None, max_length=48)
     sticker_type: str = Field(default="static", pattern="^(static|animated)$")
 
 
 class UpdateStickerPackRequest(BaseModel):
-    title: Optional[str] = Field(default=None, min_length=2, max_length=120)
+    title: Optional[str] = Field(default=None, min_length=2, max_length=140)
     is_public: Optional[bool] = None
     is_premium: Optional[bool] = None
+    price_stars: Optional[int] = Field(default=None, ge=0, le=25000)
 
 
 class ReorderStickersRequest(BaseModel):

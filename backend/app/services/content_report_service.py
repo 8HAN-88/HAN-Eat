@@ -47,6 +47,9 @@ class ContentReportService:
         Создать жалобу. Возвращает (report, burst_triggered).
         """
         reason = reason if reason in VALID_REPORT_REASONS else "other"
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(self.db).require_send_tokens_http(reporter_user_id, comment)
 
         existing = (
             self.db.query(ContentReport)
@@ -246,15 +249,23 @@ class ContentReportService:
         for r in reports:
             reporter = users_by_id.get(r.reporter_user_id) if r.reporter_user_id else None
             if reporter:
+                from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
+                raw_reporter = (reporter.name or "").strip()
+                reporter_name = (
+                    preview_text_with_custom_emoji(raw_reporter, limit=80)
+                    if raw_reporter
+                    else "Пользователь"
+                )
                 reporter_payload = {
                     "id": reporter.id,
-                    "name": reporter.name,
+                    "name": reporter_name,
                     "username": reporter.username,
                 }
                 reporter_display = (
-                    f"{reporter.name} (@{reporter.username})"
+                    f"{reporter_name} (@{reporter.username})"
                     if reporter.username
-                    else reporter.name
+                    else reporter_name
                 )
             elif r.reporter_user_id:
                 reporter_payload = {

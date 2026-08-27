@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../widgets/highlighted_text.dart';
 import '../data/bot_inline_service.dart';
 
 /// Overlay с результатами inline-режима (@bot query)
@@ -52,12 +54,14 @@ class InlineSuggestions extends StatelessWidget {
             return ListTile(
               dense: true,
               leading: Icon(icon, size: 20),
-              title: Text(
-                r.title,
+              title: HighlightedText(
+                text: r.title,
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
-              subtitle: Text(
-                r.description,
+              subtitle: HighlightedText(
+                text: r.description,
+                style: Theme.of(context).textTheme.bodySmall ??
+                    const TextStyle(fontSize: 12),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),

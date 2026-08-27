@@ -10,8 +10,10 @@ import '../../../models/chat_models.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/call_service.dart';
 import '../../../services/chat_service.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../services/user_realtime_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../call_kit_bridge.dart';
 import '../call_media_controls.dart';
 import 'call_coordinator.dart';
@@ -508,9 +510,14 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
                         : (m.username ?? 'Участник');
                     return ListTile(
                       leading: CircleAvatar(
-                        child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?'),
+                        child: Text(avatarLetterWithCustomEmoji(name)),
                       ),
-                      title: Text(name, style: const TextStyle(color: Colors.white)),
+                      title: HighlightedText(
+                        text: name,
+                        style: const TextStyle(color: Colors.white),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       onTap: () => Navigator.of(ctx).pop(m),
                     );
                   },
@@ -529,7 +536,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Приглашение отправлено: ${picked.name?.trim().isNotEmpty == true ? picked.name!.trim() : 'участник'}',
+            'Приглашение отправлено: ${picked.name?.trim().isNotEmpty == true ? previewTextWithCustomEmoji(picked.name!.trim()) : 'участник'}',
           ),
         ),
       );
@@ -702,7 +709,10 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(label, style: const TextStyle(color: Colors.white70)),
+                HighlightedText(
+                  text: label,
+                  style: const TextStyle(color: Colors.white70),
+                ),
                 if (muted) ...[
                   const SizedBox(width: 6),
                   const Icon(Icons.mic_off, color: Colors.white70, size: 16),
@@ -719,7 +729,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     return Center(
       child: CircleAvatar(
         radius: 36,
-        child: Text(label.isNotEmpty ? label[0].toUpperCase() : '?'),
+        child: Text(avatarLetterWithCustomEmoji(label)),
       ),
     );
   }

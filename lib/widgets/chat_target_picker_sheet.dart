@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../features/subscription/creator_upsell.dart';
 import '../models/chat_models.dart';
 import 'app_avatar.dart';
+import 'highlighted_text.dart';
 
 class ChatTargetPickResult {
   const ChatTargetPickResult({
@@ -244,8 +245,10 @@ class _ChatTargetPickerSheetState extends State<_ChatTargetPickerSheet> {
                                   imageUrl: chat.peer?.avatarUrl,
                                   displayName: chat.displayTitle,
                                 ),
-                          title: Text(
-                            chat.displayTitle,
+                          title: HighlightedText(
+                            text: chat.displayTitle,
+                            style: Theme.of(context).textTheme.bodyLarge ??
+                                const TextStyle(fontSize: 16),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),

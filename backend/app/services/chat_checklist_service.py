@@ -6,6 +6,8 @@ from typing import Any, Dict, List, Optional
 
 
 def build_checklist_content(title: str, item_texts: List[str]) -> str:
+    from app.services.emoji_pack_service import clip_preserving_custom_emoji
+
     heading = (title or "").strip()
     items = [t.strip() for t in item_texts if t and t.strip()]
     if len(heading) < 1:
@@ -16,8 +18,11 @@ def build_checklist_content(title: str, item_texts: List[str]) -> str:
         raise ValueError("checklist_too_many_items")
     payload = {
         "checklist": {
-            "title": heading[:200],
-            "items": [{"text": text[:120], "done": False} for text in items],
+            "title": clip_preserving_custom_emoji(heading, 200),
+            "items": [
+                {"text": clip_preserving_custom_emoji(text, 120), "done": False}
+                for text in items
+            ],
         }
     }
     return json.dumps(payload, ensure_ascii=False)
@@ -65,9 +70,12 @@ def toggle_checklist_item(content: str, index: int, done: bool) -> str:
 
 
 def checklist_preview_text(content: Optional[str]) -> str:
+    from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
     parsed = parse_checklist(content)
     if parsed is None:
         return "Чеклист"
     done = sum(1 for item in parsed["items"] if item["done"])
     total = len(parsed["items"])
-    return f"☑ {parsed['title']} ({done}/{total})"
+    title = preview_text_with_custom_emoji(parsed["title"], limit=80)
+    return f"☑ {title} ({done}/{total})"

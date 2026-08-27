@@ -11,6 +11,8 @@ import '../../../utils/api_error_parser.dart';
 import '../../../utils/url_validator.dart';
 import '../../../widgets/create_poll_form_section.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../../widgets/highlighted_text.dart';
+import '../../subscription/creator_upsell.dart';
 
 class EditProfilePostScreen extends ConsumerStatefulWidget {
   final int postId;
@@ -282,6 +284,8 @@ class _EditProfilePostScreenState extends ConsumerState<EditProfilePostScreen> {
       context.pop(true);
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       final msg = e is ApiClientException
           ? e.message
           : e.toString().replaceAll('Exception: ', '');
@@ -345,11 +349,12 @@ class _EditProfilePostScreenState extends ConsumerState<EditProfilePostScreen> {
             ),
             const SizedBox(height: 16),
           ] else if (_isPoll) ...[
-            Text(
-              _post?.poll?.question ??
+            HighlightedText(
+              text: _post?.poll?.question ??
                   _post?.body?['poll']?['question']?.toString() ??
                   'Опрос',
-              style: Theme.of(context).textTheme.titleMedium,
+              style: Theme.of(context).textTheme.titleMedium ??
+                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
             Text(

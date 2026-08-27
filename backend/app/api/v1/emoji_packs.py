@@ -1,0 +1,483 @@
+"""Custom emoji pack API."""
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+
+from app.api.dependencies import get_current_user_required
+from app.core.database import get_db
+from app.models.user import User
+from app.services.emoji_pack_service import EmojiPackService
+from app.services.pack_marketplace_service import (
+    PackMarketplaceService,
+    marketplace_fee_stars,
+    owner_labels,
+)
+
+router = APIRouter()
+
+
+def _raise_emoji_token(code: str) -> None:
+    from app.core.entitlements import feature_required_detail
+
+    if code == "custom_emoji_required":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            feature_required_detail(
+                "custom_emoji",
+                "Кастомные эмодзи в тексте доступны с уровня 69",
+            ),
+        )
+    if code == "custom_emoji_denied":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            {
+                "code": "custom_emoji_denied",
+                "message": "Этот эмодзи недоступен — купите пак",
+            },
+        )
+
+
+class EmojiItemOut(BaseModel):
+    id: int
+    media_url: str
+    shortcode: str | None = None
+    order_index: int = 0
+
+
+class EmojiPackOut(BaseModel):
+    id: int
+    title: str
+    slug: str
+    owner_user_id: int
+    owner_name: str = ""
+    is_public: bool
+    is_installed: bool = False
+    is_owned: bool = False
+    is_purchased: bool = False
+    is_listed: bool = False
+    price_stars: int = 0
+    fee_stars: int = 0
+    items: list[EmojiItemOut] = []
+    items_count: int = 0
+    share_link: str | None = None
+
+
+class EmojiPackListOut(BaseModel):
+    items: list[EmojiPackOut]
+
+
+class CreateEmojiPackIn(BaseModel):
+    title: str = Field(..., min_length=2, max_length=140)
+    is_public: bool = True
+
+
+class AddEmojiIn(BaseModel):
+    media_url: str = Field(..., min_length=1, max_length=512)
+    shortcode: str | None = Field(default=None, max_length=32)
+
+
+class ListPriceIn(BaseModel):
+    price_stars: int = Field(0, ge=0, le=25000)
+
+
+class UpdateEmojiPackIn(BaseModel):
+    title: str | None = Field(default=None, min_length=2, max_length=140)
+    is_public: bool | None = None
+
+
+class ReorderEmojisIn(BaseModel):
+    emoji_ids: list[int] = Field(default_factory=list)
+
+
+def _pack_out(
+    pack,
+    *,
+    user_id: int,
+    installed: set[int],
+    purchased: set[int],
+    items_by_pack: dict,
+    authors: dict[int, str] | None = None,
+    listed_owners: set[int] | None = None,
+) -> EmojiPackOut:
+    items = items_by_pack.get(pack.id, [])
+    price = int(getattr(pack, "price_stars", 0) or 0)
+    owner_id = int(pack.owner_user_id)
+    listed = price > 0 and (listed_owners is None or owner_id in listed_owners)
+    return EmojiPackOut(
+        id=pack.id,
+        title=pack.title,
+        slug=pack.slug,
+        owner_user_id=owner_id,
+        owner_name=(authors or {}).get(owner_id, ""),
+        is_public=bool(pack.is_public),
+        is_installed=pack.id in installed,
+        is_owned=int(pack.owner_user_id) == int(user_id),
+        is_purchased=pack.id in purchased,
+        is_listed=listed,
+        price_stars=price,
+        fee_stars=marketplace_fee_stars(price),
+        items=[
+            EmojiItemOut(
+                id=row.id,
+                media_url=row.media_url,
+                shortcode=row.shortcode,
+                order_index=row.order_index,
+            )
+            for row in items
+        ],
+        items_count=len(items),
+        share_link=f"https://haneat.app/emoji/{pack.slug}",
+    )
+
+
+def _bundle(svc: EmojiPackService, user_id: int, packs) -> EmojiPackListOut:
+    pack_ids = [p.id for p in packs]
+    authors = owner_labels(svc.db, [p.owner_user_id for p in packs])
+    market = PackMarketplaceService(svc.db)
+    priced_owners = {
+        int(p.owner_user_id)
+        for p in packs
+        if int(getattr(p, "price_stars", 0) or 0) > 0
+    }
+    listed_owners = {
+        uid for uid in priced_owners if market.seller_can_list(uid, "emoji")
+    }
+    return EmojiPackListOut(
+        items=[
+            _pack_out(
+                p,
+                user_id=user_id,
+                installed=svc.installed_pack_ids(user_id),
+                purchased=svc.purchased_pack_ids(user_id),
+                items_by_pack=svc.emojis_by_pack_ids(pack_ids),
+                authors=authors,
+                listed_owners=listed_owners,
+            )
+            for p in packs
+        ]
+    )
+
+
+@router.get("/emoji/my", response_model=EmojiPackListOut)
+def list_my_emoji_packs(
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = EmojiPackService(db)
+    return _bundle(svc, current_user.id, svc.list_my_packs(current_user.id))
+
+
+@router.get("/emoji/marketplace", response_model=EmojiPackListOut)
+def list_emoji_marketplace(
+    q: str = Query("", max_length=120),
+    limit: int = Query(60, ge=1, le=120),
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = EmojiPackService(db)
+    return _bundle(svc, current_user.id, svc.list_marketplace(query=q, limit=limit))
+
+
+@router.get("/emoji/catalog", response_model=EmojiPackListOut)
+def list_emoji_catalog(
+    q: str = Query("", max_length=120),
+    limit: int = Query(60, ge=1, le=120),
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = EmojiPackService(db)
+    return _bundle(svc, current_user.id, svc.list_catalog(query=q, limit=limit))
+
+
+@router.get("/emoji/by-slug/{slug}", response_model=EmojiPackOut)
+def get_emoji_pack_by_slug(
+    slug: str,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = EmojiPackService(db)
+    pack = svc.get_pack_by_slug_for_user(current_user.id, slug)
+    if not pack:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "pack_not_found")
+    return _bundle(svc, current_user.id, [pack]).items[0]
+
+
+@router.post("/emoji/import/{slug}")
+def import_emoji_pack_by_slug(
+    slug: str,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = EmojiPackService(db)
+    pack = svc.get_pack_by_slug_for_user(current_user.id, slug)
+    if not pack:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "pack_not_found")
+    try:
+        svc.install_pack(current_user.id, pack.id)
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        code = str(exc)
+        if code == "pack_purchase_required":
+            raise HTTPException(
+                status.HTTP_402_PAYMENT_REQUIRED,
+                {"code": "pack_purchase_required", "message": "Сначала купите пак"},
+            )
+        raise HTTPException(status.HTTP_403_FORBIDDEN, code) from exc
+    return {"ok": True, "pack_id": pack.id}
+
+
+@router.get("/emoji/resolve")
+def resolve_custom_emojis(
+    ids: str = Query(""),
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = EmojiPackService(db)
+    raw = [part.strip() for part in (ids or "").split(",") if part.strip()]
+    parsed: list[int] = []
+    for part in raw[:80]:
+        try:
+            parsed.append(int(part))
+        except ValueError:
+            continue
+    rows = svc.resolve_emojis(parsed)
+    return {
+        "items": [
+            {"id": row.id, "media_url": row.media_url, "shortcode": row.shortcode}
+            for row in rows
+            if svc.can_view_emoji(current_user.id, row)
+        ]
+    }
+
+
+@router.get("/emoji/packs/{pack_id}", response_model=EmojiPackOut)
+def get_emoji_pack(
+    pack_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = EmojiPackService(db)
+    pack = svc.get_pack_for_user(current_user.id, pack_id)
+    if not pack:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "pack_not_found")
+    return _bundle(svc, current_user.id, [pack]).items[0]
+
+
+@router.post("/emoji/packs", response_model=EmojiPackOut)
+def create_emoji_pack(
+    body: CreateEmojiPackIn,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = EmojiPackService(db)
+    try:
+        pack = svc.create_pack(current_user.id, body.title, body.is_public)
+        db.commit()
+        db.refresh(pack)
+    except HTTPException:
+        db.rollback()
+        raise
+    except ValueError as exc:
+        db.rollback()
+        code = str(exc)
+        _raise_emoji_token(code)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, code) from exc
+    return _bundle(svc, current_user.id, [pack]).items[0]
+
+
+@router.patch("/emoji/packs/{pack_id}", response_model=EmojiPackOut)
+def update_emoji_pack(
+    pack_id: int,
+    body: UpdateEmojiPackIn,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = EmojiPackService(db)
+    try:
+        pack = svc.update_pack(
+            user_id=current_user.id,
+            pack_id=pack_id,
+            title=body.title,
+            is_public=body.is_public,
+        )
+        db.commit()
+        db.refresh(pack)
+    except ValueError as exc:
+        db.rollback()
+        code = str(exc)
+        if code == "pack_not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, code)
+        if code == "forbidden":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, code)
+        _raise_emoji_token(code)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, code) from exc
+    return _bundle(svc, current_user.id, [pack]).items[0]
+
+
+@router.post("/emoji/packs/{pack_id}/items", response_model=EmojiPackOut)
+def add_custom_emoji(
+    pack_id: int,
+    body: AddEmojiIn,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = EmojiPackService(db)
+    try:
+        svc.add_emoji(
+            user_id=current_user.id,
+            pack_id=pack_id,
+            media_url=body.media_url,
+            shortcode=body.shortcode,
+        )
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        code = str(exc)
+        if code == "pack_not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, code)
+        if code == "forbidden":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, code)
+        _raise_emoji_token(code)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, code) from exc
+    from app.models.emoji_pack import EmojiPack
+
+    pack = db.query(EmojiPack).filter(EmojiPack.id == pack_id).first()
+    if not pack:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "pack_not_found")
+    return _bundle(svc, current_user.id, [pack]).items[0]
+
+
+@router.delete("/emoji/packs/{pack_id}/items/{emoji_id}")
+def delete_custom_emoji(
+    pack_id: int,
+    emoji_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = EmojiPackService(db)
+    try:
+        svc.delete_emoji(current_user.id, pack_id, emoji_id)
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        code = str(exc)
+        if code in ("pack_not_found", "emoji_not_found"):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, code)
+        if code == "forbidden":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, code)
+        raise
+    return {"ok": True}
+
+
+@router.post("/emoji/packs/{pack_id}/items/reorder")
+def reorder_custom_emojis(
+    pack_id: int,
+    body: ReorderEmojisIn,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = EmojiPackService(db)
+    try:
+        svc.reorder_emojis(
+            user_id=current_user.id,
+            pack_id=pack_id,
+            emoji_ids=body.emoji_ids,
+        )
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        code = str(exc)
+        if code == "pack_not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, code)
+        if code == "forbidden":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, code)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, code) from exc
+    pack = svc.get_pack(pack_id)
+    if not pack:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "pack_not_found")
+    return _bundle(svc, current_user.id, [pack]).items[0]
+
+
+@router.post("/emoji/packs/{pack_id}/list")
+def list_emoji_pack_for_sale(
+    pack_id: int,
+    body: ListPriceIn,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    try:
+        pack = PackMarketplaceService(db).list_emoji_pack(
+            current_user.id, pack_id, body.price_stars
+        )
+        db.commit()
+        db.refresh(pack)
+    except HTTPException:
+        db.rollback()
+        raise
+    except ValueError as exc:
+        db.rollback()
+        code = str(exc)
+        if code == "pack_not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, code)
+        if code == "forbidden":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, code)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, code) from exc
+    svc = EmojiPackService(db)
+    return _bundle(svc, current_user.id, [pack]).items[0]
+
+
+@router.post("/emoji/packs/{pack_id}/buy")
+def buy_emoji_pack(
+    pack_id: int,
+    expected_price_stars: int | None = Query(None),
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    try:
+        result = PackMarketplaceService(db).buy_emoji_pack(
+            current_user.id,
+            pack_id,
+            expected_price_stars=expected_price_stars,
+        )
+        db.commit()
+        return result
+    except HTTPException:
+        db.rollback()
+        raise
+
+
+@router.post("/emoji/packs/{pack_id}/install")
+def install_emoji_pack(
+    pack_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = EmojiPackService(db)
+    try:
+        svc.install_pack(current_user.id, pack_id)
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        code = str(exc)
+        if code == "pack_not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, code)
+        if code == "pack_purchase_required":
+            raise HTTPException(
+                status.HTTP_402_PAYMENT_REQUIRED,
+                {"code": "pack_purchase_required", "message": "Сначала купите пак"},
+            )
+        raise HTTPException(status.HTTP_403_FORBIDDEN, code) from exc
+    return {"ok": True}
+
+
+@router.delete("/emoji/packs/{pack_id}/install")
+def uninstall_emoji_pack(
+    pack_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    EmojiPackService(db).uninstall_pack(current_user.id, pack_id)
+    db.commit()
+    return {"ok": True}

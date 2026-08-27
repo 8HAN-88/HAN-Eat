@@ -10,6 +10,8 @@ import '../../../services/chat_service.dart';
 import '../application/chat_open_direct.dart';
 import '../../../services/server_config.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../services/custom_emoji_registry.dart';
+import '../../../widgets/highlighted_text.dart';
 
 class ChatPeopleSearchScreen extends StatefulWidget {
   const ChatPeopleSearchScreen({super.key});
@@ -179,7 +181,13 @@ class _ChatPeopleSearchScreenState extends State<ChatPeopleSearchScreen> {
                 final user = _results[index];
                 return ListTile(
                   leading: _Avatar(user: user.brief),
-                  title: Text(user.brief.displayName),
+                  title: HighlightedText(
+                    text: user.brief.displayName,
+                    style: Theme.of(context).textTheme.bodyLarge ??
+                        const TextStyle(fontSize: 16),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   subtitle: user.username != null
                       ? Text('@${user.username}')
                       : null,
@@ -213,11 +221,7 @@ class _ChatPeopleSearchScreenState extends State<ChatPeopleSearchScreen> {
   }
 }
 
-String _avatarLetter(String value) {
-  final trimmed = value.trim();
-  if (trimmed.isEmpty) return '?';
-  return trimmed.characters.first.toUpperCase();
-}
+String _avatarLetter(String value) => avatarLetterWithCustomEmoji(value);
 
 class _Avatar extends StatelessWidget {
   const _Avatar({required this.user});

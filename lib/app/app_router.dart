@@ -36,6 +36,10 @@ import '../features/settings/presentation/account_security_screen.dart';
 import '../features/settings/presentation/two_factor_setup_screen.dart';
 import '../features/settings/presentation/close_friends_screen.dart';
 import '../features/settings/presentation/business_settings_screen.dart';
+import '../features/settings/presentation/pack_store_screen.dart';
+import '../features/settings/presentation/emoji_pack_manage_screen.dart';
+import '../features/settings/presentation/emoji_pack_preview_screen.dart';
+import '../features/chat/presentation/sticker_pack_preview_screen.dart';
 import '../features/posts/presentation/create_post_screen.dart';
 import '../features/community/presentation/community_upload_screen.dart';
 import '../features/posts/presentation/edit_profile_post_screen.dart';
@@ -103,6 +107,8 @@ String? parseDeepLinkToGoPath(String raw) {
             return UsernameDeepLinkRoute.pathFor(handle);
           }
         }
+        final packPath = _packStoreDeepLinkPath(uri.pathSegments);
+        if (packPath != null) return packPath;
         if (path.isNotEmpty && path != '/') {
           final q = uri.query;
           return q.isEmpty ? path : '$path?$q';
@@ -157,6 +163,12 @@ String? parseDeepLinkToGoPath(String raw) {
         return StarsWalletRoute.path;
       }
     }
+    if (uri.host == 'emoji' && uri.pathSegments.isNotEmpty) {
+      return EmojiPackPreviewRoute.pathFor(uri.pathSegments.first);
+    }
+    if (uri.host == 'stickers' && uri.pathSegments.isNotEmpty) {
+      return StickerPackPreviewRoute.pathFor(uri.pathSegments.first);
+    }
     if (uri.host == 'invite') {
       final ref = uri.queryParameters['ref'];
       if (ref != null && ref.isNotEmpty) {
@@ -180,6 +192,16 @@ String? parseDeepLinkToGoPath(String raw) {
       }
     }
   } catch (_) {}
+  return null;
+}
+
+String? _packStoreDeepLinkPath(List<String> segments) {
+  if (segments.length < 2) return null;
+  final kind = segments.first.toLowerCase();
+  final slug = segments[1].trim();
+  if (slug.isEmpty) return null;
+  if (kind == 'emoji') return EmojiPackPreviewRoute.pathFor(slug);
+  if (kind == 'stickers') return StickerPackPreviewRoute.pathFor(slug);
   return null;
 }
 
@@ -750,6 +772,36 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: BusinessSettingsRoute.name,
         pageBuilder: (context, state) =>
             const MaterialPage(child: BusinessSettingsScreen()),
+      ),
+      GoRoute(
+        path: PackStoreRoute.path,
+        name: PackStoreRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: PackStoreScreen()),
+      ),
+      GoRoute(
+        path: EmojiPackManageRoute.path,
+        name: EmojiPackManageRoute.name,
+        pageBuilder: (context, state) {
+          final id = int.tryParse(state.pathParameters['packId'] ?? '') ?? 0;
+          return MaterialPage(child: EmojiPackManageScreen(packId: id));
+        },
+      ),
+      GoRoute(
+        path: EmojiPackPreviewRoute.path,
+        name: EmojiPackPreviewRoute.name,
+        pageBuilder: (context, state) {
+          final slug = state.pathParameters['slug'] ?? '';
+          return MaterialPage(child: EmojiPackPreviewScreen(slug: slug));
+        },
+      ),
+      GoRoute(
+        path: StickerPackPreviewRoute.path,
+        name: StickerPackPreviewRoute.name,
+        pageBuilder: (context, state) {
+          final slug = state.pathParameters['slug'] ?? '';
+          return MaterialPage(child: StickerPackPreviewScreen(slug: slug));
+        },
       ),
       // Profile
       GoRoute(
@@ -1666,6 +1718,34 @@ class CloseFriendsRoute {
 class BusinessSettingsRoute {
   static const path = '/settings/business';
   static const name = 'business_settings';
+}
+
+class PackStoreRoute {
+  static const path = '/settings/pack-store';
+  static const name = 'pack_store';
+}
+
+class EmojiPackManageRoute {
+  static const path = '/settings/emoji-packs/:packId';
+  static const name = 'emoji_pack_manage';
+
+  static String pathFor(int packId) => '/settings/emoji-packs/$packId';
+}
+
+class EmojiPackPreviewRoute {
+  static const path = '/emoji/:slug';
+  static const name = 'emoji_pack_preview';
+
+  static String pathFor(String slug) =>
+      '/emoji/${Uri.encodeComponent(slug.trim())}';
+}
+
+class StickerPackPreviewRoute {
+  static const path = '/stickers/:slug';
+  static const name = 'sticker_pack_preview';
+
+  static String pathFor(String slug) =>
+      '/stickers/${Uri.encodeComponent(slug.trim())}';
 }
 
 class ProfileRoute {

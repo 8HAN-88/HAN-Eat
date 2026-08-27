@@ -31,6 +31,7 @@ from app.services.yookassa_service import get_yookassa_service
 from app.services.tbank_service import get_tbank_service
 from app.services.payment_success_handler import process_payment_succeeded
 from app.services.country_service import CountryService
+from app.services.emoji_pack_service import EmojiPackService
 from app.services.subscription_service import SubscriptionService
 from datetime import datetime, timedelta
 from app.services.notification_service import NotificationService
@@ -1325,6 +1326,7 @@ async def admin_process_refund(
     db: Session = Depends(get_db),
 ):
     """Провести возврат через Т-Банк или ЮKassa (только админ)."""
+    EmojiPackService(db).require_send_tokens_http(current_user.id, body.reason)
     sub = db.query(Subscription).filter(Subscription.id == body.subscription_id).first()
     if not sub:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscription not found")
@@ -1405,6 +1407,7 @@ async def admin_reject_refund(
     db: Session = Depends(get_db),
 ):
     """Отклонить запрос на возврат (только админ)."""
+    EmojiPackService(db).require_send_tokens_http(current_user.id, body.comment)
     sub = db.query(Subscription).filter(Subscription.id == body.subscription_id).first()
     if not sub:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscription not found")
@@ -1477,6 +1480,7 @@ async def request_payment_refund(
     db: Session = Depends(get_db),
 ):
     """Запрос возврата: создаёт тикет в поддержку и помечает подписку как requested."""
+    EmojiPackService(db).require_send_tokens_http(current_user.id, body.reason)
     sub = (
         db.query(Subscription)
         .filter(

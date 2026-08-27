@@ -14,6 +14,7 @@ from app.api.dependencies import get_current_user_required
 from app.models.user import User
 from app.models.subscription import Subscription
 from app.models.support_ticket import SupportTicket
+from app.services.emoji_pack_service import EmojiPackService
 from app.services.subscription_service import SubscriptionService
 
 router = APIRouter()
@@ -154,6 +155,11 @@ async def cancel_subscription(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    EmojiPackService(db).require_send_tokens_http(
+        current_user.id,
+        request.cancellation_reason,
+        request.improvement_feedback,
+    )
     subscription_service = SubscriptionService(db)
     subscription = subscription_service.get_user_subscription(current_user.id)
 

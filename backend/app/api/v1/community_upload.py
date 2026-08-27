@@ -222,6 +222,21 @@ async def upload_community_video(
     """
     Загрузить рилс: принять video_url (предпочтительно) или base64-видео, создать пост type=reel.
     """
+    from app.services.emoji_pack_service import (
+        EmojiPackService,
+        keep_or_preview_tokens,
+    )
+
+    emoji = EmojiPackService(db)
+    # Title / description / tags are the uploader's. `author` is prefilled
+    # from the channel or profile name — preview, do not 403.
+    emoji.require_send_tokens_http(
+        current_user.id,
+        request_body.title,
+        request_body.description,
+        *(request_body.tags or []),
+    )
+    author = keep_or_preview_tokens(emoji, current_user.id, request_body.author)
     video_url: Optional[str] = None
     thumbnail_url: Optional[str] = None
 
@@ -406,10 +421,13 @@ async def upload_community_video(
 
     created_at_ts = int(post.created_at.timestamp()) if post.created_at else 0
 
-    display_author = request_body.author
+    display_author = author
     display_avatar = None
     if channel is not None:
-        display_author = (channel.name or "").strip() or display_author
+        display_author = (
+            keep_or_preview_tokens(emoji, current_user.id, channel.name)
+            or display_author
+        )
         display_avatar = (
             normalize_media_url(channel.avatar_url) if channel.avatar_url else None
         )

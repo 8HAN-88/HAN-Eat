@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import '../services/custom_emoji_registry.dart';
+
 class ChatChecklistItem {
   const ChatChecklistItem({required this.text, this.done = false});
 
@@ -15,7 +17,8 @@ class ChatChecklist {
 
   int get doneCount => items.where((item) => item.done).length;
 
-  String get preview => '☑ $title ($doneCount/${items.length})';
+  String get preview =>
+      '☑ ${previewTextWithCustomEmoji(title)} ($doneCount/${items.length})';
 
   factory ChatChecklist.fromJson(Map<String, dynamic> json) {
     final raw = json['checklist'];

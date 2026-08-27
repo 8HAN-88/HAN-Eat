@@ -28,6 +28,8 @@ import '../../../utils/number_formatter.dart';
 import '../../../widgets/share_action_sheet.dart';
 import '../../../widgets/report_content_dialog.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../../widgets/custom_emoji_view.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../../../app/app_router.dart';
 import '../../../utils/post_publisher_display.dart';
 import '../../navigation/application/root_shell_chrome.dart';
@@ -1478,8 +1480,8 @@ class _ReelCardState extends ConsumerState<ReelCard>
                     Expanded(
                       child: GestureDetector(
                         onTap: widget.onAuthorTap,
-                        child: Text(
-                          PostPublisherDisplay.atLabel(reel),
+                        child: HighlightedText(
+                          text: PostPublisherDisplay.atLabel(reel),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
@@ -1530,8 +1532,9 @@ class _ReelCardState extends ConsumerState<ReelCard>
                     children: widget.reel.tags!.map((tag) {
                       return GestureDetector(
                         onTap: () => widget.onHashtagTap(tag),
-                        child: Text(
-                          '#$tag',
+                        child: HighlightedText(
+                          text: tag,
+                          leading: '#',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 14,
@@ -1557,10 +1560,87 @@ class _ReelCardState extends ConsumerState<ReelCard>
     );
   }
 
+  static final _customEmojiInWord = RegExp(r'\[\[e:(\d+)\]\]');
+
+  List<InlineSpan> _spansWithCustomEmoji(String source) {
+    final spans = <InlineSpan>[];
+    var start = 0;
+    for (final match in _customEmojiInWord.allMatches(source)) {
+      if (match.start > start) {
+        spans.add(TextSpan(text: source.substring(start, match.start)));
+      }
+      final id = int.tryParse(match.group(1) ?? '') ?? 0;
+      if (id > 0) {
+        spans.add(
+          WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 1),
+              child: CustomEmojiView(id: id, size: 18),
+            ),
+          ),
+        );
+      } else {
+        spans.add(TextSpan(text: match.group(0)));
+      }
+      start = match.end;
+    }
+    if (start < source.length) {
+      spans.add(TextSpan(text: source.substring(start)));
+    }
+    return spans;
+  }
+
   Widget _buildDescription(String description) {
     _clearDescriptionRecognizers();
     final words = description.split(' ');
     final accent = Theme.of(context).colorScheme.primary;
+    final children = <InlineSpan>[];
+    for (final word in words) {
+      if (word.startsWith('#')) {
+        final tag = word.substring(1).replaceAll(RegExp(r'[^\w]+$'), '');
+        if (tag.isEmpty) {
+          children.add(TextSpan(text: '$word '));
+          continue;
+        }
+        final r = TapGestureRecognizer()..onTap = () => widget.onHashtagTap(tag);
+        _descriptionRecognizers.add(r);
+        children.add(
+          TextSpan(
+            text: '$word ',
+            style: TextStyle(
+              color: accent,
+              fontWeight: FontWeight.w500,
+            ),
+            recognizer: r,
+          ),
+        );
+        continue;
+      }
+      if (word.startsWith('@')) {
+        final username =
+            word.substring(1).replaceAll(RegExp(r'[^\w._]+$'), '');
+        if (username.isEmpty) {
+          children.add(TextSpan(text: '$word '));
+          continue;
+        }
+        final r = TapGestureRecognizer()
+          ..onTap = () => widget.onMentionTap(username, widget.reel);
+        _descriptionRecognizers.add(r);
+        children.add(
+          TextSpan(
+            text: '$word ',
+            style: TextStyle(
+              color: accent,
+              fontWeight: FontWeight.w500,
+            ),
+            recognizer: r,
+          ),
+        );
+        continue;
+      }
+      children.addAll(_spansWithCustomEmoji('$word '));
+    }
     return RichText(
       text: TextSpan(
         style: const TextStyle(
@@ -1568,44 +1648,7 @@ class _ReelCardState extends ConsumerState<ReelCard>
           fontSize: 14,
           height: 1.4,
         ),
-        children: words.map((word) {
-          if (word.startsWith('#')) {
-            final tag = word.substring(1).replaceAll(RegExp(r'[^\w]+$'), '');
-            if (tag.isEmpty) {
-              return TextSpan(text: '$word ');
-            }
-            final r = TapGestureRecognizer()
-              ..onTap = () => widget.onHashtagTap(tag);
-            _descriptionRecognizers.add(r);
-            return TextSpan(
-              text: '$word ',
-              style: TextStyle(
-                color: accent,
-                fontWeight: FontWeight.w500,
-              ),
-              recognizer: r,
-            );
-          }
-          if (word.startsWith('@')) {
-            final username =
-                word.substring(1).replaceAll(RegExp(r'[^\w._]+$'), '');
-            if (username.isEmpty) {
-              return TextSpan(text: '$word ');
-            }
-            final r = TapGestureRecognizer()
-              ..onTap = () => widget.onMentionTap(username, widget.reel);
-            _descriptionRecognizers.add(r);
-            return TextSpan(
-              text: '$word ',
-              style: TextStyle(
-                color: accent,
-                fontWeight: FontWeight.w500,
-              ),
-              recognizer: r,
-            );
-          }
-          return TextSpan(text: '$word ');
-        }).toList(),
+        children: children,
       ),
       maxLines: 2,
       overflow: TextOverflow.ellipsis,

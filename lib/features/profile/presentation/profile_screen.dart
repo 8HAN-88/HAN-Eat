@@ -22,6 +22,9 @@ import '../../../models/chat_models.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:han_eat/widgets/app_avatar.dart';
 import 'package:han_eat/widgets/stars_pay_helper.dart';
+import 'package:han_eat/widgets/custom_emoji_view.dart';
+import 'package:han_eat/widgets/highlighted_text.dart';
+import 'package:han_eat/services/custom_emoji_registry.dart';
 import 'package:uuid/uuid.dart';
 import '../../navigation/application/shell_tab_visibility.dart';
 import 'package:han_eat/core/layout/floating_bottom_padding.dart';
@@ -29,6 +32,7 @@ import 'package:han_eat/widgets/app_empty_state.dart';
 import 'package:han_eat/widgets/app_gradient_background.dart';
 import 'package:han_eat/widgets/telegram_ui.dart';
 import '../../content/create_content_actions.dart';
+import '../../subscription/creator_upsell.dart';
 import '../../chat/presentation/widgets/star_gift_picker_sheet.dart';
 import '../../../utils/post_publisher_display.dart';
 
@@ -415,19 +419,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           child: Column(
             children: [
               if (intro.title.isNotEmpty)
-                Text(
-                  intro.title,
+                HighlightedText(
+                  text: intro.title,
                   textAlign: TextAlign.center,
                   style: textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+                        fontWeight: FontWeight.w800,
+                      ) ??
+                      const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
                 ),
               if (intro.text.isNotEmpty) ...[
                 if (intro.title.isNotEmpty) const SizedBox(height: 4),
-                Text(
-                  intro.text,
+                HighlightedText(
+                  text: intro.text,
                   textAlign: TextAlign.center,
-                  style: textTheme.bodyMedium,
+                  style: textTheme.bodyMedium ??
+                      const TextStyle(fontSize: 14),
                 ),
               ],
             ],
@@ -538,6 +547,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           );
         } catch (e) {
           if (!mounted) return;
+          if (offerFlexIfRequired(context, e)) return;
+          if (offerPackStoreIfRequired(context, e)) return;
           await showStarsRequiredSnack(context, e);
         }
       }());
@@ -553,6 +564,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       context.push(ChatThreadRoute.pathFor(conv), extra: conv);
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       await showStarsRequiredSnack(context, e);
     } finally {
       if (mounted) setState(() => _isSendingGift = false);
@@ -563,7 +576,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     if (_isSendingTip) return;
     final draft = await pickStarsTipDraft(
       context,
-      title: 'Отправить звёзды ${user.name}',
+      title: 'Отправить звёзды ${previewTextWithCustomEmoji(user.name)}',
       subtitle: 'Звёзды появятся сообщением в личке, как в Telegram.',
     );
     if (draft == null || !mounted) return;
@@ -589,6 +602,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       }
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       await showStarsRequiredSnack(context, e);
     } finally {
       if (mounted) setState(() => _isSendingTip = false);
@@ -598,12 +613,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   Future<void> _buyProfileGift(UserStarGift gift) async {
     final price = gift.listedStars ?? 0;
     if (price <= 0) return;
+    final fee = PaidFeaturesService.resaleFeeStars(price);
     final ok = await confirmStarsSpend(
       context,
-      title: 'Купить ${gift.title}',
-      body: gift.serialLabel.isNotEmpty
-          ? '${gift.emoji} ${gift.serialLabel}'
-          : gift.emoji,
+      title: 'Купить ${previewTextWithCustomEmoji(gift.title)}',
+      body: [
+        gift.serialLabel.isNotEmpty
+            ? '${gift.emoji} ${gift.serialLabel}'
+            : gift.emoji,
+        if (fee > 0) 'Комиссия площадки $fee ★ (уже в цене)',
+      ].join('\n'),
       amountStars: price,
       confirmLabel: 'Купить',
     );
@@ -612,7 +631,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       await PaidFeaturesService.buyListedGift(gift.id);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${gift.emoji} ${gift.title} теперь ваш')),
+        SnackBar(
+          content: Text(
+            '${gift.emoji} ${previewTextWithCustomEmoji(gift.title)} теперь ваш',
+          ),
+        ),
       );
       unawaited(_loadProfileGifts());
     } catch (e) {
@@ -626,6 +649,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     final sender = gift.senderLabel;
     final me = AuthService.instance.currentUser?.id;
     final canBuy = gift.isListed && me != null && me != gift.ownerId;
+    final listedPrice = gift.listedStars ?? 0;
+    final listedFee = PaidFeaturesService.resaleFeeStars(listedPrice);
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -639,10 +664,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               children: [
                 Text(gift.emoji, style: const TextStyle(fontSize: 48)),
                 const SizedBox(height: 8),
-                Text(
-                  gift.title,
+                HighlightedText(
+                  text: gift.title,
+                  textAlign: TextAlign.center,
                   style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w800,
+                      ) ??
+                      const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 22,
                       ),
                 ),
                 if (gift.serialLabel.isNotEmpty) ...[
@@ -666,15 +696,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 ),
                 if (sender.isNotEmpty) ...[
                   const SizedBox(height: 8),
-                  Text(
-                    'От $sender',
+                  HighlightedText(
+                    text: 'От $sender',
+                    textAlign: TextAlign.center,
                     style: TextStyle(color: scheme.onSurfaceVariant),
                   ),
                 ],
                 if (gift.note != null && gift.note!.trim().isNotEmpty) ...[
                   const SizedBox(height: 10),
-                  Text(
-                    gift.note!.trim(),
+                  HighlightedText(
+                    text: gift.note!.trim(),
                     textAlign: TextAlign.center,
                     style: TextStyle(color: scheme.onSurfaceVariant),
                   ),
@@ -682,7 +713,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 if (gift.isListed) ...[
                   const SizedBox(height: 12),
                   Text(
-                    'В продаже · ${gift.listedStars} ★',
+                    listedFee > 0
+                        ? 'В продаже · $listedPrice ★ · комиссия $listedFee ★'
+                        : 'В продаже · $listedPrice ★',
                     style: TextStyle(
                       color: scheme.secondary,
                       fontWeight: FontWeight.w800,
@@ -820,7 +853,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
-        title: Text(user.name),
+        title: HighlightedText(
+          text: user.name,
+          style: Theme.of(context).textTheme.titleLarge ??
+              const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: isOwnProfile
             ? [
                 NeoCircleAction(
@@ -945,30 +984,36 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Flexible(
-                        child: Text(
-                          (user.emojiStatus ?? '').isNotEmpty
-                              ? '${user.name} ${user.emojiStatus}'
-                              : user.name,
+                        child: HighlightedText(
+                          text: user.name,
                           textAlign: TextAlign.center,
                           style: textTheme.headlineSmall?.copyWith(
-                            color: () {
-                              final hex = profileColorHex(user.profileColor);
-                              if (hex.isEmpty) return scheme.onSurface;
-                              return Color(
-                                int.parse(hex.replaceFirst('#', '0xFF')),
-                              );
-                            }(),
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.7,
-                          ),
+                                color: () {
+                                  final hex = profileColorHex(user.profileColor);
+                                  if (hex.isEmpty) return scheme.onSurface;
+                                  return Color(
+                                    int.parse(hex.replaceFirst('#', '0xFF')),
+                                  );
+                                }(),
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.7,
+                              ) ??
+                              const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 24,
+                              ),
                         ),
                       ),
+                      if ((user.emojiStatus ?? '').trim().isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        StatusEmojiView(status: user.emojiStatus, size: 28),
+                      ],
                       if (worn != null) ...[
                         const SizedBox(width: 8),
                         Tooltip(
                           message: worn.serialLabel.isNotEmpty
-                              ? '${worn.title} ${worn.serialLabel}'
-                              : worn.title,
+                              ? '${previewTextWithCustomEmoji(worn.title)} ${worn.serialLabel}'
+                              : previewTextWithCustomEmoji(worn.title),
                           child: Text(
                             worn.emoji,
                             style: const TextStyle(fontSize: 28),
@@ -1004,13 +1049,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               ],
               if (user.bio != null && user.bio!.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.md),
-                Text(
-                  user.bio!,
+                HighlightedText(
+                  text: user.bio!,
                   textAlign: TextAlign.center,
                   style: textTheme.bodyMedium?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                    height: 1.35,
-                  ),
+                        color: scheme.onSurfaceVariant,
+                        height: 1.35,
+                      ) ??
+                      const TextStyle(height: 1.35),
                 ),
               ],
               ..._businessProfileWidgets(scheme, textTheme),
@@ -1050,9 +1096,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                             Tooltip(
                               message: () {
                                 final base = g.serialLabel.isNotEmpty
-                                    ? '${g.title} ${g.serialLabel} · ${g.stars} ★'
-                                    : '${g.title} · ${g.stars} ★';
-                                final sender = g.senderLabel;
+                                    ? '${previewTextWithCustomEmoji(g.title)} ${g.serialLabel} · ${g.stars} ★'
+                                    : '${previewTextWithCustomEmoji(g.title)} · ${g.stars} ★';
+                                final sender = previewTextWithCustomEmoji(
+                                  g.senderLabel,
+                                );
                                 return sender.isEmpty
                                     ? base
                                     : '$base · от $sender';

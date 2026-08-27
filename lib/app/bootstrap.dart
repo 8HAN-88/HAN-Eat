@@ -144,6 +144,11 @@ Future<void> bootstrapServicesDeferred() async {
       }),
     );
     unawaited(_warmApiConnection());
+    unawaited(
+      SubscriptionStatusCache.warmUp().catchError((Object e) {
+        debugPrint('SubscriptionStatusCache warmUp (web): $e');
+      }),
+    );
     unawaited(() async {
       try {
         await initializeDateFormatting('ru', null);

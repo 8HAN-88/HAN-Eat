@@ -61,41 +61,45 @@ def _bot_response(bot: User, *, token: Optional[str] = None) -> "BotResponse":
 # === Schemas ===
 
 class BotReplyButton(BaseModel):
-    text: str = Field(..., min_length=1, max_length=64)
+    text: str = Field(..., min_length=1, max_length=80)
 
 
 class BotCommandCreate(BaseModel):
     command: str = Field(..., min_length=1, max_length=32)
     description: str = Field(..., min_length=1, max_length=256)
-    response_text: Optional[str] = Field(None, max_length=2000)
+    response_text: Optional[str] = Field(None, max_length=2024)
     inline_buttons: Optional[List["BotInlineButton"]] = None
     inline_button_rows: Optional[List[List["BotInlineButton"]]] = None
     reply_buttons: Optional[List[BotReplyButton]] = None
     reply_button_rows: Optional[List[List[BotReplyButton]]] = None
     reply_keyboard_one_time: bool = False
     reply_keyboard_resize: bool = True
-    reply_keyboard_placeholder: Optional[str] = Field(None, max_length=64)
+    reply_keyboard_placeholder: Optional[str] = Field(None, max_length=80)
     remove_reply_keyboard: bool = False
 
 
 class BotInlineButton(BaseModel):
-    text: str = Field(..., min_length=1, max_length=64)
+    text: str = Field(..., min_length=1, max_length=80)
     callback_data: Optional[str] = Field(None, max_length=128)
     url: Optional[str] = Field(None, max_length=512)
-    callback_text: Optional[str] = Field(None, max_length=300)
+    callback_text: Optional[str] = Field(None, max_length=320)
     # Telegram WebApp button: open mini app by id (or nested {"url": "..."}).
     web_app: Optional[dict] = None
     miniapp_id: Optional[int] = Field(None, gt=0)
 
 
 def _button_item_from_inline(btn: BotInlineButton) -> dict:
-    item: dict = {"text": btn.text.strip()[:64]}
+    from app.services.emoji_pack_service import clip_preserving_custom_emoji
+
+    item: dict = {"text": clip_preserving_custom_emoji(btn.text.strip(), 64)}
     if btn.callback_data and btn.callback_data.strip():
         item["callback_data"] = btn.callback_data.strip()[:128]
     if btn.url and btn.url.strip():
         item["url"] = btn.url.strip()[:512]
     if btn.callback_text and btn.callback_text.strip():
-        item["callback_text"] = btn.callback_text.strip()[:300]
+        item["callback_text"] = clip_preserving_custom_emoji(
+            btn.callback_text.strip(), 300
+        )
     miniapp_id = btn.miniapp_id
     if miniapp_id is None and isinstance(btn.web_app, dict):
         raw_id = btn.web_app.get("miniapp_id") or btn.web_app.get("id")
@@ -119,6 +123,24 @@ def _button_item_from_inline(btn: BotInlineButton) -> dict:
             detail="Each inline button requires callback_data, url, or web_app/miniapp_id",
         )
     return item
+
+
+def _clip_bot_response_text(text: Optional[str]) -> Optional[str]:
+    from app.services.emoji_pack_service import clip_preserving_custom_emoji
+
+    return clip_preserving_custom_emoji((text or "").strip(), 2000) or None
+
+
+def _clip_reply_placeholder(text: Optional[str]) -> Optional[str]:
+    from app.services.emoji_pack_service import clip_preserving_custom_emoji
+
+    return clip_preserving_custom_emoji((text or "").strip(), 64) or None
+
+
+def _clip_bot_about(text: Optional[str]) -> Optional[str]:
+    from app.services.emoji_pack_service import clip_preserving_custom_emoji
+
+    return clip_preserving_custom_emoji((text or "").strip(), 120) or None
 
 
 def _normalize_inline_buttons(
@@ -157,11 +179,68 @@ def _normalize_reply_buttons(
     return normalize_reply_keyboard([[{"text": b.text} for b in buttons]])
 
 
+def _bot_command_text_parts(cmd) -> list:
+    parts = [
+        getattr(cmd, "description", None),
+        getattr(cmd, "response_text", None),
+        getattr(cmd, "reply_keyboard_placeholder", None),
+    ]
+
+    def add_inline(buttons) -> None:
+        if not buttons:
+            return
+        for button in buttons:
+            parts.append(getattr(button, "text", None))
+            parts.append(getattr(button, "callback_text", None))
+
+    def add_reply(buttons) -> None:
+        if not buttons:
+            return
+        for button in buttons:
+            parts.append(getattr(button, "text", None))
+
+    add_inline(getattr(cmd, "inline_buttons", None))
+    for row in getattr(cmd, "inline_button_rows", None) or []:
+        add_inline(row)
+    add_reply(getattr(cmd, "reply_buttons", None))
+    for row in getattr(cmd, "reply_button_rows", None) or []:
+        add_reply(row)
+    return parts
+
+
+def _require_bot_texts(db: Session, user_id: int, *parts: Optional[str]) -> None:
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(user_id, *parts)
+
+
+def _stored_button_texts(*blobs: Optional[str]) -> list:
+    texts: list = []
+    for blob in blobs:
+        if not blob:
+            continue
+        try:
+            data = json.loads(blob)
+        except (TypeError, ValueError):
+            continue
+        stack = [data]
+        while stack:
+            cur = stack.pop()
+            if isinstance(cur, list):
+                stack.extend(cur)
+            elif isinstance(cur, dict):
+                for key in ("text", "callback_text"):
+                    val = cur.get(key)
+                    if isinstance(val, str) and val.strip():
+                        texts.append(val)
+    return texts
+
+
 class BotCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=64)
     username: str = Field(..., min_length=3, max_length=32)
     description: Optional[str] = Field(None, max_length=1000)
-    short_description: Optional[str] = Field(None, max_length=120)
+    short_description: Optional[str] = Field(None, max_length=140)
     commands: List[BotCommandCreate] = Field(default_factory=list)
 
 
@@ -224,6 +303,18 @@ async def create_bot(
     if existing:
         raise HTTPException(status_code=400, detail="Бот с таким username уже существует")
 
+    command_parts: list = []
+    for cmd in payload.commands:
+        command_parts.extend(_bot_command_text_parts(cmd))
+    _require_bot_texts(
+        db,
+        current_user.id,
+        payload.name,
+        payload.description,
+        payload.short_description,
+        *command_parts,
+    )
+
     # Генерация токена
     bot_token = secrets.token_urlsafe(32)
 
@@ -237,7 +328,7 @@ async def create_bot(
         bot_token=bot_token,
         bot_username=username,
         bot_description=payload.description,
-        bot_short_description=payload.short_description,
+        bot_short_description=_clip_bot_about(payload.short_description),
         created_by_user_id=current_user.id,
     )
     db.add(bot_user)
@@ -283,13 +374,13 @@ async def create_bot(
             bot_id=bot_user.id,
             command=command_name,
             description=cmd.description,
-            response_text=cmd.response_text.strip()[:2000] if cmd.response_text else None,
+            response_text=_clip_bot_response_text(cmd.response_text),
             inline_buttons_json=json.dumps(inline_buttons, ensure_ascii=False) if inline_buttons else None,
             reply_buttons_json=json.dumps(reply_buttons, ensure_ascii=False) if reply_buttons else None,
             reply_keyboard_one_time=bool(cmd.reply_keyboard_one_time),
             reply_keyboard_resize=bool(cmd.reply_keyboard_resize),
-            reply_keyboard_placeholder=(
-                (cmd.reply_keyboard_placeholder or "").strip()[:64] or None
+            reply_keyboard_placeholder=_clip_reply_placeholder(
+                cmd.reply_keyboard_placeholder
             ),
             remove_reply_keyboard=bool(cmd.remove_reply_keyboard),
         ))
@@ -326,7 +417,7 @@ async def list_my_bots(
 class BotUpdateRequest(BaseModel):
     name: Optional[str] = Field(None, max_length=64)
     description: Optional[str] = Field(None, max_length=1000)
-    short_description: Optional[str] = Field(None, max_length=120)
+    short_description: Optional[str] = Field(None, max_length=140)
 
 
 @router.get("/{bot_id}", response_model=BotResponse)
@@ -347,13 +438,34 @@ async def update_bot(
     db: Session = Depends(get_db),
 ):
     bot = _bot_or_404(db, bot_id, current_user.id)
+    from app.services.emoji_pack_service import EmojiPackService, keep_if_unchanged_http
 
+    emoji = EmojiPackService(db)
+    # Flutter always resends name + descriptions together.
     if payload.name is not None:
-        bot.name = payload.name.strip() or bot.name
+        bot.name = (
+            keep_if_unchanged_http(
+                emoji, current_user.id, payload.name, bot.name
+            )
+            or ""
+        ).strip() or bot.name
     if payload.description is not None:
-        bot.bot_description = payload.description.strip() or None
+        bot.bot_description = keep_if_unchanged_http(
+            emoji, current_user.id, payload.description, bot.bot_description
+        )
+        if bot.bot_description is not None:
+            bot.bot_description = bot.bot_description.strip() or None
     if payload.short_description is not None:
-        bot.bot_short_description = payload.short_description.strip() or None
+        bot.bot_short_description = keep_if_unchanged_http(
+            emoji,
+            current_user.id,
+            payload.short_description,
+            bot.bot_short_description,
+        )
+        if bot.bot_short_description is not None:
+            bot.bot_short_description = (
+                _clip_bot_about(bot.bot_short_description)
+            )
 
     db.commit()
     db.refresh(bot)
@@ -613,6 +725,8 @@ async def add_bot_command(
     if existing:
         raise HTTPException(status_code=400, detail="Command already exists")
 
+    _require_bot_texts(db, current_user.id, *_bot_command_text_parts(cmd))
+
     inline_buttons = _normalize_inline_buttons(
         cmd.inline_buttons,
         cmd.inline_button_rows,
@@ -626,13 +740,13 @@ async def add_bot_command(
             bot_id=bot_id,
             command=cmd.command,
             description=cmd.description,
-            response_text=cmd.response_text.strip()[:2000] if cmd.response_text else None,
+            response_text=_clip_bot_response_text(cmd.response_text),
             inline_buttons_json=json.dumps(inline_buttons, ensure_ascii=False) if inline_buttons else None,
             reply_buttons_json=json.dumps(reply_buttons, ensure_ascii=False) if reply_buttons else None,
             reply_keyboard_one_time=bool(cmd.reply_keyboard_one_time),
             reply_keyboard_resize=bool(cmd.reply_keyboard_resize),
-            reply_keyboard_placeholder=(
-                (cmd.reply_keyboard_placeholder or "").strip()[:64] or None
+            reply_keyboard_placeholder=_clip_reply_placeholder(
+                cmd.reply_keyboard_placeholder
             ),
             remove_reply_keyboard=bool(cmd.remove_reply_keyboard),
         )
@@ -643,7 +757,7 @@ async def add_bot_command(
 
 class BotCommandUpdateRequest(BaseModel):
     description: Optional[str] = Field(None, min_length=1, max_length=256)
-    response_text: Optional[str] = Field(None, max_length=2000)
+    response_text: Optional[str] = Field(None, max_length=2024)
     inline_buttons: Optional[List["BotInlineButton"]] = None
     inline_button_rows: Optional[List[List["BotInlineButton"]]] = None
     clear_inline_buttons: bool = False
@@ -652,7 +766,7 @@ class BotCommandUpdateRequest(BaseModel):
     clear_reply_buttons: bool = False
     reply_keyboard_one_time: Optional[bool] = None
     reply_keyboard_resize: Optional[bool] = None
-    reply_keyboard_placeholder: Optional[str] = Field(None, max_length=64)
+    reply_keyboard_placeholder: Optional[str] = Field(None, max_length=80)
     remove_reply_keyboard: Optional[bool] = None
 
 
@@ -676,10 +790,47 @@ async def update_bot_command(
     ).first()
     if not cmd:
         raise HTTPException(status_code=404, detail="Command not found")
+    from app.services.emoji_pack_service import (
+        EmojiPackService,
+        keep_if_unchanged_http,
+        keep_if_unchanged_items,
+    )
+
+    emoji = EmojiPackService(db)
+    # Flutter always resends description / response / buttons together.
     if payload.description is not None:
-        cmd.description = payload.description.strip()
+        cmd.description = (
+            keep_if_unchanged_http(
+                emoji, current_user.id, payload.description, cmd.description
+            )
+            or payload.description
+        ).strip()
     if payload.response_text is not None:
-        cmd.response_text = payload.response_text.strip()[:2000] or None
+        resolved = keep_if_unchanged_http(
+            emoji, current_user.id, payload.response_text, cmd.response_text
+        )
+        cmd.response_text = _clip_bot_response_text(resolved)
+    if payload.reply_keyboard_placeholder is not None:
+        resolved = keep_if_unchanged_http(
+            emoji,
+            current_user.id,
+            payload.reply_keyboard_placeholder,
+            cmd.reply_keyboard_placeholder,
+        )
+        cmd.reply_keyboard_placeholder = _clip_reply_placeholder(resolved)
+    incoming_buttons = [
+        part
+        for part in _bot_command_text_parts(payload)[3:]
+        if part
+    ]
+    if incoming_buttons:
+        keep_if_unchanged_items(
+            emoji,
+            current_user.id,
+            incoming_buttons,
+            _stored_button_texts(cmd.inline_buttons_json, cmd.reply_buttons_json),
+            http=True,
+        )
     if payload.clear_inline_buttons:
         cmd.inline_buttons_json = None
     elif payload.inline_button_rows is not None or payload.inline_buttons is not None:
@@ -704,10 +855,6 @@ async def update_bot_command(
         cmd.reply_keyboard_one_time = bool(payload.reply_keyboard_one_time)
     if payload.reply_keyboard_resize is not None:
         cmd.reply_keyboard_resize = bool(payload.reply_keyboard_resize)
-    if payload.reply_keyboard_placeholder is not None:
-        cmd.reply_keyboard_placeholder = (
-            payload.reply_keyboard_placeholder.strip()[:64] or None
-        )
     if payload.remove_reply_keyboard is not None:
         cmd.remove_reply_keyboard = bool(payload.remove_reply_keyboard)
     db.commit()

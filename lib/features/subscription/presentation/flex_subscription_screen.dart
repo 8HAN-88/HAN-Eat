@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../services/flex_subscription_service.dart';
+import '../../../services/subscription_status_cache.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
+import '../../../widgets/highlighted_text.dart';
 import 'flex_gift_sheet.dart';
 import 'flex_preview_sheet.dart';
 
@@ -17,6 +19,7 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
   FlexMe? _me;
   String? _error;
   bool _loading = true;
+  bool _fromCache = false;
   bool _busy = false;
   int? _hoverLevel;
   FlexFeature? _dragging;
@@ -35,14 +38,28 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
     });
     try {
       final me = await FlexSubscriptionApi.me();
+      await SubscriptionStatusCache.refreshFromServer();
       if (!mounted) return;
       setState(() {
         _me = me;
         _plan = me.plan;
+        _fromCache = false;
+        _error = null;
         _loading = false;
       });
     } catch (e) {
+      final cached = await FlexMeCache.load();
       if (!mounted) return;
+      if (cached != null) {
+        setState(() {
+          _me = cached;
+          _plan = cached.plan;
+          _fromCache = true;
+          _error = null;
+          _loading = false;
+        });
+        return;
+      }
       setState(() {
         _error = userVisibleError(e);
         _loading = false;
@@ -55,9 +72,16 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
+  bool _requireOnline() {
+    if (!_fromCache) return true;
+    _toast('Нужна сеть для оплаты подписки');
+    return false;
+  }
+
   Future<void> _changeLevel(int level) async {
     final me = _me;
     if (me == null || _busy || _dragging != null) return;
+    if (!_requireOnline()) return;
     setState(() => _busy = true);
     try {
       final preview = await FlexSubscriptionApi.preview(level, plan: _plan);
@@ -88,6 +112,13 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
   }
 
   Future<void> _drop(FlexFeature feature, int level) async {
+    if (!_requireOnline()) {
+      setState(() {
+        _dragging = null;
+        _hoverLevel = null;
+      });
+      return;
+    }
     if (feature.assignedLevel == level) {
       setState(() {
         _dragging = null;
@@ -137,6 +168,18 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
 
   List<Widget> _ladder(FlexMe me) {
     final children = <Widget>[
+      if (_fromCache) ...[
+        Material(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+          child: const ListTile(
+            leading: Icon(Icons.wifi_off_outlined),
+            title: Text('Показаны сохранённые данные'),
+            subtitle: Text('Нет связи с сервером. Потяните вниз, чтобы обновить.'),
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
       _HeroCard(me: me),
       const SizedBox(height: 12),
       SegmentedButton<String>(
@@ -158,8 +201,14 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
           children: [
             for (final preset in me.presets)
               ActionChip(
-                label: Text('${preset.title} · ${preset.level}'),
-                onPressed: _busy ? null : () => _changeLevel(preset.level),
+                label: HighlightedText(
+                  text: '${preset.title} · ${preset.level}',
+                  style: Theme.of(context).textTheme.labelLarge ??
+                      const TextStyle(fontSize: 14),
+                ),
+                onPressed: _busy || _fromCache
+                    ? null
+                    : () => _changeLevel(preset.level),
               ),
           ],
         ),
@@ -195,6 +244,7 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
             FlexBlock(key: 'O', title: 'Ещё Premium', minLevel: 57, maxLevel: 60),
             FlexBlock(key: 'P', title: 'Бизнес', minLevel: 61, maxLevel: 64),
             FlexBlock(key: 'Q', title: 'Ещё бизнес', minLevel: 65, maxLevel: 68),
+            FlexBlock(key: 'R', title: 'Магазин', minLevel: 69, maxLevel: 72),
           ];
 
     for (final block in blocks) {
@@ -219,7 +269,7 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
           feature: me.nextFeature!,
           price: me.priceForPlan(me.nextLevel ?? (me.currentLevel + 1), _plan),
           yearly: _plan == 'yearly',
-          onOpen: _busy
+          onOpen: _busy || _fromCache
               ? null
               : () => _changeLevel(me.nextLevel ?? (me.currentLevel + 1)),
         ),
@@ -237,6 +287,7 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
     final invalidHover = dragging != null && hover && !dragging.canPlace(level);
     return DragTarget<FlexFeature>(
       onWillAcceptWithDetails: (details) {
+        if (_fromCache) return false;
         setState(() {
           _hoverLevel = level;
           _dragging = details.data;
@@ -273,7 +324,7 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
             type: MaterialType.transparency,
             child: InkWell(
               borderRadius: BorderRadius.circular(18),
-              onTap: _busy ? null : () => _changeLevel(level),
+              onTap: _busy || _fromCache ? null : () => _changeLevel(level),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
                 child: Column(
@@ -322,7 +373,10 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
                         style: TextStyle(color: scheme.onSurfaceVariant),
                       )
                     else
-                      _DraggableFeature(feature: feature),
+                      _DraggableFeature(
+                        feature: feature,
+                        enabled: !_fromCache,
+                      ),
                     if (invalidHover && dragging != null) ...[
                       const SizedBox(height: 6),
                       Text(
@@ -352,7 +406,7 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
         actions: [
           IconButton(
             tooltip: 'Подарить',
-            onPressed: me == null || _busy
+            onPressed: me == null || _busy || _fromCache
                 ? null
                 : () => showFlexGiftSheet(context, me: me, plan: _plan),
             icon: const Icon(Icons.card_giftcard_outlined),
@@ -397,11 +451,13 @@ class _BlockHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      'Блок ${block.key} · ${block.title} (${block.minLevel}–${block.maxLevel})',
+    return HighlightedText(
+      text:
+          'Блок ${block.key} · ${block.title} (${block.minLevel}–${block.maxLevel})',
       style: Theme.of(context).textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.w800,
-          ),
+          ) ??
+          const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
     );
   }
 }
@@ -447,8 +503,9 @@ class _LevelBadge extends StatelessWidget {
 }
 
 class _DraggableFeature extends StatelessWidget {
-  const _DraggableFeature({required this.feature});
+  const _DraggableFeature({required this.feature, this.enabled = true});
   final FlexFeature feature;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -457,14 +514,20 @@ class _DraggableFeature extends StatelessWidget {
       dense: true,
       contentPadding: EdgeInsets.zero,
       leading: Icon(locked ? Icons.lock_rounded : Icons.drag_indicator_rounded),
-      title: Text(feature.title),
+      title: HighlightedText(
+        text: feature.title,
+        style: Theme.of(context).textTheme.bodyLarge ??
+            const TextStyle(fontSize: 16),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
       subtitle: Text(
         locked
             ? 'Закреплена на уровне ${feature.assignedLevel}'
             : 'Можно на ${feature.minLevel}–${feature.maxLevel}',
       ),
     );
-    if (locked) return tile;
+    if (locked || !enabled) return tile;
     return LongPressDraggable<FlexFeature>(
       data: feature,
       feedback: Material(
@@ -532,9 +595,11 @@ class _HeroCard extends StatelessWidget {
           ),
           if (currentFeature != null && me.active) ...[
             const SizedBox(height: 4),
-            Text(
-              currentFeature.title,
-              style: TextStyle(color: scheme.onPrimaryContainer.withValues(alpha: 0.85)),
+            HighlightedText(
+              text: currentFeature.title,
+              style: TextStyle(
+                color: scheme.onPrimaryContainer.withValues(alpha: 0.85),
+              ),
             ),
           ],
           if (me.active && me.expiresAt != null) ...[
@@ -585,7 +650,12 @@ class _NextCta extends StatelessWidget {
           children: [
             const Text('Следующая возможность', style: TextStyle(fontWeight: FontWeight.w800)),
             const SizedBox(height: 6),
-            Text('🔓 ${feature.title}'),
+            HighlightedText(
+              text: feature.title,
+              leading: '🔓 ',
+              style: Theme.of(context).textTheme.bodyLarge ??
+                  const TextStyle(fontSize: 16),
+            ),
             const SizedBox(height: 4),
             Text(
               'Открой всего за +$step ₽/$unit. Итого $price ₽.',

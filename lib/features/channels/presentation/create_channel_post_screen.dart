@@ -7,6 +7,7 @@ import '../../subscription/creator_upsell.dart';
 import 'package:go_router/go_router.dart';
 import '../../settings/application/subscription_status_provider.dart';
 import '../../../widgets/create_poll_form_section.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../../../services/post_service.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
@@ -307,8 +308,8 @@ class _CreateChannelPostScreenState
                 ),
               ),
             if (image != null && image.isNotEmpty) const SizedBox(height: 8),
-            Text(
-              title ?? url,
+            HighlightedText(
+              text: title ?? url,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontWeight: FontWeight.w600),
@@ -316,8 +317,8 @@ class _CreateChannelPostScreenState
             if (description != null && description.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                  description,
+                child: HighlightedText(
+                  text: description,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -1053,6 +1054,8 @@ class _CreateChannelPostScreenState
       }
     } on ApiClientException catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       if (e.code == 'HAN_CREATOR_REQUIRED') {
         await showCreatorUpsell(context);
         return;
@@ -1067,6 +1070,8 @@ class _CreateChannelPostScreenState
       );
     } catch (e) {
       if (mounted) {
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -1178,11 +1183,12 @@ class _CreateChannelPostScreenState
               ),
               const SizedBox(height: 16),
             ] else if (_isPollMode && widget.postId != null) ...[
-              Text(
-                _pollQuestionController.text.trim().isEmpty
+              HighlightedText(
+                text: _pollQuestionController.text.trim().isEmpty
                     ? 'Опрос'
                     : _pollQuestionController.text.trim(),
-                style: Theme.of(context).textTheme.titleMedium,
+                style: Theme.of(context).textTheme.titleMedium ??
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 8),
               Text(

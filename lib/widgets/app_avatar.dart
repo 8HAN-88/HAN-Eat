@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../services/custom_emoji_registry.dart';
 import '../services/server_config.dart';
 
 /// Resolved [ImageProvider] for user/channel avatars (media URL fixup + CORS proxy on web).
@@ -77,8 +78,7 @@ class AppUserAvatar extends StatelessWidget {
     final background = _isAnimatedGif
         ? null
         : resolvedAvatarImage(imageUrl, decodeWidth: decodeWidth);
-    final name = displayName.trim();
-    final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+    final initial = avatarLetterWithCustomEmoji(displayName);
     final scheme = Theme.of(context).colorScheme;
     final raw = imageUrl?.trim();
     final gifUrl = _isAnimatedGif && raw != null && raw.isNotEmpty

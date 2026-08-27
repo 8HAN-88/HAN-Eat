@@ -8,8 +8,11 @@ import '../../../models/sticker_models.dart';
 import '../../../services/media_upload_service.dart';
 import '../../../services/server_config.dart';
 import '../../../services/sticker_service.dart';
+import '../../../services/share_link_service.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../utils/api_error_parser.dart';
-import '../../../services/subscription_status_cache.dart';
+import '../../../widgets/highlighted_text.dart';
+import '../../../widgets/stars_pay_helper.dart';
 import '../../subscription/creator_upsell.dart';
 
 class StickerPackManageScreen extends StatefulWidget {
@@ -56,7 +59,7 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
 
   Future<void> _editPack() async {
     final pack = _pack;
-    if (pack == null) return;
+    if (pack == null || !pack.isOwned) return;
     final titleCtrl = TextEditingController(text: pack.title);
     var isPublic = pack.isPublic;
     var isPremium = pack.isPremium;
@@ -70,7 +73,6 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
             children: [
               TextField(
                 controller: titleCtrl,
-                maxLength: 120,
                 decoration: const InputDecoration(labelText: 'Название'),
               ),
               SwitchListTile(
@@ -134,7 +136,7 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
 
   Future<void> _deleteSticker(StickerItem item) async {
     final pack = _pack;
-    if (pack == null) return;
+    if (pack == null || !pack.isOwned) return;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -271,8 +273,65 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
     }
   }
 
+  Future<void> _setSalePrice() async {
+    final pack = _pack;
+    if (pack == null || !pack.isOwned) return;
+    final ctrl = TextEditingController(
+      text: pack.priceStars > 0 ? '${pack.priceStars}' : '',
+    );
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Цена в магазине'),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Stars (0 — снять с витрины)',
+            helperText: 'Комиссия 5%, до 20 ★ бесплатно. Снять пак можно без flex.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final price = int.tryParse(ctrl.text.trim()) ?? 0;
+    if (price > 0 && !hasFlexFeature('sticker_pack_sell')) {
+      await showCreatorUpsell(context);
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      final updated = await StickerService.listPackForSale(
+        packId: pack.id,
+        priceStars: price < 0 ? 0 : price,
+      );
+      if (!mounted) return;
+      setState(() {
+        _pack = updated;
+        _saving = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      if (offerFlexIfRequired(context, e)) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
   Future<void> _showAddStickerMenu() async {
-    if (_pack == null || _saving) return;
+    if (_pack == null || !_pack!.isOwned || _saving) return;
     final choice = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
@@ -305,23 +364,87 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
     }
   }
 
-  Future<void> _onReorder(int oldIndex, int newIndex) async {
+  Future<void> _buy() async {
+    final pack = _pack;
+    if (pack == null || pack.isOwned || pack.isPurchased) return;
+    if (pack.priceStars <= 0) return;
+    final ok = await confirmStarsSpend(
+      context,
+      title: 'Купить «${previewTextWithCustomEmoji(pack.title)}»',
+      body: pack.ownerName.trim().isEmpty
+          ? '${pack.priceStars} ★'
+          : 'Автор ${previewTextWithCustomEmoji(pack.ownerName)} · комиссия ${pack.feeStars} ★',
+      amountStars: pack.priceStars,
+      confirmLabel: 'Купить',
+    );
+    if (!ok || !mounted) return;
+    setState(() => _saving = true);
+    try {
+      await StickerService.buyPack(
+        pack.id,
+        expectedPriceStars: pack.priceStars,
+      );
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      if (offerPackStoreIfRequired(context, e)) return;
+      await showStarsRequiredSnack(context, e);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _installFree() async {
     final pack = _pack;
     if (pack == null) return;
+    if (pack.isPremium && !hasFlexFeature('premium_stickers')) {
+      await showCreatorUpsell(context);
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await StickerService.installPack(pack.id);
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _uninstall() async {
+    final pack = _pack;
+    if (pack == null || pack.isOwned || !pack.isInstalled) return;
+    setState(() => _saving = true);
+    try {
+      await StickerService.uninstallPack(pack.id);
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _onReorder(int oldIndex, int newIndex) async {
+    final pack = _pack;
+    if (pack == null || !pack.isOwned) return;
     final items = [...pack.stickers];
     if (newIndex > oldIndex) newIndex -= 1;
     final moved = items.removeAt(oldIndex);
     items.insert(newIndex, moved);
     setState(() {
-      _pack = StickerPack(
-        id: pack.id,
-        title: pack.title,
-        slug: pack.slug,
-        ownerUserId: pack.ownerUserId,
-        isPublic: pack.isPublic,
-        isInstalled: pack.isInstalled,
+      _pack = pack.copyWith(
         stickers: items,
-        stickersCount: pack.stickersCount,
+        stickersCount: items.length,
       );
     });
     try {
@@ -348,24 +471,36 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
           IconButton(
             onPressed: (_saving || pack?.shareLink == null)
                 ? null
-                : () => Share.share(pack!.shareLink!),
+                : () => Share.share(
+                    ShareLinkService.packShareText(
+                      pack!.shareLink!,
+                      isPublic: pack.isPublic,
+                    ),
+                  ),
             icon: const Icon(Icons.share_outlined),
             tooltip: 'Поделиться паком',
           ),
-          IconButton(
-            onPressed: (_saving || pack == null) ? null : _editPack,
-            icon: const Icon(Icons.edit_outlined),
-            tooltip: 'Редактировать',
-          ),
+          if (pack?.isOwned == true)
+            IconButton(
+              onPressed: _saving ? null : _setSalePrice,
+              icon: const Icon(Icons.sell_outlined),
+              tooltip: 'Цена в магазине',
+            ),
+          if (pack?.isOwned == true)
+            IconButton(
+              onPressed: _saving ? null : _editPack,
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: 'Редактировать',
+            ),
         ],
       ),
-      floatingActionButton: pack == null
-          ? null
-          : FloatingActionButton(
+      floatingActionButton: pack?.isOwned == true
+          ? FloatingActionButton(
               onPressed: _saving ? null : _showAddStickerMenu,
               tooltip: 'Добавить стикер',
               child: const Icon(Icons.add),
-            ),
+            )
+          : null,
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : (pack == null
@@ -378,23 +513,66 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
                       child: Row(
                         children: [
                           Expanded(
-                            child: Text(
-                              '${pack.title} · ${pack.stickers.length} стик.',
-                              style: Theme.of(context).textTheme.titleMedium,
+                            child: HighlightedText(
+                              text:
+                                  '${pack.title} · ${pack.stickers.length} стик.',
+                              style: Theme.of(context).textTheme.titleMedium ??
+                                  const TextStyle(fontSize: 16),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           Text(
-                            pack.isPublic ? 'Публичный' : 'Приватный',
+                            pack.priceStars > 0
+                                ? '${pack.priceStars} ★'
+                                : (pack.isPublic ? 'Публичный' : 'Приватный'),
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                         ],
                       ),
                     ),
+                    if (!pack.isOwned &&
+                        !pack.isPurchased &&
+                        pack.isOnSale)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: FilledButton(
+                            onPressed: _saving ? null : _buy,
+                            child: Text('Купить ${pack.priceStars} ★'),
+                          ),
+                        ),
+                      )
+                    else if (!pack.isOwned &&
+                        !pack.isInstalled &&
+                        (pack.priceStars <= 0 || pack.isPurchased))
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: FilledButton(
+                            onPressed: _saving ? null : _installFree,
+                            child: const Text('Установить'),
+                          ),
+                        ),
+                      )
+                    else if (!pack.isOwned && pack.isInstalled)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton(
+                            onPressed: _saving ? null : _uninstall,
+                            child: const Text('Удалить из своих'),
+                          ),
+                        ),
+                      ),
                     Expanded(
                       child: ReorderableListView.builder(
                         padding: const EdgeInsets.fromLTRB(12, 0, 12, 88),
                         itemCount: pack.stickers.length,
-                        onReorder: _onReorder,
+                        onReorder: pack.isOwned ? _onReorder : (_, __) {},
                         itemBuilder: (context, index) {
                           final item = pack.stickers[index];
                           return ListTile(
@@ -410,17 +588,24 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
                                     const Icon(Icons.broken_image_outlined),
                               ),
                             ),
-                            title: Text(
-                              item.emoji?.trim().isNotEmpty == true
+                            title: HighlightedText(
+                              text: item.emoji?.trim().isNotEmpty == true
                                   ? item.emoji!
                                   : 'Стикер #${item.id}',
+                              style: Theme.of(context).textTheme.bodyLarge ??
+                                  const TextStyle(fontSize: 16),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             subtitle: Text(item.stickerType),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.delete_outline),
-                              onPressed:
-                                  _saving ? null : () => _deleteSticker(item),
-                            ),
+                            trailing: pack.isOwned
+                                ? IconButton(
+                                    icon: const Icon(Icons.delete_outline),
+                                    onPressed: _saving
+                                        ? null
+                                        : () => _deleteSticker(item),
+                                  )
+                                : null,
                           );
                         },
                       ),

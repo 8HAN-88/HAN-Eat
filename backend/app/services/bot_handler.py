@@ -13,6 +13,51 @@ from app.models.miniapp import BotMiniApp
 from app.services.analytics_service import AnalyticsService
 
 
+def _text_for_bot_owner(db: Session, bot: User, text: Optional[str]) -> str:
+    raw = (text or "").strip()
+    if not raw:
+        return raw
+    owner_id = int(getattr(bot, "created_by_user_id", 0) or 0)
+    if owner_id <= 0:
+        return raw
+    from app.services.emoji_pack_service import (
+        EmojiPackService,
+        keep_or_preview_tokens,
+    )
+
+    # Owner text copied into the chat as the bot — do not 403 the
+    # peer, and do not truncate a long reply to 120 / «Сообщение».
+    return keep_or_preview_tokens(EmojiPackService(db), owner_id, raw) or raw
+
+
+def _keyboard_for_bot_owner(
+    db: Session,
+    bot: User,
+    keyboard: Optional[List[List[Dict[str, Any]]]],
+) -> Optional[List[List[Dict[str, Any]]]]:
+    if not keyboard:
+        return keyboard
+    out: List[List[Dict[str, Any]]] = []
+    for row in keyboard:
+        if not isinstance(row, list):
+            continue
+        out_row: List[Dict[str, Any]] = []
+        for btn in row:
+            if not isinstance(btn, dict):
+                continue
+            clean = dict(btn)
+            if clean.get("text"):
+                clean["text"] = _text_for_bot_owner(db, bot, str(clean["text"]))
+            if clean.get("callback_text"):
+                clean["callback_text"] = _text_for_bot_owner(
+                    db, bot, str(clean["callback_text"])
+                )
+            out_row.append(clean)
+        if out_row:
+            out.append(out_row)
+    return out or None
+
+
 def _find_bot_in_conversation(db: Session, conversation_id: int) -> Optional[User]:
     members = db.query(ConversationMember).filter(
         ConversationMember.conversation_id == conversation_id
@@ -27,7 +72,25 @@ def _find_bot_in_conversation(db: Session, conversation_id: int) -> Optional[Use
     return None
 
 
+def _bot_for_callback(db: Session, source_message: Message) -> Optional[User]:
+    """Prefer the bot that sent the keyboard, not the first bot in the chat.
+
+    Groups can have several bots. Old messages stay tappable after the bot
+    leaves — look up the sender even if they are no longer a member.
+    """
+    sender = (
+        db.query(User)
+        .filter(User.id == source_message.sender_id, User.is_bot == True)
+        .first()
+    )
+    if sender:
+        return sender
+    return _find_bot_in_conversation(db, source_message.conversation_id)
+
+
 def _normalize_inline_buttons(raw: Any) -> Optional[List[List[Dict[str, Any]]]]:
+    from app.services.emoji_pack_service import clip_preserving_custom_emoji
+
     if not raw:
         return None
     source = raw
@@ -46,7 +109,7 @@ def _normalize_inline_buttons(raw: Any) -> Optional[List[List[Dict[str, Any]]]]:
         for btn in row:
             if not isinstance(btn, dict):
                 continue
-            text = str(btn.get("text") or "").strip()[:64]
+            text = clip_preserving_custom_emoji(str(btn.get("text") or "").strip(), 64)
             if not text:
                 continue
             callback_data = btn.get("callback_data")
@@ -60,7 +123,9 @@ def _normalize_inline_buttons(raw: Any) -> Optional[List[List[Dict[str, Any]]]]:
             if isinstance(url, str) and url.strip():
                 clean["url"] = url.strip()[:512]
             if isinstance(callback_text, str) and callback_text.strip():
-                clean["callback_text"] = callback_text.strip()[:300]
+                clean["callback_text"] = clip_preserving_custom_emoji(
+                    callback_text.strip(), 300
+                )
             if miniapp_id is None and isinstance(web_app, dict):
                 raw_id = web_app.get("miniapp_id") or web_app.get("id")
                 try:
@@ -215,7 +280,11 @@ def process_message_for_bot(db: Session, conversation_id: int, sender_id: int, c
     reply_keyboard_update: Optional[dict] = None
     if cmd_row:
         reply_text = (cmd_row.response_text or "").strip() or cmd_row.description
-        keyboard = _normalize_inline_buttons(getattr(cmd_row, "inline_buttons_json", None))
+        keyboard = _keyboard_for_bot_owner(
+            db,
+            bot,
+            _normalize_inline_buttons(getattr(cmd_row, "inline_buttons_json", None)),
+        )
         if keyboard:
             inline_keyboard_json = json.dumps(keyboard, ensure_ascii=False)
         from app.services.reply_keyboard_service import (
@@ -239,13 +308,21 @@ def process_message_for_bot(db: Session, conversation_id: int, sender_id: int, c
                 "remove_reply_keyboard": True,
             }
         else:
-            reply_kb = normalize_reply_keyboard(
-                getattr(cmd_row, "reply_buttons_json", None)
+            reply_kb = _keyboard_for_bot_owner(
+                db,
+                bot,
+                normalize_reply_keyboard(
+                    getattr(cmd_row, "reply_buttons_json", None)
+                ),
             )
             if reply_kb:
                 one_time = bool(getattr(cmd_row, "reply_keyboard_one_time", False))
                 resize = bool(getattr(cmd_row, "reply_keyboard_resize", True))
-                placeholder = getattr(cmd_row, "reply_keyboard_placeholder", None)
+                placeholder = _text_for_bot_owner(
+                    db,
+                    bot,
+                    getattr(cmd_row, "reply_keyboard_placeholder", None),
+                )
                 set_member_reply_keyboard(
                     db,
                     conversation_id=conversation_id,
@@ -286,6 +363,8 @@ def process_message_for_bot(db: Session, conversation_id: int, sender_id: int, c
     else:
         reply_text = "Неизвестная команда. Напишите /help"
 
+    reply_text = _text_for_bot_owner(db, bot, reply_text)
+
     # Создаём сообщение от имени бота
     bot_msg = Message(
         conversation_id=conversation_id,
@@ -308,13 +387,14 @@ def process_callback_for_bot(
     source_message: Message,
     callback_data: str,
 ) -> Optional[Tuple[Message, str]]:
-    bot = _find_bot_in_conversation(db, conversation_id)
+    bot = _bot_for_callback(db, source_message)
     if not bot:
         return None
     keyboard = _normalize_inline_buttons(source_message.inline_keyboard_json)
     reply_text = _button_callback_reply(keyboard, callback_data.strip())
     if not reply_text:
         return None
+    reply_text = _text_for_bot_owner(db, bot, reply_text)
     bot_msg = Message(
         conversation_id=conversation_id,
         sender_id=bot.id,

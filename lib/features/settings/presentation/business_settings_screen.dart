@@ -6,6 +6,7 @@ import '../../../services/auth_service.dart';
 import '../../../services/user_service.dart';
 import '../../bots/data/bot_models.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../../subscription/creator_upsell.dart';
 import '../application/dm_privacy.dart';
 
@@ -165,6 +166,7 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
       if (!mounted) return;
       setState(() => _busy = false);
       if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -204,7 +206,9 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
     if (_has(slug)) return child;
     return Column(
       children: [
-        child,
+        IgnorePointer(
+          child: Opacity(opacity: 0.55, child: child),
+        ),
         ListTile(
           leading: const Icon(Icons.lock_outline),
           title: const Text('Нужна подписка'),
@@ -492,7 +496,6 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
                               const SizedBox(height: 8),
                               TextField(
                                 controller: _introTitleCtrl,
-                                maxLength: 40,
                                 decoration: const InputDecoration(
                                   labelText: 'Заголовок',
                                 ),
@@ -543,7 +546,13 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
                             ),
                             for (final bot in _bots)
                               RadioListTile<int?>(
-                                title: Text(bot.name),
+                                title: HighlightedText(
+                                  text: bot.name,
+                                  style: Theme.of(context).textTheme.bodyLarge ??
+                                      const TextStyle(fontSize: 16),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                                 subtitle: Text('@${bot.username}'),
                                 value: bot.id,
                                 groupValue: _supportBotId,
@@ -564,7 +573,13 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
                             if (_supportBotName != null &&
                                 _bots.every((b) => b.id != _supportBotId))
                               ListTile(
-                                title: Text(_supportBotName!),
+                                title: HighlightedText(
+                                  text: _supportBotName!,
+                                  style: Theme.of(context).textTheme.bodyLarge ??
+                                      const TextStyle(fontSize: 16),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                                 subtitle: const Text('Текущий бот'),
                               ),
                           ],

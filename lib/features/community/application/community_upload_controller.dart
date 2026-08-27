@@ -12,6 +12,7 @@ class CommunityUploadState {
     required this.error,
     required this.success,
     this.progress,
+    this.lastError,
   });
 
   factory CommunityUploadState.initial() => const CommunityUploadState(
@@ -19,24 +20,29 @@ class CommunityUploadState {
         error: null,
         success: false,
         progress: null,
+        lastError: null,
       );
 
   final bool uploading;
   final String? error;
   final bool success;
   final double? progress;
+  final Object? lastError;
 
   CommunityUploadState copyWith({
     bool? uploading,
     String? error,
     bool? success,
     double? progress,
+    Object? lastError,
+    bool clearLastError = false,
   }) {
     return CommunityUploadState(
       uploading: uploading ?? this.uploading,
       error: error,
       success: success ?? this.success,
       progress: progress,
+      lastError: clearLastError ? null : (lastError ?? this.lastError),
     );
   }
 }
@@ -66,6 +72,7 @@ class CommunityUploadController
       error: null,
       success: false,
       progress: 0,
+      clearLastError: true,
     );
     try {
       final videoUpload = await MediaUploadService.uploadMediaFile(
@@ -119,6 +126,7 @@ class CommunityUploadController
         error: e.message,
         success: false,
         progress: null,
+        lastError: e,
       );
       return false;
     } catch (e) {
@@ -127,6 +135,7 @@ class CommunityUploadController
         error: userVisibleError(e, fallback: 'Не удалось загрузить ролик'),
         success: false,
         progress: null,
+        lastError: e,
       );
       return false;
     }

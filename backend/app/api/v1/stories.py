@@ -45,7 +45,7 @@ class StoryReactionSummary(BaseModel):
 
 
 class StoryReactionRequest(BaseModel):
-    emoji: str = Field(..., min_length=1, max_length=16)
+    emoji: str = Field(..., min_length=1, max_length=32)
 
 
 class StoryResponse(BaseModel):
@@ -320,6 +320,10 @@ async def create_story(
     from app.services.subscription_service import SubscriptionService
 
     billing = SubscriptionService(db)
+    caption = (payload.caption or "").strip() or None
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(current_user.id, caption)
     if visibility == "close_friends":
         billing.require_feature(
             current_user.id,
@@ -327,7 +331,6 @@ async def create_story(
             "Сторис для близких доступны с уровня 20",
         )
     hours = 48 if billing.has_feature(current_user.id, "longer_stories") else 24
-    caption = (payload.caption or "").strip() or None
     if caption and len(caption) > 500:
         billing.require_feature(
             current_user.id,
@@ -490,8 +493,14 @@ async def set_story_reaction(
         raise HTTPException(status_code=400, detail="Cannot react to your own story")
 
     emoji = (payload.emoji or "").strip()
-    if not emoji or len(emoji) > 16:
+    if not emoji or len(emoji) > 32:
         raise HTTPException(status_code=400, detail="Invalid emoji")
+
+    from app.services.emoji_pack_service import EmojiPackService
+
+    custom = EmojiPackService(db).require_reaction_http(current_user.id, emoji)
+    if custom:
+        emoji = custom
 
     existing = (
         db.query(StoryReaction)

@@ -23,8 +23,15 @@ def _assign_post_body(post: Any, body: Dict[str, Any]) -> None:
 
 
 def build_poll_body(question: str, option_texts: List[str]) -> Dict[str, Any]:
-    q = (question or "").strip()
-    opts = [t.strip() for t in option_texts if t and t.strip()]
+    from app.services.emoji_pack_service import clip_preserving_custom_emoji
+
+    q = clip_preserving_custom_emoji((question or "").strip(), 300)
+    opts = [
+        clip_preserving_custom_emoji(t.strip(), 120)
+        for t in option_texts
+        if t and t.strip()
+    ]
+    opts = [t for t in opts if t]
     if len(q) < 1:
         raise ValueError("Poll question is required")
     if len(opts) < 2:

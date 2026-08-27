@@ -4,6 +4,7 @@ import '../models/post.dart';
 import '../services/post_service.dart';
 import '../utils/api_error_parser.dart';
 import 'app_avatar.dart';
+import 'highlighted_text.dart';
 
 /// Опрос в посте ленты / канала с возможностью голосования.
 class PostPollSection extends StatefulWidget {
@@ -141,11 +142,21 @@ class _PostPollSectionState extends State<PostPollSection> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            '${option.text} (${option.voters.length})',
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w600,
+                          HighlightedText(
+                            text: option.text,
+                            trailing: Text(
+                              ' (${option.voters.length})',
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
+                            style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ) ??
+                                const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
                           ),
                           const SizedBox(height: 8),
                           if (option.voters.isEmpty)
@@ -171,7 +182,13 @@ class _PostPollSectionState extends State<PostPollSection> {
                                     ? const Icon(Icons.person, size: 16)
                                     : null,
                               ),
-                              title: Text(voter.name),
+                              title: HighlightedText(
+                                text: voter.name,
+                                style: Theme.of(context).textTheme.bodyLarge ??
+                                    const TextStyle(fontSize: 16),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                               subtitle: (username != null && username.isNotEmpty)
                                   ? Text('@$username')
                                   : null,
@@ -262,11 +279,12 @@ class _PostPollSectionState extends State<PostPollSection> {
                 ],
               ),
               const SizedBox(height: 10),
-              Text(
-                _poll.question,
+              HighlightedText(
+                text: _poll.question,
                 style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+                      fontWeight: FontWeight.w600,
+                    ) ??
+                    const TextStyle(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 14),
               if (_poll.hasVoted && !_poll.isClosed)
@@ -307,9 +325,10 @@ class _PostPollSectionState extends State<PostPollSection> {
                               color: theme.colorScheme.outlineVariant,
                             ),
                           ),
-                          child: Text(
-                            option.text,
-                            style: theme.textTheme.bodyMedium,
+                          child: HighlightedText(
+                            text: option.text,
+                            style: theme.textTheme.bodyMedium ??
+                                const TextStyle(fontSize: 14),
                           ),
                         ),
                       ),
@@ -339,13 +358,14 @@ class _PostPollSectionState extends State<PostPollSection> {
                                   ),
                                 ),
                               Expanded(
-                                child: Text(
-                                  option.text,
+                                child: HighlightedText(
+                                  text: option.text,
                                   style: theme.textTheme.bodyMedium?.copyWith(
-                                    fontWeight: isSelected
-                                        ? FontWeight.w600
-                                        : FontWeight.normal,
-                                  ),
+                                        fontWeight: isSelected
+                                            ? FontWeight.w600
+                                            : FontWeight.normal,
+                                      ) ??
+                                      const TextStyle(fontSize: 14),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),

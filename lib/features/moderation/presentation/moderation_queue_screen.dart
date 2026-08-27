@@ -7,6 +7,8 @@ import 'package:intl/intl.dart';
 import '../../../app/app_router.dart';
 import '../../../../services/moderation_service.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../../widgets/highlighted_text.dart';
+import '../../subscription/creator_upsell.dart';
 
 class ModerationQueueScreen extends ConsumerStatefulWidget {
   const ModerationQueueScreen({super.key});
@@ -165,6 +167,8 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
       }
     } catch (e) {
       if (mounted) {
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(userVisibleError(e))),
         );
@@ -196,6 +200,8 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
       }
     } catch (e) {
       if (mounted) {
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(userVisibleError(e))),
         );
@@ -292,6 +298,8 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
       }
     } catch (e) {
       if (mounted) {
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(userVisibleError(e))),
         );
@@ -513,8 +521,9 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Жалобу отправил: ${report.reporterLine}',
+        HighlightedText(
+          text: report.reporterLine,
+          leading: 'Жалобу отправил: ',
           style: const TextStyle(fontSize: 13),
         ),
         if (when.isNotEmpty)
@@ -528,17 +537,11 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
         if (report.hasComment)
           Padding(
             padding: const EdgeInsets.only(top: 6),
-            child: Text.rich(
-              TextSpan(
-                style: const TextStyle(fontSize: 13),
-                children: [
-                  const TextSpan(
-                    text: 'Комментарий: ',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  TextSpan(text: report.comment),
-                ],
-              ),
+            child: HighlightedText(
+              text: report.comment ?? '',
+              leading: 'Комментарий: ',
+              leadingStyle: const TextStyle(fontWeight: FontWeight.w600),
+              style: const TextStyle(fontSize: 13),
             ),
           ),
       ],
@@ -696,7 +699,13 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           if (item.author != null)
-                            Text('Автор: ${item.author!.name}'),
+                            HighlightedText(
+                              text: 'Автор: ${item.author!.name}',
+                              style: Theme.of(context).textTheme.bodySmall ??
+                                  const TextStyle(fontSize: 12),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           if (item.reason != null)
                             Chip(
                               label: Text(
@@ -774,18 +783,22 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 if (item.contentPreview!['title'] != null)
-                                  Text(
-                                    'Заголовок: ${item.contentPreview!['title']}',
+                                  HighlightedText(
+                                    text:
+                                        'Заголовок: ${item.contentPreview!['title']}',
                                     style: const TextStyle(fontSize: 14),
                                   ),
-                                if (item.contentPreview!['description'] != null)
-                                  Text(
-                                    'Описание: ${item.contentPreview!['description']}',
+                                if (item.contentPreview!['description'] !=
+                                    null)
+                                  HighlightedText(
+                                    text:
+                                        'Описание: ${item.contentPreview!['description']}',
                                     style: const TextStyle(fontSize: 14),
                                   ),
                                 if (item.contentPreview!['text'] != null)
-                                  Text(
-                                    'Текст: ${item.contentPreview!['text']}',
+                                  HighlightedText(
+                                    text:
+                                        'Текст: ${item.contentPreview!['text']}',
                                     style: const TextStyle(fontSize: 14),
                                   ),
                               ],

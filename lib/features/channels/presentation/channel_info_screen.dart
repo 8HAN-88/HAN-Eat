@@ -16,7 +16,9 @@ import 'channel_detail_screen_tabs.dart';
 import 'channel_settings_bottom_sheet.dart';
 import 'channel_search_screen.dart';
 import '../../../app/app_router.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../../subscription/creator_upsell.dart';
 
 class ChannelInfoScreen extends ConsumerStatefulWidget {
@@ -402,7 +404,7 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
                           : null,
                   child: c.avatarUrl == null || c.avatarUrl!.isEmpty
                       ? Text(
-                          c.name.isNotEmpty ? c.name[0].toUpperCase() : '?',
+                          avatarLetterWithCustomEmoji(c.name),
                           style: const TextStyle(
                             fontSize: 32,
                             fontWeight: FontWeight.bold,
@@ -415,9 +417,13 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        c.name,
+                      HighlightedText(
+                        text: c.name,
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ) ??
+                            const TextStyle(
+                              fontSize: 22,
                               fontWeight: FontWeight.w700,
                             ),
                         maxLines: 3,
@@ -548,9 +554,10 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
                             ),
                       ),
                       const SizedBox(height: 6),
-                      Text(
-                        desc,
-                        style: Theme.of(context).textTheme.bodyMedium,
+                      HighlightedText(
+                        text: desc,
+                        style: Theme.of(context).textTheme.bodyMedium ??
+                            const TextStyle(fontSize: 14),
                         maxLines: _descExpanded ? null : 4,
                         overflow: _descExpanded
                             ? TextOverflow.visible

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../services/flex_subscription_service.dart';
+import '../../../widgets/highlighted_text.dart';
 
 Future<bool?> showFlexPreviewSheet(
   BuildContext context, {
@@ -62,10 +63,25 @@ Future<bool?> showFlexPreviewSheet(
               const SizedBox(height: 6),
               if (confirmDowngrade)
                 for (final f in preview.disabled)
-                  Text('⚠️ ${f.title}')
-              else
-                for (final f in preview.features)
-                  Text('✅ ${f.title}'),
+                  HighlightedText(
+                    text: f.title,
+                    leading: '⚠️ ',
+                    style: Theme.of(ctx).textTheme.bodyMedium ??
+                        const TextStyle(fontSize: 14),
+                  )
+              else ...[
+                for (final f in _previewGain(preview))
+                  HighlightedText(
+                    text: f.title,
+                    leading: '✅ ',
+                    style: Theme.of(ctx).textTheme.bodyMedium ??
+                        const TextStyle(fontSize: 14),
+                  ),
+                if (_previewGain(preview).isEmpty)
+                  const Text(
+                    'На этом уровне новых функций нет — меняется только цена или период.',
+                  ),
+              ],
               if (!confirmDowngrade && preview.nextFeature != null) ...[
                 const SizedBox(height: 14),
                 Text(
@@ -75,7 +91,12 @@ Future<bool?> showFlexPreviewSheet(
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 4),
-                Text('➕ ${preview.nextFeature!.title}'),
+                HighlightedText(
+                  text: preview.nextFeature!.title,
+                  leading: '➕ ',
+                  style: Theme.of(ctx).textTheme.bodyMedium ??
+                      const TextStyle(fontSize: 14),
+                ),
               ],
               const SizedBox(height: 16),
               Row(
@@ -109,4 +130,12 @@ Future<bool?> showFlexPreviewSheet(
       );
     },
   );
+}
+
+List<FlexFeature> _previewGain(FlexPreview preview) {
+  if ((preview.kind == 'upgrade' || preview.kind == 'new') &&
+      preview.added.isNotEmpty) {
+    return preview.added;
+  }
+  return preview.features;
 }

@@ -11,6 +11,7 @@ from app.models.sticker import (
     StickerPack,
     StickerPackInstall,
     StickerPackPin,
+    StickerPackPurchase,
 )
 
 
@@ -59,23 +60,35 @@ class StickerService:
             .filter(StickerPack.id == sticker.pack_id)
             .first()
         )
-        if not pack or not bool(getattr(pack, "is_premium", False)):
+        if not pack:
             return
         if int(pack.owner_user_id) == int(user_id):
             return
-        self._require_premium_stickers(user_id)
+        if int(getattr(pack, "price_stars", 0) or 0) > 0:
+            from app.services.pack_marketplace_service import PackMarketplaceService
+
+            if not PackMarketplaceService(self.db).has_sticker_access(user_id, pack):
+                raise ValueError("pack_purchase_required")
+        if bool(getattr(pack, "is_premium", False)):
+            self._require_premium_stickers(user_id)
 
     def create_pack(
         self, user_id: int, title: str, is_public: bool, is_premium: bool = False
     ) -> StickerPack:
-        clean_title = (title or "").strip()
+        from app.services.emoji_pack_service import (
+            EmojiPackService,
+            clip_preserving_custom_emoji,
+        )
+
+        clean_title = clip_preserving_custom_emoji((title or "").strip(), 120)
         if len(clean_title) < 2:
             raise ValueError("invalid_title")
+        EmojiPackService(self.db).require_send_tokens(user_id, clean_title)
         premium = bool(is_premium)
         if premium:
             self._require_premium_stickers(user_id)
         pack = StickerPack(
-            title=clean_title[:120],
+            title=clean_title,
             slug=self._make_unique_slug(clean_title, user_id),
             owner_user_id=user_id,
             is_public=bool(is_public),
@@ -95,6 +108,13 @@ class StickerService:
         emoji: Optional[str] = None,
         sticker_type: str = "static",
     ) -> Sticker:
+        from app.services.emoji_pack_service import (
+            EmojiPackService,
+            clip_preserving_custom_emoji,
+        )
+
+        emoji = clip_preserving_custom_emoji((emoji or "").strip(), 32) or None
+        EmojiPackService(self.db).require_send_tokens(user_id, emoji)
         pack = self.db.query(StickerPack).filter(StickerPack.id == pack_id).first()
         if not pack:
             raise ValueError("pack_not_found")
@@ -115,7 +135,7 @@ class StickerService:
         item = Sticker(
             pack_id=pack_id,
             media_url=clean_url[:512],
-            emoji=(emoji or "").strip()[:16] or None,
+            emoji=emoji,
             sticker_type=clean_type,
             order_index=next_order,
         )
@@ -142,7 +162,20 @@ class StickerService:
             clean_title = title.strip()
             if len(clean_title) < 2:
                 raise ValueError("invalid_title")
-            pack.title = clean_title[:120]
+            from app.services.emoji_pack_service import (
+                EmojiPackService,
+                clip_preserving_custom_emoji,
+                keep_if_unchanged,
+            )
+
+            # Flutter always resends title with is_public / is_premium.
+            pack.title = clip_preserving_custom_emoji(
+                keep_if_unchanged(
+                    EmojiPackService(self.db), user_id, clean_title, pack.title
+                )
+                or clean_title,
+                120,
+            )
         if is_public is not None:
             pack.is_public = bool(is_public)
         if is_premium is not None:
@@ -216,14 +249,47 @@ class StickerService:
         pack.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         self.db.flush()
 
+    def _is_installed(self, user_id: int, pack_id: int) -> bool:
+        return (
+            self.db.query(StickerPackInstall.id)
+            .filter(
+                StickerPackInstall.user_id == user_id,
+                StickerPackInstall.pack_id == pack_id,
+            )
+            .first()
+            is not None
+        )
+
+    def _is_purchased(self, user_id: int, pack_id: int) -> bool:
+        return (
+            self.db.query(StickerPackPurchase.id)
+            .filter(
+                StickerPackPurchase.user_id == user_id,
+                StickerPackPurchase.pack_id == pack_id,
+            )
+            .first()
+            is not None
+        )
+
     def install_pack(self, user_id: int, pack_id: int) -> None:
         pack = self.db.query(StickerPack).filter(StickerPack.id == pack_id).first()
         if not pack:
             raise ValueError("pack_not_found")
         if not pack.is_public and pack.owner_user_id != user_id:
-            raise ValueError("forbidden")
+            if not self._is_purchased(user_id, pack.id) and not self._is_installed(
+                user_id, pack.id
+            ):
+                raise ValueError("forbidden")
         if bool(getattr(pack, "is_premium", False)) and pack.owner_user_id != user_id:
             self._require_premium_stickers(user_id)
+        if (
+            int(getattr(pack, "price_stars", 0) or 0) > 0
+            and int(pack.owner_user_id) != int(user_id)
+        ):
+            from app.services.pack_marketplace_service import PackMarketplaceService
+
+            if not PackMarketplaceService(self.db).has_sticker_access(user_id, pack):
+                raise ValueError("pack_purchase_required")
         exists = (
             self.db.query(StickerPackInstall.id)
             .filter(
@@ -267,15 +333,9 @@ class StickerService:
             return None
         if pack.is_public or pack.owner_user_id == user_id:
             return pack
-        installed = (
-            self.db.query(StickerPackInstall.id)
-            .filter(
-                StickerPackInstall.user_id == user_id,
-                StickerPackInstall.pack_id == pack_id,
-            )
-            .first()
-        )
-        return pack if installed else None
+        if self._is_installed(user_id, pack.id) or self._is_purchased(user_id, pack.id):
+            return pack
+        return None
 
     def get_public_pack_by_slug(self, slug: str) -> Optional[StickerPack]:
         clean = (slug or "").strip().lower()
@@ -290,10 +350,27 @@ class StickerService:
             .first()
         )
 
+    def get_pack_by_slug_for_user(self, user_id: int, slug: str) -> Optional[StickerPack]:
+        public = self.get_public_pack_by_slug(slug)
+        if public is not None:
+            return public
+        clean = (slug or "").strip().lower()
+        if not clean:
+            return None
+        pack = self.db.query(StickerPack).filter(StickerPack.slug == clean).first()
+        if not pack:
+            return None
+        return self.get_pack_for_user(user_id, pack.id)
+
     def list_my_packs(self, user_id: int) -> List[StickerPack]:
         installed_pack_ids = (
             self.db.query(StickerPackInstall.pack_id)
             .filter(StickerPackInstall.user_id == user_id)
+            .subquery()
+        )
+        purchased_pack_ids = (
+            self.db.query(StickerPackPurchase.pack_id)
+            .filter(StickerPackPurchase.user_id == user_id)
             .subquery()
         )
         packs = (
@@ -301,6 +378,7 @@ class StickerService:
             .filter(
                 (StickerPack.owner_user_id == user_id)
                 | StickerPack.id.in_(installed_pack_ids)
+                | StickerPack.id.in_(purchased_pack_ids)
             )
             .order_by(
                 StickerPack.owner_user_id.desc(),
@@ -325,6 +403,38 @@ class StickerService:
             ),
         )
 
+    def purchased_pack_ids(self, user_id: int) -> set[int]:
+        rows = (
+            self.db.query(StickerPackPurchase.pack_id)
+            .filter(StickerPackPurchase.user_id == user_id)
+            .all()
+        )
+        return {pid for (pid,) in rows}
+
+    def list_marketplace_packs(
+        self,
+        *,
+        query: Optional[str] = None,
+        limit: int = 50,
+    ) -> List[StickerPack]:
+        q = self.db.query(StickerPack).filter(
+            StickerPack.is_public.is_(True),
+            StickerPack.price_stars > 0,
+        )
+        term = (query or "").strip()
+        if term:
+            q = q.filter(StickerPack.title.ilike(f"%{term}%"))
+        rows = (
+            q.order_by(StickerPack.listed_at.desc(), StickerPack.id.desc())
+            .limit(limit * 3)
+            .all()
+        )
+        from app.services.pack_marketplace_service import PackMarketplaceService
+
+        return PackMarketplaceService(self.db).filter_active_listings(
+            rows, kind="sticker"
+        )[:limit]
+
     def list_catalog_packs(
         self,
         *,
@@ -336,7 +446,14 @@ class StickerService:
         term = (query or "").strip()
         if term:
             q = q.filter(StickerPack.title.ilike(f"%{term}%"))
-        return q.order_by(StickerPack.updated_at.desc(), StickerPack.id.desc()).limit(limit).all()
+        rows = q.order_by(StickerPack.updated_at.desc(), StickerPack.id.desc()).limit(
+            limit * 3
+        ).all()
+        from app.services.pack_marketplace_service import PackMarketplaceService
+
+        return PackMarketplaceService(self.db).filter_active_listings(
+            rows, kind="sticker"
+        )[:limit]
 
     def installed_pack_ids(self, user_id: int) -> set[int]:
         rows = (
@@ -404,7 +521,23 @@ class StickerService:
             )
             .all()
         )
-        return [sticker for sticker, _created in rows]
+        from app.services.pack_marketplace_service import PackMarketplaceService
+
+        market = PackMarketplaceService(self.db)
+        packs = {
+            row.id: row
+            for row in self.db.query(StickerPack).filter(
+                StickerPack.id.in_({s.pack_id for s, _ in rows})
+            )
+        } if rows else {}
+        out: List[Sticker] = []
+        for sticker, _created in rows:
+            pack = packs.get(sticker.pack_id)
+            if pack is not None and int(getattr(pack, "price_stars", 0) or 0) > 0:
+                if not market.has_sticker_access(user_id, pack):
+                    continue
+            out.append(sticker)
+        return out
 
     def add_favorite(
         self,
@@ -416,6 +549,7 @@ class StickerService:
         sticker = self._resolve_sticker(sticker_id=sticker_id, media_url=media_url)
         if not sticker:
             raise ValueError("sticker_not_found")
+        self.require_sticker_send(user_id, sticker.media_url)
         exists = (
             self.db.query(StickerFavorite.id)
             .filter(
@@ -475,6 +609,7 @@ class StickerService:
             self.db.delete(row)
             self.db.flush()
             return sticker, False
+        self.require_sticker_send(user_id, sticker.media_url)
         self.db.add(StickerFavorite(user_id=user_id, sticker_id=sticker.id))
         self.db.flush()
         return sticker, True
@@ -498,6 +633,14 @@ class StickerService:
             if sticker and sticker.id not in seen:
                 resolved.append(sticker)
                 seen.add(sticker.id)
+        allowed: List[Sticker] = []
+        for sticker in resolved:
+            try:
+                self.require_sticker_send(user_id, sticker.media_url)
+            except ValueError:
+                continue
+            allowed.append(sticker)
+        resolved = allowed
 
         (
             self.db.query(StickerFavorite)
@@ -529,6 +672,32 @@ class StickerService:
         )
         return [int(pid) for (pid,) in rows]
 
+    def _can_pin_pack(self, user_id: int, pack_id: int) -> bool:
+        pack = self.db.query(StickerPack).filter(StickerPack.id == pack_id).first()
+        if not pack:
+            return False
+        if int(pack.owner_user_id) == int(user_id):
+            return True
+        installed = (
+            self.db.query(StickerPackInstall.id)
+            .filter(
+                StickerPackInstall.user_id == user_id,
+                StickerPackInstall.pack_id == pack_id,
+            )
+            .first()
+        )
+        if installed is not None:
+            return True
+        bought = (
+            self.db.query(StickerPackPurchase.id)
+            .filter(
+                StickerPackPurchase.user_id == user_id,
+                StickerPackPurchase.pack_id == pack_id,
+            )
+            .first()
+        )
+        return bought is not None
+
     def replace_pinned_packs(
         self, *, user_id: int, pack_ids: List[int]
     ) -> List[int]:
@@ -541,8 +710,7 @@ class StickerService:
                 continue
             if pid <= 0 or pid in seen:
                 continue
-            pack = self.db.query(StickerPack.id).filter(StickerPack.id == pid).first()
-            if not pack:
+            if not self._can_pin_pack(user_id, pid):
                 continue
             unique.append(pid)
             seen.add(pid)
@@ -572,6 +740,8 @@ class StickerService:
             next_ids = [pid for pid in current if pid != pack_id]
             pinned = False
         else:
+            if not self._can_pin_pack(user_id, pack_id):
+                raise ValueError("pack_not_installed")
             next_ids = [pack_id, *current]
             pinned = True
         return self.replace_pinned_packs(user_id=user_id, pack_ids=next_ids), pinned

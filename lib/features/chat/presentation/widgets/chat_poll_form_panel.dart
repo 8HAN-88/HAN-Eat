@@ -353,12 +353,6 @@ class _PollTextField extends StatelessWidget {
                   vertical: 14,
                 ),
               ),
-              maxLength: hint.contains('вопрос') ? 300 : 120,
-              buildCounter: (_,
-                      {required currentLength,
-                      required isFocused,
-                      maxLength}) =>
-                  null,
             ),
           ),
           if (trailing != null) trailing!,

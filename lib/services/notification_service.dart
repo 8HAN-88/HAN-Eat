@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 import 'auth_service.dart';
+import 'custom_emoji_registry.dart';
 import 'notification_cache_service.dart';
 import 'server_config.dart';
 
@@ -137,8 +138,10 @@ class NotificationService {
     Map<String, dynamic>? data,
   }) async {
     if (kIsWeb || !_localPluginReady) return;
-    final t = title.trim();
-    final b = body.trim();
+    final rawTitle = title.trim();
+    final rawBody = body.trim();
+    final t = rawTitle.isEmpty ? '' : previewTextWithCustomEmoji(rawTitle);
+    final b = rawBody.isEmpty ? '' : previewTextWithCustomEmoji(rawBody);
     if (t.isEmpty && b.isEmpty) return;
     try {
       final id = DateTime.now().millisecondsSinceEpoch % 2147483647;

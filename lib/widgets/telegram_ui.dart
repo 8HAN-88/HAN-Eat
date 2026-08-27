@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../core/theme/app_tokens.dart';
+import 'highlighted_text.dart';
 
 class TelegramSectionHeader extends StatelessWidget {
   const TelegramSectionHeader({
@@ -216,10 +217,22 @@ class TelegramActionRow extends StatelessWidget {
         backgroundColor: (iconColor ?? scheme.primary).withValues(alpha: 0.14),
         child: Icon(icon, size: 20, color: iconColor ?? scheme.primary),
       ),
-      title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+      title: HighlightedText(
+        text: title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.bodyLarge ??
+            const TextStyle(fontSize: 16),
+      ),
       subtitle: subtitle == null
           ? null
-          : Text(subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis),
+          : HighlightedText(
+              text: subtitle!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodyMedium ??
+                  const TextStyle(fontSize: 14),
+            ),
       trailing: trailing,
     );
   }
@@ -573,11 +586,15 @@ class TelegramActionSheet extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 22),
-                    Text(
-                      title,
+                    HighlightedText(
+                      text: title,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w800,
                             letterSpacing: -0.1,
+                          ) ??
+                          const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
                           ),
                     ),
                     const SizedBox(height: 18),
@@ -646,26 +663,35 @@ class _TelegramActionSheetRow extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      action.title,
+                    HighlightedText(
+                      text: action.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                             color: fg,
                             fontWeight: FontWeight.w500,
+                          ) ??
+                          TextStyle(
+                            color: fg,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 16,
                           ),
                     ),
                     if (action.subtitle != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          action.subtitle!,
+                        child: HighlightedText(
+                          text: action.subtitle!,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style:
                               Theme.of(context).textTheme.bodySmall?.copyWith(
                                     color: scheme.onSurfaceVariant,
-                                  ),
+                                  ) ??
+                              TextStyle(
+                                color: scheme.onSurfaceVariant,
+                                fontSize: 12,
+                              ),
                         ),
                       ),
                   ],

@@ -14,9 +14,12 @@ import '../models/post_model.dart';
 import '../services/auth_service.dart';
 import '../services/channel_service.dart';
 import '../services/repost_service.dart';
+import '../services/custom_emoji_registry.dart';
 import '../services/share_link_service.dart';
+import '../features/subscription/creator_upsell.dart';
 import '../utils/api_error_parser.dart';
 import 'app_avatar.dart';
+import 'highlighted_text.dart';
 import 'chat_target_picker_sheet.dart';
 
 class ShareActionSheet {
@@ -105,7 +108,7 @@ class _PostShareSheetState extends State<_PostShareSheet> {
     await ShareActionSheet._shareAfterSheetClosed(
       this.context,
       text: text,
-      subject: widget.post.title ?? 'Пост',
+      subject: ShareLinkService.postShareSubject(widget.post),
     );
   }
 
@@ -150,10 +153,16 @@ class _PostShareSheetState extends State<_PostShareSheet> {
                   leading: CircleAvatar(
                     backgroundImage: resolvedAvatarImage(c.avatarUrl),
                     child: resolvedAvatarImage(c.avatarUrl) == null
-                        ? Text(c.name.isNotEmpty ? c.name[0] : '?')
+                        ? Text(avatarLetterWithCustomEmoji(c.name))
                         : null,
                   ),
-                  title: Text(c.name),
+                  title: HighlightedText(
+                    text: c.name,
+                    style: Theme.of(context).textTheme.bodyLarge ??
+                        const TextStyle(fontSize: 16),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   onTap: () => Navigator.pop(ctx, c),
                 ),
             ],
@@ -179,7 +188,9 @@ class _PostShareSheetState extends State<_PostShareSheet> {
       Navigator.pop(context);
       ScaffoldMessenger.of(this.context).showSnackBar(
         SnackBar(
-            content: Text('Репост опубликован в канале «${picked.name}».')),
+            content: Text(
+              'Репост опубликован в канале «${previewTextWithCustomEmoji(picked.name)}».',
+            )),
       );
     } on ApiClientException catch (e) {
       if (!mounted) return;
@@ -254,10 +265,16 @@ class _PostShareSheetState extends State<_PostShareSheet> {
       if (!mounted) return;
       Navigator.pop(context);
       ScaffoldMessenger.of(this.context).showSnackBar(
-        SnackBar(content: Text('Отправлено в «${picked.displayTitle}»')),
+        SnackBar(
+          content: Text(
+            'Отправлено в «${previewTextWithCustomEmoji(picked.displayTitle)}»',
+          ),
+        ),
       );
     } on ApiClientException catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(this.context, e)) return;
+      if (offerPackStoreIfRequired(this.context, e)) return;
       ScaffoldMessenger.of(this.context).showSnackBar(
         SnackBar(
             content: Text(
@@ -266,6 +283,8 @@ class _PostShareSheetState extends State<_PostShareSheet> {
       );
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(this.context, e)) return;
+      if (offerPackStoreIfRequired(this.context, e)) return;
       ScaffoldMessenger.of(this.context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -346,7 +365,9 @@ class _ChannelRepostCommentDialogState
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text('Репост в «${widget.channelName}»'),
+      title: Text(
+        'Репост в «${previewTextWithCustomEmoji(widget.channelName)}»',
+      ),
       content: SingleChildScrollView(
         child: TextField(
           controller: _controller,

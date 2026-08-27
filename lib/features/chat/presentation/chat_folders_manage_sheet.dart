@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../models/chat_models.dart';
 import '../../../services/chat_folder_store.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../../subscription/creator_upsell.dart';
 
 /// Перетаскивание папок для изменения порядка вкладок.
@@ -68,7 +70,11 @@ class _ChatFoldersManageSheetState extends State<ChatFoldersManageSheet> {
         _saving = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Папка «${folder.name}» добавлена')),
+        SnackBar(
+          content: Text(
+            'Папка «${previewTextWithCustomEmoji(folder.name)}» добавлена',
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -145,7 +151,13 @@ class _ChatFoldersManageSheetState extends State<ChatFoldersManageSheet> {
                 return ListTile(
                   key: ValueKey('folder_manage_${folder.id}'),
                   leading: const Icon(Icons.drag_handle),
-                  title: Text(folder.displayLabel),
+                  title: HighlightedText(
+                    text: folder.displayLabel,
+                    style: Theme.of(context).textTheme.bodyLarge ??
+                        const TextStyle(fontSize: 16),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   subtitle: Text(
                     '${folder.conversationIds.length} чатов · '
                     '${folder.channelIds.length} каналов',

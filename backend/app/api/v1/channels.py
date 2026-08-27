@@ -105,10 +105,14 @@ def assert_can_create_private_channel(is_public: bool, has_creator: bool) -> Non
 
 
 def _post_preview_text(post: Post) -> str:
-    title = (post.title or "").strip()
+    from app.services.emoji_pack_service import text_for_external
+
+    # Do not use preview_text_with_custom_emoji here: empty title would
+    # become «Сообщение» and hide the description / type fallback.
+    title = text_for_external(post.title)
     if title:
         return title[:120]
-    desc = (post.description or "").strip()
+    desc = text_for_external(post.description)
     if desc:
         return desc[:120]
     ptype = (post.type or "").lower()
@@ -222,6 +226,16 @@ async def create_channel(
     """Создать канал"""
     import logging
     logger = logging.getLogger(__name__)
+
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(
+        current_user.id,
+        request.name,
+        request.description,
+        request.category,
+        *(request.tags or []),
+    )
     
     try:
         # Проверяем уникальность slug
@@ -322,7 +336,7 @@ async def update_channel(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Channel not found"
         )
-    
+
     member = get_membership(db, channel_id, current_user.id)
     if not has_channel_permission(
         channel, member, current_user, "manage_channel_settings"
@@ -331,7 +345,55 @@ async def update_channel(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Недостаточно прав для изменения настроек канала",
         )
-    
+
+    from app.services.emoji_pack_service import (
+        EmojiPackService,
+        keep_if_unchanged_http,
+        keep_if_unchanged_items,
+        keep_or_preview_tokens,
+    )
+
+    emoji = EmojiPackService(db)
+    name = request.name
+    description = request.description
+    rules = request.rules
+    category = request.category
+    tags = request.tags
+    if is_channel_owner(channel, current_user):
+        # Flutter always resends name/description/rules/tags when saving
+        # cover, comments, or other settings. Unchanged text is
+        # receive-and-persist — do not 403 after a downgrade.
+        name = keep_if_unchanged_http(
+            emoji, current_user.id, name, channel.name
+        )
+        description = keep_if_unchanged_http(
+            emoji, current_user.id, description, channel.description
+        )
+        rules = keep_if_unchanged_http(
+            emoji, current_user.id, rules, channel.rules
+        )
+        category = keep_if_unchanged_http(
+            emoji, current_user.id, category, channel.category
+        )
+        tags = keep_if_unchanged_items(
+            emoji,
+            current_user.id,
+            tags,
+            list(channel.tags or []) if channel.tags is not None else None,
+            http=True,
+        )
+    else:
+        # Admin resends the owner's name/tags when saving any setting.
+        name = keep_or_preview_tokens(emoji, current_user.id, name)
+        description = keep_or_preview_tokens(emoji, current_user.id, description)
+        rules = keep_or_preview_tokens(emoji, current_user.id, rules)
+        category = keep_or_preview_tokens(emoji, current_user.id, category)
+        if tags is not None:
+            tags = [
+                keep_or_preview_tokens(emoji, current_user.id, tag) or tag
+                for tag in tags
+            ]
+
     # Проверяем уникальность slug (если изменился)
     if request.slug and request.slug != channel.slug:
         existing = db.query(Channel).filter(Channel.slug == request.slug).first()
@@ -340,14 +402,14 @@ async def update_channel(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Channel with this slug already exists"
             )
-    
+
     # Обновляем поля (только переданные)
     if request.name is not None:
-        channel.name = request.name
+        channel.name = name
     if request.slug is not None:
         channel.slug = request.slug
     if request.description is not None:
-        channel.description = request.description
+        channel.description = description
     if request.cover_url is not None:
         channel.cover_url = request.cover_url
     if request.avatar_url is not None:
@@ -357,11 +419,11 @@ async def update_channel(
         assert_can_create_private_channel(request.is_public, has_creator)
         channel.is_public = request.is_public
     if request.category is not None:
-        channel.category = request.category
+        channel.category = category
     if request.tags is not None:
-        channel.tags = request.tags
+        channel.tags = tags
     if request.rules is not None:
-        channel.rules = request.rules
+        channel.rules = rules
     if request.auto_publish_to_feed is not None:
         channel.auto_publish_to_feed = request.auto_publish_to_feed
     if request.allow_comments is not None:
@@ -1050,20 +1112,25 @@ async def approve_channel_join_request(
     db.refresh(channel)
 
     try:
-        from app.models.notification import Notification
+        from app.services.notification_service import NotificationService
 
-        db.add(
-            Notification(
-                user_id=user_id,
-                type="channel_join_approved",
-                entity_type="channel",
-                entity_id=channel_id,
-                actor_id=current_user.id,
-                title=f"Вас приняли в канал «{channel.name}»",
-                body="Теперь доступны все публикации канала.",
-                data={"channel_id": channel_id, "channel_name": channel.name},
-                is_read=False,
-            )
+        from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
+        raw_name = (channel.name or "").strip()
+        channel_label = (
+            preview_text_with_custom_emoji(raw_name, limit=80)
+            if raw_name
+            else "канал"
+        )
+        NotificationService(db).create_notification(
+            user_id=user_id,
+            type="channel_join_approved",
+            title=f"Вас приняли в канал «{channel_label}»",
+            body="Теперь доступны все публикации канала.",
+            entity_type="channel",
+            entity_id=channel_id,
+            actor_id=current_user.id,
+            data={"channel_id": channel_id, "channel_name": channel_label},
         )
         db.commit()
     except Exception as e:
@@ -1476,6 +1543,22 @@ async def create_channel_post(
                 "code": "kitchen_retired",
             },
         )
+
+    from app.services.emoji_pack_service import EmojiPackService
+
+    poll_parts: list = []
+    if getattr(request, "poll", None) is not None:
+        poll_parts.append(request.poll.question)
+        poll_parts.extend(request.poll.options or [])
+    # Link preview is not persisted on this endpoint (Flutter create
+    # goes through posts.create_post). Do not 403 on an OG title.
+    EmojiPackService(db).require_send_tokens_http(
+        current_user.id,
+        request.title,
+        request.description,
+        *poll_parts,
+        *(request.tags or []),
+    )
     
     # Формируем body для поста
     body = {}
@@ -1605,14 +1688,86 @@ async def update_channel_post(
             "edit_any_post",
             "Недостаточно прав для редактирования чужих постов канала",
         )
-    
+
+    from app.services.emoji_pack_service import (
+        EmojiPackService,
+        keep_if_unchanged_http,
+        keep_if_unchanged_items,
+        keep_or_preview_tokens,
+        link_preview_for_persist_http,
+    )
+
+    emoji = EmojiPackService(db)
+    title = request.title
+    description = request.description
+    tags = request.tags
+    link_preview = request.link.preview if request.link is not None else None
+    poll_question = request.poll.question if request.poll is not None else None
+    poll_options = (
+        list(request.poll.options or []) if request.poll is not None else None
+    )
+    stored_poll = (post.body or {}).get("poll") if isinstance(post.body, dict) else None
+    stored_question = (
+        stored_poll.get("question") if isinstance(stored_poll, dict) else None
+    )
+    stored_options = None
+    if isinstance(stored_poll, dict):
+        stored_options = []
+        for item in stored_poll.get("options") or []:
+            if isinstance(item, dict):
+                stored_options.append(item.get("text") or "")
+            else:
+                stored_options.append(str(item) if item is not None else "")
+    if is_author:
+        # Flutter always resends title/description/tags on Save.
+        # Unchanged text is receive-and-persist — do not 403.
+        title = keep_if_unchanged_http(
+            emoji, current_user.id, title, post.title
+        )
+        description = keep_if_unchanged_http(
+            emoji, current_user.id, description, post.description
+        )
+        tags = keep_if_unchanged_items(
+            emoji,
+            current_user.id,
+            tags,
+            list(post.tags or []) if post.tags is not None else None,
+            http=True,
+        )
+        poll_question = keep_if_unchanged_http(
+            emoji, current_user.id, poll_question, stored_question
+        )
+        poll_options = keep_if_unchanged_items(
+            emoji, current_user.id, poll_options, stored_options, http=True
+        )
+    else:
+        # Admin is saving the author's text — preview, do not 403.
+        title = keep_or_preview_tokens(emoji, current_user.id, title)
+        description = keep_or_preview_tokens(emoji, current_user.id, description)
+        link_preview = keep_or_preview_tokens(emoji, current_user.id, link_preview)
+        if tags is not None:
+            tags = [
+                keep_or_preview_tokens(emoji, current_user.id, tag) or tag
+                for tag in tags
+            ]
+        if poll_question is not None:
+            poll_question = (
+                keep_or_preview_tokens(emoji, current_user.id, poll_question)
+                or poll_question
+            )
+        if poll_options is not None:
+            poll_options = [
+                keep_or_preview_tokens(emoji, current_user.id, opt) or opt
+                for opt in poll_options
+            ]
+
     # Обновляем поля поста
     if request.title is not None:
-        post.title = request.title
+        post.title = title
     if request.description is not None:
-        post.description = request.description
+        post.description = description
     if request.tags is not None:
-        post.tags = request.tags
+        post.tags = tags
     
     if request.visibility is not None and post.type != "recipe":
         post.visibility = request.visibility
@@ -1625,17 +1780,43 @@ async def update_channel_post(
 
     # Обновляем ссылку (link-пост)
     if post.type == "link" and request.link is not None:
-        from app.services.link_preview_service import build_link_body
+        from app.services.link_preview_service import fetch_link_preview
 
+        url = (request.link.url or "").strip()
+        if not url:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Link URL is required for link posts",
+            )
         try:
-            link_body = build_link_body(request.link.url, request.link.preview)
+            meta = fetch_link_preview(url)
         except ValueError as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(e),
             )
+        stored = (post.body or {}).get("link_preview")
+        stored_text = stored if isinstance(stored, str) else None
+        if is_author:
+            link_preview = link_preview_for_persist_http(
+                emoji,
+                current_user.id,
+                link_preview,
+                og_title=meta.get("title"),
+                stored=stored_text,
+            )
+        elif not (link_preview or "").strip():
+            link_preview = keep_or_preview_tokens(
+                emoji, current_user.id, meta.get("title")
+            )
         body = post.body or {}
-        body.update(link_body)
+        body.update(
+            {
+                "link_url": meta.get("url") or url,
+                "link_preview": link_preview,
+                "link_meta": meta,
+            }
+        )
         post.body = body
 
     if post.type == "poll" and request.poll is not None:
@@ -1643,7 +1824,7 @@ async def update_channel_post(
 
         try:
             update_poll_in_post(
-                db, post, request.poll.question, request.poll.options
+                db, post, poll_question, poll_options
             )
         except ValueError as e:
             raise HTTPException(

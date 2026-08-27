@@ -6,7 +6,9 @@ import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/paid_features_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../widgets/app_gradient_background.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../../../widgets/stars_pay_helper.dart';
 
 /// Telegram-like unique gift resale board.
@@ -61,12 +63,16 @@ class _StarGiftsMarketplaceScreenState extends State<StarGiftsMarketplaceScreen>
     }
     final price = gift.listedStars ?? 0;
     if (price <= 0 || _busy.contains(gift.id)) return;
+    final fee = PaidFeaturesService.resaleFeeStars(price);
     final ok = await confirmStarsSpend(
       context,
-      title: 'Купить ${gift.title}',
-      body: gift.serialLabel.isNotEmpty
-          ? '${gift.emoji} ${gift.serialLabel} · продавец ${gift.sellerLabel}'
-          : '${gift.emoji} · продавец ${gift.sellerLabel}',
+      title: 'Купить ${previewTextWithCustomEmoji(gift.title)}',
+      body: [
+        gift.serialLabel.isNotEmpty
+            ? '${gift.emoji} ${gift.serialLabel} · продавец ${gift.sellerLabel}'
+            : '${gift.emoji} · продавец ${gift.sellerLabel}',
+        if (fee > 0) 'Комиссия площадки $fee ★ (уже в цене)',
+      ].join('\n'),
       amountStars: price,
       confirmLabel: 'Купить',
     );
@@ -80,7 +86,11 @@ class _StarGiftsMarketplaceScreenState extends State<StarGiftsMarketplaceScreen>
         _busy.remove(gift.id);
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${gift.emoji} ${gift.title} теперь ваш')),
+        SnackBar(
+          content: Text(
+            '${gift.emoji} ${previewTextWithCustomEmoji(gift.title)} теперь ваш',
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -179,8 +189,8 @@ class _StarGiftsMarketplaceScreenState extends State<StarGiftsMarketplaceScreen>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            gift.title,
+                          HighlightedText(
+                            text: gift.title,
                             style: const TextStyle(fontWeight: FontWeight.w800),
                           ),
                           if (gift.serialLabel.isNotEmpty)
@@ -192,8 +202,9 @@ class _StarGiftsMarketplaceScreenState extends State<StarGiftsMarketplaceScreen>
                               ),
                             ),
                           if (gift.sellerLabel.isNotEmpty)
-                            Text(
-                              'Продавец ${gift.sellerLabel}',
+                            HighlightedText(
+                              text: gift.sellerLabel,
+                              leading: 'Продавец ',
                               style: TextStyle(color: scheme.onSurfaceVariant),
                             ),
                         ],

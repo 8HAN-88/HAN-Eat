@@ -19,21 +19,27 @@ import '../../../../models/gif_models.dart';
 import '../../../../models/sticker_models.dart';
 import '../../../../services/api_reachability_service.dart';
 import '../../../../services/chat_service.dart';
+import '../../../../services/emoji_pack_service.dart';
 import '../../../../services/gif_search_service.dart';
 import '../../../../services/media_upload_service.dart';
 import '../../../../services/phone_contacts_service.dart';
 import '../../../../services/server_config.dart';
 import '../../../../services/sticker_service.dart';
 import '../../../../services/subscription_status_cache.dart';
+import '../../../../utils/api_error_parser.dart';
 import '../../../subscription/creator_upsell.dart';
 import '../../application/chat_recent_files_store.dart';
 import '../../application/chat_recent_gifs_store.dart';
 import '../../application/chat_sticker_pinned_packs_store.dart';
 import '../../application/chat_recent_stickers_store.dart';
 import '../../../../widgets/chat_sticker_tile.dart';
+import '../../../../widgets/highlighted_text.dart';
 import '../../../../services/auth_service.dart';
+import '../../../../services/custom_emoji_registry.dart';
 import '../sticker_pack_manage_screen.dart';
 import '../sticker_pack_preview_screen.dart';
+import '../../../settings/presentation/emoji_pack_preview_screen.dart';
+import '../../../settings/presentation/pack_store_screen.dart';
 import 'chat_location_bubble.dart';
 import 'chat_poll_form_panel.dart';
 import 'chats_hub_tiles.dart';
@@ -719,7 +725,6 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
         content: TextField(
           controller: controller,
           autofocus: true,
-          maxLength: 120,
           decoration: const InputDecoration(
             hintText: 'Название пака',
           ),
@@ -741,10 +746,11 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
     try {
       await StickerService.createPack(title: title.trim());
       await _loadStickerPacks();
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Не удалось создать стикерпак')),
+        SnackBar(content: Text(userVisibleError(e))),
       );
     } finally {
       if (mounted) setState(() => _stickerBusy = false);
@@ -756,18 +762,7 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
       _stickerPacks = [
         for (final p in _stickerPacks)
           if (p.id == packId)
-            StickerPack(
-              id: p.id,
-              title: p.title,
-              slug: p.slug,
-              ownerUserId: p.ownerUserId,
-              isPublic: p.isPublic,
-              isPremium: p.isPremium,
-              isInstalled: installed,
-              stickers: p.stickers,
-              stickersCount: p.stickersCount,
-              shareLink: p.shareLink,
-            )
+            p.copyWith(isInstalled: installed)
           else
             p,
       ];
@@ -804,12 +799,13 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
     } catch (e) {
       if (!mounted) return;
       if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             isInstalled
                 ? 'Не удалось удалить стикерпак'
-                : 'Не удалось установить стикерпак',
+                : userVisibleError(e),
           ),
         ),
       );
@@ -919,6 +915,21 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
   Future<void> _pickSticker(StickerItem sticker) async {
     final mediaUrl = sticker.mediaUrl.trim();
     if (mediaUrl.isEmpty) return;
+    for (final pack in _stickerPacks) {
+      final mine = pack.stickers.any(
+        (item) => item.id == sticker.id || item.mediaUrl == mediaUrl,
+      );
+      if (!mine) continue;
+      if (pack.isPremium && !hasFlexFeature('premium_stickers')) {
+        await showCreatorUpsell(context);
+        return;
+      }
+      if (pack.priceStars > 0 && !pack.isOwned && !pack.isPurchased) {
+        offerPackStoreIfRequired(context, 'pack_purchase_required');
+        return;
+      }
+      break;
+    }
     await ChatRecentStickersStore.remember(
       mediaUrl: mediaUrl,
       emoji: sticker.emoji,
@@ -942,12 +953,22 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
     String? stickerType,
     int? stickerId,
   }) async {
-    await ChatRecentStickersStore.toggleFavorite(
-      mediaUrl: mediaUrl,
-      emoji: emoji,
-      stickerType: stickerType,
-      stickerId: stickerId,
-    );
+    try {
+      await ChatRecentStickersStore.toggleFavorite(
+        mediaUrl: mediaUrl,
+        emoji: emoji,
+        stickerType: stickerType,
+        stickerId: stickerId,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+      return;
+    }
     if (!mounted) return;
     await _loadStickerHistory();
   }
@@ -963,9 +984,18 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
   }
 
   Future<void> _togglePinnedPack(int packId) async {
-    await ChatStickerPinnedPacksStore.toggle(packId);
-    await _loadPinnedPacks();
-    await _loadStickerPacks();
+    try {
+      await ChatStickerPinnedPacksStore.toggle(packId);
+      await _loadPinnedPacks();
+      await _loadStickerPacks();
+    } catch (e) {
+      if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
   }
 
   Future<void> _importPackByLink() async {
@@ -994,34 +1024,70 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
       ),
     );
     if (!mounted || input == null || input.trim().isEmpty) return;
-    final slug = _extractStickerSlug(input.trim());
-    if (slug.isEmpty) {
+    final parsed = _extractPackLink(input.trim());
+    if (parsed == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Не удалось распознать ссылку на пак')),
       );
       return;
     }
-    final installed = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => StickerPackPreviewScreen(slug: slug),
-      ),
-    );
+    var kind = parsed.kind;
+    if (kind == 'any') {
+      try {
+        await EmojiPackService.getPackBySlug(parsed.slug);
+        kind = 'emoji';
+      } catch (_) {
+        kind = 'sticker';
+      }
+    }
+    if (!mounted) return;
+    final installed = kind == 'emoji'
+        ? await Navigator.of(context).push<bool>(
+            MaterialPageRoute(
+              builder: (_) => EmojiPackPreviewScreen(slug: parsed.slug),
+            ),
+          )
+        : await Navigator.of(context).push<bool>(
+            MaterialPageRoute(
+              builder: (_) => StickerPackPreviewScreen(slug: parsed.slug),
+            ),
+          );
     if (installed == true && mounted) {
       await _loadStickerPacks();
     }
   }
 
-  String _extractStickerSlug(String raw) {
+  ({String kind, String slug})? _extractPackLink(String raw) {
     final text = raw.trim();
-    if (!text.contains('/')) return text.toLowerCase();
-    final uri = Uri.tryParse(text);
-    if (uri == null) return '';
-    if (uri.pathSegments.isEmpty) return '';
-    final idx = uri.pathSegments.indexOf('stickers');
-    if (idx >= 0 && idx + 1 < uri.pathSegments.length) {
-      return uri.pathSegments[idx + 1].toLowerCase();
+    if (text.isEmpty) return null;
+    if (!text.contains('/')) {
+      return (kind: 'any', slug: text.toLowerCase());
     }
-    return uri.pathSegments.last.toLowerCase();
+    final uri = Uri.tryParse(text);
+    if (uri == null) return null;
+    final host = uri.host.toLowerCase();
+    if (host == 'emoji' && uri.pathSegments.isNotEmpty) {
+      return (kind: 'emoji', slug: uri.pathSegments.first.toLowerCase());
+    }
+    if (host == 'stickers' && uri.pathSegments.isNotEmpty) {
+      return (kind: 'sticker', slug: uri.pathSegments.first.toLowerCase());
+    }
+    if (uri.pathSegments.isEmpty) return null;
+    final emojiIdx = uri.pathSegments.indexOf('emoji');
+    if (emojiIdx >= 0 && emojiIdx + 1 < uri.pathSegments.length) {
+      return (
+        kind: 'emoji',
+        slug: uri.pathSegments[emojiIdx + 1].toLowerCase(),
+      );
+    }
+    final stickerIdx = uri.pathSegments.indexOf('stickers');
+    if (stickerIdx >= 0 && stickerIdx + 1 < uri.pathSegments.length) {
+      return (
+        kind: 'sticker',
+        slug: uri.pathSegments[stickerIdx + 1].toLowerCase(),
+      );
+    }
+    return (kind: 'sticker', slug: uri.pathSegments.last.toLowerCase());
   }
 
   void _selectStickerView(String view) {
@@ -1085,8 +1151,11 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
   }
 
   List<StickerPack> get _filteredStickerPacks {
-    if (_searchQuery.isEmpty) return _stickerPacks;
-    return _stickerPacks
+    final usable = _stickerPacks.where(
+      (p) => p.stickers.isNotEmpty || p.isOwned || p.isPurchased,
+    );
+    if (_searchQuery.isEmpty) return usable.toList();
+    return usable
         .where((p) => p.title.toLowerCase().contains(_searchQuery))
         .toList();
   }
@@ -2422,8 +2491,8 @@ class _RecentFileTile extends StatelessWidget {
           ),
         ),
       ),
-      title: Text(
-        entry.name,
+      title: HighlightedText(
+        text: entry.name,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(fontWeight: FontWeight.w500),
@@ -2945,11 +3014,12 @@ class _StickerPacksContent extends StatelessWidget {
                   const SizedBox(width: 6),
                 ],
                 Expanded(
-                  child: Text(
-                    pack.title,
+                  child: HighlightedText(
+                    text: pack.title,
                     style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                          fontWeight: FontWeight.w700,
+                        ) ??
+                        const TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ),
                 OutlinedButton(
@@ -2967,17 +3037,21 @@ class _StickerPacksContent extends StatelessWidget {
                     tooltip: 'Управление паком',
                     icon: const Icon(Icons.tune),
                   ),
-                IconButton(
-                  onPressed: busy ? null : () => onTogglePinnedPack(pack.id),
-                  tooltip: pinnedPackIds.contains(pack.id)
-                      ? 'Открепить'
-                      : 'Закрепить',
-                  icon: Icon(
-                    pinnedPackIds.contains(pack.id)
-                        ? Icons.push_pin
-                        : Icons.push_pin_outlined,
+                if (pack.isInstalled ||
+                    pack.isOwned ||
+                    pack.isPurchased ||
+                    pinnedPackIds.contains(pack.id))
+                  IconButton(
+                    onPressed: busy ? null : () => onTogglePinnedPack(pack.id),
+                    tooltip: pinnedPackIds.contains(pack.id)
+                        ? 'Открепить'
+                        : 'Закрепить',
+                    icon: Icon(
+                      pinnedPackIds.contains(pack.id)
+                          ? Icons.push_pin
+                          : Icons.push_pin_outlined,
+                    ),
                   ),
-                ),
               ],
             ),
           ),
@@ -3094,9 +3168,18 @@ class _StickerQuickActions extends StatelessWidget {
                     onOpenPackManager(editablePackId!);
                   }
                   break;
+                case _StickerQuickAction.openStore:
+                  Navigator.of(context).push<void>(
+                    MaterialPageRoute(builder: (_) => const PackStoreScreen()),
+                  );
+                  break;
               }
             },
             itemBuilder: (_) => [
+              const PopupMenuItem(
+                value: _StickerQuickAction.openStore,
+                child: Text('Магазин паков'),
+              ),
               const PopupMenuItem(
                 value: _StickerQuickAction.createPack,
                 child: Text('Создать стикерпак'),
@@ -3105,7 +3188,7 @@ class _StickerQuickActions extends StatelessWidget {
                 PopupMenuItem(
                   value: _StickerQuickAction.addAnimated,
                   child: Text(
-                      'Добавить анимированный в "${editablePackTitle ?? ''}"'),
+                      'Добавить анимированный в "${previewTextWithCustomEmoji(editablePackTitle ?? '')}"'),
                 ),
               if (editablePackId != null)
                 const PopupMenuItem(
@@ -3132,7 +3215,7 @@ class _StickerQuickActions extends StatelessWidget {
   }
 }
 
-enum _StickerQuickAction { createPack, addAnimated, managePack }
+enum _StickerQuickAction { createPack, addAnimated, managePack, openStore }
 
 class _StickerPackQuickPreviewSheet extends StatefulWidget {
   const _StickerPackQuickPreviewSheet({
@@ -3182,9 +3265,10 @@ class _StickerPackQuickPreviewSheetState
             Row(
               children: [
                 Expanded(
-                  child: Text(
-                    pack.title,
-                    style: Theme.of(context).textTheme.titleMedium,
+                  child: HighlightedText(
+                    text: pack.title,
+                    style: Theme.of(context).textTheme.titleMedium ??
+                        const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                 ),
                 if (pack.isPremium)
@@ -3652,7 +3736,7 @@ class _ContactsPanel extends StatelessWidget {
     final map = <String, List<_AttachSheetContact>>{};
     for (final contact in items) {
       final name = contact.displayName.trim();
-      final first = name.isNotEmpty ? name[0].toUpperCase() : '#';
+      final first = avatarLetterWithCustomEmoji(name);
       final key = RegExp(r'[A-ZА-ЯЁ]', caseSensitive: false).hasMatch(first)
           ? first
           : '#';
@@ -3696,9 +3780,11 @@ class _ContactTile extends StatelessWidget {
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
-      title: Text(
-        contact.displayName,
+      title: HighlightedText(
+        text: contact.displayName,
         style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       ),
       subtitle: Text(
         contact.subtitle,

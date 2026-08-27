@@ -4,6 +4,8 @@ import '../../../../models/chat_models.dart';
 import '../../../../services/chat_service.dart';
 import '../../../../utils/api_error_parser.dart';
 import '../../../../widgets/app_avatar.dart';
+import '../../../../widgets/custom_emoji_view.dart';
+import '../../../../widgets/highlighted_text.dart';
 
 Future<void> showChatMessageReactorsSheet(
   BuildContext context, {
@@ -172,8 +174,9 @@ class _ChatMessageReactorsSheetState extends State<_ChatMessageReactorsSheet> {
                         Padding(
                           padding: const EdgeInsets.only(right: 6),
                           child: FilterChip(
+                            avatar: ReactionEmojiView(token: emoji, size: 16),
                             label: Text(
-                              '$emoji ${_items.where((e) => e.emoji == emoji).length}',
+                              '${_items.where((e) => e.emoji == emoji).length}',
                             ),
                             selected: _filterEmoji == emoji,
                             onSelected: (_) =>
@@ -234,7 +237,15 @@ class _ChatMessageReactorsSheetState extends State<_ChatMessageReactorsSheet> {
                                       displayName: user.displayName,
                                       radius: 22,
                                     ),
-                                    title: Text(user.displayName),
+                                    title: HighlightedText(
+                                      text: user.displayName,
+                                      style: Theme.of(context)
+                                              .textTheme
+                                              .bodyLarge ??
+                                          const TextStyle(fontSize: 16),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                     subtitle: user.username != null &&
                                             user.username!.trim().isNotEmpty
                                         ? Text(

@@ -21,7 +21,7 @@ class ChatFolder(Base):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     name = Column(String(64), nullable=False)
-    icon = Column(String(8), nullable=True)
+    icon = Column(String(32), nullable=True)
     position = Column(Integer, nullable=False, default=0)
     filters_json = Column(String(2048), nullable=True)
     created_at = Column(DateTime, server_default=func.now())

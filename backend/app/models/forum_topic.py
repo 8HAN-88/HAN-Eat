@@ -24,7 +24,7 @@ class ForumTopic(Base):
         index=True,
     )
     title = Column(String(128), nullable=False)
-    icon_emoji = Column(String(16), nullable=True)
+    icon_emoji = Column(String(32), nullable=True)
     created_by_user_id = Column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

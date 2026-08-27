@@ -13,10 +13,12 @@ import '../../../services/media_upload_service.dart';
 import '../../../services/paid_features_service.dart';
 import '../../../widgets/stars_pay_helper.dart';
 import '../../../services/server_config.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../utils/presence_format.dart';
 import '../../subscription/creator_upsell.dart';
 import '../../../widgets/app_avatar.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../application/chat_inbox_optimistic.dart';
 import '../application/join_requests_bulk.dart';
 import 'chat_group_moderation_log_screen.dart';
@@ -162,7 +164,6 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
         content: TextField(
           controller: controller,
           autofocus: true,
-          maxLength: 120,
           decoration: const InputDecoration(hintText: 'Название'),
         ),
         actions: [
@@ -194,6 +195,8 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -650,10 +653,16 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                               }
                             });
                           },
-                          title: Text(user.displayName),
+                          title: HighlightedText(
+                            text: user.displayName,
+                            style: Theme.of(context).textTheme.bodyLarge ??
+                                const TextStyle(fontSize: 16),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                           secondary: CircleAvatar(
                             child: Text(
-                              user.displayName.characters.first.toUpperCase(),
+                              avatarLetterWithCustomEmoji(user.displayName),
                             ),
                           ),
                         );
@@ -704,7 +713,9 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Удалить участника?'),
-        content: Text('Удалить ${member.displayName} из группы?'),
+        content: Text(
+          'Удалить ${previewTextWithCustomEmoji(member.displayName)} из группы?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -781,7 +792,9 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) => AlertDialog(
-          title: Text('Права: ${member.displayName}'),
+          title: Text(
+            'Права: ${previewTextWithCustomEmoji(member.displayName)}',
+          ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -902,7 +915,9 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) => AlertDialog(
-          title: Text('Ограничить: ${member.displayName}'),
+          title: Text(
+            'Ограничить: ${previewTextWithCustomEmoji(member.displayName)}',
+          ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -962,7 +977,6 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                     ),
                   TextField(
                     controller: reasonController,
-                    maxLength: 240,
                     decoration: const InputDecoration(
                       labelText: 'Причина (опционально)',
                       hintText: 'Например: флуд / спам',
@@ -1018,6 +1032,8 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -1033,7 +1049,9 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) => AlertDialog(
-          title: Text('Забанить: ${member.displayName}'),
+          title: Text(
+            'Забанить: ${previewTextWithCustomEmoji(member.displayName)}',
+          ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1082,7 +1100,6 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                   ),
                 TextField(
                   controller: reasonController,
-                  maxLength: 240,
                   decoration: const InputDecoration(
                     labelText: 'Причина (опционально)',
                     hintText: 'Например: спам / токсичность',
@@ -1130,6 +1147,8 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -1183,7 +1202,13 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                               final until = row.bannedUntil;
                               return ListTile(
                                 leading: const Icon(Icons.block_outlined),
-                                title: Text(row.user.displayName),
+                                title: HighlightedText(
+                                  text: row.user.displayName,
+                                  style: Theme.of(context).textTheme.bodyLarge ??
+                                      const TextStyle(fontSize: 16),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                                 subtitle: Text(
                                   [
                                     if (until == null)
@@ -1191,7 +1216,9 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                                     else
                                       'До ${until.toLocal().day.toString().padLeft(2, '0')}.${until.toLocal().month.toString().padLeft(2, '0')}.${until.toLocal().year}',
                                     if ((row.reason ?? '').trim().isNotEmpty)
-                                      row.reason!.trim(),
+                                      previewTextWithCustomEmoji(
+                                        row.reason!.trim(),
+                                      ),
                                   ].join(' • '),
                                 ),
                                 trailing: TextButton(
@@ -1287,7 +1314,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
           Future<void> share(ChatGroupInviteLink link) async {
             final title = _conversation.title?.trim();
             final subject = (title != null && title.isNotEmpty)
-                ? 'Приглашение в «$title»'
+                ? 'Приглашение в «${previewTextWithCustomEmoji(title)}»'
                 : 'Приглашение в группу HanWe';
             await SystemShare.shareText(
               context,
@@ -1676,9 +1703,9 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                                           ) ==
                                           null
                                       ? Text(
-                                          _conversation.displayTitle.characters
-                                              .first
-                                              .toUpperCase(),
+                                          avatarLetterWithCustomEmoji(
+                                            _conversation.displayTitle,
+                                          ),
                                           style: theme.textTheme.headlineMedium,
                                         )
                                       : null,
@@ -1702,9 +1729,13 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                         ),
                         const SizedBox(height: 12),
                         Center(
-                          child: Text(
-                            _conversation.displayTitle,
-                            style: theme.textTheme.titleLarge,
+                          child: HighlightedText(
+                            text: _conversation.displayTitle,
+                            style: theme.textTheme.titleLarge ??
+                                const TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w600,
+                                ),
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -1996,14 +2027,17 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                           return ListTile(
                             leading: CircleAvatar(
                               child: Text(
-                                member.displayName.characters.first
-                                    .toUpperCase(),
+                                avatarLetterWithCustomEmoji(member.displayName),
                               ),
                             ),
-                            title: Text(
-                              isMe
+                            title: HighlightedText(
+                              text: isMe
                                   ? '${member.displayName} (вы)'
                                   : member.displayName,
+                              style: Theme.of(context).textTheme.bodyLarge ??
+                                  const TextStyle(fontSize: 16),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             subtitle: Text(
                               [
@@ -2266,11 +2300,20 @@ class _GroupJoinRequestsSheetState extends State<_GroupJoinRequestsSheet> {
                                 return ListTile(
                                   leading: CircleAvatar(
                                     child: Text(
-                                      row.user.displayName.characters.first
-                                          .toUpperCase(),
+                                      avatarLetterWithCustomEmoji(
+                                        row.user.displayName,
+                                      ),
                                     ),
                                   ),
-                                  title: Text(row.user.displayName),
+                                  title: HighlightedText(
+                                    text: row.user.displayName,
+                                    style: Theme.of(context)
+                                            .textTheme
+                                            .bodyLarge ??
+                                        const TextStyle(fontSize: 16),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                   subtitle: Text(
                                     'Запрос от ${row.requestedAt.day.toString().padLeft(2, '0')}.${row.requestedAt.month.toString().padLeft(2, '0')}.${row.requestedAt.year}',
                                   ),

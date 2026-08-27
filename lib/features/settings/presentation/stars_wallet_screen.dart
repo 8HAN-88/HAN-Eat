@@ -5,6 +5,7 @@ import '../../../app/app_router.dart';
 import '../../../core/config/stars_checkout_urls.dart';
 import '../../../services/paid_features_service.dart';
 import '../../../services/payment_service.dart';
+import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/telegram_ui.dart';
 import 'widgets/stars_wallet_widgets.dart';
@@ -83,7 +84,7 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
       _awaitingCheckoutReturn = false;
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        SnackBar(content: Text(userVisibleError(e))),
       );
     } finally {
       if (mounted) setState(() => _checkoutLoading = false);
@@ -168,6 +169,28 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
                       title: 'Витрина подарков',
                       subtitle: 'Коллекционные подарки на продажу',
                       onTap: () => context.push(StarGiftsMarketplaceRoute.path),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TelegramGroupedSurface(
+                    margin: EdgeInsets.zero,
+                    child: TelegramActionRow(
+                      icon: Icons.emoji_emotions_outlined,
+                      title: 'Магазин паков',
+                      subtitle: 'Стикеры и кастомные эмодзи за Stars',
+                      onTap: () => context.push(PackStoreRoute.path),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TelegramGroupedSurface(
+                    margin: EdgeInsets.zero,
+                    child: TelegramActionRow(
+                      icon: Icons.tune_rounded,
+                      title: 'Моя подписка',
+                      subtitle: 'Лестница flex и платные функции',
+                      onTap: () => context.push(FlexSubscriptionRoute.path),
                       trailing: const Icon(Icons.chevron_right_rounded),
                     ),
                   ),

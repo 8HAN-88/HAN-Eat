@@ -1,4 +1,5 @@
 import '../models/post_model.dart';
+import 'custom_emoji_registry.dart';
 
 class ShareLinkService {
   static const webOrigin = 'https://haneat.app';
@@ -28,7 +29,7 @@ class ShareLinkService {
     final name = (displayName ?? '').trim();
     final handle = (username ?? '').trim().replaceFirst(RegExp(r'^@'), '');
     final title = name.isNotEmpty
-        ? name
+        ? previewTextWithCustomEmoji(name)
         : (handle.isNotEmpty ? '@$handle' : 'Профиль');
     final handleLine = handle.isNotEmpty ? '\n@$handle' : '';
     final link =
@@ -44,18 +45,36 @@ class ShareLinkService {
     return '$base?msg=$messageId';
   }
 
+  static String channelShareSubject(String channelName) {
+    final raw = channelName.trim();
+    return raw.isEmpty ? 'Канал' : previewTextWithCustomEmoji(raw);
+  }
+
   static String channelShareText(int channelId, String channelName) {
-    final title = channelName.trim().isEmpty ? 'Канал' : channelName.trim();
-    return '$title\n\nОткрыть в HanWe: ${channelLink(channelId)}';
+    return '${channelShareSubject(channelName)}\n\nОткрыть в HanWe: ${channelLink(channelId)}';
+  }
+
+  static String postShareSubject(PostModel post) {
+    final rawTitle = (post.title ?? '').trim();
+    if (rawTitle.isNotEmpty) return previewTextWithCustomEmoji(rawTitle);
+    final rawDescription = (post.description ?? '').trim();
+    if (rawDescription.isNotEmpty) {
+      return previewTextWithCustomEmoji(rawDescription);
+    }
+    return post.type == 'reel' ? 'Рилс' : 'Пост';
   }
 
   static String postShareText(PostModel post) {
-    final title = (post.title ?? post.description ?? 'Пост').trim();
-    return '$title\n\nОткрыть в HanWe: ${postLink(post.id)}';
+    return '${postShareSubject(post)}\n\nОткрыть в HanWe: ${postLink(post.id)}';
   }
 
   static String reelShareText(PostModel reel) {
-    final title = (reel.title ?? reel.description ?? 'Рилс').trim();
-    return '$title\n\nОткрыть в HanWe: ${reelLink(reel.id)}';
+    return '${postShareSubject(reel)}\n\nОткрыть в HanWe: ${reelLink(reel.id)}';
+  }
+
+  static String packShareText(String link, {required bool isPublic}) {
+    final clean = link.trim();
+    if (isPublic) return clean;
+    return '$clean\n\nСсылка откроется только у владельца и тех, кто купил пак';
   }
 }

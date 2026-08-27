@@ -131,9 +131,16 @@ def build_poll_content(
     description: str = "",
     settings: Optional[Dict[str, Any]] = None,
 ) -> str:
-    q = (question or "").strip()
-    desc = (description or "").strip()
-    opts = [t.strip() for t in option_texts if t and t.strip()]
+    from app.services.emoji_pack_service import clip_preserving_custom_emoji
+
+    q = clip_preserving_custom_emoji((question or "").strip(), 300)
+    desc = clip_preserving_custom_emoji((description or "").strip(), 500)
+    opts = [
+        clip_preserving_custom_emoji(t.strip(), 120)
+        for t in option_texts
+        if t and t.strip()
+    ]
+    opts = [t for t in opts if t]
     if len(q) < 1:
         raise ValueError("poll_question_required")
     if len(opts) < 2:
@@ -433,7 +440,9 @@ def poll_preview_text(content: str) -> str:
     question = (data.get("poll") or {}).get("question") or ""
     q = question.strip()
     if q:
-        return f"📊 {q[:80]}"
+        from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
+        return f"📊 {preview_text_with_custom_emoji(q, limit=80)}"
     return "📊 Опрос"
 
 
@@ -444,6 +453,16 @@ def add_option_to_message_poll(
     text: str,
 ) -> str:
     """Append a new option when allow_add_options is enabled."""
+    from app.services.emoji_pack_service import (
+        EmojiPackService,
+        clip_preserving_custom_emoji,
+    )
+
+    cleaned = clip_preserving_custom_emoji((text or "").strip(), 120)
+    if len(cleaned) < 1:
+        raise ValueError("empty_option")
+    EmojiPackService(db).require_send_tokens(user_id, cleaned)
+
     from app.models.conversation import Message
 
     msg = db.query(Message).filter(Message.id == message_id).first()
@@ -465,12 +484,6 @@ def add_option_to_message_poll(
     settings = poll.get("settings") or {}
     if not bool(settings.get("allow_add_options")):
         raise ValueError("add_options_disabled")
-
-    cleaned = (text or "").strip()
-    if len(cleaned) < 1:
-        raise ValueError("empty_option")
-    if len(cleaned) > 120:
-        cleaned = cleaned[:120]
 
     raw_opts = poll.get("options") if isinstance(poll.get("options"), list) else []
     options: List[Dict[str, Any]] = []

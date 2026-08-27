@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../features/subscription/creator_upsell.dart';
 import '../services/product_analytics.dart';
 import '../services/report_service.dart';
 import '../utils/api_error_parser.dart';
@@ -113,12 +114,16 @@ class _ReportContentDialogState extends State<_ReportContentDialog> {
       if (mounted) Navigator.pop(context, true);
     } on ApiClientException catch (e) {
       if (mounted) {
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось отправить жалобу'))),
         );
       }
     } catch (e) {
       if (mounted) {
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(

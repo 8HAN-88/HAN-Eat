@@ -2,23 +2,29 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../../models/emoji_pack_models.dart';
 import '../../../../models/sticker_models.dart';
+import '../../../../services/custom_emoji_registry.dart';
+import '../../../../services/emoji_pack_service.dart';
 import '../../../../services/server_config.dart';
 import '../../../../services/sticker_service.dart';
+import '../../../subscription/creator_upsell.dart';
 import '../../application/chat_recent_stickers_store.dart';
 
-enum _InlineStickerTab { recent, favorites, pack }
+enum _InlineStickerTab { recent, favorites, pack, emoji }
 
 /// Compact sticker picker above the composer (Telegram-style).
 class ChatInlineStickerPanel extends StatefulWidget {
   const ChatInlineStickerPanel({
     super.key,
     required this.onPick,
+    this.onInsertCustomEmoji,
     this.onOpenFull,
     this.height = 268,
   });
 
   final void Function(String mediaUrl, {String? emoji}) onPick;
+  final ValueChanged<int>? onInsertCustomEmoji;
   final VoidCallback? onOpenFull;
   final double height;
 
@@ -28,12 +34,14 @@ class ChatInlineStickerPanel extends StatefulWidget {
 
 class _ChatInlineStickerPanelState extends State<ChatInlineStickerPanel> {
   List<StickerPack> _packs = const [];
+  List<EmojiPack> _emojiPacks = const [];
   List<ChatRecentStickerEntry> _recent = const [];
   List<ChatRecentStickerEntry> _favorites = const [];
   bool _loading = true;
   String? _error;
   _InlineStickerTab _tab = _InlineStickerTab.recent;
   int? _selectedPackId;
+  int? _selectedEmojiPackId;
 
   @override
   void initState() {
@@ -48,12 +56,17 @@ class _ChatInlineStickerPanelState extends State<ChatInlineStickerPanel> {
     });
     try {
       final packs = await StickerService.listMyPacks();
+      List<EmojiPack> emojiPacks = const [];
+      try {
+        emojiPacks = await EmojiPackService.listMyPacks();
+      } catch (_) {}
       final recent = await ChatRecentStickersStore.loadRecent();
       final favorites = await ChatRecentStickersStore.loadFavorites();
       if (!mounted) return;
       setState(() {
         _packs =
             packs.where((p) => p.isInstalled || p.stickers.isNotEmpty).toList();
+        _emojiPacks = emojiPacks.where((p) => p.canUse).toList();
         _recent = recent;
         _favorites = favorites;
         _loading = false;
@@ -116,10 +129,42 @@ class _ChatInlineStickerPanelState extends State<ChatInlineStickerPanel> {
           ];
         }
         return const [];
+      case _InlineStickerTab.emoji:
+        for (final pack in _emojiPacks) {
+          if (pack.id != _selectedEmojiPackId) continue;
+          return [
+            for (final s in pack.items)
+              if (s.mediaUrl.trim().isNotEmpty)
+                _StickerThumb(
+                  mediaUrl: s.mediaUrl,
+                  customEmojiId: s.id,
+                ),
+          ];
+        }
+        return const [];
     }
   }
 
   Future<void> _pick(_StickerThumb item) async {
+    final customId = item.customEmojiId;
+    if (customId != null && customId > 0) {
+      if (!hasFlexFeature('custom_emoji')) {
+        await showCreatorUpsell(context);
+        return;
+      }
+      final allowed = _emojiPacks.any(
+        (pack) =>
+            pack.canUse && pack.items.any((item) => item.id == customId),
+      );
+      if (!allowed) {
+        if (context.mounted) {
+          offerPackStoreIfRequired(context, 'pack_purchase_required');
+        }
+        return;
+      }
+      widget.onInsertCustomEmoji?.call(customId);
+      return;
+    }
     unawaited(
       ChatRecentStickersStore.remember(
         mediaUrl: item.mediaUrl,
@@ -132,12 +177,23 @@ class _ChatInlineStickerPanelState extends State<ChatInlineStickerPanel> {
   }
 
   Future<void> _toggleFavorite(_StickerThumb item) async {
-    final added = await ChatRecentStickersStore.toggleFavorite(
-      mediaUrl: item.mediaUrl,
-      emoji: item.emoji,
-      stickerType: item.stickerType,
-      stickerId: item.stickerId,
-    );
+    late final bool added;
+    try {
+      added = await ChatRecentStickersStore.toggleFavorite(
+        mediaUrl: item.mediaUrl,
+        emoji: item.emoji,
+        stickerType: item.stickerType,
+        stickerId: item.stickerId,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+      return;
+    }
     final favorites = await ChatRecentStickersStore.loadFavorites();
     if (!mounted) return;
     setState(() => _favorites = favorites);
@@ -159,6 +215,8 @@ class _ChatInlineStickerPanelState extends State<ChatInlineStickerPanel> {
         return 'Нет избранных · долгий тап по стикеру';
       case _InlineStickerTab.pack:
         return 'В паке пока пусто';
+      case _InlineStickerTab.emoji:
+        return 'Нет установленных эмодзи-паков';
     }
   }
 
@@ -177,7 +235,7 @@ class _ChatInlineStickerPanelState extends State<ChatInlineStickerPanel> {
               child: Row(
                 children: [
                   Text(
-                    'Стикеры',
+                    _tab == _InlineStickerTab.emoji ? 'Эмодзи' : 'Стикеры',
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                       color: scheme.onSurface,
@@ -241,8 +299,9 @@ class _ChatInlineStickerPanelState extends State<ChatInlineStickerPanel> {
                                 return InkWell(
                                   borderRadius: BorderRadius.circular(10),
                                   onTap: () => unawaited(_pick(item)),
-                                  onLongPress: () =>
-                                      unawaited(_toggleFavorite(item)),
+                                  onLongPress: item.customEmojiId != null
+                                      ? null
+                                      : () => unawaited(_toggleFavorite(item)),
                                   child: Stack(
                                     fit: StackFit.expand,
                                     children: [
@@ -300,10 +359,24 @@ class _ChatInlineStickerPanelState extends State<ChatInlineStickerPanel> {
                           _selectedPackId == pack.id,
                       label: pack.title.isEmpty
                           ? '#'
-                          : pack.title.characters.first.toUpperCase(),
+                          : avatarLetterWithCustomEmoji(pack.title),
                       onTap: () => setState(() {
                         _tab = _InlineStickerTab.pack;
                         _selectedPackId = pack.id;
+                        _selectedEmojiPackId = null;
+                      }),
+                    ),
+                  for (final pack in _emojiPacks)
+                    _PackChip(
+                      selected: _tab == _InlineStickerTab.emoji &&
+                          _selectedEmojiPackId == pack.id,
+                      label: pack.title.isEmpty
+                          ? 'Э'
+                          : avatarLetterWithCustomEmoji(pack.title),
+                      onTap: () => setState(() {
+                        _tab = _InlineStickerTab.emoji;
+                        _selectedEmojiPackId = pack.id;
+                        _selectedPackId = null;
                       }),
                     ),
                 ],
@@ -322,12 +395,14 @@ class _StickerThumb {
     this.emoji,
     this.stickerId,
     this.stickerType,
+    this.customEmojiId,
   });
 
   final String mediaUrl;
   final String? emoji;
   final int? stickerId;
   final String? stickerType;
+  final int? customEmojiId;
 }
 
 class _PackChip extends StatelessWidget {

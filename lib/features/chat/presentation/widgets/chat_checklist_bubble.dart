@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../models/chat_models.dart';
+import '../../../../widgets/highlighted_text.dart';
 
 class ChatChecklistBubble extends StatelessWidget {
   const ChatChecklistBubble({
@@ -32,8 +33,8 @@ class ChatChecklistBubble extends StatelessWidget {
               Icon(Icons.checklist_rtl, size: 18, color: accentColor),
               const SizedBox(width: 6),
               Expanded(
-                child: Text(
-                  checklist.title,
+                child: HighlightedText(
+                  text: checklist.title,
                   style: TextStyle(
                     color: foregroundColor,
                     fontWeight: FontWeight.w700,
@@ -68,8 +69,8 @@ class ChatChecklistBubble extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(
-                        checklist.items[i].text,
+                      child: HighlightedText(
+                        text: checklist.items[i].text,
                         style: TextStyle(
                           color: foregroundColor,
                           decoration: checklist.items[i].done

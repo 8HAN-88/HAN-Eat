@@ -173,6 +173,14 @@ def _raise_flex_gate(code: str) -> None:
             "premium_stickers",
             "Премиум-стикеры доступны с уровня 43",
         ),
+        "custom_emoji_required": (
+            "custom_emoji",
+            "Кастомные эмодзи в тексте доступны с уровня 69",
+        ),
+        "custom_emoji_reaction_required": (
+            "custom_emoji_reactions",
+            "Реакции своими эмодзи доступны с уровня 72",
+        ),
         "pinned_chat_limit": (
             "extra_pinned_chats",
             "Больше пяти закреплённых чатов доступно с уровня 45",
@@ -208,6 +216,17 @@ def _raise_flex_gate(code: str) -> None:
     )
 
 
+def _raise_pack_gate(code: str) -> None:
+    if code == "custom_emoji_denied":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            {
+                "code": "custom_emoji_denied",
+                "message": "Этот эмодзи недоступен — купите пак",
+            },
+        )
+
+
 def _require_chat_search(db, user) -> None:
     from app.services.subscription_service import SubscriptionService
 
@@ -216,6 +235,35 @@ def _require_chat_search(db, user) -> None:
         "chat_search",
         "Поиск по сообщениям доступен с уровня 26",
     )
+
+
+def _require_send_text_tokens(db, user, body, conversation_id: Optional[int] = None) -> None:
+    from app.services.emoji_pack_service import EmojiPackService, authored_send_texts
+    from app.services.reply_keyboard_service import is_reply_keyboard_label
+
+    content = getattr(body, "content", None)
+    parts: List[Optional[str]] = [
+        *authored_send_texts(
+            getattr(body, "type", None), content
+        ),
+        getattr(body, "poll_question", None),
+        getattr(body, "poll_description", None),
+        getattr(body, "checklist_title", None),
+        *(getattr(body, "poll_options", None) or []),
+        *(getattr(body, "checklist_items", None) or []),
+    ]
+    if conversation_id is not None and is_reply_keyboard_label(
+        db, conversation_id, user.id, content
+    ):
+        raw = (content or "").strip()
+        parts = [p for p in parts if (p or "").strip() != raw]
+    keyboard = _normalize_inline_keyboard(getattr(body, "inline_keyboard", None))
+    if keyboard:
+        for row in keyboard:
+            for btn in row:
+                parts.append(btn.get("text"))
+                parts.append(btn.get("callback_text"))
+    EmojiPackService(db).require_send_tokens_http(user.id, *parts)
 
 
 def _require_send_flex_options(db, user, body) -> None:
@@ -244,6 +292,13 @@ def _require_send_flex_options(db, user, body) -> None:
                 "Викторины и расширенные опросы доступны с уровня 27",
             )
     if getattr(body, "type", None) == "checklist":
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(db).require_send_tokens_http(
+            user.id,
+            getattr(body, "checklist_title", None),
+            *(getattr(body, "checklist_items", None) or []),
+        )
         billing.require_feature(
             user.id,
             "checklist",
@@ -356,6 +411,7 @@ def _scheduled_message_response(item: ScheduledMessage) -> ScheduledMessageRespo
         effect_id=getattr(item, "effect_id", None),
         topic_id=getattr(item, "topic_id", None),
         status=item.status,
+        error_text=getattr(item, "error_text", None),
         created_at=item.created_at,
     )
 
@@ -578,6 +634,7 @@ def _brief(
     send_restricted_until: Optional[datetime] = None,
     send_restriction_reason: Optional[str] = None,
 ) -> ChatUserBrief:
+    from app.services.emoji_pack_service import EmojiPackService
     from app.services.last_seen_privacy import can_viewer_see_last_seen
 
     last_seen = user.last_seen_at
@@ -603,24 +660,38 @@ def _brief(
         send_restricted_until=send_restricted_until,
         send_restriction_reason=send_restriction_reason,
         paid_message_stars=max(0, int(getattr(user, "paid_message_stars", 0) or 0)),
-        emoji_status=getattr(user, "emoji_status", None),
+        emoji_status=(
+            EmojiPackService(db).visible_emoji_status(user)
+            if db is not None
+            else getattr(user, "emoji_status", None)
+        ),
         profile_color=getattr(user, "profile_color", None),
     )
 
 
-def _group_ban_response(item: dict) -> GroupMemberBanResponse:
+def _group_ban_response(
+    item: dict,
+    *,
+    viewer_id: Optional[int] = None,
+    db: Optional[Session] = None,
+) -> GroupMemberBanResponse:
     return GroupMemberBanResponse(
-        user=_brief(item["user"]),
+        user=_brief(item["user"], viewer_id=viewer_id, db=db),
         reason=item.get("reason"),
         banned_until=item.get("banned_until"),
         banned_at=item.get("banned_at"),
     )
 
 
-def _group_join_request_response(item: dict) -> GroupJoinRequestResponse:
+def _group_join_request_response(
+    item: dict,
+    *,
+    viewer_id: Optional[int] = None,
+    db: Optional[Session] = None,
+) -> GroupJoinRequestResponse:
     return GroupJoinRequestResponse(
         id=item["id"],
-        user=_brief(item["user"]),
+        user=_brief(item["user"], viewer_id=viewer_id, db=db),
         status=item["status"],
         requested_at=item["requested_at"],
     )
@@ -748,9 +819,11 @@ def _sender_name(user: Optional[User]) -> Optional[str]:
 
 
 def _user_label(user: Optional[User], fallback_id: Optional[int] = None) -> str:
+    from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
     if user is not None:
         if user.name and user.name.strip():
-            return user.name.strip()
+            return preview_text_with_custom_emoji(user.name.strip())
         if user.username and user.username.strip():
             return f"@{user.username.strip()}"
         return f"User {user.id}"
@@ -760,6 +833,8 @@ def _user_label(user: Optional[User], fallback_id: Optional[int] = None) -> str:
 
 
 def _normalize_inline_keyboard(raw: Any) -> Optional[List[List[Dict[str, Any]]]]:
+    from app.services.emoji_pack_service import clip_preserving_custom_emoji
+
     if raw in (None, ""):
         return None
     source = raw
@@ -780,7 +855,7 @@ def _normalize_inline_keyboard(raw: Any) -> Optional[List[List[Dict[str, Any]]]]
                 btn = btn.model_dump(exclude_none=True)
             if not isinstance(btn, dict):
                 continue
-            text = str(btn.get("text") or "").strip()[:64]
+            text = clip_preserving_custom_emoji(str(btn.get("text") or "").strip(), 64)
             if not text:
                 continue
             callback_data = btn.get("callback_data")
@@ -794,7 +869,9 @@ def _normalize_inline_keyboard(raw: Any) -> Optional[List[List[Dict[str, Any]]]]
             if isinstance(url, str) and url.strip():
                 out_btn["url"] = url.strip()[:512]
             if isinstance(callback_text, str) and callback_text.strip():
-                out_btn["callback_text"] = callback_text.strip()[:300]
+                out_btn["callback_text"] = clip_preserving_custom_emoji(
+                    callback_text.strip(), 300
+                )
             if miniapp_id is None and isinstance(web_app, dict):
                 raw_id = web_app.get("miniapp_id") or web_app.get("id")
                 try:
@@ -1283,6 +1360,8 @@ async def upsert_chat_draft(
         code = str(e)
         if code == "forbidden":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        _raise_flex_gate(code)
+        _raise_pack_gate(code)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
     publish_user_event(
         current_user.id,
@@ -1375,8 +1454,10 @@ async def create_chat_folder(
         return ChatFolderResponse(**row)
     except ValueError as e:
         db.rollback()
-        _raise_flex_gate(str(e))
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e
+        code = str(e)
+        _raise_flex_gate(code)
+        _raise_pack_gate(code)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, code) from e
 
 
 @router.post("/chats/folders/reorder", response_model=ChatFolderListResponse)
@@ -1411,8 +1492,10 @@ async def update_chat_folder(
         )
     except ValueError as e:
         db.rollback()
-        _raise_flex_gate(str(e))
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e
+        code = str(e)
+        _raise_flex_gate(code)
+        _raise_pack_gate(code)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, code) from e
     if not row:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Folder not found")
     db.commit()
@@ -1506,7 +1589,18 @@ async def create_quick_reply(
 ):
     from app.services.quick_reply_service import QuickReplyError, create_reply
     from app.services.subscription_service import SubscriptionService
+    from app.services.emoji_pack_service import (
+        EmojiPackService,
+        authored_send_texts,
+    )
 
+    title = str(body.get("title") or "")
+    text = str(body.get("text") or "")
+    EmojiPackService(db).require_send_tokens_http(
+        current_user.id,
+        title,
+        *authored_send_texts("text", text),
+    )
     SubscriptionService(db).require_feature(
         current_user.id,
         "quick_replies",
@@ -1516,8 +1610,8 @@ async def create_quick_reply(
         row = create_reply(
             db,
             current_user.id,
-            str(body.get("title") or ""),
-            str(body.get("text") or ""),
+            title,
+            text,
         )
         db.commit()
         db.refresh(row)
@@ -1668,6 +1762,8 @@ async def create_group_chat(
         code = str(e)
         if code == "user_not_found":
             raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+        _raise_flex_gate(code)
+        _raise_pack_gate(code)
         if code in ("empty_title", "need_members"):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code == "user_blocked":
@@ -2336,6 +2432,7 @@ async def send_message(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    _require_send_text_tokens(db, current_user, body, conversation_id)
     _require_send_flex_options(db, current_user, body)
     svc = ChatService(db)
     if body.type in ("voice", "video_note"):
@@ -2469,6 +2566,22 @@ async def send_message(
             raise HTTPException(status.HTTP_404_NOT_FOUND, code)
         if code == "user_blocked":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "User blocked")
+        if code == "custom_emoji_denied":
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                {
+                    "code": "custom_emoji_denied",
+                    "message": "Этот эмодзи недоступен — купите пак",
+                },
+            )
+        if code == "pack_purchase_required":
+            raise HTTPException(
+                status.HTTP_402_PAYMENT_REQUIRED,
+                {
+                    "code": "pack_purchase_required",
+                    "message": "Сначала купите пак",
+                },
+            )
         if code == "group_write_restricted":
             raise HTTPException(status.HTTP_403_FORBIDDEN, code)
         if code == "group_user_restricted":
@@ -2502,8 +2615,11 @@ async def send_message(
             )
         if code == "paid_message_fee_failed":
             raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                "paid_message_fee_failed",
+                status.HTTP_402_PAYMENT_REQUIRED,
+                {
+                    "code": "STARS_REQUIRED",
+                    "message": "Недостаточно звёзд для платного сообщения",
+                },
             )
         raise
     except HTTPException:
@@ -2578,8 +2694,8 @@ async def forward_message(
     except ValueError as e:
         db.rollback()
         code = str(e)
-        if code == "hide_forward_required":
-            _raise_flex_gate(code)
+        _raise_flex_gate(code)
+        _raise_pack_gate(code)
         if code == "forbidden":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
         if code == "not_found":
@@ -2598,6 +2714,14 @@ async def forward_message(
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code == "user_blocked":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "User blocked")
+        if code == "pack_purchase_required":
+            raise HTTPException(
+                status.HTTP_402_PAYMENT_REQUIRED,
+                {
+                    "code": "pack_purchase_required",
+                    "message": "Сначала купите пак",
+                },
+            )
         if code == "protect_content":
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
@@ -2694,6 +2818,7 @@ async def schedule_message(
 ):
     from app.services.subscription_service import SubscriptionService
 
+    _require_send_text_tokens(db, current_user, body, conversation_id)
     SubscriptionService(db).require_feature(
         current_user.id,
         "scheduled_messages",
@@ -2762,6 +2887,22 @@ async def schedule_message(
         _raise_flex_gate(code)
         if code == "forbidden":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        if code == "custom_emoji_denied":
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                {
+                    "code": "custom_emoji_denied",
+                    "message": "Этот эмодзи недоступен — купите пак",
+                },
+            )
+        if code == "pack_purchase_required":
+            raise HTTPException(
+                status.HTTP_402_PAYMENT_REQUIRED,
+                {
+                    "code": "pack_purchase_required",
+                    "message": "Сначала купите пак",
+                },
+            )
         if code in (
             "empty_message",
             "missing_media",
@@ -2896,6 +3037,23 @@ async def reschedule_scheduled_message(
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code == "online_delivery_locked":
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        if code == "custom_emoji_denied":
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                {
+                    "code": "custom_emoji_denied",
+                    "message": "Этот эмодзи недоступен — купите пак",
+                },
+            )
+        if code == "pack_purchase_required":
+            raise HTTPException(
+                status.HTTP_402_PAYMENT_REQUIRED,
+                {
+                    "code": "pack_purchase_required",
+                    "message": "Сначала купите пак",
+                },
+            )
+        _raise_flex_gate(code)
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
     return _scheduled_message_response(item)
 
@@ -2949,7 +3107,11 @@ async def callback_query(
     if not result:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "callback_not_found")
     bot_reply, _ = result
-    bot_user = _find_chat_bot(db, conversation_id)
+    bot_user = (
+        db.query(User)
+        .filter(User.id == msg.sender_id, User.is_bot.is_(True))
+        .first()
+    ) or _find_chat_bot(db, conversation_id)
     if bot_user:
         AnalyticsService(db).log_event(
             event_type="bot_callback_click",
@@ -3093,6 +3255,20 @@ async def start_live_location(
     except ValueError as exc:
         db.rollback()
         code = str(exc)
+        _raise_flex_gate(code)
+        _raise_pack_gate(code)
+        if code == "forbidden":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        if code == "user_blocked":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "User blocked")
+        if code == "pack_purchase_required":
+            raise HTTPException(
+                status.HTTP_402_PAYMENT_REQUIRED,
+                {
+                    "code": "pack_purchase_required",
+                    "message": "Сначала купите пак",
+                },
+            )
         raise HTTPException(status.HTTP_400_BAD_REQUEST, code) from exc
 
     response = _live_location_message_response(
@@ -3332,7 +3508,9 @@ async def transcribe_chat_message(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "voice_media_missing")
     try:
         data = load_media_bytes(msg.media_url)
-        msg.transcription = transcribe_audio_bytes(data)
+        from app.services.emoji_pack_service import strip_custom_emoji_tokens
+
+        msg.transcription = strip_custom_emoji_tokens(transcribe_audio_bytes(data)) or None
         db.commit()
         db.refresh(msg)
     except TranscriptionUnavailable:
@@ -3412,7 +3590,11 @@ async def create_saved_tag(
 ):
     from app.services.saved_tag_service import SavedTagError, create_tag
     from app.services.subscription_service import SubscriptionService
+    from app.services.emoji_pack_service import EmojiPackService
 
+    EmojiPackService(db).require_send_tokens_http(
+        current_user.id, body.title, body.emoji
+    )
     SubscriptionService(db).require_feature(
         current_user.id,
         "saved_tags",
@@ -3643,6 +3825,16 @@ async def add_chat_poll_option(
             "invalid_poll",
         ):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        if code == "custom_emoji_required":
+            _raise_flex_gate(code)
+        if code == "custom_emoji_denied":
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                {
+                    "code": "custom_emoji_denied",
+                    "message": "Этот эмодзи недоступен — купите пак",
+                },
+            )
         raise
 
     conv = (
@@ -3873,6 +4065,15 @@ async def edit_message(
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
         if code == "empty_message":
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        if code == "custom_emoji_denied":
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                {
+                    "code": "custom_emoji_denied",
+                    "message": "Этот эмодзи недоступен — купите пак",
+                },
+            )
+        _raise_flex_gate(code)
         raise
 
     reactions = _reaction_summaries(svc, [msg.id], current_user.id).get(msg.id, [])
@@ -3964,20 +4165,24 @@ async def translate_chat_text(
     text = (body.text or "").strip()
     if not text:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "empty_text")
-    target = (body.target_lang or "ru").strip().lower()[:8] or "ru"
+    from app.services.emoji_pack_service import text_for_translation
     from app.services.text_translation import translate_text
     from app.services.subscription_service import SubscriptionService
 
+    # Translation is reading a received (or own) message — do not 403 on
+    # someone else's `[[e:id]]`. Preview tokens so the translator sees ✦.
+    source = text_for_translation(text) or text
+    target = (body.target_lang or "ru").strip().lower()[:8] or "ru"
     billing = SubscriptionService(db)
     billing.require_feature(
         current_user.id,
         "chat_translation",
         "Перевод сообщений доступен с уровня 11",
     )
-    translated = translate_text(text, target)
+    translated = translate_text(source, target)
     return TranslateTextResponse(
         text=text,
-        translated=translated or text,
+        translated=translated or source,
         target_lang=target,
         priority=billing.has_feature(current_user.id, "ai_priority_speed"),
     )
@@ -4051,6 +4256,15 @@ async def add_message_reaction(
                     "Любые реакции доступны с уровня 37",
                 ),
             )
+        if code == "custom_emoji_denied":
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                {
+                    "code": "custom_emoji_denied",
+                    "message": "Этот эмодзи недоступен — купите пак",
+                },
+            )
+        _raise_flex_gate(code)
         raise
     except HTTPException:
         db.rollback()
@@ -4798,7 +5012,9 @@ async def create_chat_tag(
 ):
     from app.services.chat_tag_service import ChatTagError, create_tag
     from app.services.subscription_service import SubscriptionService
+    from app.services.emoji_pack_service import EmojiPackService
 
+    EmojiPackService(db).require_send_tokens_http(current_user.id, body.title)
     SubscriptionService(db).require_feature(
         current_user.id,
         "chat_tags",
@@ -5162,6 +5378,7 @@ async def update_group_chat(
         db.rollback()
         code = str(e)
         _raise_flex_gate(code)
+        _raise_pack_gate(code)
         if code == "not_found":
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversation not found")
         if code == "not_group":
@@ -5276,6 +5493,8 @@ async def create_forum_topic(
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
         if code in ("not_a_forum", "empty_title", "not_group"):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        _raise_flex_gate(code)
+        _raise_pack_gate(code)
         raise
     except Exception:
         db.rollback()
@@ -5320,6 +5539,8 @@ async def update_forum_topic(
             "not_group",
         ):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        _raise_flex_gate(code)
+        _raise_pack_gate(code)
         raise
     except Exception:
         db.rollback()
@@ -5552,6 +5773,8 @@ async def set_group_member_send_restriction(
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code in ("forbidden", "not_group"):
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        _raise_flex_gate(code)
+        _raise_pack_gate(code)
         raise
     if note is not None:
         _emit(
@@ -5575,7 +5798,9 @@ async def list_group_bans(
     except ValueError:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
     return GroupMemberBanListResponse(
-        items=[_group_ban_response(r) for r in rows],
+        items=[
+            _group_ban_response(r, viewer_id=current_user.id, db=db) for r in rows
+        ],
     )
 
 
@@ -5619,6 +5844,8 @@ async def ban_group_member(
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code in ("forbidden", "not_group"):
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        _raise_flex_gate(code)
+        _raise_pack_gate(code)
         raise
     if note is not None:
         _emit(
@@ -5693,7 +5920,10 @@ async def list_group_join_requests(
         db.rollback()
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
     return GroupJoinRequestListResponse(
-        items=[_group_join_request_response(r) for r in rows]
+        items=[
+            _group_join_request_response(r, viewer_id=current_user.id, db=db)
+            for r in rows
+        ]
     )
 
 
@@ -5777,7 +6007,7 @@ async def list_join_requests_inbox(
             JoinRequestsInboxItemResponse(
                 id=row["id"],
                 conversation=conv_item,
-                user=_brief(row["user"]),
+                user=_brief(row["user"], viewer_id=current_user.id, db=db),
                 status=row["status"],
                 requested_at=row["requested_at"],
             )
@@ -5821,7 +6051,9 @@ async def list_group_moderation_log(
                 action=_moderation_action_from_text(m.content),
                 text=m.content,
                 created_at=m.created_at,
-                actor=_brief(actors[m.sender_id]) if m.sender_id in actors else None,
+                actor=_brief(actors[m.sender_id], viewer_id=current_user.id, db=db)
+                if m.sender_id in actors
+                else None,
             )
             for m in rows
         ]
@@ -5859,7 +6091,11 @@ async def list_contacts(
         user = db.query(User).filter(User.id == row.contact_user_id).first()
         if user:
             items.append(
-                ContactResponse(id=row.id, user=_brief(user), created_at=row.created_at)
+                ContactResponse(
+                    id=row.id,
+                    user=_brief(user, viewer_id=current_user.id, db=db),
+                    created_at=row.created_at,
+                )
             )
     return ContactListResponse(items=items)
 
@@ -5883,7 +6119,11 @@ async def add_contact(
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot add yourself")
         raise
     user = db.query(User).filter(User.id == row.contact_user_id).first()
-    return ContactResponse(id=row.id, user=_brief(user), created_at=row.created_at)
+    return ContactResponse(
+        id=row.id,
+        user=_brief(user, viewer_id=current_user.id, db=db),
+        created_at=row.created_at,
+    )
 
 
 @router.post("/contacts/phone-sync", response_model=PhoneSyncResponse)

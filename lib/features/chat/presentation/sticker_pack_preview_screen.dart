@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../models/sticker_models.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../services/server_config.dart';
 import '../../../services/sticker_service.dart';
+import '../../../services/share_link_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/highlighted_text.dart';
+import '../../../widgets/stars_pay_helper.dart';
 import '../../subscription/creator_upsell.dart';
 
 class StickerPackPreviewScreen extends StatefulWidget {
@@ -55,18 +60,60 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
       await showCreatorUpsell(context);
       return;
     }
+    final needsBuy =
+        pack.isOnSale && !pack.isOwned && !pack.isPurchased;
+    if (needsBuy) {
+      final ok = await confirmStarsSpend(
+        context,
+        title: 'Купить «${previewTextWithCustomEmoji(pack.title)}»',
+        body: [
+          if (pack.ownerName.trim().isNotEmpty)
+            'Автор ${previewTextWithCustomEmoji(pack.ownerName)}',
+          '${pack.priceStars} ★',
+          if (pack.feeStars > 0) 'комиссия ${pack.feeStars} ★',
+        ].join(' · '),
+        amountStars: pack.priceStars,
+        confirmLabel: 'Купить',
+      );
+      if (!ok || !mounted) return;
+    }
     setState(() => _busy = true);
     try {
-      await StickerService.installPack(pack.id);
+      if (needsBuy) {
+        await StickerService.buyPack(
+          pack.id,
+          expectedPriceStars: pack.priceStars,
+        );
+      } else {
+        await StickerService.installPack(pack.id);
+      }
       if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _busy = false);
       if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
+      await showStarsRequiredSnack(context, e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _uninstall() async {
+    final pack = _pack;
+    if (pack == null || pack.isOwned || !pack.isInstalled) return;
+    setState(() => _busy = true);
+    try {
+      await StickerService.uninstallPack(pack.id);
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -76,6 +123,19 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Предпросмотр пака'),
+        actions: [
+          if (pack?.shareLink != null)
+            IconButton(
+              onPressed: () => Share.share(
+                ShareLinkService.packShareText(
+                  pack!.shareLink!,
+                  isPublic: pack.isPublic,
+                ),
+              ),
+              icon: const Icon(Icons.share_outlined),
+              tooltip: 'Поделиться паком',
+            ),
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -98,12 +158,22 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
                               ),
                             ),
                           Expanded(
-                            child: Text(
-                              pack.title,
-                              style: Theme.of(context).textTheme.titleLarge,
+                            child: HighlightedText(
+                              text: pack.title,
+                              style: Theme.of(context).textTheme.titleLarge ??
+                                  const TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                             ),
                           ),
-                          Text('${pack.stickers.length} стик.'),
+                          HighlightedText(
+                            text: pack.ownerName.trim().isEmpty
+                                ? '${pack.stickers.length} стик.'
+                                : '${pack.stickers.length} стик. · ${pack.ownerName}',
+                            style: Theme.of(context).textTheme.bodyMedium ??
+                                const TextStyle(fontSize: 14),
+                          ),
                         ],
                       ),
                     ),
@@ -138,14 +208,33 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
                         child: SizedBox(
                           width: double.infinity,
                           child: FilledButton.icon(
-                            onPressed:
-                                _busy || pack.isInstalled ? null : _install,
-                            icon:
-                                const Icon(Icons.download_for_offline_outlined),
+                            onPressed: _busy
+                                ? null
+                                : (pack.isOwned
+                                    ? null
+                                    : pack.isInstalled
+                                        ? _uninstall
+                                        : (pack.priceStars > 0 &&
+                                                !pack.isPurchased &&
+                                                !pack.isOnSale)
+                                            ? null
+                                            : _install),
+                            icon: Icon(
+                              pack.isInstalled && !pack.isOwned
+                                  ? Icons.remove_circle_outline
+                                  : Icons.download_for_offline_outlined,
+                            ),
                             label: Text(
-                              pack.isInstalled
-                                  ? 'Уже установлен'
-                                  : 'Добавить стикерпак',
+                              pack.isOwned
+                                  ? 'Ваш пак'
+                                  : pack.isInstalled
+                                      ? 'Удалить из своих'
+                                      : (pack.isOnSale && !pack.isPurchased)
+                                          ? 'Купить ${pack.priceStars} ★'
+                                          : (pack.priceStars > 0 &&
+                                                  !pack.isPurchased)
+                                              ? 'Сейчас не продаётся'
+                                              : 'Добавить стикерпак',
                             ),
                           ),
                         ),

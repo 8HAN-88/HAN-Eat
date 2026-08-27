@@ -6,8 +6,11 @@ import 'package:intl/intl.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../services/paid_features_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/stars_pay_helper.dart';
+import '../../../widgets/highlighted_text.dart';
+import '../../subscription/creator_upsell.dart';
 
 /// Telegram-like channel Stars giveaways manage / join screen.
 class ChannelGiveawaysScreen extends StatefulWidget {
@@ -241,6 +244,8 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
       );
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       await showStarsRequiredSnack(context, e);
     }
   }
@@ -380,15 +385,15 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
                               child: w.avatarUrl == null ||
                                       w.avatarUrl!.trim().isEmpty
                                   ? Text(
-                                      w.name.trim().isNotEmpty
-                                          ? w.name.trim()[0].toUpperCase()
-                                          : '?',
+                                      avatarLetterWithCustomEmoji(w.name),
                                     )
                                   : null,
                             ),
-                            title: Text(
-                              w.name,
+                            title: HighlightedText(
+                              text: w.name,
                               style: const TextStyle(fontWeight: FontWeight.w700),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             subtitle: w.username != null &&
                                     w.username!.trim().isNotEmpty
@@ -426,7 +431,14 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Розыгрыши · ${widget.channelName}'),
+        title: HighlightedText(
+          text: widget.channelName,
+          leading: 'Розыгрыши · ',
+          style: Theme.of(context).textTheme.titleLarge ??
+              const TextStyle(fontSize: 20),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: [
           if (widget.canManage)
             IconButton(
@@ -514,8 +526,8 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  g.title?.trim().isNotEmpty == true
+                HighlightedText(
+                  text: g.title?.trim().isNotEmpty == true
                       ? g.title!.trim()
                       : (g.isPremiumPrize
                           ? 'Розыгрыш HanWe Pro'

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../services/flex_subscription_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
+import '../../../widgets/highlighted_text.dart';
+import '../creator_upsell.dart';
 
 class AdminFlexFeaturesScreen extends StatefulWidget {
   const AdminFlexFeaturesScreen({super.key});
@@ -93,7 +95,14 @@ class _AdminFlexFeaturesScreenState extends State<AdminFlexFeaturesScreen> {
                   decoration: const InputDecoration(labelText: 'Блок'),
                   items: [
                     for (final b in _catalog?.blocks ?? const <FlexBlock>[])
-                      DropdownMenuItem(value: b.key, child: Text('${b.key} · ${b.title}')),
+                      DropdownMenuItem(
+                        value: b.key,
+                        child: HighlightedText(
+                          text: '${b.key} · ${b.title}',
+                          style: Theme.of(ctx).textTheme.bodyMedium ??
+                              const TextStyle(fontSize: 14),
+                        ),
+                      ),
                   ],
                   onChanged: (v) => setLocal(() => blockKey = v ?? blockKey),
                 ),
@@ -180,6 +189,8 @@ class _AdminFlexFeaturesScreenState extends State<AdminFlexFeaturesScreen> {
       await _load();
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -210,15 +221,22 @@ class _AdminFlexFeaturesScreenState extends State<AdminFlexFeaturesScreen> {
                         const SizedBox(height: 16),
                       ],
                       for (final block in _catalog!.blocks) ...[
-                        Text(
-                          'Блок ${block.key} · ${block.title} (${block.minLevel}–${block.maxLevel})',
+                        HighlightedText(
+                          text:
+                              'Блок ${block.key} · ${block.title} (${block.minLevel}–${block.maxLevel})',
                           style: const TextStyle(fontWeight: FontWeight.w800),
                         ),
                         const SizedBox(height: 8),
                         for (final feature in _catalog!.features.where((f) => f.blockKey == block.key))
                           ListTile(
                             contentPadding: EdgeInsets.zero,
-                            title: Text(feature.title),
+                            title: HighlightedText(
+                              text: feature.title,
+                              style: Theme.of(context).textTheme.bodyLarge ??
+                                  const TextStyle(fontSize: 16),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                             subtitle: Text(
                               '${feature.slug} · ${feature.featureType} · ур. ${feature.assignedLevel}',
                             ),

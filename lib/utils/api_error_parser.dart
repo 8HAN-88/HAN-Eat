@@ -42,6 +42,9 @@ String parseApiErrorMessage(
         'Превышен лимит сообщений в минуту. Подождите и попробуйте снова.',
       'paid_media_locked' =>
         'Сначала откройте платное медиа, чтобы переслать',
+      'pack_not_installed' =>
+        'Сначала установите пак, чтобы закрепить его',
+      'not_for_sale' => 'Пак сейчас не продаётся',
       _ => detail,
     };
   }
@@ -51,6 +54,21 @@ String parseApiErrorMessage(
     final code = detail['code'] as String?;
     if (code == 'STARS_REQUIRED') {
       return 'Недостаточно звёзд';
+    }
+    if (code == 'pack_purchase_required') {
+      return 'Сначала купите пак';
+    }
+    if (code == 'custom_emoji_denied') {
+      return 'Этот эмодзи недоступен — купите пак';
+    }
+    if (code == 'price_changed') {
+      return 'Цена пака изменилась. Обновите витрину и подтвердите снова';
+    }
+    if (code == 'not_for_sale') {
+      return 'Пак сейчас не продаётся';
+    }
+    if (code == 'own_pack') {
+      return 'Нельзя купить свой пак';
     }
     if (code == 'group_paid_required') {
       final price = detail['monthly_price_stars'];

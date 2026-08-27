@@ -13,7 +13,9 @@ import '../../../services/server_config.dart';
 import '../../../utils/image_url_helper.dart';
 import '../../../utils/post_display_title.dart';
 import '../../../widgets/telegram_photo_grid.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../../widgets/highlighted_text.dart';
 
 int? _repostOriginalPostIdFromBody(Map<String, dynamic>? body) {
   final raw = body?['repost_original_post_id'];
@@ -245,7 +247,7 @@ class _ChannelPostDetailScreenState
 
     final name = sourceName();
     final url = avatarUrl();
-    final initial = name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?';
+    final initial = avatarLetterWithCustomEmoji(name);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
@@ -290,8 +292,8 @@ class _ChannelPostDetailScreenState
                   const SizedBox(height: 4),
                   GestureDetector(
                     onTap: openSource,
-                    child: Text(
-                      name,
+                    child: HighlightedText(
+                      text: name,
                       style: const TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w600,
@@ -301,8 +303,8 @@ class _ChannelPostDetailScreenState
                 ],
                 if (comment != null && comment.isNotEmpty) ...[
                   const SizedBox(height: 10),
-                  Text(
-                    comment,
+                  HighlightedText(
+                    text: comment,
                     style: const TextStyle(fontSize: 16, height: 1.45),
                   ),
                 ],
@@ -395,8 +397,8 @@ class _ChannelPostDetailScreenState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (showTitle)
-            Text(
-              displayTitleForPost(p),
+            HighlightedText(
+              text: displayTitleForPost(p),
               style: const TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
@@ -404,8 +406,8 @@ class _ChannelPostDetailScreenState
             ),
           if (showTitle) const SizedBox(height: 16),
           if (p.description != null && p.description!.trim().isNotEmpty)
-            Text(
-              p.description!,
+            HighlightedText(
+              text: p.description!,
               style: const TextStyle(
                 fontSize: 16,
                 height: 1.6,
@@ -443,7 +445,11 @@ class _ChannelPostDetailScreenState
               runSpacing: 8,
               children: p.tags!.map((tag) {
                 return Chip(
-                  label: Text(tag),
+                  label: HighlightedText(
+                    text: tag,
+                    style: Theme.of(context).textTheme.labelLarge ??
+                        const TextStyle(fontSize: 14),
+                  ),
                   backgroundColor:
                       Theme.of(context).colorScheme.primaryContainer,
                 );

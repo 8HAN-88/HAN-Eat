@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../services/paid_features_service.dart';
+import '../../../../widgets/highlighted_text.dart';
 
 class StarGiftSendDraft {
   const StarGiftSendDraft({
@@ -33,7 +34,13 @@ Future<StarGiftSendDraft?> showStarGiftSendFlow(BuildContext context) async {
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setLocal) => AlertDialog(
-        title: Text('${gift.emoji} ${gift.title}'),
+        title: HighlightedText(
+          text: '${gift.emoji} ${gift.title}',
+          style: Theme.of(context).textTheme.bodyLarge ??
+              const TextStyle(fontSize: 16),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -200,14 +207,19 @@ class _StarGiftPickerSheetState extends State<_StarGiftPickerSheet> {
                                   style: const TextStyle(fontSize: 32),
                                 ),
                                 const SizedBox(height: 6),
-                                Text(
-                                  gift.title,
+                                HighlightedText(
+                                  text: gift.title,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: Theme.of(context)
-                                      .textTheme
-                                      .labelLarge
-                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                          .textTheme
+                                          .labelLarge
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ) ??
+                                      const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                      ),
                                 ),
                                 const SizedBox(height: 2),
                                 Text(

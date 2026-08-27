@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/app_router.dart';
 import '../../../services/server_config.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../../subscription/creator_upsell.dart';
 import '../data/story_models.dart';
 import '../data/story_service.dart';
@@ -114,6 +115,7 @@ class _StoriesHubScreenState extends State<StoriesHubScreen> {
         viewsCount: story.viewsCount,
         myReaction: story.myReaction,
         reactions: story.reactions,
+        caption: story.caption,
         duration: story.isVideo
             ? const Duration(seconds: 60)
             : const Duration(seconds: 5),
@@ -303,8 +305,8 @@ class _StoryGroupCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          latest.author.name,
+                        HighlightedText(
+                          text: latest.author.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(

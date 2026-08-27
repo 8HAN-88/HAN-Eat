@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/chat_service.dart';
 import '../../../services/server_config.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../utils/chat_time_format.dart';
 import '../../../utils/media_download_helper.dart';
@@ -432,7 +433,9 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
                                             ? _voiceDurationLabel(msg)
                                             : (msg.content.trim().isEmpty
                                                 ? 'Файл'
-                                                : msg.content.trim()),
+                                                : previewTextWithCustomEmoji(
+                                                    msg.content.trim(),
+                                                  )),
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
                                       ),

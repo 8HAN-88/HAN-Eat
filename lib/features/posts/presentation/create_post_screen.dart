@@ -13,10 +13,13 @@ import 'package:han_eat/services/feed_api_cache.dart';
 import 'package:han_eat/services/media_upload_service.dart';
 import 'package:han_eat/utils/file_helper.dart';
 import 'package:han_eat/widgets/app_avatar.dart';
+import 'package:han_eat/services/custom_emoji_registry.dart';
+import 'package:han_eat/widgets/highlighted_text.dart';
 import 'package:han_eat/widgets/telegram_photo_grid.dart';
 import 'package:han_eat/widgets/create_poll_form_section.dart';
 import 'package:han_eat/utils/url_validator.dart';
 import '../../reels/application/reels_feed_refresh_provider.dart';
+import '../../subscription/creator_upsell.dart';
 
 class CreatePostScreen extends ConsumerStatefulWidget {
   const CreatePostScreen({
@@ -443,8 +446,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                 ),
               ),
             if (image != null && image.isNotEmpty) const SizedBox(height: 8),
-            Text(
-              title ?? url,
+            HighlightedText(
+              text: title ?? url,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontWeight: FontWeight.w600),
@@ -452,8 +455,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
             if (description != null && description.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                  description,
+                child: HighlightedText(
+                  text: description,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -633,6 +636,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       }
     } on ApiClientException catch (e) {
       if (mounted) {
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         final text = e.isContentBlocked
             ? 'Контент не прошёл модерацию и не будет опубликован.'
             : e.isRateLimited
@@ -644,6 +649,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       }
     } catch (e) {
       if (mounted) {
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content: Text(
@@ -907,7 +914,13 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                         ..._userChannels.map((channel) {
                           return DropdownMenuItem<int>(
                             value: channel.id,
-                            child: Text(channel.name),
+                            child: HighlightedText(
+                              text: channel.name,
+                              style: Theme.of(context).textTheme.bodyLarge ??
+                                  const TextStyle(fontSize: 16),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           );
                         }),
                       ],
@@ -934,9 +947,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       future: AuthService.getCurrentUser(),
       builder: (context, snapshot) {
         final user = snapshot.data;
-        final initial = (user?.name.isNotEmpty ?? false)
-            ? user!.name[0].toUpperCase()
-            : '?';
+        final initial = avatarLetterWithCustomEmoji(user?.name);
 
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,

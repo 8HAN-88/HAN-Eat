@@ -36,15 +36,21 @@ def list_tags(db: Session, user_id: int) -> List[ChatTag]:
 
 
 def create_tag(db: Session, user_id: int, title: str, color: str | None = None) -> ChatTag:
-    heading = (title or "").strip()
+    from app.services.emoji_pack_service import (
+        EmojiPackService,
+        clip_preserving_custom_emoji,
+    )
+
+    heading = clip_preserving_custom_emoji((title or "").strip(), 40)
     if not heading:
         raise ChatTagError("tag_title_required")
+    EmojiPackService(db).require_send_tokens(user_id, heading)
     count = db.query(ChatTag).filter(ChatTag.user_id == user_id).count()
     if count >= MAX_TAGS_PER_USER:
         raise ChatTagError("tag_limit")
     tag = ChatTag(
         user_id=user_id,
-        title=heading[:40],
+        title=heading,
         color=_normalize_color(color),
         sort_order=count,
     )

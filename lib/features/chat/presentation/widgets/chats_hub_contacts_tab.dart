@@ -17,8 +17,10 @@ import '../../../../services/chat_service.dart';
 import '../../application/chat_open_direct.dart';
 import '../../../../services/phone_contacts_service.dart';
 import '../../../../services/phone_link_prompt_store.dart';
+import '../../../../services/custom_emoji_registry.dart';
 import '../../../../utils/api_error_parser.dart';
 import '../../../../widgets/app_empty_state.dart';
+import '../../../../widgets/highlighted_text.dart';
 import 'chats_hub_tiles.dart';
 
 class ChatsHubContactsTab extends StatefulWidget {
@@ -418,7 +420,9 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Удалить контакт?'),
-        content: Text('$name будет убран из списка «Мои контакты».'),
+        content: Text(
+          '${previewTextWithCustomEmoji(name)} будет убран из списка «Мои контакты».',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -590,9 +594,19 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
               if (matched != null) {
                 return ListTile(
                   leading: ChatHubUserAvatar(user: matched.brief),
-                  title: Text(entry.displayName),
-                  subtitle: Text(
-                    matched.name ?? '@${matched.username ?? matched.id}',
+                  title: HighlightedText(
+                    text: entry.displayName,
+                    style: Theme.of(context).textTheme.bodyLarge ??
+                        const TextStyle(fontSize: 16),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: HighlightedText(
+                    text: matched.name ?? '@${matched.username ?? matched.id}',
+                    style: Theme.of(context).textTheme.bodyMedium ??
+                        const TextStyle(fontSize: 14),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   trailing: matched.isContact
                       ? const Icon(Icons.check_circle, color: Colors.green)
@@ -614,7 +628,13 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
-                title: Text(entry.displayName),
+                title: HighlightedText(
+                  text: entry.displayName,
+                  style: Theme.of(context).textTheme.bodyLarge ??
+                      const TextStyle(fontSize: 16),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 subtitle: Text(entry.phoneE164),
                 trailing: FilledButton.tonal(
                   onPressed: () => AppInviteService.inviteContact(
@@ -641,7 +661,13 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
                 children: [
                   ListTile(
                     leading: ChatHubUserAvatar(user: contact.user),
-                    title: Text(contact.user.displayName),
+                    title: HighlightedText(
+                      text: contact.user.displayName,
+                      style: Theme.of(context).textTheme.bodyLarge ??
+                          const TextStyle(fontSize: 16),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     subtitle: contact.user.username != null
                         ? Text('@${contact.user.username}')
                         : null,

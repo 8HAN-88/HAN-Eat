@@ -7,6 +7,8 @@ import '../../../services/paid_features_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/stars_pay_helper.dart';
+import '../../../widgets/highlighted_text.dart';
+import '../../subscription/creator_upsell.dart';
 
 /// Telegram-like paid suggested posts for a channel.
 class ChannelSuggestedPostsScreen extends StatefulWidget {
@@ -103,7 +105,6 @@ class _ChannelSuggestedPostsScreenState
                     controller: textController,
                     minLines: 3,
                     maxLines: 6,
-                    maxLength: 2000,
                     decoration: const InputDecoration(
                       labelText: 'Текст поста',
                     ),
@@ -171,6 +172,8 @@ class _ChannelSuggestedPostsScreenState
       );
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       await showStarsRequiredSnack(context, e);
     }
   }
@@ -239,7 +242,14 @@ class _ChannelSuggestedPostsScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Предложения · ${widget.channelName}'),
+        title: HighlightedText(
+          text: widget.channelName,
+          leading: 'Предложения · ',
+          style: Theme.of(context).textTheme.titleLarge ??
+              const TextStyle(fontSize: 20),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: [
           if (_canSuggest)
             IconButton(
@@ -326,12 +336,15 @@ class _ChannelSuggestedPostsScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  post.authorLabel,
+                HighlightedText(
+                  text: post.authorLabel,
                   style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 4),
-                Text(post.text),
+                HighlightedText(
+                  text: post.text,
+                  style: const TextStyle(fontSize: 14, height: 1.35),
+                ),
                 const SizedBox(height: 6),
                 Text(
                   '${post.amountStars} ★ · ${_statusLabel(post.status)}',

@@ -8,6 +8,7 @@ import '../../../core/haptics/app_haptics.dart';
 import '../../../services/api_service.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/app_gradient_background.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../../../widgets/telegram_ui.dart';
 import '../../bots/data/bot_models.dart';
 import '../../bots/presentation/bot_detail_screen.dart';
@@ -194,7 +195,13 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
               child: ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.smart_toy_outlined),
-                title: Text(bot.name),
+                title: HighlightedText(
+                  text: bot.name,
+                  style: Theme.of(context).textTheme.bodyLarge ??
+                      const TextStyle(fontSize: 16),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 subtitle: Text('@${bot.username}'),
               ),
             ),
@@ -594,23 +601,25 @@ class _MiniAppRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      app.name,
+                    HighlightedText(
+                      text: app.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context)
-                          .textTheme
-                          .titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w800),
+                              .textTheme
+                              .titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w800) ??
+                          const TextStyle(fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      desc.isNotEmpty ? desc : 'Без описания',
+                    HighlightedText(
+                      text: desc.isNotEmpty ? desc : 'Без описания',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: scheme.onSurfaceVariant,
-                          ),
+                          ) ??
+                          TextStyle(color: scheme.onSurfaceVariant),
                     ),
                     const SizedBox(height: 4),
                     Text(

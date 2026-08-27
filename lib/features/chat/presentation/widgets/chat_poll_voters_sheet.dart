@@ -4,6 +4,7 @@ import '../../../../models/chat_poll.dart';
 import '../../../../services/chat_service.dart';
 import '../../../../utils/api_error_parser.dart';
 import '../../../../widgets/app_avatar.dart';
+import '../../../../widgets/highlighted_text.dart';
 
 Future<void> showChatPollVotersSheet(
   BuildContext context, {
@@ -121,8 +122,8 @@ class _ChatPollVotersSheetState extends State<_ChatPollVotersSheet> {
                 if (option.voters.isNotEmpty) ...[
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                    child: Text(
-                      option.text,
+                    child: HighlightedText(
+                      text: option.text,
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                   ),
@@ -133,7 +134,13 @@ class _ChatPollVotersSheetState extends State<_ChatPollVotersSheet> {
                         imageUrl: voter.avatarUrl,
                         displayName: voter.displayName,
                       ),
-                      title: Text(voter.displayName),
+                      title: HighlightedText(
+                        text: voter.displayName,
+                        style: Theme.of(context).textTheme.bodyLarge ??
+                            const TextStyle(fontSize: 16),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       subtitle: voter.username == null
                           ? null
                           : Text(

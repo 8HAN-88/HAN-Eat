@@ -4,8 +4,10 @@ import 'package:go_router/go_router.dart';
 import '../../../app/app_router.dart';
 import '../../../services/channel_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../../widgets/highlighted_text.dart';
 
 class ChannelSubscribersScreen extends StatefulWidget {
   const ChannelSubscribersScreen({
@@ -100,13 +102,14 @@ class _ChannelSubscribersScreenState extends State<ChannelSubscribersScreen> {
                 preferredSize: const Size.fromHeight(24),
                 child: Padding(
                   padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    subtitle,
+                  child: HighlightedText(
+                    text: subtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
+                        ) ??
+                        const TextStyle(fontSize: 12),
                   ),
                 ),
               )
@@ -190,12 +193,16 @@ class _ChannelSubscribersScreenState extends State<ChannelSubscribersScreen> {
                                 decodeWidth: 96,
                               ),
                               child: resolvedAvatarImage(avatarUrl) == null
-                                  ? Text(name.isNotEmpty
-                                      ? name[0].toUpperCase()
-                                      : '?')
+                                  ? Text(avatarLetterWithCustomEmoji(name))
                                   : null,
                             ),
-                            title: Text(name),
+                            title: HighlightedText(
+                              text: name,
+                              style: Theme.of(context).textTheme.bodyLarge ??
+                                  const TextStyle(fontSize: 16),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                             subtitle: username != null && username.isNotEmpty
                                 ? Text('@$username')
                                 : null,

@@ -61,7 +61,11 @@ import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/chat_link_preview.dart';
 import '../../../widgets/fullscreen_image_viewer.dart';
+import '../../../widgets/custom_emoji_view.dart';
 import '../../../widgets/highlighted_text.dart';
+import '../../../services/custom_emoji_registry.dart';
+import '../../../services/emoji_pack_service.dart';
+import '../../../models/emoji_pack_models.dart';
 import '../../../widgets/chat_bubble_accent.dart';
 import '../../../widgets/chat_wallpaper.dart';
 import '../../../widgets/telegram_ui.dart';
@@ -689,6 +693,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     } catch (e) {
       if (!mounted) return;
       if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -700,7 +705,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Удалить быстрый ответ?'),
-        content: Text(reply.title.isEmpty ? reply.text : reply.title),
+        content: HighlightedText(
+          text: reply.title.isEmpty ? reply.text : reply.title,
+          style: Theme.of(ctx).textTheme.bodyMedium ??
+              const TextStyle(fontSize: 14),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -834,6 +843,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (warm != null && warm.isNotEmpty) {
       _messages.addAll(warm);
       _loading = false;
+      _prefetchCustomEmojis(warm);
     }
     unawaited(_loadCachedMessages().then((_) async {
       await _restoreFailedTextSends();
@@ -1484,7 +1494,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     for (final msg in List<ChatMessage>.from(_messages)) {
       if (msg.isMine || msg.id <= 0 || msg.type != 'text') continue;
       if (_autoTranslations.containsKey(msg.id)) continue;
-      final source = _copyableText(msg).trim();
+      final source = _translationSource(msg);
       if (source.isEmpty) continue;
       try {
         final translated = await ChatService.translateText(text: source);
@@ -2744,6 +2754,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           if (!mounted) return;
           setState(() {});
           if (offerFlexIfRequired(context, e)) return;
+          if (offerPackStoreIfRequired(context, e)) return;
           showErrorSnackBar(context, e);
           return;
         }
@@ -3026,8 +3037,22 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                           )
                         : null,
                   ),
-                  title: Text(item.title),
-                  subtitle: item.subtitle != null ? Text(item.subtitle!) : null,
+                  title: HighlightedText(
+                    text: item.title,
+                    style: Theme.of(context).textTheme.bodyLarge ??
+                        const TextStyle(fontSize: 16),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: item.subtitle != null
+                      ? HighlightedText(
+                          text: item.subtitle!,
+                          style: Theme.of(context).textTheme.bodySmall ??
+                              const TextStyle(fontSize: 12),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        )
+                      : null,
                   onTap: () {
                     if (item.isSlashCommand) {
                       _insertBotCommand(item.username);
@@ -3086,6 +3111,22 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       text: newText,
       selection: TextSelection.collapsed(offset: newText.length),
     );
+  }
+
+  void _insertComposerToken(String token) {
+    final text = _controller.text;
+    final sel = _controller.selection;
+    final start = sel.isValid ? sel.start.clamp(0, text.length) : text.length;
+    final end = sel.isValid ? sel.end.clamp(0, text.length) : text.length;
+    final insertion = start > 0 && text[start - 1] != ' ' && text[start - 1] != '\n'
+        ? ' $token '
+        : '$token ';
+    final newText = text.replaceRange(start, end, insertion);
+    _controller.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: start + insertion.length),
+    );
+    _inputFocusNode.requestFocus();
   }
 
   void _wrapComposerMarkup(String left, String right) {
@@ -3538,7 +3579,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         content: TextField(
           controller: controller,
           autofocus: true,
-          maxLength: 128,
           decoration: const InputDecoration(
             labelText: 'Название',
             hintText: 'Например: Новости',
@@ -3588,6 +3628,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             if (t.id != temp.id) t,
         ];
       });
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -3603,7 +3645,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         content: TextField(
           controller: controller,
           autofocus: true,
-          maxLength: 128,
           decoration: const InputDecoration(labelText: 'Название'),
           onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
         ),
@@ -3649,6 +3690,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             if (t.id == topic.id) topic else t,
         ];
       });
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -3717,7 +3760,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              title: Text(topic.displayLabel),
+              title: HighlightedText(
+                text: topic.displayLabel,
+                style: Theme.of(ctx).textTheme.bodyLarge ??
+                    const TextStyle(fontSize: 16),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
               subtitle: Text(
                 topic.isGeneral
                     ? 'Главная тема группы'
@@ -3781,7 +3830,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: FilterChip(
-                  label: Text(tag.label),
+                  label: HighlightedText(
+                    text: tag.label,
+                    style: Theme.of(context).textTheme.labelLarge ??
+                        const TextStyle(fontSize: 14),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   selected: _activeSavedTagId == tag.id,
                   onSelected: locked
                       ? (_) => unawaited(showCreatorUpsell(context))
@@ -3843,10 +3898,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                               color: scheme.onSurfaceVariant,
                             )
                           : null,
-                      label: Text(
-                        topic.closed
+                      label: HighlightedText(
+                        text: topic.closed
                             ? '${topic.displayLabel} · закрыта'
                             : topic.displayLabel,
+                        style: Theme.of(context).textTheme.labelLarge ??
+                            const TextStyle(fontSize: 14),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       selected: _selectedTopicId == topic.id,
                       onSelected: (_) =>
@@ -3924,7 +3983,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _messages
       ..clear()
       ..addAll(result.messages);
+    _prefetchCustomEmojis([msg]);
     return result.added;
+  }
+
+  void _prefetchCustomEmojis([Iterable<ChatMessage>? msgs]) {
+    final ids = <int>{};
+    for (final m in msgs ?? _messages) {
+      ids.addAll(parseCustomEmojiIds(m.content));
+      for (final r in m.reactions) {
+        final id = parseCustomEmojiTokenId(r.emoji);
+        if (id != null) ids.add(id);
+      }
+    }
+    final statusId = parseCustomEmojiTokenId(_conversation.peer?.emojiStatus);
+    if (statusId != null) ids.add(statusId);
+    if (ids.isEmpty) return;
+    unawaited(CustomEmojiRegistry.instance.resolveMissing(ids));
   }
 
   String _pinnedPreview(ChatMessage msg) {
@@ -3946,7 +4021,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
     if (msg.type == 'file') {
       final name = msg.content.trim();
-      return name.isEmpty ? '📎 Файл' : '📎 $name';
+      return name.isEmpty
+          ? '📎 Файл'
+          : '📎 ${previewTextWithCustomEmoji(name)}';
     }
     if (msg.type == 'location' ||
         ChatLocationPayload.tryParse(msg.content) != null) {
@@ -3959,9 +4036,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return reply?.previewText ?? '🖼 Ответ на сторис';
     }
     final contact = ChatContactPayload.tryParse(msg.content);
-    if (contact != null) return '👤 ${contact.displayName}';
+    if (contact != null) {
+      return '👤 ${previewTextWithCustomEmoji(contact.displayName)}';
+    }
     final text = msg.content.trim();
-    return text.isEmpty ? 'Сообщение' : text;
+    if (text.isEmpty) return 'Сообщение';
+    return previewTextWithCustomEmoji(text);
   }
 
   void _scrollToMessage(int messageId) {
@@ -5729,6 +5809,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (!mounted) return;
       _applyReactions(msg.id, previous);
       if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -6002,6 +6083,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   bool _canUseReactionEmoji(String emoji) {
+    final customId = parseCustomEmojiTokenId(emoji);
+    if (customId != null) {
+      if (!_hasFlexFeature('custom_emoji_reactions')) return false;
+      return _customReactionEmojis.any((e) => e.id == customId);
+    }
     if (_freeChatReactions.contains(emoji)) return true;
     if (_exclusiveOverlayReactions.contains(emoji)) {
       return _hasFlexFeature('exclusive_reactions') ||
@@ -6011,14 +6097,40 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _pickReactionEmoji(ChatMessage msg, String emoji) async {
-    if (!_canUseReactionEmoji(emoji)) {
+    final customId = parseCustomEmojiTokenId(emoji);
+    if (customId != null) {
+      if (!_hasFlexFeature('custom_emoji_reactions')) {
+        await showCreatorUpsell(context);
+        return;
+      }
+      await _ensureCustomReactionEmojis();
+      if (!_customReactionEmojis.any((e) => e.id == customId)) {
+        offerPackStoreIfRequired(context, 'pack_purchase_required');
+        return;
+      }
+    } else if (!_canUseReactionEmoji(emoji)) {
       await showCreatorUpsell(context);
       return;
     }
     await _toggleReaction(msg, emoji);
   }
 
-  void _showReactionPicker(ChatMessage msg) {
+  List<CustomEmojiItem> _customReactionEmojis = const [];
+
+  Future<void> _ensureCustomReactionEmojis() async {
+    if (_customReactionEmojis.isNotEmpty) return;
+    try {
+      final packs = await EmojiPackService.listMyPacks();
+      _customReactionEmojis = [
+        for (final pack in packs)
+          if (pack.canUse) ...pack.items,
+      ];
+    } catch (_) {}
+  }
+
+  Future<void> _showReactionPicker(ChatMessage msg) async {
+    await _ensureCustomReactionEmojis();
+    if (!mounted) return;
     final controller = TextEditingController();
     showModalBottomSheet<void>(
       context: context,
@@ -6047,7 +6159,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                     alignment: WrapAlignment.center,
                     spacing: 8,
                     runSpacing: 8,
-                    children: _reactionPickerEmojis.map((emoji) {
+                    children: [
+                      ..._reactionPickerEmojis,
+                      for (final item in _customReactionEmojis)
+                        customEmojiReaction(item.id),
+                    ].map((emoji) {
                       final locked = !_canUseReactionEmoji(emoji);
                       return Material(
                         color: msg.reactions.any(
@@ -6069,16 +6185,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                             child: Stack(
                               alignment: Alignment.center,
                               children: [
-                                Text(
-                                  emoji,
-                                  style: TextStyle(
-                                    fontSize: 26,
-                                    color: locked
-                                        ? Theme.of(ctx)
-                                            .colorScheme
-                                            .onSurface
-                                            .withValues(alpha: 0.45)
-                                        : null,
+                                Opacity(
+                                  opacity: locked ? 0.45 : 1,
+                                  child: ReactionEmojiView(
+                                    token: emoji,
+                                    size: 26,
                                   ),
                                 ),
                                 if (locked)
@@ -6689,10 +6800,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             if (canOpenProfile)
               ListTile(
                 leading: const Icon(Icons.person_outline_rounded),
-                title: Text(
-                  msg.forwardFromName?.trim().isNotEmpty == true
+                title: HighlightedText(
+                  text: msg.forwardFromName?.trim().isNotEmpty == true
                       ? msg.forwardFromName!.trim()
                       : 'Профиль',
+                  style: Theme.of(context).textTheme.bodyLarge ??
+                      const TextStyle(fontSize: 16),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 onTap: () => Navigator.pop(ctx, 'profile'),
               ),
@@ -6764,7 +6879,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 displayName: peer.displayName,
                 radius: 22,
               ),
-              title: Text(peer.displayName),
+              title: HighlightedText(
+                text: peer.displayName,
+                style: Theme.of(context).textTheme.bodyLarge ??
+                    const TextStyle(fontSize: 16),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
               subtitle: Text(
                 peer.isOnline
                     ? 'в сети'
@@ -6850,7 +6971,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 final g = groups[index];
                 return ListTile(
                   leading: const Icon(Icons.group_outlined),
-                  title: Text(g.displayTitle),
+                  title: HighlightedText(
+                    text: g.displayTitle,
+                    style: Theme.of(context).textTheme.bodyLarge ??
+                        const TextStyle(fontSize: 16),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   subtitle: Text('${g.memberCount} участн.'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
@@ -6901,7 +7028,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   onChanged: (v) => setLocal(() => alsoForPeer = v ?? false),
                   title: Text(
                     (peerName != null && peerName.isNotEmpty)
-                        ? 'Также удалить у $peerName'
+                        ? 'Также удалить у ${previewTextWithCustomEmoji(peerName)}'
                         : 'Также удалить у собеседника',
                   ),
                   controlAffinity: ListTileControlAffinity.leading,
@@ -7154,7 +7281,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       }
       final verb = picked.asCopy ? 'Скопировано' : 'Переслано';
       final label = dests.length == 1
-          ? '«${dests.first.displayTitle}»'
+          ? '«${previewTextWithCustomEmoji(dests.first.displayTitle)}»'
           : '${dests.length} чатов';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('$verb в $label')),
@@ -7262,7 +7389,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   onChanged: (v) => setLocal(() => alsoForPeer = v ?? false),
                   title: Text(
                     (peerName != null && peerName.isNotEmpty)
-                        ? 'Также удалить у $peerName'
+                        ? 'Также удалить у ${previewTextWithCustomEmoji(peerName)}'
                         : 'Также удалить у собеседника',
                   ),
                   controlAffinity: ListTileControlAffinity.leading,
@@ -7409,7 +7536,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                       _openUserProfile(member.id);
                     },
                   ),
-                  title: Text(member.displayName),
+                  title: HighlightedText(
+                    text: member.displayName,
+                    style: Theme.of(context).textTheme.bodyLarge ??
+                        const TextStyle(fontSize: 16),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   subtitle: Text(formatLastSeen(member.lastSeenAt)),
                   onTap: () {
                     Navigator.pop(ctx);
@@ -7827,7 +7960,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             children: [
               for (final option in options)
                 ListTile(
-                  title: Text(option.label),
+                  title: HighlightedText(
+                    text: option.label,
+                    style: Theme.of(ctx).textTheme.bodyLarge ??
+                        const TextStyle(fontSize: 16),
+                  ),
                   trailing: selectedValue == option.value
                       ? const Icon(Icons.check)
                       : null,
@@ -8373,22 +8510,26 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           hideName: draft.hideName,
           idempotencyKey: idem,
         );
-        if (mounted) unawaited(_pollNew());
+        if (!mounted) return;
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              draft.hideName
+                  ? 'Подарок ${gift.emoji} отправлен анонимно'
+                  : 'Подарок ${gift.emoji} отправлен',
+            ),
+          ),
+        );
+        unawaited(_pollNew());
       } catch (e) {
-        if (mounted) await showStarsRequiredSnack(context, e);
+        if (!mounted) return;
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
+        await showStarsRequiredSnack(context, e);
       } finally {
         if (mounted) setState(() => _sendingStarGift = false);
       }
     }());
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          draft.hideName
-              ? 'Подарок ${gift.emoji} отправлен анонимно'
-              : 'Подарок ${gift.emoji} отправлен',
-        ),
-      ),
-    );
   }
 
   int? _userGiftIdFromMessage(ChatMessage msg) {
@@ -8458,11 +8599,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (ok != true || !mounted) return;
     setState(() => _giftActionMessageIds.add(msg.id));
     _patchLocalGiftStatus(msg, 'converted');
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('+$stars ★ на балансе')),
-    );
     try {
       await PaidFeaturesService.convertGift(giftId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('+$stars ★ на балансе')),
+      );
     } catch (e) {
       if (!mounted) return;
       final idx = _messages.indexWhere((m) => m.id == msg.id);
@@ -8528,11 +8670,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (ok != true || !mounted) return;
     setState(() => _giftActionMessageIds.add(msg.id));
     _patchLocalGiftStatus(msg, 'refunded');
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('+$stars ★ возвращены')),
-    );
     try {
       await PaidFeaturesService.refundGift(giftId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('+$stars ★ возвращены')),
+      );
     } catch (e) {
       if (!mounted) return;
       final idx = _messages.indexWhere((m) => m.id == msg.id);
@@ -8594,11 +8737,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (giftId == null || _giftActionMessageIds.contains(msg.id)) return;
     setState(() => _giftActionMessageIds.add(msg.id));
     _patchLocalGiftStatus(msg, 'kept');
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Подарок сохранён в профиле')),
-    );
     try {
       await PaidFeaturesService.keepGift(giftId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Подарок сохранён в профиле')),
+      );
     } catch (e) {
       if (!mounted) return;
       final idx = _messages.indexWhere((m) => m.id == msg.id);
@@ -8653,14 +8797,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (peer == null) return;
     final payload = await pickStarsTipDraft(
       context,
-      title: 'Отправить звёзды ${peer.displayName}',
+      title:
+          'Отправить звёзды ${previewTextWithCustomEmoji(peer.displayName)}',
       subtitle: 'Как в Telegram: звёзды появятся сообщением в чате.',
     );
     if (payload == null || !mounted) return;
     final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(
-      SnackBar(content: Text('Отправлено ${payload.amount} ★')),
-    );
     unawaited(() async {
       try {
         final result = await PaidFeaturesService.donate(
@@ -8668,11 +8810,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           amountStars: payload.amount,
           message: payload.message,
         );
-        if (mounted && result.messageId != null) {
+        if (!mounted) return;
+        messenger.showSnackBar(
+          SnackBar(content: Text('Отправлено ${payload.amount} ★')),
+        );
+        if (result.messageId != null) {
           unawaited(_pollNew());
         }
       } catch (e) {
         if (!mounted) return;
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         await showStarsRequiredSnack(context, e);
       }
     }());
@@ -8774,7 +8922,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '${peer.displayName} не сможет писать вам и видеть ваш профиль в чатах.',
+                '${previewTextWithCustomEmoji(peer.displayName)} не сможет писать вам и видеть ваш профиль в чатах.',
               ),
               const SizedBox(height: 12),
               CheckboxListTile(
@@ -8814,7 +8962,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         );
       });
       messenger.showSnackBar(
-        SnackBar(content: Text('${peer.displayName} заблокирован')),
+        SnackBar(
+          content: Text(
+            '${previewTextWithCustomEmoji(peer.displayName)} заблокирован',
+          ),
+        ),
       );
     }
     unawaited(() async {
@@ -8846,7 +8998,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${peer.displayName} разблокирован')),
+      SnackBar(
+        content: Text(
+          '${previewTextWithCustomEmoji(peer.displayName)} разблокирован',
+        ),
+      ),
     );
     try {
       await ChatService.unblockUser(peer.id);
@@ -9006,7 +9162,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (msg.type == 'file') {
       if (msg.isLockedPaidMedia) return '🔒 Платный файл';
       final name = msg.content.trim();
-      return name.isEmpty ? '📎 Файл' : '📎 $name';
+      return name.isEmpty
+          ? '📎 Файл'
+          : '📎 ${previewTextWithCustomEmoji(name)}';
     }
     if (msg.type == 'location' ||
         ChatLocationPayload.tryParse(msg.content) != null) {
@@ -9019,9 +9177,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return reply?.previewText ?? '🖼 Ответ на сторис';
     }
     final contact = ChatContactPayload.tryParse(msg.content);
-    if (contact != null) return '👤 ${contact.displayName}';
+    if (contact != null) {
+      return '👤 ${previewTextWithCustomEmoji(contact.displayName)}';
+    }
     final t = msg.content.trim();
-    return t.isEmpty ? 'Сообщение' : t;
+    if (t.isEmpty) return 'Сообщение';
+    return previewTextWithCustomEmoji(t);
   }
 
   String _formatRecordDuration(Duration d) {
@@ -9316,6 +9477,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return _messagePreview(msg);
   }
 
+  /// Share / export preview — clipboard copy stays raw so `[[e:id]]` can be pasted back.
+  String _shareableText(ChatMessage msg) =>
+      previewTextWithCustomEmoji(_copyableText(msg));
+
   int _mediaMessageCount() {
     return _messages
         .where(
@@ -9437,7 +9602,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Future<void> _shareSelectedMessages() async {
     final texts = _selectedMessages
-        .map(_copyableText)
+        .map(_shareableText)
         .where((t) => t.isNotEmpty)
         .join('\n\n');
     if (texts.isEmpty) {
@@ -9463,7 +9628,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
       return;
     }
-    final text = _copyableText(msg);
+    final text = _shareableText(msg);
     if (text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Нечего отправить')),
@@ -9595,16 +9760,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final fmt = DateFormat('yyyy-MM-dd HH:mm');
       final buf = StringBuffer()
         ..writeln('HanWe — экспорт чата')
-        ..writeln(_conversation.displayTitle)
+        ..writeln(previewTextWithCustomEmoji(_conversation.displayTitle))
         ..writeln('Сообщений: ${collected.length}')
         ..writeln('---');
       for (final msg in collected) {
         final who = msg.isMine
             ? 'Вы'
             : (msg.senderName?.trim().isNotEmpty == true
-                ? msg.senderName!.trim()
+                ? previewTextWithCustomEmoji(msg.senderName!.trim())
                 : 'Участник');
-        final body = _copyableText(msg).replaceAll('\n', ' ');
+        final body = previewTextWithCustomEmoji(
+          _copyableText(msg),
+        ).replaceAll('\n', ' ');
         buf.writeln('${fmt.format(msg.createdAt.toLocal())} · $who: $body');
       }
       final text = buf.toString();
@@ -9627,7 +9794,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
       await Share.shareXFiles(
         [file],
-        text: 'Экспорт чата «${_conversation.displayTitle}»',
+        text:
+            'Экспорт чата «${previewTextWithCustomEmoji(_conversation.displayTitle)}»',
         subject: filename,
       );
     } catch (e) {
@@ -9705,7 +9873,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _exitSelectionMode();
       final verb = picked.asCopy ? 'Скопировано' : 'Переслано';
       final destLabel = dests.length == 1
-          ? '«${dests.first.displayTitle}»'
+          ? '«${previewTextWithCustomEmoji(dests.first.displayTitle)}»'
           : '${dests.length} чатов';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -9898,6 +10066,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     } catch (e) {
       if (!mounted) return null;
       if (offerFlexIfRequired(context, e)) return null;
+      if (offerPackStoreIfRequired(context, e)) return null;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -9953,7 +10122,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                             for (final tag in _savedTags)
                               CheckboxListTile(
                                 value: selected.contains(tag.id),
-                                title: Text(tag.label),
+                                title: HighlightedText(
+                                  text: tag.label,
+                                  style: Theme.of(ctx).textTheme.bodyLarge ??
+                                      const TextStyle(fontSize: 16),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                                 onChanged: (v) {
                                   setLocal(() {
                                     if (v == true) {
@@ -10012,8 +10187,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
+  String _translationSource(ChatMessage msg) {
+    final raw = _copyableText(msg).trim();
+    if (raw.isEmpty) return '';
+    // Reading — preview tokens so translate/auto-translate never 403 on
+    // someone else's `[[e:id]]` and the translator does not see the token.
+    return previewTextWithCustomEmoji(raw);
+  }
+
   Future<void> _translateMessage(ChatMessage msg) async {
-    final source = _copyableText(msg).trim();
+    final source = _translationSource(msg);
     if (source.isEmpty) return;
     try {
       final translated = await ChatService.translateText(text: source);
@@ -10043,16 +10226,21 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                         ),
                   ),
                   const SizedBox(height: 12),
-                  Text(
-                    translated,
-                    style: Theme.of(ctx).textTheme.bodyLarge,
+                  HighlightedText(
+                    text: translated,
+                    style: Theme.of(ctx).textTheme.bodyLarge ??
+                        const TextStyle(fontSize: 16),
                   ),
                   const SizedBox(height: 16),
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton.icon(
                       onPressed: () {
-                        Clipboard.setData(ClipboardData(text: translated));
+                        Clipboard.setData(
+                          ClipboardData(
+                            text: previewTextWithCustomEmoji(translated),
+                          ),
+                        );
                         Navigator.pop(ctx);
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Перевод скопирован')),
@@ -10080,25 +10268,33 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final text = content.trim();
     switch (messageType) {
       case 'image':
-        return text.isEmpty ? '📷 Фото' : '📷 Подпись: $text';
+        return text.isEmpty
+            ? '📷 Фото'
+            : '📷 Подпись: ${previewTextWithCustomEmoji(text)}';
       case 'video':
-        return text.isEmpty ? '🎬 Видео' : '🎬 Подпись: $text';
+        return text.isEmpty
+            ? '🎬 Видео'
+            : '🎬 Подпись: ${previewTextWithCustomEmoji(text)}';
       case 'video_note':
-        return text.isEmpty ? '⭕ Видеосообщение' : '⭕ Подпись: $text';
+        return text.isEmpty
+            ? '⭕ Видеосообщение'
+            : '⭕ Подпись: ${previewTextWithCustomEmoji(text)}';
       case 'file':
-        return text.isEmpty ? '📎 Файл' : '📎 $text';
+        return text.isEmpty
+            ? '📎 Файл'
+            : '📎 ${previewTextWithCustomEmoji(text)}';
       case 'voice':
         return '🎤 Голосовое';
       case 'sticker':
         return '🧩 Стикер';
       case 'poll':
-        return text.isEmpty ? '📊 Опрос' : '📊 $text';
+        return text.isEmpty ? '📊 Опрос' : '📊 ${previewTextWithCustomEmoji(text)}';
       case 'checklist':
         return ChatChecklist.tryParse(content)?.preview ?? '☑ Чеклист';
       case 'location':
         return '📍 Геопозиция';
       default:
-        return text.isEmpty ? '—' : text;
+        return text.isEmpty ? '—' : previewTextWithCustomEmoji(text);
     }
   }
 
@@ -10113,7 +10309,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
     if (editorId != null && editorId > 0) {
       final name = _displayNameForUserId(editorId);
-      if (name != null && name.isNotEmpty) parts.add(name);
+      if (name != null && name.isNotEmpty) {
+        parts.add(previewTextWithCustomEmoji(name));
+      }
     }
     if (at != null) parts.add(formatChatMessageTime(at));
     return parts.isEmpty ? '—' : parts.join(' · ');
@@ -10639,8 +10837,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    caption,
+                  HighlightedText(
+                    text: caption,
                     style: TextStyle(
                       color: fg,
                       height: 1.24,
@@ -11511,6 +11709,27 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
+  String _composerHintText({
+    required bool canCompose,
+    required bool peerBlockedByMe,
+    required bool isRestrictedByModeration,
+    required int activeCooldownSeconds,
+  }) {
+    if (!canCompose) {
+      if (peerBlockedByMe) return 'Пользователь заблокирован';
+      if (_selectedTopicIsClosed) return 'Тема закрыта';
+      if (isRestrictedByModeration) return 'Отправка ограничена';
+      return 'Только админы';
+    }
+    if (activeCooldownSeconds > 0) {
+      return 'Подождите ${_formatSlowModeCountdown(activeCooldownSeconds)}';
+    }
+    if (_editingMessage != null) return 'Изменить…';
+    final raw = _replyKeyboard?.placeholder?.trim() ?? '';
+    if (raw.isEmpty) return 'Сообщение';
+    return previewTextWithCustomEmoji(raw);
+  }
+
   Widget _buildReplyKeyboardStrip(ColorScheme scheme) {
     final kb = _replyKeyboard;
     if (kb == null || kb.isEmpty) return const SizedBox.shrink();
@@ -11544,11 +11763,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                               vertical: 10,
                             ),
                           ),
-                          child: Text(
-                            row[i],
+                          child: HighlightedText(
+                            text: row[i],
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.labelLarge ??
+                                const TextStyle(fontSize: 14),
                           ),
                         ),
                       ),
@@ -11564,13 +11785,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Future<void> _tapReplyKeyboardButton(String text) async {
     final label = text.trim();
-    if (label.isEmpty) return;
+    if (label.isEmpty || _recording) return;
+    // A keyboard tap always sends a new message — not an edit, and not
+    // the composer `@bot query` inline intercept.
+    if (_editingMessage != null) {
+      setState(() => _editingMessage = null);
+    }
     _controller.text = label;
     _controller.selection = TextSelection.collapsed(offset: label.length);
     if (_replyKeyboard?.oneTime == true) {
       setState(() => _replyKeyboard = null);
     }
-    await _sendText();
+    await _sendText(fromReplyKeyboard: true);
   }
 
   Widget _compactComposerStrip({
@@ -11658,8 +11884,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      author,
+                    HighlightedText(
+                      text: author,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -11669,8 +11895,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                         height: 1.15,
                       ),
                     ),
-                    Text(
-                      preview,
+                    HighlightedText(
+                      text: preview,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -11920,6 +12146,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _loadError = null;
       });
       unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
+      _prefetchCustomEmojis();
       unawaited(_runAutoTranslate());
       _tryRestorePendingDraftReply();
       if (refresh) {
@@ -12249,6 +12476,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           unawaited(_persistFailedTextSends());
           if (!mounted) return;
           setState(() {});
+          if (offerFlexIfRequired(context, e)) return;
+          if (offerPackStoreIfRequired(context, e)) return;
           if (isStarsRequiredError(e)) {
             await showStarsRequiredSnack(context, e);
           } else {
@@ -12310,7 +12539,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return false;
   }
 
-  Future<void> _sendText({bool silent = false, String? effectId}) async {
+  Future<void> _sendText({
+    bool silent = false,
+    String? effectId,
+    bool fromReplyKeyboard = false,
+  }) async {
     if (!await _allowSilent(silent)) return;
     final text = _controller.text.trim();
     final editingMedia = _editingMessage != null &&
@@ -12336,7 +12569,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final untilText = until == null
           ? 'без срока'
           : DateFormat('dd.MM.yyyy HH:mm').format(until.toLocal());
-      final details = reason.isEmpty ? untilText : '$untilText • $reason';
+      final details = reason.isEmpty
+          ? untilText
+          : '$untilText • ${previewTextWithCustomEmoji(reason)}';
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -12360,7 +12595,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _hideBotAutocompleteOverlay();
 
     // === Inline Mode: @bot query ===
-    if (text.startsWith('@')) {
+    // ReplyKeyboard labels are sent as-is — `@name` is not an inline query.
+    if (!fromReplyKeyboard && text.startsWith('@')) {
       final match = RegExp(r'^@([a-zA-Z0-9_]+)\s*(.*)$').firstMatch(text);
       if (match != null) {
         final botUsername = match.group(1)!;
@@ -12422,7 +12658,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       }
       return;
     }
-    final editing = _editingMessage;
+    final editing = fromReplyKeyboard ? null : _editingMessage;
     if (editing != null) {
       final previous = editing;
       _controller.clear();
@@ -12466,6 +12702,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             _editingMessage = previous;
           });
           _controller.text = text;
+          if (offerFlexIfRequired(context, e)) return;
+          if (offerPackStoreIfRequired(context, e)) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(userVisibleError(e))),
           );
@@ -12888,6 +13126,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       unawaited(_refreshScheduledPendingCount());
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       showErrorSnackBar(context, e,
           fallback: 'Не удалось запланировать сообщение');
     }
@@ -13049,10 +13289,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _sendScheduledMessageNow(ScheduledChatMessage item) async {
-    await ChatService.cancelScheduledMessage(
-      conversationId: widget.conversationId,
-      scheduledMessageId: item.id,
-    );
+    var canceled = false;
+    try {
+      await ChatService.cancelScheduledMessage(
+        conversationId: widget.conversationId,
+        scheduledMessageId: item.id,
+      );
+      canceled = true;
+      await _enqueueScheduledMessageNow(item);
+    } catch (e) {
+      if (canceled) {
+        await _restoreScheduledAfterFailedSend(item);
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> _enqueueScheduledMessageNow(ScheduledChatMessage item) async {
     final replyId = item.replyToMessageId;
     final media = item.mediaUrl?.trim();
     final topicId = item.topicId ?? _activeTopicIdForSend;
@@ -13063,13 +13316,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         item.type == 'file' ||
         item.type == 'sticker';
     if (needsMedia && (media == null || media.isEmpty)) {
-      await _restoreScheduledAfterFailedSend(item);
       throw Exception('Нет медиа для отправки');
     }
     if (item.type == 'poll') {
       final poll = parseChatPollFromContent(item.content);
       if (poll == null || poll.options.length < 2) {
-        await _restoreScheduledAfterFailedSend(item);
         throw Exception('Не удалось восстановить опрос');
       }
       _enqueueReadyOutgoing(
@@ -13091,7 +13342,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (item.type == 'checklist') {
       final list = ChatChecklist.tryParse(item.content);
       if (list == null || list.items.isEmpty) {
-        await _restoreScheduledAfterFailedSend(item);
         throw Exception('Не удалось восстановить чеклист');
       }
       _enqueueReadyOutgoing(
@@ -13143,14 +13393,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (item.type == 'sticker') return '🧩 Стикер';
     if (item.type == 'file') {
       final name = item.content.trim();
-      return name.isEmpty ? '📎 Файл' : '📎 $name';
+      return name.isEmpty
+          ? '📎 Файл'
+          : '📎 ${previewTextWithCustomEmoji(name)}';
     }
     if (item.type == 'location') {
       final loc = ChatLocationPayload.tryParse(item.content);
       return loc?.previewText ?? '📍 Геопозиция';
     }
     final text = item.content.trim();
-    return text.isEmpty ? item.type.toUpperCase() : text;
+    return text.isEmpty
+        ? item.type.toUpperCase()
+        : previewTextWithCustomEmoji(text);
   }
 
   Future<void> _openScheduledMessagesManager() async {
@@ -13167,8 +13421,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           final items = List<ScheduledChatMessage>.from(initialItems);
           return StatefulBuilder(
             builder: (ctx, setModalState) {
-              final pending = items.where((e) => e.status == 'pending').toList()
-                ..sort((a, b) => a.sendAt.compareTo(b.sendAt));
+              final pending = items
+                  .where((e) => e.status == 'pending' || e.status == 'failed')
+                  .toList()
+                ..sort((a, b) {
+                  if (a.status != b.status) {
+                    return a.status == 'failed' ? -1 : 1;
+                  }
+                  return a.sendAt.compareTo(b.sendAt);
+                });
               if (pending.isEmpty) {
                 return SafeArea(
                   child: Padding(
@@ -13207,9 +13468,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                           itemBuilder: (_, index) {
                             final item = pending[index];
                             final preview = _scheduledPreview(item);
-                            final caption = item.type != 'text'
+                            final rawCaption = item.type != 'text'
                                 ? item.content.trim()
                                 : '';
+                            final caption = rawCaption.isEmpty
+                                ? ''
+                                : previewTextWithCustomEmoji(rawCaption);
                             return ListTile(
                               leading: _scheduledLeading(item),
                               title: Text(
@@ -13220,12 +13484,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                               subtitle: Text(
                                 [
                                   if (caption.isNotEmpty) caption,
-                                  item.sendWhenOnline
-                                      ? 'Отправка: когда пользователь онлайн'
-                                      : 'Отправка: ${DateFormat('dd.MM.yyyy HH:mm').format(item.sendAt)}',
+                                  if (item.status == 'failed')
+                                    item.errorText?.trim().isNotEmpty == true
+                                        ? 'Не отправлено: ${item.errorText}'
+                                        : 'Не отправлено',
+                                  if (item.status != 'failed')
+                                    item.sendWhenOnline
+                                        ? 'Отправка: когда пользователь онлайн'
+                                        : 'Отправка: ${DateFormat('dd.MM.yyyy HH:mm').format(item.sendAt)}',
                                   if (item.silent) 'Без звука',
                                 ].join('\n'),
-                                maxLines: 4,
+                                maxLines: 5,
                                 overflow: TextOverflow.ellipsis,
                               ),
                               isThreeLine: caption.isNotEmpty,
@@ -13272,6 +13541,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                           );
                                         }
                                         if (!mounted) return;
+                                        if (offerFlexIfRequired(context, e)) {
+                                          return;
+                                        }
+                                        if (offerPackStoreIfRequired(
+                                            context, e)) {
+                                          return;
+                                        }
+                                        if (isStarsRequiredError(e)) {
+                                          await showStarsRequiredSnack(
+                                            context,
+                                            e,
+                                          );
+                                          return;
+                                        }
                                         showErrorSnackBar(
                                           context,
                                           e,
@@ -13322,6 +13605,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                             if (idx >= 0) items[idx] = item;
                                           });
                                           if (!mounted) return;
+                                          if (offerFlexIfRequired(context, e)) {
+                                            return;
+                                          }
+                                          if (offerPackStoreIfRequired(
+                                              context, e)) {
+                                            return;
+                                          }
+                                          if (isStarsRequiredError(e)) {
+                                            await showStarsRequiredSnack(
+                                              context,
+                                              e,
+                                            );
+                                            return;
+                                          }
                                           showErrorSnackBar(
                                             context,
                                             e,
@@ -13399,7 +13696,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                     ),
                                   IconButton(
                                     icon: const Icon(Icons.delete_outline),
-                                    tooltip: 'Отменить',
+                                    tooltip: item.status == 'failed'
+                                        ? 'Удалить'
+                                        : 'Отменить',
                                     onPressed: () async {
                                       setModalState(
                                         () => items.removeWhere(
@@ -13455,7 +13754,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         limit: 200,
       );
       if (!mounted) return;
-      setState(() => _scheduledPendingCount = items.length);
+      setState(
+        () => _scheduledPendingCount =
+            items.where((e) => e.status == 'pending').length,
+      );
     } catch (_) {
       // Silent: this is a decorative badge.
     }
@@ -13739,6 +14041,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       unawaited(_refreshScheduledPendingCount());
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       showErrorSnackBar(context, e,
           fallback: 'Не удалось запланировать медиа');
     } finally {
@@ -14294,6 +14598,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           final i = _messages.indexWhere((m) => m.id == previous.id);
           if (i >= 0) _messages[i] = previous;
         });
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         showErrorSnackBar(context, e, fallback: 'Не удалось отметить пункт');
       }
     } finally {
@@ -14357,6 +14663,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           final i = _messages.indexWhere((m) => m.id == previous.id);
           if (i >= 0) _messages[i] = previous;
         });
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         showErrorSnackBar(context, e, fallback: 'Не удалось проголосовать');
       }
     } finally {
@@ -14434,7 +14742,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           content: TextField(
             controller: controller,
             autofocus: true,
-            maxLength: 120,
             decoration: const InputDecoration(
               hintText: 'Текст варианта',
             ),
@@ -14485,6 +14792,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           if (i >= 0) _messages[i] = previous;
           if (_isMessagePinned(previous.id)) _replacePinnedMessage(previous);
         });
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         showErrorSnackBar(context, e, fallback: 'Не удалось добавить вариант');
       }
     }
@@ -14560,6 +14869,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
       } catch (e) {
         if (mounted) {
+          if (offerFlexIfRequired(context, e)) return;
+          if (offerPackStoreIfRequired(context, e)) return;
           showErrorSnackBar(context, e,
               fallback: 'Не удалось выполнить действие');
         }
@@ -15055,44 +15366,68 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              _conversation.displayTitle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                    letterSpacing: 0.1,
-                                    color: () {
-                                      final hex = profileColorHex(
-                                        _conversation.peer?.profileColor,
-                                      );
-                                      if (hex.isEmpty ||
-                                          _conversation.isGroup) {
-                                        return null;
-                                      }
-                                      return Color(
-                                        int.parse(
-                                          hex.replaceFirst('#', '0xFF'),
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: HighlightedText(
+                                    text: _conversation.isGroup
+                                        ? _conversation.displayTitle
+                                        : (_conversation.peer?.displayName ??
+                                            _conversation.displayTitle),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w600,
+                                              letterSpacing: 0.1,
+                                              color: () {
+                                                final hex = profileColorHex(
+                                                  _conversation.peer?.profileColor,
+                                                );
+                                                if (hex.isEmpty ||
+                                                    _conversation.isGroup) {
+                                                  return null;
+                                                }
+                                                return Color(
+                                                  int.parse(
+                                                    hex.replaceFirst('#', '0xFF'),
+                                                  ),
+                                                );
+                                              }(),
+                                            ) ??
+                                        const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 16,
                                         ),
-                                      );
-                                    }(),
                                   ),
+                                ),
+                                if (!_conversation.isGroup &&
+                                    (_conversation.peer?.emojiStatus ?? '')
+                                        .trim()
+                                        .isNotEmpty) ...[
+                                  const SizedBox(width: 4),
+                                  StatusEmojiView(
+                                    status: _conversation.peer!.emojiStatus,
+                                    size: 20,
+                                  ),
+                                ],
+                              ],
                             ),
                             if (subtitle.isNotEmpty)
                               _peerTyping
                                   ? Row(
                                       children: [
                                         Flexible(
-                                          child: Text(
-                                            subtitle,
+                                          child: HighlightedText(
+                                            text: subtitle,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                             style: subtitleStyle?.copyWith(
-                                              fontSize: 12,
-                                            ),
+                                                  fontSize: 12,
+                                                ) ??
+                                                const TextStyle(fontSize: 12),
                                           ),
                                         ),
                                         const SizedBox(width: 4),
@@ -15325,7 +15660,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                     ? chipLabelColor
                                                     : chipSelectedLabelColor,
                                               ),
-                                              label: Text(_searchSenderLabel()),
+                                              label: HighlightedText(
+                                                text: _searchSenderLabel(),
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  color: _threadSearchSenderId ==
+                                                          null
+                                                      ? chipLabelColor
+                                                      : chipSelectedLabelColor,
+                                                ),
+                                              ),
                                               selected:
                                                   _threadSearchSenderId != null,
                                               onSelected: (_) =>
@@ -16524,6 +16868,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                           ChatInlineStickerPanel(
                             onOpenFull: () =>
                                 unawaited(_showFullStickerSheet()),
+                            onInsertCustomEmoji: (id) {
+                              if (!_hasFlexFeature('custom_emoji')) {
+                                unawaited(showCreatorUpsell(context));
+                                return;
+                              }
+                              _insertComposerToken(customEmojiToken(id));
+                            },
                             onPick: (url, {emoji}) {
                               setState(() => _stickerPanelOpen = false);
                               unawaited(
@@ -16605,10 +16956,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                   Padding(
                                     padding: const EdgeInsets.only(right: 6),
                                     child: InputChip(
-                                      label: Text(
-                                        reply.title.isNotEmpty
+                                      label: HighlightedText(
+                                        text: reply.title.isNotEmpty
                                             ? reply.title
                                             : reply.text,
+                                        style: Theme.of(context)
+                                                .textTheme
+                                                .labelLarge ??
+                                            const TextStyle(fontSize: 14),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
@@ -16840,20 +17195,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                               bottom: 96,
                                             ),
                                             decoration: InputDecoration(
-                                              hintText: !canCompose
-                                                  ? (peerBlockedByMe
-                                                      ? 'Пользователь заблокирован'
-                                                      : (_selectedTopicIsClosed
-                                                          ? 'Тема закрыта'
-                                                          : (isRestrictedByModeration
-                                                              ? 'Отправка ограничена'
-                                                              : 'Только админы')))
-                                                  : (activeCooldownSeconds > 0
-                                                      ? 'Подождите ${_formatSlowModeCountdown(activeCooldownSeconds)}'
-                                                      : (_editingMessage !=
-                                                              null
-                                                          ? 'Изменить…'
-                                                          : 'Сообщение')),
+                                              hintText: _composerHintText(
+                                                canCompose: canCompose,
+                                                peerBlockedByMe: peerBlockedByMe,
+                                                isRestrictedByModeration:
+                                                    isRestrictedByModeration,
+                                                activeCooldownSeconds:
+                                                    activeCooldownSeconds,
+                                              ),
                                               filled: true,
                                               fillColor: Colors.transparent,
                                               border: OutlineInputBorder(
@@ -17657,15 +18006,29 @@ class _Bubble extends StatelessWidget {
                   : () => onReactionLongPress!(r.emoji),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                child: Text(
-                  r.starsTotal > 0
-                      ? '${r.emoji} ${r.starsTotal}★'
-                      : (r.count > 1 ? '${r.emoji} ${r.count}' : r.emoji),
-                  style: TextStyle(
-                    color: fg.withValues(alpha: 0.92),
-                    fontSize: 13,
-                    height: 1.1,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ReactionEmojiView(token: r.emoji, size: 16),
+                    if (r.starsTotal > 0)
+                      Text(
+                        ' ${r.starsTotal}★',
+                        style: TextStyle(
+                          color: fg.withValues(alpha: 0.92),
+                          fontSize: 13,
+                          height: 1.1,
+                        ),
+                      )
+                    else if (r.count > 1)
+                      Text(
+                        ' ${r.count}',
+                        style: TextStyle(
+                          color: fg.withValues(alpha: 0.92),
+                          fontSize: 13,
+                          height: 1.1,
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),
@@ -17721,8 +18084,8 @@ class _Bubble extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (replyAuthor != null && replyAuthor!.isNotEmpty)
-                  Text(
-                    replyAuthor!,
+                  HighlightedText(
+                    text: replyAuthor!,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -17789,7 +18152,11 @@ class _Bubble extends StatelessWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(btn.text),
+                          HighlightedText(
+                            text: btn.text,
+                            style: Theme.of(context).textTheme.labelLarge ??
+                                const TextStyle(fontSize: 14),
+                          ),
                           if (btn.isWebApp) ...[
                             const SizedBox(width: 6),
                             Icon(
@@ -17951,8 +18318,8 @@ class _Bubble extends StatelessWidget {
                 style: TextStyle(color: fg, fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 4),
-              Text(
-                buttonText,
+              HighlightedText(
+                text: buttonText,
                 style: TextStyle(
                   color: scheme.secondary,
                   fontWeight: FontWeight.w700,
@@ -17960,8 +18327,8 @@ class _Bubble extends StatelessWidget {
               ),
               if (shortData.isNotEmpty) ...[
                 const SizedBox(height: 6),
-                Text(
-                  shortData,
+                HighlightedText(
+                  text: shortData,
                   style: TextStyle(color: fg.withValues(alpha: 0.85)),
                 ),
               ],
@@ -18007,8 +18374,8 @@ class _Bubble extends StatelessWidget {
               ),
               if (note != null && note.trim().isNotEmpty) ...[
                 const SizedBox(height: 6),
-                Text(
-                  note.trim(),
+                HighlightedText(
+                  text: note.trim(),
                   style: TextStyle(color: fg.withValues(alpha: 0.8)),
                 ),
               ],
@@ -18059,8 +18426,8 @@ class _Bubble extends StatelessWidget {
             children: [
               Text(emoji, style: const TextStyle(fontSize: 40)),
               const SizedBox(height: 6),
-              Text(
-                title,
+              HighlightedText(
+                text: title,
                 style: TextStyle(color: fg, fontWeight: FontWeight.w800),
               ),
               if (isAnonymousGift)
@@ -18098,8 +18465,8 @@ class _Bubble extends StatelessWidget {
               ),
               if (note != null && note.trim().isNotEmpty) ...[
                 const SizedBox(height: 6),
-                Text(
-                  note.trim(),
+                HighlightedText(
+                  text: note.trim(),
                   style: TextStyle(color: fg.withValues(alpha: 0.8)),
                 ),
               ],
@@ -18168,8 +18535,8 @@ class _Bubble extends StatelessWidget {
             if ((message.transcription ?? '').isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  message.transcription!,
+                child: HighlightedText(
+                  text: message.transcription!,
                   style: TextStyle(color: fg, fontSize: 13),
                 ),
               )
@@ -18571,8 +18938,8 @@ class _Bubble extends StatelessWidget {
                 textChild,
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                    translated,
+                  child: HighlightedText(
+                    text: translated,
                     style: TextStyle(
                       color: fg.withValues(alpha: 0.78),
                       height: 1.22,
@@ -18664,8 +19031,8 @@ class _Bubble extends StatelessWidget {
                   ? GestureDetector(
                       onTap: onSenderTap,
                       behavior: HitTestBehavior.opaque,
-                      child: Text(
-                        senderLabel!,
+                      child: HighlightedText(
+                        text: senderLabel!,
                         style: TextStyle(
                           color: nameColor,
                           fontSize: 12.5,
@@ -18673,8 +19040,8 @@ class _Bubble extends StatelessWidget {
                         ),
                       ),
                     )
-                  : Text(
-                      senderLabel!,
+                  : HighlightedText(
+                      text: senderLabel!,
                       style: TextStyle(
                         color: nameColor,
                         fontSize: 12.5,
@@ -18693,7 +19060,7 @@ class _Bubble extends StatelessWidget {
                 onTap: onForwardFromTap,
                 behavior: HitTestBehavior.opaque,
                 child: Text(
-                  'Переслано от ${message.forwardFromName?.trim().isNotEmpty == true ? message.forwardFromName!.trim() : 'пользователя'}',
+                  'Переслано от ${message.forwardFromName?.trim().isNotEmpty == true ? previewTextWithCustomEmoji(message.forwardFromName!.trim()) : 'пользователя'}',
                   style: TextStyle(
                     color: scheme.primary,
                     fontSize: 12.5,

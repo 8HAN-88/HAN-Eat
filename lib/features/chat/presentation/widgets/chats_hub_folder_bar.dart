@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/haptics/app_haptics.dart';
 import '../../../../models/chat_models.dart';
+import '../../../../widgets/highlighted_text.dart';
 
 class ChatHubFolderBar extends StatelessWidget {
   const ChatHubFolderBar({
@@ -118,8 +119,8 @@ class _FolderTab extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                label,
+              HighlightedText(
+                text: label,
                 style: TextStyle(
                   color: selected ? scheme.primary : scheme.onSurfaceVariant,
                   fontWeight: selected ? FontWeight.w700 : FontWeight.w500,

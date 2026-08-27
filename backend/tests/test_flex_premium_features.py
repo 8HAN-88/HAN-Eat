@@ -52,6 +52,8 @@ def test_normalize_emoji_status():
     assert normalize_emoji_status(" 🔥 ") == "🔥"
     assert normalize_emoji_status("") is None
     assert len(normalize_emoji_status("abcdefghij") or "") == 8
+    assert normalize_emoji_status("[[e:42]]") == "ce:42"
+    assert normalize_emoji_status("ce:7") == "ce:7"
 
 
 def test_stt_stub(monkeypatch):

@@ -7,10 +7,12 @@ import '../../../services/comment_service.dart';
 import '../../../services/auth_service.dart';
 import '../../../models/post_model.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../subscription/creator_upsell.dart';
 import '../../../utils/session_snackbar.dart';
 import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/report_content_dialog.dart';
+import '../../../widgets/highlighted_text.dart';
 
 class CommentsScreen extends ConsumerStatefulWidget {
   final int postId;
@@ -142,6 +144,8 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
       }
     } on ApiClientException catch (e) {
       if (mounted) {
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         final text = e.isContentBlocked
             ? 'Комментарий не прошёл модерацию.'
             : e.isRateLimited
@@ -153,6 +157,8 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
       }
     } catch (e) {
       if (mounted) {
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
         showErrorSnackBar(
           context,
           e,
@@ -248,13 +254,15 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        widget.post!.author?.name ?? 'Неизвестный',
+                      HighlightedText(
+                        text: widget.post!.author?.name ?? 'Неизвестный',
                         style: const TextStyle(fontWeight: FontWeight.bold),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       if (widget.post!.title != null)
-                        Text(
-                          widget.post!.title!,
+                        HighlightedText(
+                          text: widget.post!.title!,
                           style: TextStyle(
                             fontSize: 12,
                             color: scheme.onSurfaceVariant,
@@ -650,19 +658,21 @@ class _CommentItemState extends State<_CommentItem> {
                     Row(
                       children: [
                         Expanded(
-                          child: Text(
-                            comment.authorName ?? 'Неизвестный',
+                          child: HighlightedText(
+                            text: comment.authorName ?? 'Неизвестный',
                             style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 14,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      '${widget.textPrefix}${comment.text}',
+                    HighlightedText(
+                      text: '${widget.textPrefix}${comment.text}',
                       style: const TextStyle(fontSize: 14),
                       maxLines: (isLongText && !_expanded) ? 3 : null,
                       overflow: (isLongText && !_expanded)

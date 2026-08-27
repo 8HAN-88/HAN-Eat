@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../../../models/chat_models.dart';
 import '../../../services/server_config.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../application/chat_voice_playback_coordinator.dart';
 import '../widgets/chat_voice_waveform.dart';
 
@@ -404,8 +405,8 @@ class _ChatVoiceBubbleState extends State<ChatVoiceBubble> {
           if ((widget.message.transcription ?? '').isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(left: 4, top: 6),
-              child: Text(
-                widget.message.transcription!,
+              child: HighlightedText(
+                text: widget.message.transcription!,
                 style: TextStyle(
                   color: widget.foregroundColor.withValues(alpha: 0.92),
                   fontSize: 13,

@@ -8,8 +8,10 @@ import '../../../services/auth_service.dart';
 import '../../../services/channel_service.dart';
 import '../../../services/chat_folder_store.dart';
 import '../../../services/chat_service.dart';
+import '../../../services/custom_emoji_registry.dart';
 import '../../../services/user_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../../subscription/creator_upsell.dart';
 
 enum _FolderPickTab { all, chats, channels }
@@ -278,6 +280,7 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
     } catch (e) {
       if (!mounted) return;
       if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -304,7 +307,7 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
           title: const Text('Ссылка на папку'),
           content: Text(
             'Токен скопирован. Другой человек с функцией «Папки» может '
-            'импортировать «${shared.name}» по этому коду:\n\n${shared.token}',
+            'импортировать «${previewTextWithCustomEmoji(shared.name)}» по этому коду:\n\n${shared.token}',
           ),
           actions: [
             TextButton(
@@ -330,9 +333,9 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Удалить папку?'),
-        content: Text(
-          'Папка «${folder.name}» будет удалена. Чаты и каналы останутся в «Все чаты».',
-        ),
+          content: Text(
+            'Папка «${previewTextWithCustomEmoji(folder.name)}» будет удалена. Чаты и каналы останутся в «Все чаты».',
+          ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -435,7 +438,7 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
                         ? null
                         : const Icon(Icons.lock_outline),
                   ),
-                  maxLength: 2,
+                  maxLength: 32,
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
@@ -706,8 +709,20 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
                     (item) => CheckboxListTile(
                       value: _isSelected(item),
                       onChanged: (_) => _toggle(item),
-                      title: Text(item.title),
-                      subtitle: Text(item.subtitle),
+                      title: HighlightedText(
+                        text: item.title,
+                        style: Theme.of(context).textTheme.bodyLarge ??
+                            const TextStyle(fontSize: 16),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: HighlightedText(
+                        text: item.subtitle,
+                        style: Theme.of(context).textTheme.bodySmall ??
+                            const TextStyle(fontSize: 12),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       controlAffinity: ListTileControlAffinity.leading,
                       dense: true,
                     ),

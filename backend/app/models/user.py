@@ -80,7 +80,7 @@ class User(Base):
     totp_enabled = Column(Boolean, default=False, nullable=False)
     totp_enabled_at = Column(DateTime, nullable=True)
     # Telegram Premium: emoji next to name + account name color.
-    emoji_status = Column(String(16), nullable=True)
+    emoji_status = Column(String(32), nullable=True)
     profile_color = Column(String(16), nullable=True)
     # Telegram Premium: who may send voice / video notes to this user.
     voice_privacy = Column(String(20), default="everybody", nullable=False)

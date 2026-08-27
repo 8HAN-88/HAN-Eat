@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 
 import '../../../../models/chat_models.dart';
 import '../../../../services/channel_service.dart';
+import '../../../../services/custom_emoji_registry.dart';
 import '../../../../widgets/app_avatar.dart';
+import '../../../../widgets/highlighted_text.dart';
 import '../../../../widgets/telegram_ui.dart';
 import '../../../calls/call_message_labels.dart';
 import '../../application/chat_tag.dart';
@@ -108,7 +110,7 @@ class ChatHubTile extends StatelessWidget {
     if (hasTyping) {
       body = typing;
     } else if (hasDraft) {
-      body = draft;
+      body = previewTextWithCustomEmoji(draft);
     } else {
       body = _bodyPreview(last);
     }
@@ -158,8 +160,8 @@ class ChatHubTile extends StatelessWidget {
                     Row(
                       children: [
                         Expanded(
-                          child: Text(
-                            chat.displayTitle,
+                          child: HighlightedText(
+                            text: chat.displayTitle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
@@ -260,8 +262,8 @@ class ChatHubTile extends StatelessWidget {
                                   ),
                                 ),
                               ] else if (prefix != null)
-                                Text(
-                                  prefix,
+                                HighlightedText(
+                                  text: prefix,
                                   style: TextStyle(
                                     color: hasUnread
                                         ? scheme.onSurface
@@ -285,8 +287,8 @@ class ChatHubTile extends StatelessWidget {
                                     ? Row(
                                         children: [
                                           Flexible(
-                                            child: Text(
-                                              body,
+                                            child: HighlightedText(
+                                              text: body,
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                               style: TextStyle(
@@ -458,8 +460,8 @@ class ChatHubRecommendedChannelChip extends StatelessWidget {
               const SizedBox(width: 8),
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 140),
-                child: Text(
-                  channel.name,
+                child: HighlightedText(
+                  text: channel.name,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontWeight: FontWeight.w500),
@@ -504,7 +506,7 @@ class ChatHubGroupAvatar extends StatelessWidget {
       radius: 28,
       backgroundColor: scheme.primaryContainer,
       child: Text(
-        members.first.displayName.characters.first.toUpperCase(),
+        avatarLetterWithCustomEmoji(members.first.displayName),
         style: TextStyle(
           fontWeight: FontWeight.w600,
           color: scheme.onPrimaryContainer,
@@ -576,11 +578,7 @@ class ChatHubChannelAvatar extends StatelessWidget {
   }
 }
 
-String chatHubAvatarLetter(String value) {
-  final trimmed = value.trim();
-  if (trimmed.isEmpty) return '?';
-  return trimmed.characters.first.toUpperCase();
-}
+String chatHubAvatarLetter(String value) => avatarLetterWithCustomEmoji(value);
 
 String chatHubBodyPreview(ChatMessage? msg, {bool isSaved = false}) {
   if (msg == null) {
@@ -634,12 +632,15 @@ String chatHubBodyPreview(ChatMessage? msg, {bool isSaved = false}) {
   if (msg.type == 'file') {
     final name = msg.content.trim();
     if (msg.isPaid && !msg.purchased && !msg.isMine) return 'Платный файл';
-    return name.isEmpty ? 'Файл' : name;
+    return name.isEmpty ? 'Файл' : previewTextWithCustomEmoji(name);
   }
   final contact = ChatContactPayload.tryParse(msg.content);
-  if (contact != null) return contact.displayName;
+  if (contact != null) {
+    return previewTextWithCustomEmoji(contact.displayName);
+  }
   final content = msg.content.trim();
-  return content.isEmpty ? 'Сообщение' : content;
+  if (content.isEmpty) return 'Сообщение';
+  return previewTextWithCustomEmoji(content);
 }
 
 String chatHubFormatInboxTime(DateTime dt) {
@@ -790,9 +791,13 @@ class _ChannelInboxTileState extends State<ChannelInboxTile> {
 
   String _postPreview(Map<String, dynamic> post) {
     final title = (post['title'] as String?)?.trim();
-    if (title != null && title.isNotEmpty) return title;
+    if (title != null && title.isNotEmpty) {
+      return previewTextWithCustomEmoji(title);
+    }
     final description = (post['description'] as String?)?.trim();
-    if (description != null && description.isNotEmpty) return description;
+    if (description != null && description.isNotEmpty) {
+      return previewTextWithCustomEmoji(description);
+    }
     final type = (post['type'] as String?)?.toLowerCase() ?? '';
     if (type == 'recipe') return 'Пост';
     if (type == 'reel' || type == 'video') return 'Видео';
@@ -802,9 +807,9 @@ class _ChannelInboxTileState extends State<ChannelInboxTile> {
 
   String _subtitle() {
     if (_channel.postsCount > 0 && _loadingPost) return 'Загрузка…';
-    if (_preview != null) return _preview!;
+    if (_preview != null) return previewTextWithCustomEmoji(_preview!);
     final d = _channel.description?.trim();
-    if (d != null && d.isNotEmpty) return d;
+    if (d != null && d.isNotEmpty) return previewTextWithCustomEmoji(d);
     return 'Канал';
   }
 
@@ -839,8 +844,8 @@ class _ChannelInboxTileState extends State<ChannelInboxTile> {
                             size: 15, color: scheme.primary),
                         const SizedBox(width: 4),
                         Expanded(
-                          child: Text(
-                            _channel.name,
+                          child: HighlightedText(
+                            text: _channel.name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(

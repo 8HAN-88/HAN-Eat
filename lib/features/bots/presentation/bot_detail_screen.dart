@@ -9,7 +9,10 @@ import '../../../services/api_service.dart';
 import '../../../services/chat_service.dart';
 import '../../../services/paid_features_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../subscription/creator_upsell.dart';
 import '../../../widgets/app_gradient_background.dart';
+import '../../../services/custom_emoji_registry.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../../../widgets/telegram_ui.dart';
 import '../../miniapps/data/miniapp_models.dart';
 import '../../miniapps/data/miniapps_service.dart';
@@ -257,6 +260,8 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
       );
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Не удалось сохранить: $e')),
       );
@@ -488,8 +493,10 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
                               final statusLabel = _invoiceStatusLabel(inv.status);
                               final canRefund = inv.status == 'paid';
                               return ListTile(
-                                title: Text(
-                                  inv.title,
+                                title: HighlightedText(
+                                  text: inv.title,
+                                  style: Theme.of(context).textTheme.bodyLarge ??
+                                      const TextStyle(fontSize: 16),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -616,6 +623,8 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
       );
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -765,17 +774,23 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
                                 ),
                               ),
                               const SizedBox(height: 12),
-                              Text(
-                                bot.name,
+                              HighlightedText(
+                                text: bot.name,
                                 textAlign: TextAlign.center,
                                 style: Theme.of(context)
-                                    .textTheme
-                                    .headlineSmall
-                                    ?.copyWith(fontWeight: FontWeight.w900),
+                                        .textTheme
+                                        .headlineSmall
+                                        ?.copyWith(fontWeight: FontWeight.w900) ??
+                                    const TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.w900,
+                                    ),
                               ),
                               const SizedBox(height: 4),
-                              Text(
-                                (bot.shortDescription ?? bot.description ?? '')
+                              HighlightedText(
+                                text: (bot.shortDescription ??
+                                            bot.description ??
+                                            '')
                                         .trim()
                                         .isEmpty
                                     ? 'Настройте бота как в @BotFather'
@@ -783,11 +798,12 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
                                         bot.description)!,
                                 textAlign: TextAlign.center,
                                 style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                      color: scheme.onSurfaceVariant,
-                                    ),
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          color: scheme.onSurfaceVariant,
+                                        ) ??
+                                    const TextStyle(fontSize: 14),
                               ),
                               const SizedBox(height: 22),
                               _BotFatherGroup(
@@ -1011,7 +1027,6 @@ class _EditBotProfileDialogState extends State<_EditBotProfileDialog> {
             const SizedBox(height: 10),
             TextField(
               controller: _about,
-              maxLength: 120,
               decoration: const InputDecoration(
                 labelText: 'About',
                 helperText: 'Короткое описание в профиле бота',
@@ -1141,6 +1156,8 @@ class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
       await _reload();
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Ошибка: $e')),
       );
@@ -1175,6 +1192,8 @@ class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
       await _reload();
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Ошибка: $e')),
       );
@@ -1201,7 +1220,9 @@ class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete Mini App?'),
-        content: Text('«${app.name}» будет удалено из каталога.'),
+        content: Text(
+          '«${previewTextWithCustomEmoji(app.name)}» будет удалено из каталога.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -1359,11 +1380,13 @@ class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
                                         : Icons.apps_outage_outlined,
                                   ),
                                 ),
-                                title: Text(
-                                  app.name,
+                                title: HighlightedText(
+                                  text: app.name,
                                   style: const TextStyle(
                                     fontWeight: FontWeight.w700,
                                   ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                                 subtitle: Text(
                                   [
@@ -1614,6 +1637,8 @@ class _BotCommandsScreenState extends State<_BotCommandsScreen> {
       await _reload();
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Ошибка: $e')),
       );
@@ -1643,6 +1668,8 @@ class _BotCommandsScreenState extends State<_BotCommandsScreen> {
       await _reload();
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Ошибка: $e')),
       );
@@ -1714,7 +1741,13 @@ class _BotCommandsScreenState extends State<_BotCommandsScreen> {
                         return ListTile(
                           leading: const Icon(Icons.code_rounded),
                           title: Text('/${c.command}'),
-                          subtitle: Text(c.description),
+                          subtitle: HighlightedText(
+                            text: c.description,
+                            style: Theme.of(context).textTheme.bodySmall ??
+                                const TextStyle(fontSize: 12),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -1802,8 +1835,20 @@ class _SelectChatDialogState extends State<_SelectChatDialog> {
                   return RadioListTile<int>(
                     value: chat.id,
                     groupValue: _selectedConversationId,
-                    title: Text(chat.title),
-                    subtitle: Text(chat.subtitle),
+                    title: HighlightedText(
+                      text: chat.title,
+                      style: Theme.of(context).textTheme.bodyLarge ??
+                          const TextStyle(fontSize: 16),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: HighlightedText(
+                      text: chat.subtitle,
+                      style: Theme.of(context).textTheme.bodySmall ??
+                          const TextStyle(fontSize: 12),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     onChanged: (value) {
                       setState(() => _selectedConversationId = value);
                     },

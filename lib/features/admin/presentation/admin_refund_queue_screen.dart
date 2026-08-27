@@ -3,6 +3,7 @@ import '../../../utils/api_error_parser.dart';
 import 'package:intl/intl.dart';
 import '../../../services/payment_service.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../../widgets/highlighted_text.dart';
 
 /// Очередь запросов на возврат (только is_admin).
 class AdminRefundQueueScreen extends StatefulWidget {
@@ -183,22 +184,27 @@ class _AdminRefundQueueScreenState extends State<AdminRefundQueueScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  item.productName,
+                HighlightedText(
+                  text: item.productName,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ) ??
+                      const TextStyle(
+                        fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  [
+                HighlightedText(
+                  text: [
                     if (item.userName != null) item.userName!,
                     if (item.userEmail != null) item.userEmail!,
                     '${item.amount.toStringAsFixed(0)} ₽',
                     if (date.isNotEmpty) date,
                     if (item.ticketId != null) 'тикет #${item.ticketId}',
                   ].join(' · '),
-                  style: Theme.of(context).textTheme.bodySmall,
+                  style: Theme.of(context).textTheme.bodySmall ??
+                      const TextStyle(fontSize: 12),
                 ),
                 const SizedBox(height: 12),
                 Row(

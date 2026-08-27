@@ -80,7 +80,8 @@ class ChatStickerPinnedPacksStore {
       await prefs.setBool(_migratedKey, true);
       return result.pinned;
     } catch (_) {
-      return willPin;
+      await saveLocal(current);
+      rethrow;
     }
   }
 }

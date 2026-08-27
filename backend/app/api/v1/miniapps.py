@@ -122,9 +122,12 @@ def _ensure_url(url: str) -> str:
 
 
 def _serialize_user(user: User) -> dict:
+    from app.services.emoji_pack_service import preview_text_with_custom_emoji
+
+    name = (user.name or "").strip()
     return {
         "id": user.id,
-        "first_name": user.name or "",
+        "first_name": preview_text_with_custom_emoji(name) if name else "",
         "username": user.username or "",
     }
 
@@ -487,6 +490,13 @@ async def create_miniapp(
     if exists:
         raise HTTPException(status_code=400, detail="Mini app short_name already exists for this bot")
 
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(
+        current_user.id,
+        payload.name,
+        payload.description,
+    )
     app = BotMiniApp(
         bot_id=bot.id,
         name=payload.name.strip(),
@@ -517,12 +527,24 @@ async def update_miniapp(
     if not bot or bot.created_by_user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
+    from app.services.emoji_pack_service import EmojiPackService, keep_if_unchanged_http
+
+    emoji = EmojiPackService(db)
+    # Flutter always resends name + description with url / category / icon.
     requires_re_moderation = False
     if payload.name is not None:
-        app.name = payload.name.strip()
+        app.name = (
+            keep_if_unchanged_http(
+                emoji, current_user.id, payload.name, app.name
+            )
+            or payload.name
+        ).strip()
         requires_re_moderation = True
     if payload.description is not None:
-        app.description = payload.description.strip() or None
+        resolved = keep_if_unchanged_http(
+            emoji, current_user.id, payload.description, app.description
+        )
+        app.description = (resolved or "").strip() or None
         requires_re_moderation = True
     if payload.category is not None:
         app.category = _normalize_category(payload.category)
@@ -768,7 +790,24 @@ async def send_miniapp_web_app_data(
     if not bot_member:
         raise HTTPException(status_code=400, detail="Bot is not in this chat")
 
-    button_text = (payload.button_text or app.name or "Mini App").strip()[:64]
+    from app.services.emoji_pack_service import (
+        EmojiPackService,
+        authored_or_peer_label,
+    )
+
+    emoji = EmojiPackService(db)
+    # `data` is the webapp payload the user confirmed. Flutter always
+    # sends the chrome title (app name or inline-button label) as
+    # button_text — that is the owner's, not authored. Preview, do not 403.
+    emoji.require_send_tokens_http(current_user.id, data)
+    button_text = authored_or_peer_label(
+        emoji,
+        current_user.id,
+        None,
+        (payload.button_text or "").strip() or app.name,
+        default="Mini App",
+        limit=64,
+    )
     content = json.dumps(
         {
             "data": data,
@@ -925,6 +964,12 @@ async def moderate_miniapp(
     current_user: User = Depends(get_current_moderator_required),
     db: Session = Depends(get_db),
 ):
+    from app.services.emoji_pack_service import EmojiPackService
+
+    EmojiPackService(db).require_send_tokens_http(
+        current_user.id,
+        payload.moderation_note,
+    )
     app = db.query(BotMiniApp).filter(BotMiniApp.id == miniapp_id).first()
     if not app:
         raise HTTPException(status_code=404, detail="Mini app not found")
