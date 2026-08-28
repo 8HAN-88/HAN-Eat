@@ -22,6 +22,13 @@ else
   fail_msg "GET / → $code (ожидали 200)"
 fi
 
+app_code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$WEB_ORIGIN/app/")"
+if [[ "$app_code" == "200" ]]; then
+  check "GET /app/ → $app_code"
+else
+  fail_msg "GET /app/ → $app_code (ожидали 200)"
+fi
+
 www_code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "https://www.haneat.app/")"
 if [[ "$www_code" == "200" ]]; then
   check "GET www → $www_code"
