@@ -1,5 +1,5 @@
 // Standalone check — без Flutter. Запуск: dart run tool/check_web_app_path.dart
-import '../lib/app/web_app_path.dart';
+import 'package:han_eat/app/web_app_path.dart';
 
 int _failed = 0;
 
