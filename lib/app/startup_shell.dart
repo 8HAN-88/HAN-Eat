@@ -49,8 +49,8 @@ class _StartupShellState extends State<StartupShell> {
 
   void _onSessionRevision() {
     if (!mounted) return;
-    if (AppBootstrapState.authReady.value) {
-      _enterFullAppIfSessionReady();
+    if (AuthService.instance.currentUser != null) {
+      _openMainUi();
     }
   }
 
@@ -192,6 +192,15 @@ class _StartupShellState extends State<StartupShell> {
         setState(() => _error = e);
       }
     } finally {
+      if (kIsWeb && AuthService.instance.currentUser == null) {
+        try {
+          final token = await AuthService.getAccessToken();
+          if (token != null && token.isNotEmpty) {
+            debugPrint('StartupShell: токен есть — ждём user, не логин');
+            return;
+          }
+        } catch (_) {}
+      }
       _openMainUi();
     }
   }

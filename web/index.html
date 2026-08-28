@@ -500,20 +500,16 @@
       // If HTML shell is stale after a deploy, hard-navigate so no-store
       // index.html + fresh bootstrap load without visiting /fresh.
       function ensureLatestShellThen(next) {
+        // Never block Flutter boot on version.json (was +2.5s on VPN).
+        next();
         fetchRemoteBuild(2500).then(function (remote) {
-          if (!remote || remote === BUILD) {
-            next();
-            return;
-          }
+          if (!remote || remote === BUILD) return;
+          if (flutterStarted) return;
           var guardKey = 'haneat_shell_update_' + remote;
           try {
             var prev = parseInt(sessionStorage.getItem(guardKey) || '', 10);
             var now = Date.now();
-            // Avoid reload loops; allow retry after 45s if boot never settled.
-            if (prev && now - prev < 45000) {
-              next();
-              return;
-            }
+            if (prev && now - prev < 45000) return;
             sessionStorage.setItem(guardKey, String(now));
           } catch (e) {}
           ping(

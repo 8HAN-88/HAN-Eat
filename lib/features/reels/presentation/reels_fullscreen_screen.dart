@@ -41,6 +41,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
     with WidgetsBindingObserver {
   late PageController _pageController;
   final Map<int, VideoPlayerController> _videoControllers = {};
+  final Map<int, bool> _videoInitFailed = {};
   final Map<int, bool> _isPaused = {};
   List<PostModel> _reels = [];
   bool _isLoading = false;
@@ -79,6 +80,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
     final controller = _videoControllers.remove(index);
     await controller?.dispose();
     if (!mounted) return;
+    setState(() => _videoInitFailed.remove(index));
     await _initSingleVideo(index);
     if (mounted && _shouldPlayReelAt(index)) {
       _playReelAt(index);
@@ -205,7 +207,10 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
 
     final reel = _reels[i];
     final sources = reel.reelVideoSources;
-    if (sources.isEmpty) return;
+    if (sources.isEmpty) {
+      if (mounted) setState(() => _videoInitFailed[i] = true);
+      return;
+    }
 
     try {
       final qualityPref = ref.read(videoPlaybackProvider);
@@ -223,6 +228,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
 
       setState(() {
         _videoControllers[i] = playback.controller;
+        _videoInitFailed.remove(i);
       });
       if (_shouldPlayReelAt(i)) {
         _playReelAt(i);
@@ -254,6 +260,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
       }
     } catch (e) {
       debugPrint('ReelsFullscreen init video $i: $e');
+      if (mounted) setState(() => _videoInitFailed[i] = true);
     }
   }
 
@@ -560,6 +567,8 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
                 reel: reel,
                 index: index,
                 videoController: _videoControllers[index],
+                videoInitFailed: _videoInitFailed[index] == true,
+                onRetryVideo: () => unawaited(_reloadReelVideo(index)),
                 isCurrent: index == _currentIndex,
                 isPaused: _isPaused[index] ?? false,
                 isMuted: _sessionMuted,

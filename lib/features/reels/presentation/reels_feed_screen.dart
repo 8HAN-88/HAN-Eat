@@ -1043,6 +1043,7 @@ class _ReelCardState extends ConsumerState<ReelCard>
   late Animation<double> _likeScaleAnimation;
   late Animation<double> _likeOpacityAnimation;
   final List<TapGestureRecognizer> _descriptionRecognizers = [];
+  VideoPlayerController? _boundController;
 
   static const double _igActionGap = 14;
   static const double _igRightInset = 12;
@@ -1068,10 +1069,37 @@ class _ReelCardState extends ConsumerState<ReelCard>
         curve: const Interval(0.5, 1.0),
       ),
     );
+    _bindController(widget.videoController);
+  }
+
+  @override
+  void didUpdateWidget(ReelCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.videoController != widget.videoController) {
+      _bindController(widget.videoController);
+    }
+  }
+
+  void _bindController(VideoPlayerController? controller) {
+    _boundController?.removeListener(_onVideoTick);
+    _boundController = controller;
+    controller?.addListener(_onVideoTick);
+  }
+
+  void _onVideoTick() {
+    if (mounted) setState(() {});
+  }
+
+  bool get _hasVideoFrame {
+    final controller = widget.videoController;
+    if (controller == null || !controller.value.isInitialized) return false;
+    return controller.value.isPlaying ||
+        controller.value.position > Duration.zero;
   }
 
   @override
   void dispose() {
+    _boundController?.removeListener(_onVideoTick);
     _singleTapTimer?.cancel();
     _clearDescriptionRecognizers();
     _likeAnimationController.dispose();
@@ -1276,8 +1304,7 @@ class _ReelCardState extends ConsumerState<ReelCard>
             color: Colors.black,
             child: Center(child: _buildVideoPlaceholder()),
           ),
-          if (widget.videoController != null &&
-              widget.videoController!.value.isInitialized)
+          if (_hasVideoFrame)
             SizedBox.expand(
               child: CoverNetworkVideo(controller: widget.videoController!),
             ),
