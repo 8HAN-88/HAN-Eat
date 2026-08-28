@@ -17386,6 +17386,8 @@ class _Bubble extends StatelessWidget {
                   highlightMentions: true,
                   onMentionTap: onMentionTap,
                   mentionLabels: mentionLabels,
+                  onUrlTap: (url) =>
+                      unawaited(openAppOrExternalLink(context, url)),
                 ),
               ),
             ),
@@ -17484,6 +17486,8 @@ class _Bubble extends StatelessWidget {
                   highlightMentions: true,
                   onMentionTap: onMentionTap,
                   mentionLabels: mentionLabels,
+                  onUrlTap: (url) =>
+                      unawaited(openAppOrExternalLink(context, url)),
                 ),
               ),
             ),
@@ -17512,6 +17516,7 @@ class _Bubble extends StatelessWidget {
         parseMarkup: true,
         onMentionTap: onMentionTap,
         mentionLabels: mentionLabels,
+        onUrlTap: (url) => unawaited(openAppOrExternalLink(context, url)),
       );
       if (hasLinkPreview) {
         mainContent = _withBottomMeta(
