@@ -868,7 +868,28 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               child: InvalidLinkScreen(title: 'Комментарии'),
             );
           }
-          return MaterialPage(child: CommentsScreen(postId: postId));
+          return CustomTransitionPage<void>(
+            key: state.pageKey,
+            fullscreenDialog: true,
+            transitionDuration: const Duration(milliseconds: 280),
+            reverseTransitionDuration: const Duration(milliseconds: 220),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+              final curved = CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+                reverseCurve: Curves.easeInCubic,
+              );
+              return SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 1),
+                  end: Offset.zero,
+                ).animate(curved),
+                child: child,
+              );
+            },
+            child: CommentsScreen(postId: postId),
+          );
         },
       ),
       GoRoute(

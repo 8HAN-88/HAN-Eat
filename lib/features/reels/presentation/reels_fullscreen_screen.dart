@@ -13,6 +13,8 @@ import '../../../services/feed_service.dart';
 import '../../../services/like_service.dart';
 import '../../../services/saved_posts_service.dart';
 import '../../../services/repost_service.dart';
+import '../../../services/comment_service.dart';
+import '../../comments/presentation/show_post_comments_sheet.dart';
 import '../../../utils/video_player_helper.dart';
 import '../../../services/feed_analytics_service.dart';
 import '../../../widgets/share_action_sheet.dart';
@@ -397,6 +399,34 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
     _currentReelStartedAt = null;
   }
 
+  Future<void> _openComments(PostModel reel) async {
+    FeedAnalyticsService.openDetail(
+      reel,
+      source: 'reels_fullscreen',
+      target: 'comments',
+    );
+    _pauseAllVideos();
+    await showPostCommentsSheet(
+      context,
+      postId: reel.id,
+      post: reel,
+    );
+    if (!mounted) return;
+    try {
+      final total = await CommentService.getCommentsTotal(reel.id);
+      if (!mounted) return;
+      if (_reels.any((r) => r.id == reel.id && r.commentsCount != total)) {
+        _updateReelAt(
+          reel.id,
+          (r) => _copyReelWith(r, commentsCount: total),
+        );
+      }
+    } catch (_) {}
+    if (_canPlayVideos) {
+      _playReelAt(_currentIndex);
+    }
+  }
+
   Future<void> _toggleLike(int postId) async {
     if (_likeBusy.contains(postId)) return;
     final index = _reels.indexWhere((r) => r.id == postId);
@@ -496,6 +526,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
   PostModel _copyReelWith(
     PostModel r, {
     int? likesCount,
+    int? commentsCount,
     bool? isLiked,
     bool? isSaved,
     bool? isReposted,
@@ -513,7 +544,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
       body: r.body,
       tags: r.tags,
       likesCount: likesCount ?? r.likesCount,
-      commentsCount: r.commentsCount,
+      commentsCount: commentsCount ?? r.commentsCount,
       repostsCount: r.repostsCount,
       viewsCount: r.viewsCount,
       isPromoted: r.isPromoted,
@@ -577,14 +608,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
                   setState(() => _isPaused[index] = paused);
                 },
                 onLike: () => _toggleLike(reel.id),
-                onComment: () {
-                  FeedAnalyticsService.openDetail(
-                    reel,
-                    source: 'reels_fullscreen',
-                    target: 'comments',
-                  );
-                  context.push('/post/${reel.id}/comments');
-                },
+                onComment: () => unawaited(_openComments(reel)),
                 onShare: () => _shareReel(reel),
                 onSave: () => _toggleSave(reel),
                 onRepost: () => _toggleRepost(reel),

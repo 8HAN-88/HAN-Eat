@@ -22,6 +22,8 @@ import 'package:go_router/go_router.dart';
 import '../../../services/like_service.dart';
 import '../../../services/saved_posts_service.dart';
 import '../../../services/repost_service.dart';
+import '../../../services/comment_service.dart';
+import '../../comments/presentation/show_post_comments_sheet.dart';
 import '../../../utils/video_player_helper.dart';
 import '../../../widgets/cover_network_video.dart';
 import '../../../utils/number_formatter.dart';
@@ -776,14 +778,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
                 });
               },
               onLike: () => _toggleLike(reel.id),
-              onComment: () {
-                FeedAnalyticsService.openDetail(
-                  reel,
-                  source: 'reels',
-                  target: 'comments',
-                );
-                context.push('/post/${reel.id}/comments');
-              },
+              onComment: () => unawaited(_openComments(reel)),
               onShare: () => _shareReel(reel),
               onSave: () => _toggleSave(reel),
               onRepost: () => _toggleRepost(reel),
@@ -872,6 +867,35 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
       backgroundColor: Colors.black,
       body: reelFeed,
     );
+  }
+
+  Future<void> _openComments(PostModel reel) async {
+    FeedAnalyticsService.openDetail(
+      reel,
+      source: 'reels',
+      target: 'comments',
+    );
+    _pauseAllVideos();
+    await showPostCommentsSheet(
+      context,
+      postId: reel.id,
+      post: reel,
+    );
+    if (!mounted) return;
+    try {
+      final total = await CommentService.getCommentsTotal(reel.id);
+      if (!mounted) return;
+      final i = _reels.indexWhere((r) => r.id == reel.id);
+      if (i != -1 && _reels[i].commentsCount != total) {
+        setState(() {
+          _reels[i] = _reels[i].copyWith(commentsCount: total);
+        });
+        unawaited(FeedApiCache.save(_cacheVariant, _reels));
+      }
+    } catch (_) {}
+    if (_canPlayVideos) {
+      _playReelAt(_currentIndex);
+    }
   }
 
   Future<void> _toggleLike(int postId) async {
