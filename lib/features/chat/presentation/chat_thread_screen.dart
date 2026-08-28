@@ -32,6 +32,7 @@ import '../../calls/call_message_labels.dart';
 import '../../calls/presentation/call_coordinator.dart';
 
 import '../../../app/app_router.dart';
+import '../../../app/open_app_link.dart';
 import '../../../core/theme/color_schemes.dart';
 import '../../../core/haptics/app_haptics.dart';
 import '../../../core/network/feed_load_helper.dart';
@@ -13652,7 +13653,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         }
         return;
       }
-      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      final ok = await openAppOrExternalLink(context, url);
       if (!ok && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Не удалось открыть ссылку')),

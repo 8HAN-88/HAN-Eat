@@ -33,5 +33,12 @@ void main() {
       expect(parseDeepLinkToGoPath('haneat://reel/28'), '/reel/28');
       expect(parseDeepLinkToGoPath('haneat://post/28'), '/post/28');
     });
+
+    test('share text from a reel is an in-app path', () {
+      const share = 'салют\n\nОткрыть в HanWe: https://haneat.app/reel/28';
+      final match = RegExp(r'https?://[^\s]+').firstMatch(share);
+      expect(match, isNotNull);
+      expect(parseDeepLinkToGoPath(match!.group(0)!), '/reel/28');
+    });
   });
 }
