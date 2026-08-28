@@ -1,4 +1,6 @@
 # Nginx: Flutter Web PWA на haneat.app
+# Этот шаблон устарел (корень = SPA). Актуальный /app/ шелл —
+# scripts/patch_nginx_web_api_proxy.sh
 # Установка на сервер: bash scripts/setup_nginx_haneat_web.sh
 #
 # Требования:

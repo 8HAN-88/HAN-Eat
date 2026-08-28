@@ -72,6 +72,7 @@ import '../features/search/application/search_scope.dart';
 import '../features/search/presentation/search_screen.dart';
 import '../features/reels/presentation/reels_feed_screen.dart';
 import '../features/reels/presentation/reels_fullscreen_screen.dart';
+import '../features/reels/presentation/reel_by_id_screen.dart';
 import '../features/chat/presentation/chats_hub_screen.dart';
 import '../features/chat/presentation/chat_invite_join_screen.dart';
 import '../features/chat/application/chat_private_reply.dart';
@@ -86,6 +87,7 @@ import 'auth_route_paths.dart';
 import 'boot_screen.dart';
 import 'bootstrap.dart';
 import 'router_keys.dart';
+import 'web_app_path.dart';
 import 'web_session_landing_screen.dart';
 import 'invalid_link_screen.dart';
 import '../widgets/app_empty_state.dart';
@@ -97,7 +99,12 @@ String? parseDeepLinkToGoPath(String raw) {
     if (uri.scheme == 'https' || uri.scheme == 'http') {
       final host = uri.host.toLowerCase();
       if (host == 'haneat.app' || host == 'www.haneat.app') {
-        final path = uri.path;
+        // PWA живёт на /app/ — это HTML-шелл, не маршрут GoRouter.
+        var path = browserPathToGoPath(uri.path) ?? '';
+        // Hash-стратегия: https://haneat.app/app/#/stories
+        if (path.isEmpty && uri.fragment.isNotEmpty) {
+          path = hashFragmentToGoPath(uri.fragment) ?? '';
+        }
         // https://haneat.app/@username → /u/username
         if (path.startsWith('/@') && path.length > 2) {
           final handle = path.substring(2).split('/').first;
@@ -106,8 +113,12 @@ String? parseDeepLinkToGoPath(String raw) {
           }
         }
         if (path.isNotEmpty && path != '/') {
-          final q = uri.query;
-          return q.isEmpty ? path : '$path?$q';
+          final reelPath = ReelByIdRoute.goPathFromBrowserPath(path);
+          if (reelPath != null) {
+            return reelPath;
+          }
+          final q = routerQueryFromUri(uri);
+          return q == null ? path : '$path?$q';
         }
         if (uri.queryParameters.containsKey('ref')) {
           final ref = uri.queryParameters['ref'];
@@ -119,8 +130,10 @@ String? parseDeepLinkToGoPath(String raw) {
       return null;
     }
     if (uri.scheme != 'haneat') return null;
-    if ((uri.host == 'post' || uri.host == 'reel') &&
-        uri.pathSegments.isNotEmpty) {
+    if (uri.host == 'reel' && uri.pathSegments.isNotEmpty) {
+      return ReelByIdRoute.pathFor(uri.pathSegments.first);
+    }
+    if (uri.host == 'post' && uri.pathSegments.isNotEmpty) {
       return '/post/${uri.pathSegments.first}';
     }
     if (uri.host == 'channel' && uri.pathSegments.isNotEmpty) {
@@ -246,9 +259,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       try {
         final loc = state.matchedLocation;
+        final incoming = state.uri.path;
         if (!AppBootstrapState.authReady.value) {
           if (loc == BootScreen.path) return null;
           return BootScreen.path;
+        }
+        // PWA /app/?go=1 при base-href=/app/ приходит в роутер как `/`.
+        // Смотрим uri.path: matchedLocation на промежуточном кадре бывает пустым.
+        if (isGoRouterShellLocation(incoming)) {
+          if (AuthService.instance.currentUser == null) {
+            return LoginRoute.path;
+          }
+          FeedShellLaunch.skipReelsTab = true;
+          return stableHomePath;
         }
         if (loc == BootScreen.path) {
           if (AuthService.instance.currentUser == null) {
@@ -311,6 +334,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
     },
     routes: [
+      GoRoute(
+        path: '/',
+        redirect: (context, state) {
+          if (AuthService.instance.currentUser == null) {
+            return LoginRoute.path;
+          }
+          FeedShellLaunch.skipReelsTab = true;
+          return FeedRoute.path;
+        },
+      ),
       GoRoute(
         path: BootScreen.path,
         name: 'boot',
@@ -842,7 +875,28 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               child: InvalidLinkScreen(title: 'Комментарии'),
             );
           }
-          return MaterialPage(child: CommentsScreen(postId: postId));
+          return CustomTransitionPage<void>(
+            key: state.pageKey,
+            fullscreenDialog: true,
+            transitionDuration: const Duration(milliseconds: 280),
+            reverseTransitionDuration: const Duration(milliseconds: 220),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+              final curved = CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+                reverseCurve: Curves.easeInCubic,
+              );
+              return SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 1),
+                  end: Offset.zero,
+                ).animate(curved),
+                child: child,
+              );
+            },
+            child: CommentsScreen(postId: postId),
+          );
         },
       ),
       GoRoute(
@@ -1143,6 +1197,42 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
+      // Deep link https://haneat.app/reel/28
+      GoRoute(
+        path: ReelByIdRoute.path,
+        name: ReelByIdRoute.name,
+        parentNavigatorKey: hanEatRootNavigatorKey,
+        pageBuilder: (context, state) {
+          final postId = parseRoutePositiveId(state.pathParameters['postId']);
+          if (postId == null) {
+            return const MaterialPage(
+              child: InvalidLinkScreen(title: 'Рилс'),
+            );
+          }
+          return CustomTransitionPage<void>(
+            key: state.pageKey,
+            fullscreenDialog: true,
+            transitionDuration: const Duration(milliseconds: 280),
+            reverseTransitionDuration: const Duration(milliseconds: 220),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+              final curved = CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+                reverseCurve: Curves.easeInCubic,
+              );
+              return SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 1),
+                  end: Offset.zero,
+                ).animate(curved),
+                child: child,
+              );
+            },
+            child: ReelByIdScreen(postId: postId),
+          );
+        },
+      ),
       // Reels Feed
       GoRoute(
         path: ReelsRoute.path,
@@ -1168,11 +1258,46 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
     ],
-    errorPageBuilder: (context, state) => MaterialPage(
-      child: _RouterRecoveryScreen(error: state.error),
-    ),
+    errorPageBuilder: (context, state) {
+      if (isGoRouterShellLocation(state.uri.path) ||
+          isGoRouterShellLocation(state.matchedLocation)) {
+        return const MaterialPage(child: _SilentShellRedirect());
+      }
+      return MaterialPage(
+        child: _RouterRecoveryScreen(error: state.error),
+      );
+    },
   );
 });
+
+/// `/app/` попал в GoRouter — сразу домой, без экрана «ошибка маршрута».
+class _SilentShellRedirect extends StatefulWidget {
+  const _SilentShellRedirect();
+
+  @override
+  State<_SilentShellRedirect> createState() => _SilentShellRedirectState();
+}
+
+class _SilentShellRedirectState extends State<_SilentShellRedirect> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final user = AuthService.instance.currentUser;
+      if (user != null) FeedShellLaunch.skipReelsTab = true;
+      context.go(user == null ? LoginRoute.path : FeedRoute.path);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const ColoredBox(
+      color: Color(0xFF0F1319),
+      child: SizedBox.expand(),
+    );
+  }
+}
 
 class _RouterRecoveryScreen extends StatefulWidget {
   const _RouterRecoveryScreen({this.error});
@@ -1206,14 +1331,13 @@ class _RouterRecoveryScreenState extends State<_RouterRecoveryScreen> {
       final user = AuthService.instance.currentUser;
       context.go(user == null ? LoginRoute.path : _stableHomePath);
     });
-    Future<void>.delayed(const Duration(seconds: 12), () async {
+    Future<void>.delayed(const Duration(seconds: 12), () {
       if (!mounted || _forcedLogout) return;
-      // Last-resort recovery: if this screen still exists after two redirects,
-      // reset session and force a clean login path.
+      // Ещё одна попытка домой. Logout здесь выкидывал из сессии на
+      // медленном Safari, если / ещё не успел средиректить.
       _forcedLogout = true;
-      await AuthService.logout();
-      if (!mounted) return;
-      context.go(LoginRoute.path);
+      final user = AuthService.instance.currentUser;
+      context.go(user == null ? LoginRoute.path : _stableHomePath);
     });
   }
 
@@ -1856,6 +1980,30 @@ class SearchRoute {
 class ReelsRoute {
   static const path = '/reels';
   static const name = 'reels';
+}
+
+class ReelByIdRoute {
+  static const path = '/reel/:postId';
+  static const name = 'reel_by_id';
+
+  static String pathFor(Object postId) => '/reel/$postId';
+
+  /// `/reel/28` и `/app/reel/28` → `/reel/28`.
+  static String? goPathFromBrowserPath(String path) {
+    var p = path.trim();
+    if (p.contains('?')) {
+      p = p.split('?').first;
+    }
+    if (p.length > 1 && p.endsWith('/')) {
+      p = p.substring(0, p.length - 1);
+    }
+    if (p.startsWith('/app/')) {
+      p = p.substring(4);
+    }
+    final match = RegExp(r'^/reel/(\d+)$').firstMatch(p);
+    if (match == null) return null;
+    return pathFor(match.group(1)!);
+  }
 }
 
 class ReelsFullscreenRoute {

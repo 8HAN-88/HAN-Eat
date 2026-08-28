@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'dart:async';
 
 import '../../../app/app_router.dart';
+import '../../../app/web_app_path.dart';
 import '../../../core/app/kitchen_removed_notice.dart';
 import '../../../services/feed_ui_prefs.dart';
 import '../../../models/post_types.dart';
@@ -65,7 +66,11 @@ class _MainFeedScreenState extends ConsumerState<MainFeedScreen>
       FeedUiPrefs.loadReelsFollowingOnly(),
     ]);
     if (!mounted) return;
-    final tab = results[0] as int;
+    var tab = results[0] as int;
+    // Холодный старт с /app/?go=1: не прыгаем в рилсы, пока роутер не стабилен.
+    if (kIsWeb && FeedShellLaunch.takeSkipReelsTab() && tab == 2) {
+      tab = 1;
+    }
     setState(() {
       _subsFeedType = results[1] as String;
       _subsSortMode = results[2] as FeedSortMode;
@@ -106,61 +111,65 @@ class _MainFeedScreenState extends ConsumerState<MainFeedScreen>
   Widget _buildFeedChromeHeader() {
     return SafeArea(
       bottom: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
-        child: SizedBox(
-          height: kFeedChromeHeaderHeight - 16,
-          child: Row(
-            children: [
-              Expanded(
-                child: FeedSectionTabs(
-                  controller: _tabController,
-                  subsFeedType: _subsFeedType,
-                  subsSortMode: _subsSortMode,
-                  recFeedType: _recFeedType,
-                  recSortMode: _recSortMode,
-                  reelsFollowingOnly: _reelsFollowingOnly,
-                  onSubsFilterChanged: (value) {
-                    setState(() => _subsFeedType = value);
-                    unawaited(FeedUiPrefs.saveSubsFeedType(value));
-                  },
-                  onSubsSortChanged: (mode) {
-                    setState(() => _subsSortMode = mode);
-                    unawaited(FeedUiPrefs.saveSubsSortMode(mode));
-                  },
-                  onRecFilterChanged: (value) {
-                    setState(() => _recFeedType = value);
-                    unawaited(FeedUiPrefs.saveRecFeedType(value));
-                  },
-                  onRecSortChanged: (mode) {
-                    setState(() => _recSortMode = mode);
-                    unawaited(FeedUiPrefs.saveRecSortMode(mode));
-                  },
-                  onReelsFilterChanged: (followingOnly) {
-                    setState(() => _reelsFollowingOnly = followingOnly);
-                    unawaited(
-                        FeedUiPrefs.saveReelsFollowingOnly(followingOnly));
-                  },
-                ),
+      child: SizedBox(
+        height: kFeedChromeHeaderHeight,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+              child: Row(
+                children: [
+                  const Spacer(),
+                  NeoCircleAction(
+                    tooltip: 'Моменты',
+                    icon: Icons.auto_stories_outlined,
+                    selected: false,
+                    onPressed: () => context.push(StoriesRoute.path),
+                  ),
+                  const SizedBox(width: 6),
+                  NeoCircleAction(
+                    tooltip: 'Звёзды и кошелёк',
+                    icon: Icons.stars_rounded,
+                    selected: true,
+                    onPressed: () => context.push(StarsWalletRoute.path),
+                  ),
+                  const SizedBox(width: 6),
+                  const NotificationBellButton(),
+                ],
               ),
-              const SizedBox(width: 10),
-              NeoCircleAction(
-                tooltip: 'Моменты',
-                icon: Icons.auto_stories_outlined,
-                selected: false,
-                onPressed: () => context.push(StoriesRoute.path),
+            ),
+            Expanded(
+              child: FeedSectionTabs(
+                controller: _tabController,
+                subsFeedType: _subsFeedType,
+                subsSortMode: _subsSortMode,
+                recFeedType: _recFeedType,
+                recSortMode: _recSortMode,
+                reelsFollowingOnly: _reelsFollowingOnly,
+                onSubsFilterChanged: (value) {
+                  setState(() => _subsFeedType = value);
+                  unawaited(FeedUiPrefs.saveSubsFeedType(value));
+                },
+                onSubsSortChanged: (mode) {
+                  setState(() => _subsSortMode = mode);
+                  unawaited(FeedUiPrefs.saveSubsSortMode(mode));
+                },
+                onRecFilterChanged: (value) {
+                  setState(() => _recFeedType = value);
+                  unawaited(FeedUiPrefs.saveRecFeedType(value));
+                },
+                onRecSortChanged: (mode) {
+                  setState(() => _recSortMode = mode);
+                  unawaited(FeedUiPrefs.saveRecSortMode(mode));
+                },
+                onReelsFilterChanged: (followingOnly) {
+                  setState(() => _reelsFollowingOnly = followingOnly);
+                  unawaited(
+                      FeedUiPrefs.saveReelsFollowingOnly(followingOnly));
+                },
               ),
-              const SizedBox(width: 8),
-              NeoCircleAction(
-                tooltip: 'Звёзды и кошелёк',
-                icon: Icons.stars_rounded,
-                selected: true,
-                onPressed: () => context.push(StarsWalletRoute.path),
-              ),
-              const SizedBox(width: 8),
-              const NotificationBellButton(),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

@@ -203,12 +203,18 @@ class VideoPlayerHelper {
     }
 
     await controller.setLooping(loop);
-    if (muted) {
+    // iOS Safari / Flutter web блокирует unmuted autoplay — стартуем без звука.
+    if (muted || kIsWeb) {
       await controller.setVolume(0);
     }
 
     if (autoPlay) {
       await ensurePlaying(controller);
+    }
+    if (kIsWeb && !muted && controller.value.isPlaying) {
+      try {
+        await controller.setVolume(1);
+      } catch (_) {}
     }
   }
 
@@ -224,13 +230,43 @@ class VideoPlayerHelper {
         debugPrint('VideoPlayer error: ${controller.value.errorDescription}');
         return;
       }
-      await controller.play();
+      try {
+        await controller.play();
+      } catch (e) {
+        debugPrint('VideoPlayer play failed: $e');
+      }
+      if (kIsWeb &&
+          !controller.value.isPlaying &&
+          controller.value.volume > 0) {
+        try {
+          await controller.setVolume(0);
+          await controller.play();
+        } catch (e) {
+          debugPrint('VideoPlayer muted retry failed: $e');
+        }
+      }
       if (shouldContinue != null && !shouldContinue()) {
         await controller.pause();
         return;
       }
       await Future<void>.delayed(const Duration(milliseconds: 100));
     }
+  }
+
+  /// Web: play muted first (Safari autoplay), then restore session volume.
+  static Future<void> ensurePlayingWithVolume(
+    VideoPlayerController controller, {
+    required bool muted,
+    bool Function()? shouldContinue,
+  }) async {
+    await ensurePlaying(controller, shouldContinue: shouldContinue);
+    if (shouldContinue != null && !shouldContinue()) return;
+    if (!controller.value.isInitialized) return;
+    final target = muted ? 0.0 : 1.0;
+    if ((controller.value.volume < 0.5) == muted) return;
+    try {
+      await controller.setVolume(target);
+    } catch (_) {}
   }
 
   static Future<bool> toggleMute(VideoPlayerController controller) async {

@@ -3,15 +3,19 @@ import 'dart:async';
 import 'dart:math' as math;
 import '../../../utils/api_error_parser.dart';
 import '../../../utils/session_snackbar.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:video_player/video_player.dart';
 import '../../../models/post_model.dart';
 import '../../../services/feed_service.dart';
+import '../../../services/auth_service.dart';
 import '../../../services/like_service.dart';
 import '../../../services/saved_posts_service.dart';
 import '../../../services/repost_service.dart';
+import '../../../services/comment_service.dart';
+import '../../comments/presentation/show_post_comments_sheet.dart';
 import '../../../utils/video_player_helper.dart';
 import '../../../services/feed_analytics_service.dart';
 import '../../../widgets/share_action_sheet.dart';
@@ -40,6 +44,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
     with WidgetsBindingObserver {
   late PageController _pageController;
   final Map<int, VideoPlayerController> _videoControllers = {};
+  final Map<int, bool> _videoInitFailed = {};
   final Map<int, bool> _isPaused = {};
   List<PostModel> _reels = [];
   bool _isLoading = false;
@@ -48,13 +53,15 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
   int _currentIndex = 0;
   DateTime? _currentReelStartedAt;
   final Set<int> _impressedReelIds = {};
-  bool _sessionMuted = false;
+  bool _sessionMuted = kIsWeb;
   bool _appVisible = true;
+  bool _openingComments = false;
 
   static const Duration _likeTouchGrace = Duration(seconds: 20);
 
   final Set<int> _likeBusy = {};
   final Map<int, DateTime> _likeTouchedAt = {};
+  final Map<int, DateTime> _commentTouchedAt = {};
 
   bool get _canPlayVideos => _appVisible;
 
@@ -65,8 +72,9 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
     final controller = _videoControllers[index];
     if (controller == null) return;
     unawaited(
-      VideoPlayerHelper.ensurePlaying(
+      VideoPlayerHelper.ensurePlayingWithVolume(
         controller,
+        muted: _sessionMuted,
         shouldContinue: () => mounted && _shouldPlayReelAt(index),
       ),
     );
@@ -77,6 +85,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
     final controller = _videoControllers.remove(index);
     await controller?.dispose();
     if (!mounted) return;
+    setState(() => _videoInitFailed.remove(index));
     await _initSingleVideo(index);
     if (mounted && _shouldPlayReelAt(index)) {
       _playReelAt(index);
@@ -141,14 +150,21 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
     return incoming.map((post) {
       final prev = existing[post.id];
       if (prev == null) return post;
-      final touched = _likeTouchedAt[post.id];
-      if (touched != null && now.difference(touched) < _likeTouchGrace) {
-        return post.copyWith(
+      var next = post;
+      final likeTouched = _likeTouchedAt[post.id];
+      if (likeTouched != null &&
+          now.difference(likeTouched) < _likeTouchGrace) {
+        next = next.copyWith(
           isLiked: prev.isLiked,
           likesCount: prev.likesCount,
         );
       }
-      return post;
+      final commentTouched = _commentTouchedAt[post.id];
+      if (commentTouched != null &&
+          now.difference(commentTouched) < _likeTouchGrace) {
+        next = next.copyWith(commentsCount: prev.commentsCount);
+      }
+      return next;
     }).toList();
   }
 
@@ -203,7 +219,10 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
 
     final reel = _reels[i];
     final sources = reel.reelVideoSources;
-    if (sources.isEmpty) return;
+    if (sources.isEmpty) {
+      if (mounted) setState(() => _videoInitFailed[i] = true);
+      return;
+    }
 
     try {
       final qualityPref = ref.read(videoPlaybackProvider);
@@ -221,6 +240,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
 
       setState(() {
         _videoControllers[i] = playback.controller;
+        _videoInitFailed.remove(i);
       });
       if (_shouldPlayReelAt(i)) {
         _playReelAt(i);
@@ -252,6 +272,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
       }
     } catch (e) {
       debugPrint('ReelsFullscreen init video $i: $e');
+      if (mounted) setState(() => _videoInitFailed[i] = true);
     }
   }
 
@@ -388,6 +409,51 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
     _currentReelStartedAt = null;
   }
 
+  void _applyCommentsCount(int postId, int total) {
+    final i = _reels.indexWhere((r) => r.id == postId);
+    if (i == -1 || _reels[i].commentsCount == total) return;
+    _commentTouchedAt[postId] = DateTime.now();
+    _updateReelAt(
+      postId,
+      (r) => _copyReelWith(r, commentsCount: total),
+    );
+  }
+
+  Future<void> _openComments(PostModel reel) async {
+    if (_openingComments) return;
+    _openingComments = true;
+    FeedAnalyticsService.openDetail(
+      reel,
+      source: 'reels_fullscreen',
+      target: 'comments',
+    );
+    _pauseAllVideos();
+    try {
+      final fromSheet = await showPostCommentsSheet(
+        context,
+        postId: reel.id,
+        post: reel,
+        onCommentsCountChanged: (total) {
+          if (mounted) _applyCommentsCount(reel.id, total);
+        },
+      );
+      if (!mounted) return;
+      if (fromSheet != null) {
+        _applyCommentsCount(reel.id, fromSheet);
+      } else {
+        try {
+          final total = await CommentService.getCommentsTotal(reel.id);
+          if (mounted) _applyCommentsCount(reel.id, total);
+        } catch (_) {}
+      }
+      if (_canPlayVideos) {
+        _playReelAt(_currentIndex);
+      }
+    } finally {
+      _openingComments = false;
+    }
+  }
+
   Future<void> _toggleLike(int postId) async {
     if (_likeBusy.contains(postId)) return;
     final index = _reels.indexWhere((r) => r.id == postId);
@@ -453,6 +519,11 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
     }
   }
 
+  bool _isOwnReel(PostModel reel) {
+    final me = AuthService.instance.currentUser?.id;
+    return me != null && me == reel.userId;
+  }
+
   Future<void> _toggleRepost(PostModel reel) async {
     if (!mounted) return;
     try {
@@ -487,6 +558,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
   PostModel _copyReelWith(
     PostModel r, {
     int? likesCount,
+    int? commentsCount,
     bool? isLiked,
     bool? isSaved,
     bool? isReposted,
@@ -504,7 +576,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
       body: r.body,
       tags: r.tags,
       likesCount: likesCount ?? r.likesCount,
-      commentsCount: r.commentsCount,
+      commentsCount: commentsCount ?? r.commentsCount,
       repostsCount: r.repostsCount,
       viewsCount: r.viewsCount,
       isPromoted: r.isPromoted,
@@ -531,7 +603,8 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
     await ShareActionSheet.showForReel(
       context,
       reel: reel,
-      onRepostToWall: () => _toggleRepost(reel),
+      onRepostToWall:
+          _isOwnReel(reel) ? null : () => _toggleRepost(reel),
     );
   }
 
@@ -558,6 +631,8 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
                 reel: reel,
                 index: index,
                 videoController: _videoControllers[index],
+                videoInitFailed: _videoInitFailed[index] == true,
+                onRetryVideo: () => unawaited(_reloadReelVideo(index)),
                 isCurrent: index == _currentIndex,
                 isPaused: _isPaused[index] ?? false,
                 isMuted: _sessionMuted,
@@ -566,17 +641,11 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
                   setState(() => _isPaused[index] = paused);
                 },
                 onLike: () => _toggleLike(reel.id),
-                onComment: () {
-                  FeedAnalyticsService.openDetail(
-                    reel,
-                    source: 'reels_fullscreen',
-                    target: 'comments',
-                  );
-                  context.push('/post/${reel.id}/comments');
-                },
+                onComment: () => unawaited(_openComments(reel)),
                 onShare: () => _shareReel(reel),
                 onSave: () => _toggleSave(reel),
-                onRepost: () => _toggleRepost(reel),
+                onRepost:
+                    _isOwnReel(reel) ? null : () => _toggleRepost(reel),
                 onAuthorTap: () {
                   FeedAnalyticsService.openDetail(
                     reel,

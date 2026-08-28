@@ -200,13 +200,23 @@ class CommentsResponse {
   });
 
   factory CommentsResponse.fromJson(Map<String, dynamic> json) {
+    final raw = json['comments'];
     return CommentsResponse(
-      comments: (json['comments'] as List<dynamic>)
-          .map((item) => Comment.fromJson(item as Map<String, dynamic>))
-          .toList(),
-      total: json['total'] as int,
+      comments: raw is List
+          ? raw
+              .whereType<Map>()
+              .map((item) => Comment.fromJson(Map<String, dynamic>.from(item)))
+              .toList()
+          : const [],
+      total: readCommentsTotal(json['total']),
     );
   }
+}
+
+int readCommentsTotal(dynamic value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.tryParse(value?.toString() ?? '') ?? 0;
 }
 
 class Comment {

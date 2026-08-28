@@ -4,6 +4,13 @@ import '../services/reel_video_sources.dart';
 import '../services/server_config.dart';
 import 'post.dart';
 
+int _jsonCount(Object? raw) {
+  if (raw is int) return raw;
+  if (raw is num) return raw.toInt();
+  if (raw is String) return int.tryParse(raw.trim()) ?? 0;
+  return 0;
+}
+
 class PostCommentPreview {
   const PostCommentPreview({
     required this.id,
@@ -269,6 +276,17 @@ class PostModel {
         ? DateTime.parse(createdAtRaw)
         : DateTime.fromMillisecondsSinceEpoch(0);
 
+    final previewComments = (json['preview_comments'] as List<dynamic>? ??
+            const [])
+        .whereType<Map>()
+        .map((e) => PostCommentPreview.fromJson(Map<String, dynamic>.from(e)))
+        .where((e) => e.text.isNotEmpty)
+        .toList();
+    final commentsCountRaw = _jsonCount(json['comments_count']);
+    final commentsCount = commentsCountRaw < previewComments.length
+        ? previewComments.length
+        : commentsCountRaw;
+
     return PostModel(
       id: parsedId,
       type: json['type'] as String? ?? 'text',
@@ -285,20 +303,16 @@ class PostModel {
       tags: json['tags'] != null
           ? List<String>.from(json['tags'] as List)
           : null,
-      likesCount: json['likes_count'] as int? ?? 0,
-      commentsCount: json['comments_count'] as int? ?? 0,
-      previewComments: (json['preview_comments'] as List<dynamic>? ?? const [])
-          .whereType<Map>()
-          .map((e) => PostCommentPreview.fromJson(Map<String, dynamic>.from(e)))
-          .where((e) => e.text.isNotEmpty)
-          .toList(),
+      likesCount: _jsonCount(json['likes_count']),
+      commentsCount: commentsCount,
+      previewComments: previewComments,
       previewLikers: (json['preview_likers'] as List<dynamic>? ?? const [])
           .whereType<Map>()
           .map((e) => PostLikerPreview.fromJson(Map<String, dynamic>.from(e)))
           .where((e) => e.id > 0 && e.name.trim().isNotEmpty)
           .toList(),
-      repostsCount: json['reposts_count'] as int? ?? 0,
-      viewsCount: json['views_count'] as int? ?? 0,
+      repostsCount: _jsonCount(json['reposts_count']),
+      viewsCount: _jsonCount(json['views_count']),
       isPromoted: json['is_promoted'] as bool? ??
           json['isPromoted'] as bool? ??
           false,

@@ -75,11 +75,9 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
   VoidCallback? _apiReconnectedListener;
   VoidCallback? _apiReachabilityUiListener;
 
-  /// Show cache strip only when offline / confirmed error — not during silent hydrate.
+  /// Show cache strip only after a confirmed load error — not during hydrate.
   bool get _showCacheBanner =>
-      _servingFromCache &&
-      (_cacheLoadError != null ||
-          !ApiReachabilityService.instance.isApiReachable.value);
+      _servingFromCache && _cacheLoadError != null;
 
   int _storiesRefreshToken = 0;
 
@@ -457,6 +455,16 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
                                 context,
                                 postId: post.id,
                                 post: post,
+                                onCommentsCountChanged: (n) {
+                                  final i = _posts
+                                      .indexWhere((p) => p.id == post.id);
+                                  if (i == -1 || !mounted) return;
+                                  if (_posts[i].commentsCount == n) return;
+                                  setState(() {
+                                    _posts[i] =
+                                        _posts[i].copyWith(commentsCount: n);
+                                  });
+                                },
                               );
                             },
                             onPostDeleted: () {

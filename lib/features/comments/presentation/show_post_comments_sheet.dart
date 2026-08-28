@@ -3,18 +3,29 @@ import 'package:flutter/material.dart';
 import '../../../models/post_model.dart';
 import 'comments_screen.dart';
 
-/// Instagram-style comments bottom sheet over the feed.
-Future<void> showPostCommentsSheet(
+/// Instagram-style comments bottom sheet over the current screen.
+///
+/// Full width on purpose: Material 3 defaults `maxWidth: 640`, and on iPhone
+/// PWA a wrong CSS width would pin the sheet as a side panel over the reel.
+///
+/// Returns the latest comments total (after posts/deletes), or null if unknown.
+Future<int?> showPostCommentsSheet(
   BuildContext context, {
   required int postId,
   PostModel? post,
+  ValueChanged<int>? onCommentsCountChanged,
 }) {
-  return showModalBottomSheet<void>(
+  final width = MediaQuery.sizeOf(context).width;
+  var latest = post?.commentsCount;
+  return showModalBottomSheet<int>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
+    useRootNavigator: true,
     showDragHandle: true,
     backgroundColor: Theme.of(context).colorScheme.surface,
+    barrierColor: Colors.black.withValues(alpha: 0.55),
+    constraints: BoxConstraints(minWidth: width, maxWidth: width),
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
     ),
@@ -24,14 +35,19 @@ Future<void> showPostCommentsSheet(
       return Padding(
         padding: EdgeInsets.only(bottom: keyboard),
         child: SizedBox(
+          width: width,
           height: height * 0.88,
           child: CommentsScreen(
             postId: postId,
             post: post,
             asSheet: true,
+            onCommentsCountChanged: (n) {
+              latest = n;
+              onCommentsCountChanged?.call(n);
+            },
           ),
         ),
       );
     },
-  );
+  ).then((popped) => popped ?? latest);
 }

@@ -19,11 +19,15 @@ class CommentsScreen extends ConsumerStatefulWidget {
   /// When true, render as a bottom-sheet body (no Scaffold AppBar).
   final bool asSheet;
 
+  /// Fires after load / post / delete with the current comments total.
+  final ValueChanged<int>? onCommentsCountChanged;
+
   const CommentsScreen({
     super.key,
     required this.postId,
     this.post,
     this.asSheet = false,
+    this.onCommentsCountChanged,
   });
 
   @override
@@ -41,12 +45,27 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
   bool _isPosting = false;
   bool _hasMore = true;
   int _offset = 0;
+  int _listedTotal = 0;
   final Set<int> _expandedThreads = <int>{};
 
   @override
   void initState() {
     super.initState();
+    _listedTotal = widget.post?.commentsCount ?? 0;
+    _scrollController.addListener(_onScroll);
     _loadComments();
+  }
+
+  void _emitCount() {
+    widget.onCommentsCountChanged?.call(_listedTotal);
+  }
+
+  void _onScroll() {
+    if (!_hasMore || _isLoading || !_scrollController.hasClients) return;
+    final pos = _scrollController.position;
+    if (pos.pixels >= pos.maxScrollExtent - 240) {
+      _loadComments();
+    }
   }
 
   void _focusCommentInput() {
@@ -58,6 +77,7 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
     _commentController.dispose();
     _commentFocusNode.dispose();
     _scrollController.dispose();
@@ -94,9 +114,11 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
         } else {
           _comments.addAll(response.comments);
         }
+        _listedTotal = response.total;
         _offset = _comments.length;
-        _hasMore = _comments.length < response.total;
+        _hasMore = _comments.length < _listedTotal;
       });
+      _emitCount();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -130,7 +152,11 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
         _commentController.clear();
         _replyToCommentId = null;
         _replyToAuthor = null;
+        _listedTotal += 1;
+        _offset = _comments.length;
+        _hasMore = _comments.length < _listedTotal;
       });
+      _emitCount();
 
       // Прокручиваем к новому комментарию
       if (_scrollController.hasClients) {
@@ -162,6 +188,36 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
     } finally {
       if (mounted) {
         setState(() => _isPosting = false);
+      }
+    }
+  }
+
+  Future<void> _deleteComment(Comment target) async {
+    try {
+      await CommentService.deleteComment(target.id);
+      if (!mounted) return;
+      final removeIds = <int>{target.id};
+      if (target.parentId == null) {
+        for (final c in _comments) {
+          if (c.parentId == target.id) removeIds.add(c.id);
+        }
+      }
+      setState(() {
+        _comments.removeWhere((c) => removeIds.contains(c.id));
+        _listedTotal -= removeIds.length;
+        if (_listedTotal < 0) _listedTotal = 0;
+        _offset = _comments.length;
+      });
+      _emitCount();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось удалить комментарий'),
+            ),
+          ),
+        );
       }
     }
   }
@@ -220,7 +276,8 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
                 ),
                 IconButton(
                   tooltip: 'Закрыть',
-                  onPressed: () => Navigator.of(context).maybePop(),
+                  onPressed: () => Navigator.of(context, rootNavigator: true)
+                      .maybePop(_listedTotal),
                   icon: const Icon(Icons.close),
                 ),
               ],
@@ -307,29 +364,7 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
                                     });
                                     _focusCommentInput();
                                   },
-                                  onDelete: () async {
-                                    try {
-                                      await CommentService.deleteComment(
-                                          root.id);
-                                      setState(() {
-                                        _comments.removeWhere(
-                                            (c) => c.id == root.id);
-                                      });
-                                    } catch (e) {
-                                      if (mounted) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                              userVisibleError(e,
-                                                  fallback:
-                                                      'Не удалось удалить комментарий'),
-                                            ),
-                                          ),
-                                        );
-                                      }
-                                    }
-                                  },
+                                  onDelete: () => _deleteComment(root),
                                 ),
                                 if (replies.isNotEmpty)
                                     Padding(
@@ -389,29 +424,8 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
                                             });
                                             _focusCommentInput();
                                           },
-                                          onDelete: () async {
-                                            try {
-                                              await CommentService
-                                                  .deleteComment(reply.id);
-                                              setState(() {
-                                                _comments.removeWhere(
-                                                    (c) => c.id == reply.id);
-                                              });
-                                            } catch (e) {
-                                              if (mounted) {
-                                                ScaffoldMessenger.of(context)
-                                                    .showSnackBar(
-                                                  SnackBar(
-                                                    content: Text(
-                                                      userVisibleError(e,
-                                                          fallback:
-                                                              'Не удалось удалить комментарий'),
-                                                    ),
-                                                  ),
-                                                );
-                                              }
-                                            }
-                                          },
+                                          onDelete: () =>
+                                              _deleteComment(reply),
                                         ),
                                       );
                                     }),
@@ -438,7 +452,7 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
         child: Column(
           children: [
             Expanded(child: listBody),
-            _buildComposerBar(context, includeSafeArea: false),
+            _buildComposerBar(context, includeSafeArea: true),
           ],
         ),
       );

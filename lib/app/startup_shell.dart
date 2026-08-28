@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/web/boot_ready_signal.dart';
 import '../services/auth_service.dart';
 import '../services/web_app_update_service.dart';
 import '../utils/api_error_parser.dart';
@@ -32,17 +33,24 @@ class _StartupShellState extends State<StartupShell> {
   bool _fullAppLibraryLoaded = false;
   bool _fullAppLoadStarted = false;
 
-  void _openMainUi() {
-    if (AppBootstrapState.authReady.value) return;
-    AppBootstrapState.authReady.value = true;
-    AuthService.sessionRevision.value++;
-    // Keep WEB_BUILD_ID in the cold-start JS chunk (not only in deferred full app).
-    if (kIsWeb) {
-      WebAppUpdateService.start();
-    }
-    // Native / already signed-in web: go straight to the full app chunk.
+  void _enterFullAppIfSessionReady() {
     if (!kIsWeb || AuthService.instance.currentUser != null) {
       AppBootstrapState.enterFullApp();
+    }
+  }
+
+  void _openMainUi() {
+    if (!AppBootstrapState.authReady.value) {
+      AppBootstrapState.authReady.value = true;
+      AuthService.sessionRevision.value++;
+    }
+    _enterFullAppIfSessionReady();
+  }
+
+  void _onSessionRevision() {
+    if (!mounted) return;
+    if (AuthService.instance.currentUser != null) {
+      _openMainUi();
     }
   }
 
@@ -50,12 +58,35 @@ class _StartupShellState extends State<StartupShell> {
   void initState() {
     super.initState();
     AppBootstrapState.loadFullApp.addListener(_onLoadFullAppChanged);
+    AuthService.sessionRevision.addListener(_onSessionRevision);
+    // Качаем deferred-чанк сразу, параллельно с auth — иначе iPhone Safari
+    // сидит 20–30 с на «Загружаем приложение…» после восстановления сессии.
+    unawaited(_ensureFullAppLoaded());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_runBootstrapInBackground());
     });
-    Future<void>.delayed(const Duration(seconds: 12), () {
+    if (kIsWeb) {
+      notifyPrimaryUiReady();
+    }
+    Future<void>.delayed(const Duration(seconds: 12), () async {
+      if (!mounted || AppBootstrapState.authReady.value) return;
+      if (kIsWeb) {
+        try {
+          final token = await AuthService.getAccessToken();
+          if (token != null &&
+              token.isNotEmpty &&
+              AuthService.instance.currentUser == null) {
+            debugPrint('StartupShell: 12s, токен есть — ждём user');
+            return;
+          }
+        } catch (_) {}
+      }
+      debugPrint('⚠️ StartupShell: timeout 12s — открываем UI');
+      _openMainUi();
+    });
+    Future<void>.delayed(const Duration(seconds: 20), () {
       if (mounted && !AppBootstrapState.authReady.value) {
-        debugPrint('⚠️ StartupShell: timeout 12s — открываем UI');
+        debugPrint('⚠️ StartupShell: timeout 20s — открываем UI');
         _openMainUi();
       }
     });
@@ -64,6 +95,7 @@ class _StartupShellState extends State<StartupShell> {
   @override
   void dispose() {
     AppBootstrapState.loadFullApp.removeListener(_onLoadFullAppChanged);
+    AuthService.sessionRevision.removeListener(_onSessionRevision);
     super.dispose();
   }
 
@@ -77,10 +109,29 @@ class _StartupShellState extends State<StartupShell> {
     if (_fullAppLibraryLoaded || _fullAppLoadStarted) return;
     _fullAppLoadStarted = true;
     try {
-      final loaders = <Future<void>>[
-        full_app.loadLibrary(),
-        heavy_boot.loadLibrary(),
-      ];
+      await full_app.loadLibrary();
+      if (!mounted) return;
+      setState(() {
+        _fullAppLibraryLoaded = true;
+        _fullAppLoadError = null;
+      });
+      if (kIsWeb) {
+        WebAppUpdateService.start();
+      }
+      unawaited(_loadHeavyAndBootstrap());
+    } catch (e, st) {
+      debugPrint('full_app.loadLibrary failed: $e\n$st');
+      if (!mounted) return;
+      setState(() {
+        _fullAppLoadStarted = false;
+        _fullAppLoadError = e;
+      });
+    }
+  }
+
+  Future<void> _loadHeavyAndBootstrap() async {
+    try {
+      final loaders = <Future<void>>[heavy_boot.loadLibrary()];
       if (kIsWeb) {
         loaders.add(heavy_plugins.loadLibrary());
       }
@@ -89,18 +140,10 @@ class _StartupShellState extends State<StartupShell> {
         heavy_plugins.registerHeavyWebPlugins();
       }
       if (!mounted) return;
-      setState(() {
-        _fullAppLibraryLoaded = true;
-        _fullAppLoadError = null;
-      });
-      unawaited(_runHeavyBootstrap());
+      await _runHeavyBootstrap();
     } catch (e, st) {
-      debugPrint('full_app.loadLibrary failed: $e\n$st');
-      if (!mounted) return;
-      setState(() {
-        _fullAppLoadStarted = false;
-        _fullAppLoadError = e;
-      });
+      debugPrint('heavy load/bootstrap failed: $e\n$st');
+      AppBootstrapState.servicesReady.value = true;
     }
   }
 
@@ -135,6 +178,7 @@ class _StartupShellState extends State<StartupShell> {
       AppBootstrapState.loadFullApp.value = false;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_ensureFullAppLoaded());
       unawaited(_runBootstrapInBackground());
     });
   }
@@ -164,6 +208,15 @@ class _StartupShellState extends State<StartupShell> {
         setState(() => _error = e);
       }
     } finally {
+      if (kIsWeb && AuthService.instance.currentUser == null) {
+        try {
+          final token = await AuthService.getAccessToken();
+          if (token != null && token.isNotEmpty) {
+            debugPrint('StartupShell: токен есть — ждём user, не логин');
+            return;
+          }
+        } catch (_) {}
+      }
       _openMainUi();
     }
   }

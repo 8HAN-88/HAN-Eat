@@ -21,5 +21,17 @@ void main() {
         contains('Войдите'),
       );
     });
+
+    test('cache banner is an error, not a hydrate spinner', () {
+      expect(
+        FeedLoadHelper.cacheBannerMessage(''),
+        contains('Не удалось обновить'),
+      );
+      expect(FeedLoadHelper.cacheBannerMessage('offline'), contains('интернета'));
+      expect(
+        FeedLoadHelper.cacheBannerMessage('Обновляем ленту'),
+        isNot(contains('Обновляем ленту')),
+      );
+    });
   });
 }

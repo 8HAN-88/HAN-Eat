@@ -35,7 +35,7 @@ BLOCK = f"""
     location = /fresh {{
         add_header Clear-Site-Data '"cache", "storage", "executionContexts"' always;
         add_header Cache-Control "no-store" always;
-        return 302 /?fresh=1;
+        return 302 /app/?go=1&fresh=1;
     }}
     location ^~ /assets/ {{ return 302 /app$request_uri; }}
     location ^~ /canvaskit/ {{ return 302 /app$request_uri; }}

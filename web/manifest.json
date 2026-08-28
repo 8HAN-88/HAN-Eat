@@ -2,7 +2,7 @@
     "id": "https://haneat.app/",
     "name": "HanWe",
     "short_name": "HanWe",
-    "start_url": "/?v=__HAN_BUILD_ID__",
+    "start_url": "/app/?go=1&v=__HAN_BUILD_ID__",
     "scope": "/",
     "display": "standalone",
     "display_override": ["standalone", "minimal-ui"],

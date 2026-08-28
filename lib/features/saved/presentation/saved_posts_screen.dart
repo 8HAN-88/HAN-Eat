@@ -242,8 +242,6 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
             final post = _posts[index];
             return NewPostCard(
               post: post,
-              onCommentTap: () =>
-                  context.push('/post/${post.id}/comments'),
               onPostDeleted: () {
                 setState(() {
                   _posts.removeWhere((p) => p.id == post.id);

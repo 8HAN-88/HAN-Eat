@@ -1257,8 +1257,6 @@ class _PostsListWidgetState extends State<_PostsListWidget> {
             return NewPostCard(
               post: post,
               hideFeedHeader: true,
-              onCommentTap: () =>
-                  context.push(PostCommentsRoute.pathFor(post.id)),
               onPostDeleted: () {
                 setState(() {
                   _posts.removeWhere((p) => p.id == post.id);

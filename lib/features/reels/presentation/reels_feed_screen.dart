@@ -19,9 +19,12 @@ import '../../../services/feed_service.dart';
 import '../../../services/user_realtime_service.dart';
 import '../../../services/server_config.dart';
 import 'package:go_router/go_router.dart';
+import '../../../services/auth_service.dart';
 import '../../../services/like_service.dart';
 import '../../../services/saved_posts_service.dart';
 import '../../../services/repost_service.dart';
+import '../../../services/comment_service.dart';
+import '../../comments/presentation/show_post_comments_sheet.dart';
 import '../../../utils/video_player_helper.dart';
 import '../../../widgets/cover_network_video.dart';
 import '../../../utils/number_formatter.dart';
@@ -74,13 +77,15 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
   Object? _cacheLoadError;
   DateTime? _currentReelStartedAt;
   final Set<int> _impressedReelIds = {};
-  bool _sessionMuted = false;
+  bool _sessionMuted = kIsWeb;
   bool _appVisible = true;
+  bool _openingComments = false;
 
   static const Duration _likeTouchGrace = Duration(seconds: 20);
 
   final Set<int> _likeBusy = {};
   final Map<int, DateTime> _likeTouchedAt = {};
+  final Map<int, DateTime> _commentTouchedAt = {};
 
   bool _followingOnly = false;
   StreamSubscription<UserRealtimeEvent>? _realtimeSub;
@@ -103,8 +108,9 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
     final controller = _videoControllers[index];
     if (controller == null) return;
     unawaited(
-      VideoPlayerHelper.ensurePlaying(
+      VideoPlayerHelper.ensurePlayingWithVolume(
         controller,
+        muted: _sessionMuted,
         shouldContinue: () => mounted && _shouldPlayReelAt(index),
       ),
     );
@@ -379,14 +385,21 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
     return incoming.map((post) {
       final prev = existing[post.id];
       if (prev == null) return post;
-      final touched = _likeTouchedAt[post.id];
-      if (touched != null && now.difference(touched) < _likeTouchGrace) {
-        return post.copyWith(
+      var next = post;
+      final likeTouched = _likeTouchedAt[post.id];
+      if (likeTouched != null &&
+          now.difference(likeTouched) < _likeTouchGrace) {
+        next = next.copyWith(
           isLiked: prev.isLiked,
           likesCount: prev.likesCount,
         );
       }
-      return post;
+      final commentTouched = _commentTouchedAt[post.id];
+      if (commentTouched != null &&
+          now.difference(commentTouched) < _likeTouchGrace) {
+        next = next.copyWith(commentsCount: prev.commentsCount);
+      }
+      return next;
     }).toList();
   }
 
@@ -775,17 +788,11 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
                 });
               },
               onLike: () => _toggleLike(reel.id),
-              onComment: () {
-                FeedAnalyticsService.openDetail(
-                  reel,
-                  source: 'reels',
-                  target: 'comments',
-                );
-                context.push('/post/${reel.id}/comments');
-              },
+              onComment: () => unawaited(_openComments(reel)),
               onShare: () => _shareReel(reel),
               onSave: () => _toggleSave(reel),
-              onRepost: () => _toggleRepost(reel),
+              onRepost:
+                  _isOwnReel(reel) ? null : () => _toggleRepost(reel),
               onAuthorTap: () {
                 FeedAnalyticsService.openDetail(
                   reel,
@@ -873,6 +880,51 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
     );
   }
 
+  void _applyCommentsCount(int postId, int total) {
+    final i = _reels.indexWhere((r) => r.id == postId);
+    if (i == -1 || _reels[i].commentsCount == total) return;
+    _commentTouchedAt[postId] = DateTime.now();
+    setState(() {
+      _reels[i] = _reels[i].copyWith(commentsCount: total);
+    });
+    unawaited(FeedApiCache.save(_cacheVariant, _reels));
+  }
+
+  Future<void> _openComments(PostModel reel) async {
+    if (_openingComments) return;
+    _openingComments = true;
+    FeedAnalyticsService.openDetail(
+      reel,
+      source: 'reels',
+      target: 'comments',
+    );
+    _pauseAllVideos();
+    try {
+      final fromSheet = await showPostCommentsSheet(
+        context,
+        postId: reel.id,
+        post: reel,
+        onCommentsCountChanged: (total) {
+          if (mounted) _applyCommentsCount(reel.id, total);
+        },
+      );
+      if (!mounted) return;
+      if (fromSheet != null) {
+        _applyCommentsCount(reel.id, fromSheet);
+      } else {
+        try {
+          final total = await CommentService.getCommentsTotal(reel.id);
+          if (mounted) _applyCommentsCount(reel.id, total);
+        } catch (_) {}
+      }
+      if (_canPlayVideos) {
+        _playReelAt(_currentIndex);
+      }
+    } finally {
+      _openingComments = false;
+    }
+  }
+
   Future<void> _toggleLike(int postId) async {
     if (_likeBusy.contains(postId)) return;
     final index = _reels.indexWhere((r) => r.id == postId);
@@ -946,6 +998,11 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
     }
   }
 
+  bool _isOwnReel(PostModel reel) {
+    final me = AuthService.instance.currentUser?.id;
+    return me != null && me == reel.userId;
+  }
+
   Future<void> _toggleRepost(PostModel reel) async {
     try {
       final isReposted = reel.isReposted ?? false;
@@ -978,7 +1035,8 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
     await ShareActionSheet.showForReel(
       context,
       reel: reel,
-      onRepostToWall: () => _toggleRepost(reel),
+      onRepostToWall:
+          _isOwnReel(reel) ? null : () => _toggleRepost(reel),
     );
   }
 }
@@ -998,7 +1056,7 @@ class ReelCard extends ConsumerStatefulWidget {
   final VoidCallback onComment;
   final VoidCallback onShare;
   final VoidCallback onSave;
-  final VoidCallback onRepost;
+  final VoidCallback? onRepost;
   final VoidCallback onAuthorTap;
   final void Function(String tagWithoutHash) onHashtagTap;
   final void Function(String usernameWithoutAt, PostModel reel) onMentionTap;
@@ -1021,7 +1079,7 @@ class ReelCard extends ConsumerStatefulWidget {
     required this.onComment,
     required this.onShare,
     required this.onSave,
-    required this.onRepost,
+    this.onRepost,
     required this.onAuthorTap,
     required this.onHashtagTap,
     required this.onMentionTap,
@@ -1035,18 +1093,17 @@ class ReelCard extends ConsumerStatefulWidget {
 
 class _ReelCardState extends ConsumerState<ReelCard>
     with SingleTickerProviderStateMixin {
-  DateTime? _lastTap;
-  Timer? _singleTapTimer;
   bool _showLikeAnimation = false;
   late AnimationController _likeAnimationController;
   late Animation<double> _likeScaleAnimation;
   late Animation<double> _likeOpacityAnimation;
   final List<TapGestureRecognizer> _descriptionRecognizers = [];
+  VideoPlayerController? _boundController;
+  bool _hadVideoFrame = false;
 
   static const double _igActionGap = 14;
   static const double _igRightInset = 12;
   static const double _igRailWidth = 50;
-  static const Duration _doubleTapWindow = Duration(milliseconds: 300);
 
   @override
   void initState() {
@@ -1067,11 +1124,41 @@ class _ReelCardState extends ConsumerState<ReelCard>
         curve: const Interval(0.5, 1.0),
       ),
     );
+    _bindController(widget.videoController);
+  }
+
+  @override
+  void didUpdateWidget(ReelCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.videoController != widget.videoController) {
+      _hadVideoFrame = false;
+      _bindController(widget.videoController);
+    }
+  }
+
+  void _bindController(VideoPlayerController? controller) {
+    _boundController?.removeListener(_onVideoTick);
+    _boundController = controller;
+    controller?.addListener(_onVideoTick);
+  }
+
+  void _onVideoTick() {
+    if (!mounted || _hadVideoFrame) return;
+    if (_hasVideoFrame) {
+      setState(() => _hadVideoFrame = true);
+    }
+  }
+
+  bool get _hasVideoFrame {
+    final controller = widget.videoController;
+    if (controller == null || !controller.value.isInitialized) return false;
+    return controller.value.isPlaying ||
+        controller.value.position > Duration.zero;
   }
 
   @override
   void dispose() {
-    _singleTapTimer?.cancel();
+    _boundController?.removeListener(_onVideoTick);
     _clearDescriptionRecognizers();
     _likeAnimationController.dispose();
     super.dispose();
@@ -1178,27 +1265,19 @@ class _ReelCardState extends ConsumerState<ReelCard>
     widget.onMutePreferenceChanged(!widget.isMuted);
   }
 
-  void _handleSingleTap() {
-    final now = DateTime.now();
-    if (_lastTap != null && now.difference(_lastTap!) < _doubleTapWindow) {
-      _singleTapTimer?.cancel();
-      _singleTapTimer = null;
-      _handleDoubleTap();
-      _lastTap = null;
-      return;
-    }
-    _lastTap = now;
-    _singleTapTimer?.cancel();
-    _singleTapTimer = Timer(_doubleTapWindow, _togglePlayback);
-  }
-
   Future<void> _togglePlayback() async {
-    _singleTapTimer = null;
-    _lastTap = null;
-    if (widget.videoController == null) return;
-    final paused =
-        await VideoPlayerHelper.toggleOrStart(widget.videoController!);
-    if (mounted) widget.onPauseToggle(paused);
+    final controller = widget.videoController;
+    if (controller == null || !controller.value.isInitialized) return;
+    final willPause = controller.value.isPlaying;
+    widget.onPauseToggle(willPause);
+    if (willPause) {
+      await controller.pause();
+    } else {
+      await VideoPlayerHelper.ensurePlaying(controller);
+    }
+    if (!mounted) return;
+    final paused = !controller.value.isPlaying;
+    if (paused != willPause) widget.onPauseToggle(paused);
   }
 
   Widget _buildVideoPlaceholder() {
@@ -1243,7 +1322,17 @@ class _ReelCardState extends ConsumerState<ReelCard>
       );
     }
 
-    return const CircularProgressIndicator(color: Colors.white);
+    return const Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        CircularProgressIndicator(color: Colors.white),
+        SizedBox(height: 12),
+        Text(
+          'Загружаем видео',
+          style: TextStyle(color: Colors.white70, fontSize: 14),
+        ),
+      ],
+    );
   }
 
   @override
@@ -1256,19 +1345,30 @@ class _ReelCardState extends ConsumerState<ReelCard>
     final contentBottom = bottomSafe + 8;
 
     return GestureDetector(
-      onTap: _handleSingleTap,
+      behavior: HitTestBehavior.opaque,
+      onTap: () => unawaited(_togglePlayback()),
       onDoubleTap: _handleDoubleTap,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (widget.videoController != null)
-            SizedBox.expand(
-              child: CoverNetworkVideo(controller: widget.videoController!),
-            )
-          else
-            Container(
-              color: Colors.black,
-              child: Center(child: _buildVideoPlaceholder()),
+          Container(
+            color: Colors.black,
+            child: Center(child: _buildVideoPlaceholder()),
+          ),
+          if (_hasVideoFrame)
+            IgnorePointer(
+              child: SizedBox.expand(
+                child: CoverNetworkVideo(controller: widget.videoController!),
+              ),
+            ),
+          if (widget.videoController != null &&
+              widget.videoController!.value.isInitialized)
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => unawaited(_togglePlayback()),
+                onDoubleTap: _handleDoubleTap,
+              ),
             ),
           if (widget.isPaused)
             Positioned.fill(
@@ -1305,7 +1405,7 @@ class _ReelCardState extends ConsumerState<ReelCard>
                     ),
                     const SizedBox(height: 20),
                     GestureDetector(
-                      onTap: _handleSingleTap,
+                      onTap: () => unawaited(_togglePlayback()),
                       behavior: HitTestBehavior.opaque,
                       child: Container(
                         width: 72,
@@ -1326,39 +1426,43 @@ class _ReelCardState extends ConsumerState<ReelCard>
               ),
             ),
           if (_showLikeAnimation)
-            Center(
-              child: AnimatedBuilder(
-                animation: _likeAnimationController,
-                builder: (context, child) {
-                  return Opacity(
-                    opacity: _likeOpacityAnimation.value,
-                    child: Transform.scale(
-                      scale: _likeScaleAnimation.value,
-                      child: const Icon(
-                        Icons.favorite,
-                        color: Colors.white,
-                        size: 100,
+            IgnorePointer(
+              child: Center(
+                child: AnimatedBuilder(
+                  animation: _likeAnimationController,
+                  builder: (context, child) {
+                    return Opacity(
+                      opacity: _likeOpacityAnimation.value,
+                      child: Transform.scale(
+                        scale: _likeScaleAnimation.value,
+                        child: const Icon(
+                          Icons.favorite,
+                          color: Colors.white,
+                          size: 100,
+                        ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ),
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
-            child: Container(
-              height: 220,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.bottomCenter,
-                  end: Alignment.topCenter,
-                  colors: [
-                    Colors.black.withValues(alpha: 0.75),
-                    Colors.black.withValues(alpha: 0.35),
-                    Colors.transparent,
-                  ],
+            child: IgnorePointer(
+              child: Container(
+                height: 220,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.75),
+                      Colors.black.withValues(alpha: 0.35),
+                      Colors.transparent,
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1387,17 +1491,19 @@ class _ReelCardState extends ConsumerState<ReelCard>
                     count: widget.reel.commentsCount,
                     onTap: widget.onComment,
                   ),
-                  const SizedBox(height: _igActionGap),
-                  _IgReelAction(
-                    icon: (widget.reel.isReposted ?? false)
-                        ? Icons.repeat_on
-                        : Icons.repeat,
-                    count: widget.reel.repostsCount,
-                    onTap: widget.onRepost,
-                    color: (widget.reel.isReposted ?? false)
-                        ? const Color(0xFF4CD964)
-                        : Colors.white,
-                  ),
+                  if (widget.onRepost != null) ...[
+                    const SizedBox(height: _igActionGap),
+                    _IgReelAction(
+                      icon: (widget.reel.isReposted ?? false)
+                          ? Icons.repeat_on
+                          : Icons.repeat,
+                      count: widget.reel.repostsCount,
+                      onTap: widget.onRepost!,
+                      color: (widget.reel.isReposted ?? false)
+                          ? const Color(0xFF4CD964)
+                          : Colors.white,
+                    ),
+                  ],
                   const SizedBox(height: _igActionGap),
                   _IgReelAction(
                     icon: Icons.near_me_outlined,

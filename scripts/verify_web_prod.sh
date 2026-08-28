@@ -22,6 +22,13 @@ else
   fail_msg "GET / → $code (ожидали 200)"
 fi
 
+app_code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$WEB_ORIGIN/app/")"
+if [[ "$app_code" == "200" ]]; then
+  check "GET /app/ → $app_code"
+else
+  fail_msg "GET /app/ → $app_code (ожидали 200)"
+fi
+
 www_code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "https://www.haneat.app/")"
 if [[ "$www_code" == "200" ]]; then
   check "GET www → $www_code"
@@ -45,7 +52,9 @@ import json,sys
 m=json.load(sys.stdin)
 assert m.get('display')=='standalone', m.get('display')
 assert m.get('start_url'), 'no start_url'
-print('standalone manifest OK')
+su = str(m.get('start_url') or '')
+assert su.startswith('/app/'), su
+print('standalone manifest OK', su)
 " 2>/dev/null; then
   check "manifest display=standalone"
 else

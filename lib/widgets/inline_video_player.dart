@@ -42,6 +42,7 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
   bool _appVisible = true;
   String? _initKey;
   Timer? _disposeWhenHiddenTimer;
+  bool _hadVideoFrame = false;
 
   static const double _visibilityThresholdPlay = 0.6;
   static const double _visibilityThresholdPause = 0.18;
@@ -104,6 +105,7 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
         return;
       }
 
+      controller.addListener(_onVideoTick);
       setState(() {
         _controller = controller;
         _initialized = true;
@@ -128,6 +130,20 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
     }
   }
 
+  void _onVideoTick() {
+    if (!mounted || _hadVideoFrame) return;
+    if (_hasVideoFrame) {
+      setState(() => _hadVideoFrame = true);
+    }
+  }
+
+  bool get _hasVideoFrame {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return false;
+    return controller.value.isPlaying ||
+        controller.value.position > Duration.zero;
+  }
+
   void _pause() {
     _controller?.pause();
   }
@@ -137,9 +153,11 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
     _disposeWhenHiddenTimer = Timer(const Duration(seconds: 4), () {
       if (!mounted || _isVisible) return;
       final controller = _controller;
+      controller?.removeListener(_onVideoTick);
       _controller = null;
       _initialized = false;
       _initKey = null;
+      _hadVideoFrame = false;
       unawaited(controller?.dispose());
       if (mounted) setState(() {});
     });
@@ -180,6 +198,7 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _disposeWhenHiddenTimer?.cancel();
+    _controller?.removeListener(_onVideoTick);
     _controller?.dispose();
     _controller = null;
     super.dispose();
@@ -200,23 +219,26 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
             fit: StackFit.expand,
             alignment: Alignment.center,
             children: [
-              if (!_initialized || _controller == null) ...[
-                if (widget.thumbnailUrl != null)
-                  CachedNetworkImage(
-                    imageUrl: ServerConfig.resolvePublisherAvatarUrl(
-                      widget.thumbnailUrl!,
-                    ),
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    height: double.infinity,
-                    memCacheWidth: 640,
-                    placeholder: (_, __) => _placeholder(),
-                    errorWidget: (_, __, ___) => _placeholder(),
-                  )
-                else
-                  _placeholder(),
-              ] else if (!_hasError && _controller != null)
-                CoverNetworkVideo(controller: _controller!),
+              if (widget.thumbnailUrl != null)
+                CachedNetworkImage(
+                  imageUrl: ServerConfig.resolvePublisherAvatarUrl(
+                    widget.thumbnailUrl!,
+                  ),
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  height: double.infinity,
+                  memCacheWidth: 640,
+                  placeholder: (_, __) => _placeholder(),
+                  errorWidget: (_, __, ___) => _placeholder(),
+                )
+              else
+                _placeholder(),
+              if (!_hasError &&
+                  _hadVideoFrame &&
+                  _controller != null)
+                IgnorePointer(
+                  child: CoverNetworkVideo(controller: _controller!),
+                ),
               if (_hasError)
                 Stack(
                   fit: StackFit.expand,
@@ -229,6 +251,8 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
                             _hasError = false;
                             _initialized = false;
                             _initKey = null;
+                            _hadVideoFrame = false;
+                            _controller?.removeListener(_onVideoTick);
                             _controller?.dispose();
                             _controller = null;
                           });
@@ -271,7 +295,14 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
     );
   }
 
-  Widget _placeholder() => Container(
-        color: Colors.black,
+  Widget _placeholder() => const ColoredBox(
+        color: Color(0xFF1A1A1A),
+        child: Center(
+          child: Icon(
+            Icons.play_circle_outline_rounded,
+            color: Colors.white38,
+            size: 56,
+          ),
+        ),
       );
 }

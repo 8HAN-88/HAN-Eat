@@ -38,7 +38,8 @@ Future<void> reloadWebPage({String? build}) async {
   final cb = nowMs.toString();
   final v = (build != null && build.isNotEmpty) ? build : cb;
   // assign (not replace): Safari iOS often hangs on location.replace at boot.
-  html.window.location.assign('/app/?v=$v&go=1&_cb=$cb');
+  // /app/feed — реальный маршрут после base-href, не / который ловил error page.
+  html.window.location.assign('/app/feed?v=$v&_cb=$cb');
 }
 
 Future<void> _wipeFlutterCaches() async {

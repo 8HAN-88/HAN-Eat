@@ -130,7 +130,7 @@ class _FeedStoriesStripState extends State<FeedStoriesStrip> {
         children: [
           if (me != null)
             _StoryRing(
-              label: 'Ваша история',
+              label: 'Вы',
               avatarUrl: me.avatarUrl,
               initial: me.name.isNotEmpty ? me.name[0].toUpperCase() : '+',
               hasStory: myGroup != null,

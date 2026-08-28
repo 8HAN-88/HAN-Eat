@@ -48,7 +48,7 @@ managed = """
         add_header Clear-Site-Data '"cache", "storage", "executionContexts"' always;
         add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
         add_header Pragma "no-cache" always;
-        return 302 /?fresh=1;
+        return 302 /app/?go=1&fresh=1;
     }
 
     # Tiny JS beacon used by app shell to prove the device reached the new build.

@@ -8,6 +8,7 @@ import '../../../models/post_model.dart';
 import '../../../app/app_router.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../comments/presentation/show_post_comments_sheet.dart';
 import 'channel_post_card.dart';
 
 class ChannelSearchScreen extends ConsumerStatefulWidget {
@@ -219,8 +220,11 @@ class _ChannelSearchScreenState extends ConsumerState<ChannelSearchScreen> {
                   post: post,
                   channelId: widget.channelId,
                   channel: widget.channel,
-                  onCommentTap: () =>
-                      context.push(PostCommentsRoute.pathFor(post.id)),
+                  onCommentTap: () => showPostCommentsSheet(
+                    context,
+                    postId: post.id,
+                    post: post,
+                  ),
                   onCardTap: () {
                     context.push(
                       ChannelDetailRoute.post(widget.channelId, post.id),

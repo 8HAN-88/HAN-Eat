@@ -20,6 +20,7 @@ class HighlightedText extends StatefulWidget {
     this.onMentionTap,
     this.mentionLabels,
     this.parseMarkup = false,
+    this.onUrlTap,
   });
 
   final String text;
@@ -35,6 +36,7 @@ class HighlightedText extends StatefulWidget {
   /// Optional display labels for handles (e.g. `id42` → `Anna`).
   final Map<String, String>? mentionLabels;
   final bool parseMarkup;
+  final ValueChanged<String>? onUrlTap;
 
   @override
   State<HighlightedText> createState() => _HighlightedTextState();
@@ -44,6 +46,10 @@ class _HighlightedTextState extends State<HighlightedText> {
   final Set<int> _revealedSpoilers = {};
 
   static final _mentionRe = RegExp(r'@id\d+|@[a-zA-Z0-9_]{2,}');
+  static final _urlRe = RegExp(
+    r'https?://[^\s<>"\]]+',
+    caseSensitive: false,
+  );
   static final _markupRe = RegExp(
     r'\|\|(.+?)\|\|'
     r'|\*(.+?)\*'
@@ -99,11 +105,65 @@ class _HighlightedTextState extends State<HighlightedText> {
     return spans;
   }
 
+  String _trimUrl(String raw) {
+    var url = raw;
+    while (url.endsWith(')') ||
+        url.endsWith(']') ||
+        url.endsWith('.') ||
+        url.endsWith(',') ||
+        url.endsWith('!') ||
+        url.endsWith('?')) {
+      url = url.substring(0, url.length - 1);
+    }
+    return url;
+  }
+
+  List<InlineSpan> _urlAndMentionSpans(BuildContext context, String source) {
+    final urlStyle = widget.style.copyWith(
+      color: widget.mentionColor ?? Theme.of(context).colorScheme.primary,
+      decoration: TextDecoration.underline,
+      fontWeight: FontWeight.w600,
+    );
+    final spans = <InlineSpan>[];
+    var start = 0;
+    for (final m in _urlRe.allMatches(source)) {
+      final raw = m.group(0)!;
+      final url = _trimUrl(raw);
+      final used = url.length;
+      if (used <= 0) continue;
+      if (m.start > start) {
+        spans.addAll(
+          _plainOrMentions(context, source.substring(start, m.start)),
+        );
+      }
+      spans.add(
+        TextSpan(
+          text: url,
+          style: urlStyle,
+          recognizer: TapGestureRecognizer()
+            ..onTap = () => widget.onUrlTap!(url),
+        ),
+      );
+      start = m.start + used;
+    }
+    if (start < source.length) {
+      spans.addAll(_plainOrMentions(context, source.substring(start)));
+    }
+    return spans;
+  }
+
   List<InlineSpan> _plainOrMentions(BuildContext context, String source) {
     if (!widget.highlightMentions) {
       return [TextSpan(text: source)];
     }
     return _mentionSpans(context, source);
+  }
+
+  List<InlineSpan> _linkAwarePlain(BuildContext context, String source) {
+    if (widget.onUrlTap != null) {
+      return _urlAndMentionSpans(context, source);
+    }
+    return _plainOrMentions(context, source);
   }
 
   List<InlineSpan> _markupSpans(BuildContext context, String source) {
@@ -114,7 +174,7 @@ class _HighlightedTextState extends State<HighlightedText> {
     for (final m in _markupRe.allMatches(source)) {
       if (m.start > start) {
         spans.addAll(
-          _plainOrMentions(context, source.substring(start, m.start)),
+          _linkAwarePlain(context, source.substring(start, m.start)),
         );
       }
       if (m.group(1) != null) {
@@ -174,7 +234,7 @@ class _HighlightedTextState extends State<HighlightedText> {
       start = m.end;
     }
     if (start < source.length) {
-      spans.addAll(_plainOrMentions(context, source.substring(start)));
+      spans.addAll(_linkAwarePlain(context, source.substring(start)));
     }
     return spans;
   }
@@ -193,7 +253,7 @@ class _HighlightedTextState extends State<HighlightedText> {
           spans.addAll(
             widget.parseMarkup
                 ? _markupSpans(context, rest)
-                : _plainOrMentions(context, rest),
+                : _linkAwarePlain(context, rest),
           );
         }
         break;
@@ -201,9 +261,9 @@ class _HighlightedTextState extends State<HighlightedText> {
       if (index > start) {
         final chunk = text.substring(start, index);
         spans.addAll(
-          widget.parseMarkup
-              ? _markupSpans(context, chunk)
-              : _plainOrMentions(context, chunk),
+            widget.parseMarkup
+                ? _markupSpans(context, chunk)
+                : _linkAwarePlain(context, chunk),
         );
       }
       spans.add(
@@ -229,6 +289,7 @@ class _HighlightedTextState extends State<HighlightedText> {
     final needsRich = hasQuery ||
         widget.highlightMentions ||
         widget.parseMarkup ||
+        widget.onUrlTap != null ||
         reserve != null;
 
     if (!needsRich) {
@@ -245,6 +306,8 @@ class _HighlightedTextState extends State<HighlightedText> {
       spans.addAll(_querySpans(context));
     } else if (widget.parseMarkup) {
       spans.addAll(_markupSpans(context, widget.text));
+    } else if (widget.onUrlTap != null) {
+      spans.addAll(_urlAndMentionSpans(context, widget.text));
     } else if (widget.highlightMentions) {
       spans.addAll(_mentionSpans(context, widget.text));
     } else {

@@ -19,8 +19,8 @@ const Curve kShellNavChromeCurve = Curves.easeOutCubic;
 const double _kScrollDeltaThreshold = 6;
 const double _kMinOffsetToHide = 48;
 
-/// Высота верхней панели ленты: вкладки + уведомления (одна строка).
-const double kFeedChromeHeaderHeight = 50;
+/// Высота верхней панели ленты: иконки + полноценные вкладки.
+const double kFeedChromeHeaderHeight = 88;
 
 /// Полная высота плавающей нижней панели в [RootShell].
 const double kShellNavExpandedHeight = 62;

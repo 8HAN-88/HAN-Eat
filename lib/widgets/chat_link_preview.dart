@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
 
+import '../app/open_app_link.dart';
 import '../core/network/haneat_http_client.dart';
 import '../services/auth_service.dart';
 import '../services/server_config.dart';
@@ -153,9 +153,7 @@ class _ChatLinkPreviewState extends State<ChatLinkPreview> {
   }
 
   Future<void> _openUrl(String url) async {
-    final uri = Uri.tryParse(url);
-    if (uri == null) return;
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+    await openAppOrExternalLink(context, url);
   }
 
   Future<void> _copyUrl(String url) async {
