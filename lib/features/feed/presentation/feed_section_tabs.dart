@@ -33,7 +33,7 @@ class FeedSectionTabs extends StatelessWidget {
   final ValueChanged<FeedSortMode> onRecSortChanged;
   final ValueChanged<bool> onReelsFilterChanged;
 
-  static const _labels = ['Подписки', 'Рекомендации', 'Рилсы'];
+  static const labels = ['Подписки', 'Рекомендации', 'Рилсы'];
 
   List<PopupMenuEntry<String>> _filterItems(int index) {
     if (index == 2) {
@@ -95,6 +95,8 @@ class FeedSectionTabs extends StatelessWidget {
       builder: (context, _) {
         return TabBar(
           controller: controller,
+          isScrollable: false,
+          tabAlignment: TabAlignment.fill,
           indicatorSize: TabBarIndicatorSize.label,
           dividerColor: Colors.transparent,
           splashFactory: InkRipple.splashFactory,
@@ -107,16 +109,18 @@ class FeedSectionTabs extends StatelessWidget {
           labelStyle: textTheme.titleSmall?.copyWith(
             fontWeight: FontWeight.w600,
             letterSpacing: -0.2,
+            fontSize: 14,
           ),
           unselectedLabelStyle: textTheme.titleSmall?.copyWith(
             fontWeight: FontWeight.w500,
+            fontSize: 14,
           ),
           tabs: [
-            for (var i = 0; i < _labels.length; i++)
+            for (var i = 0; i < labels.length; i++)
               Tab(
                 height: 40,
                 child: _TabLabel(
-                  label: _labels[i],
+                  label: labels[i],
                   filterArrow: controller.index == i
                       ? _FilterArrow(
                           onSelected: (value) => _onFilterSelected(i, value),
@@ -155,12 +159,11 @@ class _TabLabel extends StatelessWidget {
             child: filterArrow,
           ),
         ),
-        Flexible(
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+        Text(
+          label,
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.visible,
         ),
       ],
     );

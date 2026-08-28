@@ -233,8 +233,12 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
                 )
               else
                 _placeholder(),
-              if (!_hasError && _hasVideoFrame)
-                CoverNetworkVideo(controller: _controller!),
+              if (!_hasError &&
+                  _hadVideoFrame &&
+                  _controller != null)
+                IgnorePointer(
+                  child: CoverNetworkVideo(controller: _controller!),
+                ),
               if (_hasError)
                 Stack(
                   fit: StackFit.expand,
@@ -291,7 +295,14 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
     );
   }
 
-  Widget _placeholder() => Container(
-        color: Colors.black,
+  Widget _placeholder() => const ColoredBox(
+        color: Color(0xFF1A1A1A),
+        child: Center(
+          child: Icon(
+            Icons.play_circle_outline_rounded,
+            color: Colors.white38,
+            size: 56,
+          ),
+        ),
       );
 }

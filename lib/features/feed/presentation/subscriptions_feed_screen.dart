@@ -62,6 +62,10 @@ class _SubscriptionsFeedScreenState
   /// Посты с диска
   bool _servingFromCache = false;
   Object? _cacheLoadError;
+
+  /// Только после ошибки/офлайна — не во время тихой подгрузки кэша.
+  bool get _showCacheBanner =>
+      _servingFromCache && _cacheLoadError != null;
   StreamSubscription<UserRealtimeEvent>? _realtimeSub;
 
   String _feedType = 'all';
@@ -374,7 +378,7 @@ class _SubscriptionsFeedScreenState
                       bottom: _listBottomPadding(context, chromeHidden),
                     ),
                     itemCount: 1 +
-                        (_servingFromCache ? 1 : 0) +
+                        (_showCacheBanner ? 1 : 0) +
                         _posts.length +
                         (_hasMore ? 1 : 0),
                     itemBuilder: (context, index) {
@@ -383,7 +387,7 @@ class _SubscriptionsFeedScreenState
                           refreshToken: _storiesRefreshToken,
                         );
                       }
-                      final banner = _servingFromCache ? 1 : 0;
+                      final banner = _showCacheBanner ? 1 : 0;
                       final adj = index - 1;
                       if (banner == 1 && adj == 0) {
                         final scheme = Theme.of(context).colorScheme;
