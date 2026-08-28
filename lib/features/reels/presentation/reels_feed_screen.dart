@@ -19,6 +19,7 @@ import '../../../services/feed_service.dart';
 import '../../../services/user_realtime_service.dart';
 import '../../../services/server_config.dart';
 import 'package:go_router/go_router.dart';
+import '../../../services/auth_service.dart';
 import '../../../services/like_service.dart';
 import '../../../services/saved_posts_service.dart';
 import '../../../services/repost_service.dart';
@@ -782,7 +783,8 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
               onComment: () => unawaited(_openComments(reel)),
               onShare: () => _shareReel(reel),
               onSave: () => _toggleSave(reel),
-              onRepost: () => _toggleRepost(reel),
+              onRepost:
+                  _isOwnReel(reel) ? null : () => _toggleRepost(reel),
               onAuthorTap: () {
                 FeedAnalyticsService.openDetail(
                   reel,
@@ -978,6 +980,11 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
     }
   }
 
+  bool _isOwnReel(PostModel reel) {
+    final me = AuthService.instance.currentUser?.id;
+    return me != null && me == reel.userId;
+  }
+
   Future<void> _toggleRepost(PostModel reel) async {
     try {
       final isReposted = reel.isReposted ?? false;
@@ -1010,7 +1017,8 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
     await ShareActionSheet.showForReel(
       context,
       reel: reel,
-      onRepostToWall: () => _toggleRepost(reel),
+      onRepostToWall:
+          _isOwnReel(reel) ? null : () => _toggleRepost(reel),
     );
   }
 }
@@ -1030,7 +1038,7 @@ class ReelCard extends ConsumerStatefulWidget {
   final VoidCallback onComment;
   final VoidCallback onShare;
   final VoidCallback onSave;
-  final VoidCallback onRepost;
+  final VoidCallback? onRepost;
   final VoidCallback onAuthorTap;
   final void Function(String tagWithoutHash) onHashtagTap;
   final void Function(String usernameWithoutAt, PostModel reel) onMentionTap;
@@ -1053,7 +1061,7 @@ class ReelCard extends ConsumerStatefulWidget {
     required this.onComment,
     required this.onShare,
     required this.onSave,
-    required this.onRepost,
+    this.onRepost,
     required this.onAuthorTap,
     required this.onHashtagTap,
     required this.onMentionTap,
@@ -1461,17 +1469,19 @@ class _ReelCardState extends ConsumerState<ReelCard>
                     count: widget.reel.commentsCount,
                     onTap: widget.onComment,
                   ),
-                  const SizedBox(height: _igActionGap),
-                  _IgReelAction(
-                    icon: (widget.reel.isReposted ?? false)
-                        ? Icons.repeat_on
-                        : Icons.repeat,
-                    count: widget.reel.repostsCount,
-                    onTap: widget.onRepost,
-                    color: (widget.reel.isReposted ?? false)
-                        ? const Color(0xFF4CD964)
-                        : Colors.white,
-                  ),
+                  if (widget.onRepost != null) ...[
+                    const SizedBox(height: _igActionGap),
+                    _IgReelAction(
+                      icon: (widget.reel.isReposted ?? false)
+                          ? Icons.repeat_on
+                          : Icons.repeat,
+                      count: widget.reel.repostsCount,
+                      onTap: widget.onRepost!,
+                      color: (widget.reel.isReposted ?? false)
+                          ? const Color(0xFF4CD964)
+                          : Colors.white,
+                    ),
+                  ],
                   const SizedBox(height: _igActionGap),
                   _IgReelAction(
                     icon: Icons.near_me_outlined,

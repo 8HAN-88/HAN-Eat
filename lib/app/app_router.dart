@@ -72,6 +72,7 @@ import '../features/search/application/search_scope.dart';
 import '../features/search/presentation/search_screen.dart';
 import '../features/reels/presentation/reels_feed_screen.dart';
 import '../features/reels/presentation/reels_fullscreen_screen.dart';
+import '../features/reels/presentation/reel_by_id_screen.dart';
 import '../features/chat/presentation/chats_hub_screen.dart';
 import '../features/chat/presentation/chat_invite_join_screen.dart';
 import '../features/chat/application/chat_private_reply.dart';
@@ -112,6 +113,10 @@ String? parseDeepLinkToGoPath(String raw) {
           }
         }
         if (path.isNotEmpty && path != '/') {
+          final reelPath = ReelByIdRoute.goPathFromBrowserPath(path);
+          if (reelPath != null) {
+            return reelPath;
+          }
           final q = routerQueryFromUri(uri);
           return q == null ? path : '$path?$q';
         }
@@ -125,8 +130,10 @@ String? parseDeepLinkToGoPath(String raw) {
       return null;
     }
     if (uri.scheme != 'haneat') return null;
-    if ((uri.host == 'post' || uri.host == 'reel') &&
-        uri.pathSegments.isNotEmpty) {
+    if (uri.host == 'reel' && uri.pathSegments.isNotEmpty) {
+      return ReelByIdRoute.pathFor(uri.pathSegments.first);
+    }
+    if (uri.host == 'post' && uri.pathSegments.isNotEmpty) {
       return '/post/${uri.pathSegments.first}';
     }
     if (uri.host == 'channel' && uri.pathSegments.isNotEmpty) {
@@ -1190,6 +1197,42 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
+      // Deep link https://haneat.app/reel/28
+      GoRoute(
+        path: ReelByIdRoute.path,
+        name: ReelByIdRoute.name,
+        parentNavigatorKey: hanEatRootNavigatorKey,
+        pageBuilder: (context, state) {
+          final postId = parseRoutePositiveId(state.pathParameters['postId']);
+          if (postId == null) {
+            return const MaterialPage(
+              child: InvalidLinkScreen(title: 'Рилс'),
+            );
+          }
+          return CustomTransitionPage<void>(
+            key: state.pageKey,
+            fullscreenDialog: true,
+            transitionDuration: const Duration(milliseconds: 280),
+            reverseTransitionDuration: const Duration(milliseconds: 220),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+              final curved = CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+                reverseCurve: Curves.easeInCubic,
+              );
+              return SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 1),
+                  end: Offset.zero,
+                ).animate(curved),
+                child: child,
+              );
+            },
+            child: ReelByIdScreen(postId: postId),
+          );
+        },
+      ),
       // Reels Feed
       GoRoute(
         path: ReelsRoute.path,
@@ -1937,6 +1980,30 @@ class SearchRoute {
 class ReelsRoute {
   static const path = '/reels';
   static const name = 'reels';
+}
+
+class ReelByIdRoute {
+  static const path = '/reel/:postId';
+  static const name = 'reel_by_id';
+
+  static String pathFor(Object postId) => '/reel/$postId';
+
+  /// `/reel/28` и `/app/reel/28` → `/reel/28`.
+  static String? goPathFromBrowserPath(String path) {
+    var p = path.trim();
+    if (p.contains('?')) {
+      p = p.split('?').first;
+    }
+    if (p.length > 1 && p.endsWith('/')) {
+      p = p.substring(0, p.length - 1);
+    }
+    if (p.startsWith('/app/')) {
+      p = p.substring(4);
+    }
+    final match = RegExp(r'^/reel/(\d+)$').firstMatch(p);
+    if (match == null) return null;
+    return pathFor(match.group(1)!);
+  }
 }
 
 class ReelsFullscreenRoute {

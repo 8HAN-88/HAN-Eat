@@ -30,4 +30,10 @@ void main() {
       UsernameDeepLinkRoute.pathFor('alice'),
     );
   });
+
+  test('reel share links open /reel/:id', () {
+    expect(parseDeepLinkToGoPath('https://haneat.app/reel/28'), '/reel/28');
+    expect(parseDeepLinkToGoPath('https://haneat.app/app/reel/28'), '/reel/28');
+    expect(parseDeepLinkToGoPath('haneat://reel/28'), '/reel/28');
+  });
 }

@@ -40,9 +40,13 @@ class ShareActionSheet {
     Future<void> Function()? onRepostToWall,
   }) async {
     final link = ShareLinkService.postLink(post.id);
+    final width = MediaQuery.sizeOf(context).width;
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
+      useRootNavigator: true,
+      constraints: BoxConstraints(minWidth: width, maxWidth: width),
       builder: (ctx) => _PostShareSheet(
         post: post,
         link: link,
@@ -57,9 +61,13 @@ class ShareActionSheet {
     Future<void> Function()? onRepostToWall,
   }) async {
     final link = ShareLinkService.reelLink(reel.id);
+    final width = MediaQuery.sizeOf(context).width;
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
+      useRootNavigator: true,
+      constraints: BoxConstraints(minWidth: width, maxWidth: width),
       builder: (ctx) => _PostShareSheet(
         post: reel,
         link: link,
@@ -87,6 +95,11 @@ class _PostShareSheet extends StatefulWidget {
 class _PostShareSheetState extends State<_PostShareSheet> {
   bool _loadingChannels = false;
   bool _sendingToChat = false;
+
+  bool get _isOwnPost {
+    final me = AuthService.instance.currentUser?.id;
+    return me != null && me == widget.post.userId;
+  }
 
   Future<void> _copyLink(BuildContext context) async {
     await Clipboard.setData(ClipboardData(text: widget.link));
@@ -286,7 +299,7 @@ class _PostShareSheetState extends State<_PostShareSheet> {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
-          if (widget.onRepostToWall != null)
+          if (widget.onRepostToWall != null && !_isOwnPost)
             ListTile(
               leading: const Icon(Icons.autorenew),
               title: const Text('Репост на стену'),
@@ -295,11 +308,12 @@ class _PostShareSheetState extends State<_PostShareSheet> {
                 await widget.onRepostToWall!.call();
               },
             ),
-          ListTile(
-            leading: const Icon(Icons.campaign_outlined),
-            title: const Text('Репост в канал'),
-            onTap: _loadingChannels ? null : () => _repostToChannel(context),
-          ),
+          if (!_isOwnPost)
+            ListTile(
+              leading: const Icon(Icons.campaign_outlined),
+              title: const Text('Репост в канал'),
+              onTap: _loadingChannels ? null : () => _repostToChannel(context),
+            ),
           ListTile(
             leading: const Icon(Icons.send_rounded),
             title: const Text('Отправить в чат'),

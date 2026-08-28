@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import 'package:video_player/video_player.dart';
 import '../../../models/post_model.dart';
 import '../../../services/feed_service.dart';
+import '../../../services/auth_service.dart';
 import '../../../services/like_service.dart';
 import '../../../services/saved_posts_service.dart';
 import '../../../services/repost_service.dart';
@@ -499,6 +500,11 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
     }
   }
 
+  bool _isOwnReel(PostModel reel) {
+    final me = AuthService.instance.currentUser?.id;
+    return me != null && me == reel.userId;
+  }
+
   Future<void> _toggleRepost(PostModel reel) async {
     if (!mounted) return;
     try {
@@ -578,7 +584,8 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
     await ShareActionSheet.showForReel(
       context,
       reel: reel,
-      onRepostToWall: () => _toggleRepost(reel),
+      onRepostToWall:
+          _isOwnReel(reel) ? null : () => _toggleRepost(reel),
     );
   }
 
@@ -618,7 +625,8 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
                 onComment: () => unawaited(_openComments(reel)),
                 onShare: () => _shareReel(reel),
                 onSave: () => _toggleSave(reel),
-                onRepost: () => _toggleRepost(reel),
+                onRepost:
+                    _isOwnReel(reel) ? null : () => _toggleRepost(reel),
                 onAuthorTap: () {
                   FeedAnalyticsService.openDetail(
                     reel,
