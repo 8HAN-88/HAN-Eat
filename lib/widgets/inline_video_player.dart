@@ -247,6 +247,7 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
                             _hasError = false;
                             _initialized = false;
                             _initKey = null;
+                            _hadVideoFrame = false;
                             _controller?.removeListener(_onVideoTick);
                             _controller?.dispose();
                             _controller = null;
