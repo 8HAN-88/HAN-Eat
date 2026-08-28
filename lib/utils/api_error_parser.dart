@@ -19,7 +19,8 @@ class ApiClientException implements Exception {
   final Map<String, dynamic>? details;
 
   bool get isContentBlocked => code == 'CONTENT_BLOCKED';
-  bool get isRateLimited => statusCode == 429;
+  bool get isRateLimited =>
+      statusCode == 429 || code == 'RATE_LIMIT_EXCEEDED';
 
   @override
   String toString() => message;
@@ -42,7 +43,10 @@ String parseApiErrorMessage(
         'Превышен лимит сообщений в минуту. Подождите и попробуйте снова.',
       'paid_media_locked' =>
         'Сначала откройте платное медиа, чтобы переслать',
-      _ => detail,
+      _ => detail.toLowerCase().contains('too many requests') ||
+              detail == 'RATE_LIMIT_EXCEEDED'
+          ? 'Слишком много запросов. Подождите немного.'
+          : detail,
     };
   }
   if (detail is Map) {
@@ -175,8 +179,20 @@ bool _isNetworkError(Object e) {
       s.contains('handshakeexception');
 }
 
+bool isTransientRateLimitError(Object? e) {
+  if (e == null) return false;
+  if (e is ApiClientException) return e.isRateLimited;
+  final lower = e.toString().toLowerCase();
+  return lower.contains('too many requests') ||
+      lower.contains('rate_limit') ||
+      lower.contains('429');
+}
+
 /// Текст ошибки для SnackBar / диалогов.
 String userVisibleError(Object e, {String fallback = 'Произошла ошибка'}) {
+  if (isTransientRateLimitError(e)) {
+    return 'Слишком много запросов. Подождите немного.';
+  }
   if (e is ApiClientException) return e.message;
   if (e is TimeoutException) {
     return 'Превышено время ожидания ответа от сервера';

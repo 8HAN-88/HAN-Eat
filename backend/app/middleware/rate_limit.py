@@ -50,6 +50,18 @@ def _is_exempt(path: str) -> bool:
     return any(path.startswith(prefix) for prefix in _EXEMPT_PREFIXES)
 
 
+def _is_read_heavy_get(method: str, path: str) -> bool:
+    """Inbox / feed GETs are polled by the PWA and must not trip the IP cap."""
+    if method != "GET":
+        return False
+    return (
+        path.startswith("/api/v1/chats")
+        or path.startswith("/api/v1/channels")
+        or path.startswith("/api/v1/contacts")
+        or path.startswith("/api/v1/feed")
+    )
+
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         if not getattr(settings, "RATE_LIMIT_ENABLED", True):
@@ -59,6 +71,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if _is_exempt(request.url.path):
             return await call_next(request)
         if _is_realtime_stream(request.url.path):
+            return await call_next(request)
+        if _is_read_heavy_get(request.method, request.url.path):
             return await call_next(request)
 
         from app.core.redis_client import REDIS_IS_STUB, get_redis
