@@ -167,6 +167,41 @@ class _HighlightedTextState extends State<HighlightedText> {
   }
 
   List<InlineSpan> _markupSpans(BuildContext context, String source) {
+    // URLs first so `_italic_` / `*bold*` cannot split https://…_query=…
+    if (widget.onUrlTap != null) {
+      final spans = <InlineSpan>[];
+      var start = 0;
+      for (final m in _urlRe.allMatches(source)) {
+        final raw = m.group(0)!;
+        final url = _trimUrl(raw);
+        if (url.isEmpty) continue;
+        if (m.start > start) {
+          spans.addAll(_markupInner(context, source.substring(start, m.start)));
+        }
+        final urlStyle = widget.style.copyWith(
+          color: widget.mentionColor ?? Theme.of(context).colorScheme.primary,
+          decoration: TextDecoration.underline,
+          fontWeight: FontWeight.w600,
+        );
+        spans.add(
+          TextSpan(
+            text: url,
+            style: urlStyle,
+            recognizer: TapGestureRecognizer()
+              ..onTap = () => widget.onUrlTap!(url),
+          ),
+        );
+        start = m.start + url.length;
+      }
+      if (start < source.length) {
+        spans.addAll(_markupInner(context, source.substring(start)));
+      }
+      return spans;
+    }
+    return _markupInner(context, source);
+  }
+
+  List<InlineSpan> _markupInner(BuildContext context, String source) {
     final scheme = Theme.of(context).colorScheme;
     final spans = <InlineSpan>[];
     var start = 0;
@@ -174,7 +209,7 @@ class _HighlightedTextState extends State<HighlightedText> {
     for (final m in _markupRe.allMatches(source)) {
       if (m.start > start) {
         spans.addAll(
-          _linkAwarePlain(context, source.substring(start, m.start)),
+          _plainOrMentions(context, source.substring(start, m.start)),
         );
       }
       if (m.group(1) != null) {
@@ -234,7 +269,7 @@ class _HighlightedTextState extends State<HighlightedText> {
       start = m.end;
     }
     if (start < source.length) {
-      spans.addAll(_linkAwarePlain(context, source.substring(start)));
+      spans.addAll(_plainOrMentions(context, source.substring(start)));
     }
     return spans;
   }

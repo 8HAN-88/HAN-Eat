@@ -16842,6 +16842,8 @@ class _Bubble extends StatelessWidget {
     final quoteBg = mine
         ? scheme.primary.withValues(alpha: 0.12)
         : scheme.onSurface.withValues(alpha: 0.06);
+    final linkColor =
+        mine && isDark ? AppColors.outgoingLinkOnDark : scheme.primary;
 
     if (message.type == 'call') {
       final label = CallMessageLabels.preview(message.content, mine: mine);
@@ -17398,6 +17400,7 @@ class _Bubble extends StatelessWidget {
                   trailingReserveWidth: _metaReserveWidth(mine),
                   parseMarkup: true,
                   highlightMentions: true,
+                  mentionColor: linkColor,
                   onMentionTap: onMentionTap,
                   mentionLabels: mentionLabels,
                   onUrlTap: (url) =>
@@ -17498,6 +17501,7 @@ class _Bubble extends StatelessWidget {
                   trailingReserveWidth: _metaReserveWidth(mine),
                   parseMarkup: true,
                   highlightMentions: true,
+                  mentionColor: linkColor,
                   onMentionTap: onMentionTap,
                   mentionLabels: mentionLabels,
                   onUrlTap: (url) =>
@@ -17531,6 +17535,7 @@ class _Bubble extends StatelessWidget {
                   hasLinkPreview ? null : _metaReserveWidth(mine),
               highlightMentions: true,
               parseMarkup: true,
+              mentionColor: linkColor,
               onMentionTap: onMentionTap,
               mentionLabels: mentionLabels,
               onUrlTap: (url) => unawaited(openAppOrExternalLink(context, url)),
@@ -17548,7 +17553,7 @@ class _Bubble extends StatelessWidget {
               ChatLinkPreview(
                 url: previewUrl,
                 foregroundColor: fg,
-                accentColor: scheme.primary,
+                accentColor: linkColor,
                 backgroundColor: quoteBg,
                 mine: mine,
               ),
