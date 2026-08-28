@@ -7,13 +7,17 @@ import 'comments_screen.dart';
 ///
 /// Full width on purpose: Material 3 defaults `maxWidth: 640`, and on iPhone
 /// PWA a wrong CSS width would pin the sheet as a side panel over the reel.
-Future<void> showPostCommentsSheet(
+///
+/// Returns the latest comments total (after posts/deletes), or null if unknown.
+Future<int?> showPostCommentsSheet(
   BuildContext context, {
   required int postId,
   PostModel? post,
+  ValueChanged<int>? onCommentsCountChanged,
 }) {
   final width = MediaQuery.sizeOf(context).width;
-  return showModalBottomSheet<void>(
+  var latest = post?.commentsCount;
+  return showModalBottomSheet<int>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
@@ -37,9 +41,13 @@ Future<void> showPostCommentsSheet(
             postId: postId,
             post: post,
             asSheet: true,
+            onCommentsCountChanged: (n) {
+              latest = n;
+              onCommentsCountChanged?.call(n);
+            },
           ),
         ),
       );
     },
-  );
+  ).then((popped) => popped ?? latest);
 }

@@ -61,6 +61,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
 
   final Set<int> _likeBusy = {};
   final Map<int, DateTime> _likeTouchedAt = {};
+  final Map<int, DateTime> _commentTouchedAt = {};
 
   bool get _canPlayVideos => _appVisible;
 
@@ -149,14 +150,21 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
     return incoming.map((post) {
       final prev = existing[post.id];
       if (prev == null) return post;
-      final touched = _likeTouchedAt[post.id];
-      if (touched != null && now.difference(touched) < _likeTouchGrace) {
-        return post.copyWith(
+      var next = post;
+      final likeTouched = _likeTouchedAt[post.id];
+      if (likeTouched != null &&
+          now.difference(likeTouched) < _likeTouchGrace) {
+        next = next.copyWith(
           isLiked: prev.isLiked,
           likesCount: prev.likesCount,
         );
       }
-      return post;
+      final commentTouched = _commentTouchedAt[post.id];
+      if (commentTouched != null &&
+          now.difference(commentTouched) < _likeTouchGrace) {
+        next = next.copyWith(commentsCount: prev.commentsCount);
+      }
+      return next;
     }).toList();
   }
 
@@ -401,6 +409,16 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
     _currentReelStartedAt = null;
   }
 
+  void _applyCommentsCount(int postId, int total) {
+    final i = _reels.indexWhere((r) => r.id == postId);
+    if (i == -1 || _reels[i].commentsCount == total) return;
+    _commentTouchedAt[postId] = DateTime.now();
+    _updateReelAt(
+      postId,
+      (r) => _copyReelWith(r, commentsCount: total),
+    );
+  }
+
   Future<void> _openComments(PostModel reel) async {
     if (_openingComments) return;
     _openingComments = true;
@@ -411,22 +429,23 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
     );
     _pauseAllVideos();
     try {
-      await showPostCommentsSheet(
+      final fromSheet = await showPostCommentsSheet(
         context,
         postId: reel.id,
         post: reel,
+        onCommentsCountChanged: (total) {
+          if (mounted) _applyCommentsCount(reel.id, total);
+        },
       );
       if (!mounted) return;
-      try {
-        final total = await CommentService.getCommentsTotal(reel.id);
-        if (!mounted) return;
-        if (_reels.any((r) => r.id == reel.id && r.commentsCount != total)) {
-          _updateReelAt(
-            reel.id,
-            (r) => _copyReelWith(r, commentsCount: total),
-          );
-        }
-      } catch (_) {}
+      if (fromSheet != null) {
+        _applyCommentsCount(reel.id, fromSheet);
+      } else {
+        try {
+          final total = await CommentService.getCommentsTotal(reel.id);
+          if (mounted) _applyCommentsCount(reel.id, total);
+        } catch (_) {}
+      }
       if (_canPlayVideos) {
         _playReelAt(_currentIndex);
       }

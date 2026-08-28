@@ -445,6 +445,16 @@ class _SubscriptionsFeedScreenState
                                 context,
                                 postId: post.id,
                                 post: post,
+                                onCommentsCountChanged: (n) {
+                                  final i = _posts
+                                      .indexWhere((p) => p.id == post.id);
+                                  if (i == -1 || !mounted) return;
+                                  if (_posts[i].commentsCount == n) return;
+                                  setState(() {
+                                    _posts[i] =
+                                        _posts[i].copyWith(commentsCount: n);
+                                  });
+                                },
                               );
                             },
                             onPostDeleted: () {

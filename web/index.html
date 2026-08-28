@@ -188,6 +188,11 @@
     flt-scene-host, flt-glass-pane, flutter-view, flt-renderer, canvas {
       background-color: var(--bg) !important;
     }
+    /* Flutter web puts <video> in a platform view that steals taps.
+       Reels pause / like must reach Flutter. Controls stay in the app UI. */
+    video {
+      pointer-events: none !important;
+    }
   </style>
   <script>
     (function () {

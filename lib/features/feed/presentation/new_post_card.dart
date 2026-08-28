@@ -1705,6 +1705,9 @@ class _NewPostCardState extends State<NewPostCard>
           context,
           postId: widget.post.id,
           post: widget.post,
+          onCommentsCountChanged: (n) {
+            if (mounted) setState(() => _displayCommentsCount = n);
+          },
         );
       }
       await _refreshCommentsCount();
