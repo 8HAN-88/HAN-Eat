@@ -60,7 +60,7 @@ void main() {
   group('routerQueryFromUri', () {
     test('drops PWA boot query keys', () {
       expect(
-        routerQueryFromUri(Uri.parse('https://haneat.app/app/feed?go=1&v=2&_cb=9')),
+        routerQueryFromUri(Uri.parse('https://haneat.app/app/feed?go=1&v=2&_cb=9&fresh=1')),
         isNull,
       );
       expect(
