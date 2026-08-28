@@ -65,6 +65,7 @@ import '../../../widgets/chat_bubble_accent.dart';
 import '../../../widgets/chat_wallpaper.dart';
 import '../../../widgets/telegram_ui.dart';
 import '../application/active_chat_session.dart';
+import '../application/chat_keyboard_inset.dart';
 import '../application/chat_auto_delete.dart';
 import '../application/anonymous_admin.dart';
 import '../application/chat_mentions.dart';
@@ -4729,10 +4730,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   @override
   void didChangeMetrics() {
     super.didChangeMetrics();
+    // Only follow a real keyboard. Visual-viewport chrome on iOS PWA fires
+    // metrics while rubber-banding the thread and must not jump the list.
+    if (!_inputFocusNode.hasFocus) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final keyboard = MediaQuery.viewInsetsOf(context).bottom;
-      if (keyboard > 0 && (_inputFocusNode.hasFocus || _isNearBottom())) {
+      if (!mounted || !_inputFocusNode.hasFocus) return;
+      final keyboard = effectiveChatKeyboardInset(
+        rawInset: MediaQuery.viewInsetsOf(context).bottom,
+        composerFocused: true,
+      );
+      if (keyboard > 0) {
         _scrollToBottomAfterKeyboard();
       }
     });
@@ -4740,8 +4747,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   void _onScrollChanged() {
     if (!_scroll.hasClients || _selectionMode) return;
-    final nearBottom = _isNearBottom();
-    if (nearBottom) {
+    final maxExtent = _scroll.position.maxScrollExtent;
+    final offset = _scroll.offset;
+    final fabPolicy = chatBottomFabPolicy(
+      offset: offset,
+      maxScrollExtent: maxExtent,
+    );
+    if (fabPolicy == ChatBottomFabPolicy.hide) {
       if (_showJumpToBottom ||
           _jumpFabTargetsUnread ||
           _unreadMentionQueue.isNotEmpty ||
@@ -4756,7 +4768,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       }
       // Telegram: mark read when the user actually reaches the bottom.
       _scheduleMarkRead();
-    } else {
+    } else if (fabPolicy == ChatBottomFabPolicy.show) {
       final targetsUnread = _shouldJumpToFirstUnread() ||
           _hasMentionJumpTargets ||
           _hasReactionJumpTargets;
@@ -4989,7 +5001,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   bool _isNearBottom([double threshold = 120]) {
     if (!_scroll.hasClients) return true;
-    return _scroll.position.maxScrollExtent - _scroll.offset <= threshold;
+    return chatScrollIsNearBottom(
+      offset: _scroll.offset,
+      maxScrollExtent: _scroll.position.maxScrollExtent,
+      threshold: threshold,
+    );
   }
 
   int? _firstUnreadMessageId() {
@@ -11375,6 +11391,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   void _scrollToBottom({bool animated = true}) {
     if (!_scroll.hasClients) return;
     final target = _scroll.position.maxScrollExtent;
+    if ((target - _scroll.offset).abs() < 2) {
+      if (_suppressMarkRead) {
+        setState(() => _suppressMarkRead = false);
+      }
+      _scheduleMarkRead();
+      return;
+    }
     if (animated) {
       _scroll.animateTo(
         target,
@@ -14030,7 +14053,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         ? searchMatchIds[_searchMatchIndex.clamp(0, searchMatchIds.length - 1)]
         : _focusedMessageId;
     final mediaCount = _mediaMessageCount();
-    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final keyboardInset = effectiveChatKeyboardInset(
+      rawInset: MediaQuery.viewInsetsOf(context).bottom,
+      composerFocused: _inputFocusNode.hasFocus,
+    );
     final isRestrictedByModeration = _conversation.isGroup &&
         _conversation.amISendRestricted &&
         !_conversation.amIGroupAdmin;
@@ -14745,6 +14771,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                               )
                             : ListView.builder(
                                 controller: _scroll,
+                                physics: kIsWeb
+                                    ? const ClampingScrollPhysics()
+                                    : null,
                                 cacheExtent: 900,
                                 addAutomaticKeepAlives: false,
                                 addRepaintBoundaries: true,
