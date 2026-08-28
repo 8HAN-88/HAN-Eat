@@ -1067,8 +1067,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             padding: const EdgeInsets.only(bottom: 16),
             child: NewPostCard(
               post: post,
-              onCommentTap: () =>
-                  context.push(PostCommentsRoute.pathFor(post.id)),
               onPostDeleted: () {
                 setState(() {
                   _posts.removeWhere((p) => p.id == post.id);

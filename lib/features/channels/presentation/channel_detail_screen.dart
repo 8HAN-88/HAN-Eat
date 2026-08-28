@@ -21,6 +21,7 @@ import 'channel_search_screen.dart';
 import 'channel_create_content_sheet.dart';
 
 import 'channel_post_card.dart';
+import '../../comments/presentation/show_post_comments_sheet.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../monetization/presentation/support_button.dart';
 import '../../monetization/presentation/channel_subscription_button.dart';
@@ -1000,9 +1001,11 @@ class ChannelPostsListState extends State<ChannelPostsList> {
               post: post,
               channelId: widget.channelId,
               channel: widget.channel,
-              onCommentTap: () async {
-                await context.push(PostCommentsRoute.pathFor(post.id));
-              },
+              onCommentTap: () => showPostCommentsSheet(
+                context,
+                postId: post.id,
+                post: post,
+              ),
               onCardTap: () async {
                 await context.push(
                   ChannelDetailRoute.post(widget.channelId, post.id),

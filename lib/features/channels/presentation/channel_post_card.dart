@@ -28,6 +28,7 @@ import '../../../services/subscription_service.dart';
 import '../../../widgets/report_content_dialog.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../utils/session_snackbar.dart';
+import '../../comments/presentation/show_post_comments_sheet.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 int? _channelRepostOriginalPostId(Map<String, dynamic>? body) {
@@ -1295,7 +1296,15 @@ class _ChannelPostCardState extends State<ChannelPostCard>
                     IconButton(
                       icon: const Icon(Icons.comment_outlined, size: 28),
                       onPressed: () async {
-                        await widget.onCommentTap?.call();
+                        if (widget.onCommentTap != null) {
+                          await widget.onCommentTap!.call();
+                        } else {
+                          await showPostCommentsSheet(
+                            context,
+                            postId: widget.post.id,
+                            post: widget.post,
+                          );
+                        }
                         await _refreshCommentsCount();
                       },
                       padding: EdgeInsets.zero,

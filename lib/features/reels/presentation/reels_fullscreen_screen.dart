@@ -54,6 +54,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
   final Set<int> _impressedReelIds = {};
   bool _sessionMuted = kIsWeb;
   bool _appVisible = true;
+  bool _openingComments = false;
 
   static const Duration _likeTouchGrace = Duration(seconds: 20);
 
@@ -400,30 +401,36 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
   }
 
   Future<void> _openComments(PostModel reel) async {
+    if (_openingComments) return;
+    _openingComments = true;
     FeedAnalyticsService.openDetail(
       reel,
       source: 'reels_fullscreen',
       target: 'comments',
     );
     _pauseAllVideos();
-    await showPostCommentsSheet(
-      context,
-      postId: reel.id,
-      post: reel,
-    );
-    if (!mounted) return;
     try {
-      final total = await CommentService.getCommentsTotal(reel.id);
+      await showPostCommentsSheet(
+        context,
+        postId: reel.id,
+        post: reel,
+      );
       if (!mounted) return;
-      if (_reels.any((r) => r.id == reel.id && r.commentsCount != total)) {
-        _updateReelAt(
-          reel.id,
-          (r) => _copyReelWith(r, commentsCount: total),
-        );
+      try {
+        final total = await CommentService.getCommentsTotal(reel.id);
+        if (!mounted) return;
+        if (_reels.any((r) => r.id == reel.id && r.commentsCount != total)) {
+          _updateReelAt(
+            reel.id,
+            (r) => _copyReelWith(r, commentsCount: total),
+          );
+        }
+      } catch (_) {}
+      if (_canPlayVideos) {
+        _playReelAt(_currentIndex);
       }
-    } catch (_) {}
-    if (_canPlayVideos) {
-      _playReelAt(_currentIndex);
+    } finally {
+      _openingComments = false;
     }
   }
 

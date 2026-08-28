@@ -78,6 +78,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
   final Set<int> _impressedReelIds = {};
   bool _sessionMuted = kIsWeb;
   bool _appVisible = true;
+  bool _openingComments = false;
 
   static const Duration _likeTouchGrace = Duration(seconds: 20);
 
@@ -870,31 +871,37 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
   }
 
   Future<void> _openComments(PostModel reel) async {
+    if (_openingComments) return;
+    _openingComments = true;
     FeedAnalyticsService.openDetail(
       reel,
       source: 'reels',
       target: 'comments',
     );
     _pauseAllVideos();
-    await showPostCommentsSheet(
-      context,
-      postId: reel.id,
-      post: reel,
-    );
-    if (!mounted) return;
     try {
-      final total = await CommentService.getCommentsTotal(reel.id);
+      await showPostCommentsSheet(
+        context,
+        postId: reel.id,
+        post: reel,
+      );
       if (!mounted) return;
-      final i = _reels.indexWhere((r) => r.id == reel.id);
-      if (i != -1 && _reels[i].commentsCount != total) {
-        setState(() {
-          _reels[i] = _reels[i].copyWith(commentsCount: total);
-        });
-        unawaited(FeedApiCache.save(_cacheVariant, _reels));
+      try {
+        final total = await CommentService.getCommentsTotal(reel.id);
+        if (!mounted) return;
+        final i = _reels.indexWhere((r) => r.id == reel.id);
+        if (i != -1 && _reels[i].commentsCount != total) {
+          setState(() {
+            _reels[i] = _reels[i].copyWith(commentsCount: total);
+          });
+          unawaited(FeedApiCache.save(_cacheVariant, _reels));
+        }
+      } catch (_) {}
+      if (_canPlayVideos) {
+        _playReelAt(_currentIndex);
       }
-    } catch (_) {}
-    if (_canPlayVideos) {
-      _playReelAt(_currentIndex);
+    } finally {
+      _openingComments = false;
     }
   }
 

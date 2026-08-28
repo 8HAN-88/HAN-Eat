@@ -46,7 +46,16 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     _loadComments();
+  }
+
+  void _onScroll() {
+    if (!_hasMore || _isLoading || !_scrollController.hasClients) return;
+    final pos = _scrollController.position;
+    if (pos.pixels >= pos.maxScrollExtent - 240) {
+      _loadComments();
+    }
   }
 
   void _focusCommentInput() {
@@ -58,6 +67,7 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
     _commentController.dispose();
     _commentFocusNode.dispose();
     _scrollController.dispose();
@@ -220,7 +230,8 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
                 ),
                 IconButton(
                   tooltip: 'Закрыть',
-                  onPressed: () => Navigator.of(context).maybePop(),
+                  onPressed: () =>
+                      Navigator.of(context, rootNavigator: true).maybePop(),
                   icon: const Icon(Icons.close),
                 ),
               ],
@@ -438,7 +449,7 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
         child: Column(
           children: [
             Expanded(child: listBody),
-            _buildComposerBar(context, includeSafeArea: false),
+            _buildComposerBar(context, includeSafeArea: true),
           ],
         ),
       );

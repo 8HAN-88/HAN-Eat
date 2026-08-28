@@ -114,8 +114,6 @@ class _PostByIdScreenState extends State<PostByIdScreen> {
               children: [
                 NewPostCard(
                   post: post,
-                  onCommentTap: () =>
-                      context.push('/post/${post.id}/comments'),
                   onPostDeleted: () {
                     if (context.canPop()) context.pop();
                   },

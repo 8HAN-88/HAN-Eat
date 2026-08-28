@@ -17,6 +17,7 @@ import '../../../services/user_service.dart' as user_service;
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/app_gradient_background.dart';
+import '../../comments/presentation/show_post_comments_sheet.dart';
 import '../application/unread_notifications_provider.dart';
 import 'notification_formatters.dart';
 import 'widgets/notification_tile.dart';
@@ -296,7 +297,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     if (channelId != null) {
       context.push('/channel/$channelId/post/$postId');
     } else {
-      context.push(PostCommentsRoute.pathFor(postId));
+      unawaited(showPostCommentsSheet(context, postId: postId));
     }
   }
 
@@ -333,7 +334,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       if (postId != null && channelId != null) {
         context.push('/channel/$channelId/post/$postId');
       } else if (postId != null) {
-        context.push(PostCommentsRoute.pathFor(postId));
+        unawaited(showPostCommentsSheet(context, postId: postId));
       } else if (notification.actor != null) {
         context.push(ProfileRoute.withUserId(notification.actor!.id));
       }
