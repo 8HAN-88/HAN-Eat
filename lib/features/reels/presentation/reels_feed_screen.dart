@@ -1044,6 +1044,7 @@ class _ReelCardState extends ConsumerState<ReelCard>
   late Animation<double> _likeOpacityAnimation;
   final List<TapGestureRecognizer> _descriptionRecognizers = [];
   VideoPlayerController? _boundController;
+  bool _hadVideoFrame = false;
 
   static const double _igActionGap = 14;
   static const double _igRightInset = 12;
@@ -1076,6 +1077,7 @@ class _ReelCardState extends ConsumerState<ReelCard>
   void didUpdateWidget(ReelCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.videoController != widget.videoController) {
+      _hadVideoFrame = false;
       _bindController(widget.videoController);
     }
   }
@@ -1087,7 +1089,10 @@ class _ReelCardState extends ConsumerState<ReelCard>
   }
 
   void _onVideoTick() {
-    if (mounted) setState(() {});
+    if (!mounted || _hadVideoFrame) return;
+    if (_hasVideoFrame) {
+      setState(() => _hadVideoFrame = true);
+    }
   }
 
   bool get _hasVideoFrame {

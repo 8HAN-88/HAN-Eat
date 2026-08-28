@@ -68,9 +68,25 @@ class _StartupShellState extends State<StartupShell> {
     if (kIsWeb) {
       notifyPrimaryUiReady();
     }
-    Future<void>.delayed(const Duration(seconds: 12), () {
+    Future<void>.delayed(const Duration(seconds: 12), () async {
+      if (!mounted || AppBootstrapState.authReady.value) return;
+      if (kIsWeb) {
+        try {
+          final token = await AuthService.getAccessToken();
+          if (token != null &&
+              token.isNotEmpty &&
+              AuthService.instance.currentUser == null) {
+            debugPrint('StartupShell: 12s, токен есть — ждём user');
+            return;
+          }
+        } catch (_) {}
+      }
+      debugPrint('⚠️ StartupShell: timeout 12s — открываем UI');
+      _openMainUi();
+    });
+    Future<void>.delayed(const Duration(seconds: 20), () {
       if (mounted && !AppBootstrapState.authReady.value) {
-        debugPrint('⚠️ StartupShell: timeout 12s — открываем UI');
+        debugPrint('⚠️ StartupShell: timeout 20s — открываем UI');
         _openMainUi();
       }
     });

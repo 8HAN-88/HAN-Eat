@@ -42,6 +42,7 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
   bool _appVisible = true;
   String? _initKey;
   Timer? _disposeWhenHiddenTimer;
+  bool _hadVideoFrame = false;
 
   static const double _visibilityThresholdPlay = 0.6;
   static const double _visibilityThresholdPause = 0.18;
@@ -130,7 +131,10 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
   }
 
   void _onVideoTick() {
-    if (mounted) setState(() {});
+    if (!mounted || _hadVideoFrame) return;
+    if (_hasVideoFrame) {
+      setState(() => _hadVideoFrame = true);
+    }
   }
 
   bool get _hasVideoFrame {
@@ -153,6 +157,7 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
       _controller = null;
       _initialized = false;
       _initKey = null;
+      _hadVideoFrame = false;
       unawaited(controller?.dispose());
       if (mounted) setState(() {});
     });
