@@ -32,6 +32,8 @@
     html, body {
       margin: 0;
       min-height: 100%;
+      overflow: hidden;
+      overscroll-behavior: none;
       background: radial-gradient(120% 80% at 50% -10%, #243041 0%, var(--bg) 55%);
       color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
@@ -187,6 +189,7 @@
     }
     flt-scene-host, flt-glass-pane, flutter-view, flt-renderer, canvas {
       background-color: var(--bg) !important;
+      overscroll-behavior: none;
     }
     /* Flutter web puts <video> in a platform view that steals taps.
        Reels pause / like must reach Flutter. Controls stay in the app UI. */
