@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/app_router.dart';
 import '../../../../core/layout/floating_bottom_padding.dart';
+import '../../../../core/network/api_rate_limit_backoff.dart';
 import '../../../../core/network/feed_load_helper.dart';
 import '../../../../models/chat_models.dart';
 import '../../../../services/api_reachability_service.dart';
@@ -61,6 +62,9 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
   List<Channel> _recommended = [];
   List<ChatJoinRequestsInboxItem> _joinRequestsInbox = [];
   bool _loading = false;
+  bool _loadInFlight = false;
+  bool _loadQueued = false;
+  Timer? _rateLimitRetryTimer;
   bool _started = false;
   Object? _error;
   Object? _chatsPartialError;
@@ -776,6 +780,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     ShellTabVisibility.activeIndex.removeListener(_onShellTabChanged);
     WidgetsBinding.instance.removeObserver(this);
     _pollTimer?.cancel();
+    _rateLimitRetryTimer?.cancel();
     _typingTicker?.cancel();
     _signalSub?.cancel();
     _realtimeSub?.cancel();
@@ -921,7 +926,34 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     }
   }
 
+  void _scheduleInboxRateLimitRetry() {
+    if (_rateLimitRetryTimer != null) return;
+    final wait = ApiRateLimitBackoff.remaining ?? const Duration(seconds: 12);
+    _rateLimitRetryTimer = Timer(wait + const Duration(milliseconds: 400), () {
+      _rateLimitRetryTimer = null;
+      if (!mounted || !ShellTabVisibility.chatsActive) return;
+      unawaited(_load(silent: true));
+    });
+  }
+
   Future<void> _load({bool silent = false}) async {
+    if (_loadInFlight) {
+      _loadQueued = true;
+      return;
+    }
+    _loadInFlight = true;
+    try {
+      await _loadUnlocked(silent: silent);
+    } finally {
+      _loadInFlight = false;
+      if (mounted && _loadQueued) {
+        _loadQueued = false;
+        unawaited(_load(silent: true));
+      }
+    }
+  }
+
+  Future<void> _loadUnlocked({bool silent = false}) async {
     final seq = ++_loadSeq;
     if (!silent) {
       final cached = ChatCacheService.peekConversations() ??
@@ -1036,6 +1068,16 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
 
     if (chats.isEmpty && channels.isEmpty && resolvedSaved == null) {
       final err = chatsError ?? channelsError;
+      if (isTransientRateLimitError(err)) {
+        _scheduleInboxRateLimitRetry();
+        setState(() {
+          _error = _entries.isEmpty ? err : null;
+          _chatsPartialError = null;
+          _joinInboxPartialError = null;
+          _loading = false;
+        });
+        return;
+      }
       if (err != null) {
         unawaited(FeedLoadHelper.clearSessionIfExpired(err));
       }
@@ -1111,25 +1153,42 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       _archivedUnread = archivedUnread;
       _archivedPreview = archivedPreview;
       _error = null;
-      _chatsPartialError =
-          chatsError != null && channels.isNotEmpty ? chatsError : null;
-      _joinRequestsInbox = joinInbox;
-      _joinInboxPartialError = joinInboxError;
+      _chatsPartialError = chatsError != null &&
+              channels.isNotEmpty &&
+              !isTransientRateLimitError(chatsError)
+          ? chatsError
+          : null;
+      _joinRequestsInbox = joinInbox.isNotEmpty ||
+              !isTransientRateLimitError(joinInboxError)
+          ? joinInbox
+          : _joinRequestsInbox;
+      _joinInboxPartialError =
+          joinInboxError != null && !isTransientRateLimitError(joinInboxError)
+              ? joinInboxError
+              : null;
       _loading = false;
       _servingFromCache = false;
     });
-    _warmTopThreads([
-      for (final entry in entries)
-        if (entry is ChatInboxEntry) entry.chat,
-    ]);
+    if (isTransientRateLimitError(chatsError) ||
+        isTransientRateLimitError(joinInboxError)) {
+      _scheduleInboxRateLimitRetry();
+    }
+    if (!silent) {
+      _warmTopThreads([
+        for (final entry in entries)
+          if (entry is ChatInboxEntry) entry.chat,
+      ]);
+    }
 
-    unawaited(
-      _loadRecommendedChannels(
-        seq: seq,
-        channels: channels,
-        archivedChannelIds: archivedChannelIds,
-      ),
-    );
+    if (!silent) {
+      unawaited(
+        _loadRecommendedChannels(
+          seq: seq,
+          channels: channels,
+          archivedChannelIds: archivedChannelIds,
+        ),
+      );
+    }
   }
 
   Future<void> _loadRecommendedChannels({

@@ -154,6 +154,8 @@ class ChatService {
 
   static Future<http.Response> _get(Uri uri) => _request(
         (client, headers) => client.get(uri, headers: headers),
+        // Reads must not fail because an unrelated POST hit 429.
+        bypassRateLimitGate: true,
       );
 
   static Future<http.Response> _post(

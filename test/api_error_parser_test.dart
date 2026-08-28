@@ -9,6 +9,33 @@ void main() {
     );
   });
 
+  test('userVisibleError localizes rate-limit English detail', () {
+    expect(
+      userVisibleError(
+        const ApiClientException(
+          message: 'Too many requests. Please try again later.',
+          statusCode: 429,
+          code: 'RATE_LIMIT_EXCEEDED',
+        ),
+      ),
+      'Слишком много запросов. Подождите немного.',
+    );
+    expect(
+      parseApiErrorMessage('Too many requests. Please try again later.'),
+      'Слишком много запросов. Подождите немного.',
+    );
+  });
+
+  test('isTransientRateLimitError detects 429', () {
+    expect(
+      isTransientRateLimitError(
+        const ApiClientException(message: 'x', statusCode: 429),
+      ),
+      isTrue,
+    );
+    expect(isTransientRateLimitError(Exception('network')), isFalse);
+  });
+
   test('userVisibleError uses ApiClientException message', () {
     expect(
       userVisibleError(
