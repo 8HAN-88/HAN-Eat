@@ -83,7 +83,7 @@ class _ReelByIdScreenState extends State<ReelByIdScreen> {
           return const InvalidLinkScreen(title: 'Рилс');
         }
         final isReel =
-            post.type == 'reel' || post.reelVideoSources.isNotEmpty;
+            post.type == 'reel' || !post.reelVideoSources.isEmpty;
         if (!isReel) {
           return PostByIdScreen(postId: post.id);
         }
