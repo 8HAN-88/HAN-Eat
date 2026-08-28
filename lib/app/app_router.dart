@@ -2004,6 +2004,15 @@ class ReelByIdRoute {
     if (match == null) return null;
     return pathFor(match.group(1)!);
   }
+
+  /// `https://haneat.app/reel/28`, `/app/reel/28`, `haneat://reel/28`.
+  static int? postIdFromUrl(String raw) {
+    final path = parseDeepLinkToGoPath(raw.trim());
+    if (path == null) return null;
+    final match = RegExp(r'^/reel/(\d+)$').firstMatch(path);
+    if (match == null) return null;
+    return int.tryParse(match.group(1)!);
+  }
 }
 
 class ReelsFullscreenRoute {

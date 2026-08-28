@@ -93,9 +93,13 @@ def _apply_viewer_post_flags(
 async def preview_link(
     payload: dict,
     _: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
 ):
     """Вернуть метаданные ссылки для live-preview на клиенте."""
-    from app.services.link_preview_service import fetch_link_preview
+    from app.services.link_preview_service import (
+        fetch_link_preview,
+        try_own_content_preview,
+    )
 
     raw_url = str(payload.get("url") or "").strip()
     if not raw_url:
@@ -103,6 +107,9 @@ async def preview_link(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="URL is required",
         )
+    own = try_own_content_preview(db, raw_url)
+    if own:
+        return {"meta": own}
     return {"meta": fetch_link_preview(raw_url)}
 
 

@@ -43,6 +43,17 @@ managed = """
         client_max_body_size 64M;
     }
 
+    # Shared /reel/:id and /post/:id — OG HTML for Telegram/iMessage, then hop to /app/.
+    location ~ ^/(reel|post)/([0-9]+)/?$ {
+        proxy_pass http://127.0.0.1:8000/api/v1/og/$1/$2;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        add_header Cache-Control "public, max-age=300";
+    }
+
     # One-shot Safari/PWA recovery: wipe Cache API + storage + SW, then HTML login.
     location = /fresh {
         add_header Clear-Site-Data '"cache", "storage", "executionContexts"' always;

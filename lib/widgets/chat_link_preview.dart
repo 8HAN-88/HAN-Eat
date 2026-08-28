@@ -4,10 +4,12 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../app/app_router.dart';
 import '../app/open_app_link.dart';
 import '../core/network/haneat_http_client.dart';
 import '../services/auth_service.dart';
 import '../services/server_config.dart';
+import 'chat_reel_preview.dart';
 
 class LinkPreview {
   const LinkPreview({
@@ -109,12 +111,18 @@ class ChatLinkPreview extends StatefulWidget {
     required this.foregroundColor,
     required this.accentColor,
     required this.backgroundColor,
+    this.mine = true,
+    this.compact = false,
+    this.showActions = true,
   });
 
   final String url;
   final Color foregroundColor;
   final Color accentColor;
   final Color backgroundColor;
+  final bool mine;
+  final bool compact;
+  final bool showActions;
 
   @override
   State<ChatLinkPreview> createState() => _ChatLinkPreviewState();
@@ -235,6 +243,17 @@ class _ChatLinkPreviewState extends State<ChatLinkPreview> {
     final openUrl = (_preview?.url.trim().isNotEmpty ?? false)
         ? _preview!.url.trim()
         : widget.url.trim();
+    final reelId = ReelByIdRoute.postIdFromUrl(openUrl) ??
+        ReelByIdRoute.postIdFromUrl(widget.url);
+    if (reelId != null) {
+      return ChatReelPreview(
+        postId: reelId,
+        url: openUrl,
+        mine: widget.mine,
+        compact: widget.compact,
+        showActions: widget.showActions,
+      );
+    }
 
     if (_loading) {
       return _shell(

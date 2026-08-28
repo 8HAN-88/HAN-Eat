@@ -11,6 +11,8 @@ class AppColors {
   static const telegramBlueDark = primaryDark;
   static const telegramOutgoingLight = Color(0xFFEFFEDD);
   static const telegramOutgoingDark = Color(0xFF6A3423);
+  /// Links on outgoing dark-brown bubbles. Brand orange on #6A3423 is unreadable.
+  static const outgoingLinkOnDark = Color(0xFFFFF1E8);
   static const telegramChatBgLight = Color(0xFFE7EBF0);
   static const telegramChatBgDark = Color(0xFF0E1621);
 

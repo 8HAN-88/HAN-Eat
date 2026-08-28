@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:han_eat/app/app_router.dart';
+import 'package:han_eat/services/share_link_service.dart';
 
 void main() {
   group('ReelByIdRoute.goPathFromBrowserPath', () {
@@ -39,6 +40,36 @@ void main() {
       final match = RegExp(r'https?://[^\s]+').firstMatch(share);
       expect(match, isNotNull);
       expect(parseDeepLinkToGoPath(match!.group(0)!), '/reel/28');
+    });
+  });
+
+  group('ReelByIdRoute.postIdFromUrl', () {
+    test('reads public, /app and native reel links', () {
+      expect(ReelByIdRoute.postIdFromUrl('https://haneat.app/reel/28'), 28);
+      expect(ReelByIdRoute.postIdFromUrl('https://haneat.app/app/reel/28'), 28);
+      expect(ReelByIdRoute.postIdFromUrl('haneat://reel/28'), 28);
+    });
+
+    test('ignores other links', () {
+      expect(ReelByIdRoute.postIdFromUrl('https://haneat.app/post/28'), isNull);
+      expect(ReelByIdRoute.postIdFromUrl('https://yandex.ru/pogoda'), isNull);
+    });
+  });
+
+  group('ShareLinkService.visibleCaptionForReelShare', () {
+    test('keeps user text and drops the HanWe reel url', () {
+      expect(
+        ShareLinkService.visibleCaptionForReelShare(
+          'салют\n\nОткрыть в HanWe: https://haneat.app/reel/28',
+        ),
+        'салют',
+      );
+      expect(
+        ShareLinkService.visibleCaptionForReelShare(
+          'Открыть в HanWe: https://haneat.app/reel/28',
+        ),
+        isEmpty,
+      );
     });
   });
 }
