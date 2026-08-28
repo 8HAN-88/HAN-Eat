@@ -15466,6 +15466,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                             backgroundColor: scheme
                                                 .surfaceContainerHighest
                                                 .withValues(alpha: 0.55),
+                                            compact: true,
+                                            showActions: false,
                                           ),
                                         ),
                                         IconButton(
@@ -16895,7 +16897,19 @@ class _Bubble extends StatelessWidget {
     final isVideoNote = message.type == 'video_note' && message.mediaUrl != null;
     final isMedia = isImage || isVideo || isSticker;
     final hasCaption = message.content.trim().isNotEmpty;
-    final isFullBleedMedia = (isImage || isVideo) && !hasCaption;
+    final reelShareUrl = message.disableWebpagePreview
+        ? null
+        : extractFirstHttpUrl(message.content);
+    final reelShareId = reelShareUrl == null
+        ? null
+        : ReelByIdRoute.postIdFromUrl(reelShareUrl);
+    final reelCaption = reelShareId == null
+        ? ''
+        : ShareLinkService.visibleCaptionForReelShare(message.content);
+    final isReelShare = reelShareId != null;
+    final isFullBleedMedia =
+        ((isImage || isVideo) && !hasCaption) ||
+            (isReelShare && reelCaption.isEmpty);
     final bubbleRadius = _bubbleRadius(mine);
     final contentPadding = (isSticker || isVideoNote)
         ? const EdgeInsets.fromLTRB(2, 2, 2, 0)
@@ -17502,39 +17516,41 @@ class _Bubble extends StatelessWidget {
         );
       }
     } else if (message.content.isNotEmpty && message.type != 'voice') {
-      final previewUrl = message.disableWebpagePreview
-          ? null
-          : extractFirstHttpUrl(message.content);
+      final previewUrl = reelShareUrl;
+      final reelId = reelShareId;
+      final visibleText = isReelShare ? reelCaption : message.content;
       final hasLinkPreview = previewUrl != null;
       final textStyle = TextStyle(color: fg, height: 1.22, fontSize: 15.5);
-      final textChild = HighlightedText(
-        text: message.content,
-        query: highlightQuery,
-        style: textStyle,
-        trailingReserveWidth: hasLinkPreview ? null : _metaReserveWidth(mine),
-        highlightMentions: true,
-        parseMarkup: true,
-        onMentionTap: onMentionTap,
-        mentionLabels: mentionLabels,
-        onUrlTap: (url) => unawaited(openAppOrExternalLink(context, url)),
-      );
+      final textChild = visibleText.isEmpty
+          ? null
+          : HighlightedText(
+              text: visibleText,
+              query: highlightQuery,
+              style: textStyle,
+              trailingReserveWidth:
+                  hasLinkPreview ? null : _metaReserveWidth(mine),
+              highlightMentions: true,
+              parseMarkup: true,
+              onMentionTap: onMentionTap,
+              mentionLabels: mentionLabels,
+              onUrlTap: (url) => unawaited(openAppOrExternalLink(context, url)),
+            );
       if (hasLinkPreview) {
         mainContent = _withBottomMeta(
           fg: fg,
           mine: mine,
+          onMedia: reelId != null && visibleText.isEmpty,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              textChild,
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: ChatLinkPreview(
-                  url: previewUrl,
-                  foregroundColor: fg,
-                  accentColor: scheme.primary,
-                  backgroundColor: quoteBg,
-                ),
+              if (textChild != null) textChild,
+              ChatLinkPreview(
+                url: previewUrl,
+                foregroundColor: fg,
+                accentColor: scheme.primary,
+                backgroundColor: quoteBg,
+                mine: mine,
               ),
             ],
           ),
@@ -17544,7 +17560,7 @@ class _Bubble extends StatelessWidget {
           fg: fg,
           mine: mine,
           inlineMeta: true,
-          child: textChild,
+          child: textChild ?? const SizedBox.shrink(),
         );
       }
     } else {

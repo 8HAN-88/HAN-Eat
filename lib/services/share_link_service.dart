@@ -58,4 +58,22 @@ class ShareLinkService {
     final title = (reel.title ?? reel.description ?? 'Рилс').trim();
     return '$title\n\nОткрыть в HanWe: ${reelLink(reel.id)}';
   }
+
+  /// Текст поверх карточки рилса: убираем шаблон шаринга и сам URL.
+  static String visibleCaptionForReelShare(String text) {
+    var t = text;
+    t = t.replaceAll(
+      RegExp(r'Открыть в HanWe:\s*https?://\S+', caseSensitive: false),
+      '',
+    );
+    t = t.replaceAll(
+      RegExp(
+        r'https?://(?:www\.)?haneat\.app(?:/app)?/reel/\d+\S*',
+        caseSensitive: false,
+      ),
+      '',
+    );
+    t = t.replaceAll(RegExp(r'haneat://reel/\d+', caseSensitive: false), '');
+    return t.replaceAll(RegExp(r'[ \t]+\n'), '\n').replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
+  }
 }
