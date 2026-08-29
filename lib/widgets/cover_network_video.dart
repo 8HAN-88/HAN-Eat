@@ -1,8 +1,23 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
-/// Полноэкранное cover-видео. На iOS — rebuild по кадрам; на web/Android — меньше нагрузки на UI.
+/// Cover-виджет не должен setState на каждый position-tick плеера.
+bool shouldRebuildCoverVideo({
+  required bool wasInitialized,
+  required bool isInitialized,
+  required double oldWidth,
+  required double oldHeight,
+  required double newWidth,
+  required double newHeight,
+  required bool hadError,
+  required bool hasError,
+}) {
+  if (wasInitialized != isInitialized) return true;
+  if (hadError != hasError) return true;
+  return oldWidth != newWidth || oldHeight != newHeight;
+}
+
+/// Полноэкранное cover-видео. Rebuild только при init/ошибке/размере — не на каждый кадр.
 class CoverNetworkVideo extends StatefulWidget {
   const CoverNetworkVideo({super.key, required this.controller});
 
@@ -13,79 +28,90 @@ class CoverNetworkVideo extends StatefulWidget {
 }
 
 class _CoverNetworkVideoState extends State<CoverNetworkVideo> {
-  bool get _needsPerFrameRebuild =>
-      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+  late bool _initialized;
+  late bool _hasError;
+  late Size _size;
 
   @override
   void initState() {
     super.initState();
-    if (!_needsPerFrameRebuild) {
-      widget.controller.addListener(_onControllerUpdate);
-    }
+    _syncFromController(widget.controller);
+    widget.controller.addListener(_onControllerUpdate);
   }
 
   @override
   void didUpdateWidget(CoverNetworkVideo oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!_needsPerFrameRebuild && oldWidget.controller != widget.controller) {
+    if (oldWidget.controller != widget.controller) {
       oldWidget.controller.removeListener(_onControllerUpdate);
+      _syncFromController(widget.controller);
       widget.controller.addListener(_onControllerUpdate);
     }
   }
 
   @override
   void dispose() {
-    if (!_needsPerFrameRebuild) {
-      widget.controller.removeListener(_onControllerUpdate);
-    }
+    widget.controller.removeListener(_onControllerUpdate);
     super.dispose();
+  }
+
+  void _syncFromController(VideoPlayerController controller) {
+    final v = controller.value;
+    _initialized = v.isInitialized;
+    _hasError = v.hasError;
+    _size = v.size;
   }
 
   void _onControllerUpdate() {
     if (!mounted) return;
-    if (widget.controller.value.isInitialized) {
-      setState(() {});
+    final v = widget.controller.value;
+    if (!shouldRebuildCoverVideo(
+      wasInitialized: _initialized,
+      isInitialized: v.isInitialized,
+      oldWidth: _size.width,
+      oldHeight: _size.height,
+      newWidth: v.size.width,
+      newHeight: v.size.height,
+      hadError: _hasError,
+      hasError: v.hasError,
+    )) {
+      return;
     }
+    setState(() => _syncFromController(widget.controller));
   }
 
   @override
   Widget build(BuildContext context) {
-    final controller = widget.controller;
-    if (!controller.value.isInitialized) {
+    if (!_initialized) {
       return const Center(
         child: CircularProgressIndicator(color: Colors.white),
       );
     }
-    if (controller.value.hasError) {
+    if (_hasError) {
       return const Center(
         child: Icon(Icons.videocam_off_outlined,
             color: Colors.white70, size: 48),
       );
     }
 
-    final size = controller.value.size;
-    if (size.width <= 0 || size.height <= 0) {
+    if (_size.width <= 0 || _size.height <= 0) {
       return const Center(
         child: CircularProgressIndicator(color: Colors.white),
       );
     }
 
-    final video = RepaintBoundary(
-      child: FittedBox(
-        fit: BoxFit.cover,
-        child: SizedBox(
-          width: size.width,
-          height: size.height,
-          child: VideoPlayer(controller),
-        ),
-      ),
-    );
-
     return ColoredBox(
       color: Colors.black,
-      child: _needsPerFrameRebuild
-          ? ListenableBuilder(listenable: controller, builder: (_, __) => video)
-          : video,
+      child: RepaintBoundary(
+        child: FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            width: _size.width,
+            height: _size.height,
+            child: VideoPlayer(widget.controller),
+          ),
+        ),
+      ),
     );
   }
 }

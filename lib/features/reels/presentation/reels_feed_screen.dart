@@ -35,6 +35,7 @@ import '../../../app/app_router.dart';
 import '../../../utils/post_publisher_display.dart';
 import '../../navigation/application/root_shell_chrome.dart';
 import '../application/reels_feed_refresh_provider.dart';
+import '../application/reels_swipe_policy.dart';
 import '../application/reels_video_preload.dart';
 import '../../settings/application/video_playback_controller.dart';
 
@@ -89,6 +90,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
 
   bool _followingOnly = false;
   StreamSubscription<UserRealtimeEvent>? _realtimeSub;
+  final Set<int> _videoInitInFlight = {};
 
   String get _cacheVariant =>
       _followingOnly ? 'rec_reels_following' : 'rec_reels';
@@ -132,70 +134,76 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
     if (!mounted || !_canPlayVideos) return;
     if (_videoControllers.containsKey(i)) return;
     if (i < 0 || i >= _reels.length) return;
+    if (!_videoInitInFlight.add(i)) return;
 
-    final reel = _reels[i];
-    final sources = reel.reelVideoSources;
-    if (sources.isEmpty) {
-      if (mounted) setState(() => _videoInitFailed[i] = true);
-      return;
-    }
     try {
-      final qualityPref = ref.read(videoPlaybackProvider);
-      final playback = await VideoPlayerHelper.createReelPlayback(
-        sources: sources,
-        qualityPref: qualityPref,
-        autoPlay: false,
-        muted: _sessionMuted,
-      );
-
-      if (!mounted) {
-        playback.controller.dispose();
+      final reel = _reels[i];
+      final sources = reel.reelVideoSources;
+      if (sources.isEmpty) {
+        if (mounted) setState(() => _videoInitFailed[i] = true);
         return;
       }
-
-      setState(() {
-        _videoControllers[i] = playback.controller;
-        _videoInitFailed.remove(i);
-      });
-
-      if (i == _currentIndex) {
-        _prefetchAdjacentReelFiles(i);
-        _scheduleNeighborControllers(i);
-      }
-      if (_shouldPlayReelAt(i)) {
-        _playReelAt(i);
-      } else {
-        unawaited(playback.controller.pause());
-      }
-
-      final upgradeUrl = playback.upgradeUrl;
-      if (upgradeUrl != null) {
-        final controllerRef = playback.controller;
-        VideoPlayerHelper.scheduleQualityUpgrade(
-          current: controllerRef,
-          upgradeUrl: upgradeUrl,
-          shouldAutoPlay: () => _shouldPlayReelAt(i),
-          onUpgraded: (upgraded) {
-            if (!mounted) {
-              return false;
-            }
-            if (_videoControllers[i] != controllerRef) {
-              return false;
-            }
-            setState(() => _videoControllers[i] = upgraded);
-            if (!_shouldPlayReelAt(i)) {
-              unawaited(upgraded.pause());
-            }
-            return true;
-          },
+      try {
+        final qualityPref = ref.read(videoPlaybackProvider);
+        final playback = await VideoPlayerHelper.createReelPlayback(
+          sources: sources,
+          qualityPref: qualityPref,
+          autoPlay: false,
+          muted: _sessionMuted,
         );
+
+        if (!mounted) {
+          playback.controller.dispose();
+          return;
+        }
+
+        setState(() {
+          _videoControllers[i] = playback.controller;
+          _videoInitFailed.remove(i);
+        });
+
+        if (i == _currentIndex) {
+          _prefetchAdjacentReelFiles(i);
+          _scheduleNeighborControllers(i);
+        }
+        if (_shouldPlayReelAt(i)) {
+          _playReelAt(i);
+        } else {
+          unawaited(playback.controller.pause());
+        }
+
+        final upgradeUrl = playback.upgradeUrl;
+        if (upgradeUrl != null &&
+            !ReelsSwipePolicy.skipQualityUpgrade(isWeb: kIsWeb)) {
+          final controllerRef = playback.controller;
+          VideoPlayerHelper.scheduleQualityUpgrade(
+            current: controllerRef,
+            upgradeUrl: upgradeUrl,
+            shouldAutoPlay: () => _shouldPlayReelAt(i),
+            onUpgraded: (upgraded) {
+              if (!mounted) {
+                return false;
+              }
+              if (_videoControllers[i] != controllerRef) {
+                return false;
+              }
+              setState(() => _videoControllers[i] = upgraded);
+              if (!_shouldPlayReelAt(i)) {
+                unawaited(upgraded.pause());
+              }
+              return true;
+            },
+          );
+        }
+      } catch (e) {
+        final startUrl = sources.fastStartUrl(ref.read(videoPlaybackProvider));
+        debugPrint('Ошибка инициализации видео $i ($startUrl): $e');
+        if (mounted) {
+          setState(() => _videoInitFailed[i] = true);
+        }
       }
-    } catch (e) {
-      final startUrl = sources.fastStartUrl(ref.read(videoPlaybackProvider));
-      debugPrint('Ошибка инициализации видео $i ($startUrl): $e');
-      if (mounted) {
-        setState(() => _videoInitFailed[i] = true);
-      }
+    } finally {
+      _videoInitInFlight.remove(i);
     }
   }
 
@@ -248,9 +256,18 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
       );
     }
 
-    schedule(index + 1, const Duration(milliseconds: 180));
-    schedule(index - 1, const Duration(milliseconds: 420));
-    schedule(index + 2, const Duration(milliseconds: 760));
+    schedule(
+      index + 1,
+      ReelsSwipePolicy.neighborInitDelay(offsetFromCurrent: 1, isWeb: kIsWeb),
+    );
+    schedule(
+      index - 1,
+      ReelsSwipePolicy.neighborInitDelay(offsetFromCurrent: -1, isWeb: kIsWeb),
+    );
+    schedule(
+      index + 2,
+      ReelsSwipePolicy.neighborInitDelay(offsetFromCurrent: 2, isWeb: kIsWeb),
+    );
   }
 
   void _retainMatchingControllerOnRefresh(List<PostModel> nextReels) {
@@ -281,6 +298,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _pageController.addListener(_onPageScroll);
     _followingOnly = widget.externalFollowingOnly;
     final cached = FeedApiCache.peek(_cacheVariant);
     if (cached.isNotEmpty) {
@@ -366,6 +384,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
     _realtimeSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _finishCurrentReelExposure();
+    _pageController.removeListener(_onPageScroll);
     _pageController.dispose();
     _disposeAllControllers();
     super.dispose();
@@ -587,19 +606,26 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
     }
   }
 
+  void _onPageScroll() {
+    if (!_pageController.hasClients) return;
+    final page = _pageController.page;
+    if (page == null) return;
+    final drifting = page - _currentIndex;
+    if (drifting.abs() < 0.12) return;
+    final neighbor = drifting > 0 ? _currentIndex + 1 : _currentIndex - 1;
+    if (neighbor < 0 || neighbor >= _reels.length) return;
+    if (_videoControllers.containsKey(neighbor)) return;
+    unawaited(_initSingleVideo(neighbor));
+  }
+
   void _onPageChanged(int index) {
+    if (index == _currentIndex) return;
     _finishCurrentReelExposure();
 
-    // Останавливаем предыдущее видео
     _videoControllers[_currentIndex]?.pause();
-    setState(() {
-      _isPaused[_currentIndex] = true;
-    });
-
-    setState(() {
-      _currentIndex = index;
-      _isPaused[index] = false;
-    });
+    _isPaused[_currentIndex] = false;
+    _isPaused[index] = false;
+    setState(() => _currentIndex = index);
     _startReelExposure(index);
 
     if (_videoControllers.containsKey(index)) {
@@ -612,7 +638,6 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
       );
     }
 
-    // Загружаем больше, если приближаемся к концу
     if (index >= _reels.length - 3 && _hasMore && !_isLoading) {
       _loadReels();
     }
@@ -621,7 +646,12 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
     if (_lookaheadVideoPreloadCount > 0) {
       _scheduleNeighborControllers(index);
     }
-    _trimVideoControllers();
+    unawaited(
+      Future<void>.delayed(ReelsSwipePolicy.disposeAfterSettle, () {
+        if (!mounted || _currentIndex != index) return;
+        _trimVideoControllers();
+      }),
+    );
   }
 
   void _setSessionMuted(bool muted) {
@@ -758,6 +788,8 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
         PageView.builder(
           controller: _pageController,
           scrollDirection: Axis.vertical,
+          allowImplicitScrolling: true,
+          padEnds: false,
           itemCount: _reels.length + (_hasMore ? 1 : 0),
           onPageChanged: _onPageChanged,
           itemBuilder: (context, index) {
@@ -769,7 +801,9 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
             }
 
             final reel = _reels[index];
-            return ReelCard(
+            return RepaintBoundary(
+              key: ValueKey<int>(reel.id),
+              child: ReelCard(
               reel: reel,
               index: index,
               videoController: _videoControllers[index],
@@ -823,6 +857,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
               },
               onReport: () => reportPostWithDialog(context, reel.id),
               onQualityChanged: () => _reloadReelVideo(index),
+              ),
             );
           },
         ),
@@ -861,10 +896,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 430),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: pageBody,
-                ),
+                child: pageBody,
               ),
             ),
           )

@@ -23,6 +23,7 @@ import '../../../widgets/report_content_dialog.dart';
 import '../../../app/app_router.dart';
 import '../../../utils/post_publisher_display.dart';
 import '../../navigation/application/root_shell_chrome.dart';
+import '../application/reels_swipe_policy.dart';
 import '../application/reels_video_preload.dart';
 import '../../settings/application/video_playback_controller.dart';
 import 'reels_feed_screen.dart';
@@ -56,6 +57,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
   bool _sessionMuted = kIsWeb;
   bool _appVisible = true;
   bool _openingComments = false;
+  final Set<int> _videoInitInFlight = {};
 
   static const Duration _likeTouchGrace = Duration(seconds: 20);
 
@@ -98,6 +100,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
     WidgetsBinding.instance.addObserver(this);
     hideShellBottomNavForFullscreenReels();
     _pageController = PageController(initialPage: 0);
+    _pageController.addListener(_onPageScroll);
     _reels = [widget.initialPost];
     unawaited(_loadMoreReels());
     unawaited(_initializeVideos(0, 1, priorityIndex: 0));
@@ -125,6 +128,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
     WidgetsBinding.instance.removeObserver(this);
     clearRootShellBottomNavHide();
     _finishCurrentReelExposure();
+    _pageController.removeListener(_onPageScroll);
     _pageController.dispose();
     _disposeAllControllers();
     super.dispose();
@@ -216,63 +220,69 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
     if (!mounted || !_canPlayVideos) return;
     if (_videoControllers.containsKey(i)) return;
     if (i < 0 || i >= _reels.length) return;
-
-    final reel = _reels[i];
-    final sources = reel.reelVideoSources;
-    if (sources.isEmpty) {
-      if (mounted) setState(() => _videoInitFailed[i] = true);
-      return;
-    }
+    if (!_videoInitInFlight.add(i)) return;
 
     try {
-      final qualityPref = ref.read(videoPlaybackProvider);
-      final playback = await VideoPlayerHelper.createReelPlayback(
-        sources: sources,
-        qualityPref: qualityPref,
-        autoPlay: false,
-        muted: _sessionMuted,
-      );
-
-      if (!mounted) {
-        playback.controller.dispose();
+      final reel = _reels[i];
+      final sources = reel.reelVideoSources;
+      if (sources.isEmpty) {
+        if (mounted) setState(() => _videoInitFailed[i] = true);
         return;
       }
 
-      setState(() {
-        _videoControllers[i] = playback.controller;
-        _videoInitFailed.remove(i);
-      });
-      if (_shouldPlayReelAt(i)) {
-        _playReelAt(i);
-      } else {
-        unawaited(playback.controller.pause());
-      }
-
-      final upgradeUrl = playback.upgradeUrl;
-      if (upgradeUrl != null) {
-        final controllerRef = playback.controller;
-        VideoPlayerHelper.scheduleQualityUpgrade(
-          current: controllerRef,
-          upgradeUrl: upgradeUrl,
-          shouldAutoPlay: () => _shouldPlayReelAt(i),
-          onUpgraded: (upgraded) {
-            if (!mounted) {
-              return false;
-            }
-            if (_videoControllers[i] != controllerRef) {
-              return false;
-            }
-            setState(() => _videoControllers[i] = upgraded);
-            if (!_shouldPlayReelAt(i)) {
-              unawaited(upgraded.pause());
-            }
-            return true;
-          },
+      try {
+        final qualityPref = ref.read(videoPlaybackProvider);
+        final playback = await VideoPlayerHelper.createReelPlayback(
+          sources: sources,
+          qualityPref: qualityPref,
+          autoPlay: false,
+          muted: _sessionMuted,
         );
+
+        if (!mounted) {
+          playback.controller.dispose();
+          return;
+        }
+
+        setState(() {
+          _videoControllers[i] = playback.controller;
+          _videoInitFailed.remove(i);
+        });
+        if (_shouldPlayReelAt(i)) {
+          _playReelAt(i);
+        } else {
+          unawaited(playback.controller.pause());
+        }
+
+        final upgradeUrl = playback.upgradeUrl;
+        if (upgradeUrl != null &&
+            !ReelsSwipePolicy.skipQualityUpgrade(isWeb: kIsWeb)) {
+          final controllerRef = playback.controller;
+          VideoPlayerHelper.scheduleQualityUpgrade(
+            current: controllerRef,
+            upgradeUrl: upgradeUrl,
+            shouldAutoPlay: () => _shouldPlayReelAt(i),
+            onUpgraded: (upgraded) {
+              if (!mounted) {
+                return false;
+              }
+              if (_videoControllers[i] != controllerRef) {
+                return false;
+              }
+              setState(() => _videoControllers[i] = upgraded);
+              if (!_shouldPlayReelAt(i)) {
+                unawaited(upgraded.pause());
+              }
+              return true;
+            },
+          );
+        }
+      } catch (e) {
+        debugPrint('ReelsFullscreen init video $i: $e');
+        if (mounted) setState(() => _videoInitFailed[i] = true);
       }
-    } catch (e) {
-      debugPrint('ReelsFullscreen init video $i: $e');
-      if (mounted) setState(() => _videoInitFailed[i] = true);
+    } finally {
+      _videoInitInFlight.remove(i);
     }
   }
 
@@ -316,16 +326,26 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
     }
   }
 
+  void _onPageScroll() {
+    if (!_pageController.hasClients) return;
+    final page = _pageController.page;
+    if (page == null) return;
+    final drifting = page - _currentIndex;
+    if (drifting.abs() < 0.12) return;
+    final neighbor = drifting > 0 ? _currentIndex + 1 : _currentIndex - 1;
+    if (neighbor < 0 || neighbor >= _reels.length) return;
+    if (_videoControllers.containsKey(neighbor)) return;
+    unawaited(_initSingleVideo(neighbor));
+  }
+
   void _onPageChanged(int index) {
+    if (index == _currentIndex) return;
     _finishCurrentReelExposure();
 
     _videoControllers[_currentIndex]?.pause();
-    setState(() => _isPaused[_currentIndex] = true);
-
-    setState(() {
-      _currentIndex = index;
-      _isPaused[index] = false;
-    });
+    _isPaused[_currentIndex] = false;
+    _isPaused[index] = false;
+    setState(() => _currentIndex = index);
     _startReelExposure(index);
 
     if (_videoControllers.containsKey(index)) {
@@ -345,7 +365,12 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
       unawaited(_initializeVideos(index + 1, 2, priorityIndex: index + 1));
     }
     _prefetchAdjacentReelFiles(index);
-    _trimVideoControllers();
+    unawaited(
+      Future<void>.delayed(ReelsSwipePolicy.disposeAfterSettle, () {
+        if (!mounted || _currentIndex != index) return;
+        _trimVideoControllers();
+      }),
+    );
   }
 
   void _setSessionMuted(bool muted) {
@@ -617,6 +642,8 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
           PageView.builder(
             controller: _pageController,
             scrollDirection: Axis.vertical,
+            allowImplicitScrolling: true,
+            padEnds: false,
             itemCount: _reels.length + (_hasMore ? 1 : 0),
             onPageChanged: _onPageChanged,
             itemBuilder: (context, index) {
@@ -627,7 +654,9 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
               }
 
               final reel = _reels[index];
-              return ReelCard(
+              return RepaintBoundary(
+                key: ValueKey<int>(reel.id),
+                child: ReelCard(
                 reel: reel,
                 index: index,
                 videoController: _videoControllers[index],
@@ -677,6 +706,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
                 },
                 onReport: () => reportPostWithDialog(context, reel.id),
                 onQualityChanged: () => _reloadReelVideo(index),
+                ),
               );
             },
           ),
