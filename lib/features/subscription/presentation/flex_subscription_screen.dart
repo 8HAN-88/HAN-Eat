@@ -8,7 +8,6 @@ import '../../../widgets/app_gradient_background.dart';
 import '../application/flex_boundary_bands.dart';
 import '../application/flex_level_features.dart';
 import '../application/flex_purchase_ladder.dart';
-import '../subscription_copy.dart';
 import 'flex_preview_sheet.dart';
 
 class FlexSubscriptionScreen extends StatefulWidget {
@@ -126,7 +125,7 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
                         _HeroCard(me: me!),
                         const SizedBox(height: 12),
                         Text(
-                          'Одна подписка. Пакеты HanWe AI / Creator / Pro — те же возможности, что раньше. Ниже — все 10 уровней с полным списком функций.',
+                          'Одна подписка. Выберите уровень — внутри границы можно переставить возможности.',
                           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                 color: Theme.of(context)
                                     .colorScheme
@@ -134,53 +133,6 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
                               ),
                         ),
                         const SizedBox(height: 18),
-                        Text(
-                          'Пакеты',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w800,
-                              ),
-                        ),
-                        const SizedBox(height: 8),
-                        for (final product in const ['ai', 'creator', 'pro'])
-                          _ClassicPackTile(
-                            product: product,
-                            level: FlexPurchaseLadder.levelForClassicProduct(
-                              product,
-                            ),
-                            current: me.active &&
-                                me.currentLevel ==
-                                    FlexPurchaseLadder.levelForClassicProduct(
-                                      product,
-                                    ),
-                            busy: _busy,
-                            onBuy: () => _buyLevel(
-                              FlexPurchaseLadder.levelForClassicProduct(
-                                product,
-                              ),
-                            ),
-                            onOpen: () {
-                              final level =
-                                  FlexPurchaseLadder.levelForClassicProduct(
-                                product,
-                              );
-                              final ctx = _keyFor(level).currentContext;
-                              if (ctx != null) {
-                                Scrollable.ensureVisible(
-                                  ctx,
-                                  duration: const Duration(milliseconds: 280),
-                                  alignment: 0.15,
-                                );
-                              }
-                            },
-                          ),
-                        const SizedBox(height: 10),
-                        Text(
-                          'Все уровни',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w800,
-                              ),
-                        ),
-                        const SizedBox(height: 8),
                         for (final band in flexBoundaryBands(
                           blocks: me.blocks,
                           maxLevel: me.maxLevel,
@@ -268,82 +220,6 @@ class _HeroCard extends StatelessWidget {
   }
 }
 
-class _ClassicPackTile extends StatelessWidget {
-  const _ClassicPackTile({
-    required this.product,
-    required this.level,
-    required this.current,
-    required this.busy,
-    required this.onBuy,
-    required this.onOpen,
-  });
-
-  final String product;
-  final int level;
-  final bool current;
-  final bool busy;
-  final VoidCallback onBuy;
-  final VoidCallback onOpen;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final price = FlexPurchaseLadder.priceRub(level);
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: InkWell(
-        onTap: onOpen,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(SubscriptionCopy.tierIcon(product)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      SubscriptionCopy.tierTitle(product),
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                  ),
-                  Text(
-                    '$price ₽/мес',
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '${SubscriptionCopy.tierSubtitle(product)} · уровень $level',
-                style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13),
-              ),
-              const SizedBox(height: 8),
-              for (final line in SubscriptionCopy.tierBenefits(product))
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Text('• $line'),
-                ),
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerRight,
-                child: current
-                    ? Text('Ваш пакет', style: TextStyle(color: scheme.primary))
-                    : FilledButton(
-                        onPressed: busy ? null : onBuy,
-                        child: const Text('Оформить'),
-                      ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _BandTitle extends StatelessWidget {
   const _BandTitle({required this.band});
   final FlexBoundaryBand band;
@@ -386,7 +262,6 @@ class _LevelBuyTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final previous = unlocked.length - atLevel.length;
-    final pack = FlexPurchaseLadder.classicProductAtLevel(level);
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       color: current
@@ -403,9 +278,7 @@ class _LevelBuyTile extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    pack == null
-                        ? 'Уровень $level · $price ₽/мес'
-                        : 'Уровень $level · ${SubscriptionCopy.tierTitle(pack)} · $price ₽/мес',
+                    'Уровень $level · $price ₽/мес',
                     style: const TextStyle(fontWeight: FontWeight.w800),
                   ),
                 ),
