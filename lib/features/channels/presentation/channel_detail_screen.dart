@@ -222,7 +222,10 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
       channelId: widget.channelId,
       channelName: _channel?.name,
     );
-    if (!mounted || !created) return;
+    if (!mounted || created == null || created == false) return;
+    if (created is PostModel) {
+      _postsListKey.currentState?.addPost(created);
+    }
     _postsListKey.currentState?.refreshPosts();
   }
 
@@ -831,6 +834,7 @@ class ChannelPostsListState extends State<ChannelPostsList> {
       offset:
           0, // При первой загрузке всегда offset=0 (бэкенд вернет последние посты)
       postType: widget.postType,
+      fresh: refresh,
     ).timeout(
       const Duration(seconds: 10),
       onTimeout: () {

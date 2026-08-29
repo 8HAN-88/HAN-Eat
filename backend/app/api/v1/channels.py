@@ -34,6 +34,7 @@ from app.services.channel_membership_service import (
     normalize_role_permissions,
     sync_channel_members_count,
 )
+from app.services.channel_posts_cache import invalidate_channel_posts_cache
 from app.services.search_normalization import escaped_like_pattern, search_terms, stable_search_key
 from app.schemas.channel import (
     CreateChannelRequest,
@@ -1166,6 +1167,7 @@ async def get_channel_posts(
     channel_id: int,
     post_type: Optional[str] = Query(None, description="Filter by post type: text, photo, recipe, reel"),
     search: Optional[str] = Query(None, description="Search by title, description, tags and recipe text"),
+    fresh: bool = Query(False, description="Skip Redis first-page cache after a write"),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
@@ -1183,7 +1185,7 @@ async def get_channel_posts(
         cache_key += f":user_{current_user.id}"
     
     # Проверяем кэш (только для offset=0, чтобы не кэшировать все страницы)
-    if offset == 0:
+    if offset == 0 and not fresh:
         try:
             cached = redis_client.get(cache_key)
             if cached:
@@ -1514,6 +1516,7 @@ async def create_channel_post(
 
     db.commit()
     db.refresh(post)
+    invalidate_channel_posts_cache(channel_id)
 
     try:
         from app.services.user_stats_cache import invalidate_user_stats_cache
@@ -1643,6 +1646,7 @@ async def update_channel_post(
     
     db.commit()
     db.refresh(post)
+    invalidate_channel_posts_cache(channel_id)
 
     # Инвалидируем кэш ленты
     if post.status == "published":
@@ -1714,6 +1718,7 @@ async def delete_channel_post(
         channel.posts_count -= 1
     
     db.commit()
+    invalidate_channel_posts_cache(channel_id)
     
     # Инвалидируем кэш ленты
     try:

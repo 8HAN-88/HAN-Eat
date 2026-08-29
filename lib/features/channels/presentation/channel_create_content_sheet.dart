@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
+import '../../../models/post_model.dart';
 import '../../../widgets/telegram_ui.dart';
 import '../../content/create_content_actions.dart';
 
 /// Меню создания контента внутри канала (пост, рилс).
 ///
-/// Возвращает `true`, если рилс был создан.
-Future<bool> showChannelCreateContentSheet(
+/// `true` / [PostModel] если контент создан.
+Future<Object?> showChannelCreateContentSheet(
   BuildContext context, {
   required int channelId,
   String? channelName,
@@ -45,7 +46,7 @@ Future<bool> showChannelCreateContentSheet(
       channelId: channelId,
       channelName: channelName,
     );
-    return created == true;
+    return created == true ? true : null;
   }
 
   final result = await context.push(
@@ -55,5 +56,7 @@ Future<bool> showChannelCreateContentSheet(
       type: choice!,
     ),
   );
-  return result == true || result != null;
+  if (result is PostModel) return result;
+  if (result == true) return true;
+  return null;
 }

@@ -311,6 +311,12 @@ async def create_post(
 
     if channel_obj is not None:
         try:
+            from app.services.channel_posts_cache import invalidate_channel_posts_cache
+
+            invalidate_channel_posts_cache(channel_obj.id)
+        except Exception:
+            pass
+        try:
             from app.services.user_stats_cache import invalidate_user_stats_cache
 
             invalidate_user_stats_cache([current_user.id])
