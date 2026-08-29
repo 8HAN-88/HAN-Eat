@@ -7,7 +7,7 @@ final feedScrollChromeHidden = ValueNotifier<bool>(false);
 /// Компактная нижняя панель [RootShell] при прокрутке вниз (как в Instagram).
 final shellNavCompact = ValueNotifier<bool>(false);
 
-/// Активно на домашней ленте (не на рилсах).
+/// Активно только на вкладках «Подписки» / «Рекомендации» (не на рилсах).
 final feedScrollChromeActive = ValueNotifier<bool>(true);
 
 const Duration kFeedScrollChromeDuration = Duration(milliseconds: 260);

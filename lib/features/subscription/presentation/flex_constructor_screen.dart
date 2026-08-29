@@ -4,6 +4,7 @@ import '../../../services/flex_subscription_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../application/flex_boundary_bands.dart';
+import '../application/flex_purchase_ladder.dart';
 
 class FlexConstructorScreen extends StatefulWidget {
   const FlexConstructorScreen({super.key});
@@ -225,7 +226,7 @@ class _LevelDropZone extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final price = 39 + (level - 1) * 10;
+    final price = FlexPurchaseLadder.priceRub(level);
     return DragTarget<FlexFeature>(
       onWillAcceptWithDetails: (details) => onWillAccept(details.data),
       onLeave: (_) => onLeave(),
