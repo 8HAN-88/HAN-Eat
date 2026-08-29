@@ -31,22 +31,31 @@ import 'bootstrap_light.dart';
 export 'bootstrap_light.dart';
 
 /// Минимум в фоне: сессия из кэша (без Firebase — он в deferred).
-///
-/// On web, only auth — cache warm-up waits until after first paint / full app.
+Future<void> _warmMessengerCaches() {
+  return Future.wait<void>([
+    FeedApiCache.warmUp().catchError((Object e) {
+      debugPrint('FeedApiCache warmUp: $e');
+    }),
+    ChatCacheService.warmUp().catchError((Object e) {
+      debugPrint('ChatCacheService warmUp: $e');
+    }),
+    if (kIsWeb)
+      FeedSyncService.init().catchError((Object e) {
+        debugPrint('FeedSyncService init (web): $e');
+      }),
+  ]);
+}
+
+/// Минимум в фоне: сессия из кэша (без Firebase — он в deferred).
 Future<void> bootstrapServicesForFirstFrame() async {
   await bootstrapAuthForFirstFrame();
+  unawaited(_warmMessengerCaches());
   if (kIsWeb) return;
 
   unawaited(
     Future.wait<void>([
       FeedCacheService.init().catchError((Object e) {
         debugPrint('FeedCacheService early init: $e');
-      }),
-      FeedApiCache.warmUp().catchError((Object e) {
-        debugPrint('FeedApiCache warmUp: $e');
-      }),
-      ChatCacheService.warmUp().catchError((Object e) {
-        debugPrint('ChatCacheService warmUp: $e');
       }),
       ProfileCacheService.warmUp(AuthService.instance.currentUser?.id)
           .catchError((Object e) {
@@ -151,6 +160,22 @@ Future<void> bootstrapServicesDeferred() async {
         debugPrint('Date formatting init error: $e');
       }
     }());
+
+    // SharedPreferences only — needed so chats/feed paint from last session
+    // on slow 3G instead of empty spinners.
+    unawaited(
+      Future.wait<void>([
+        FeedApiCache.warmUp().catchError((Object e) {
+          debugPrint('FeedApiCache warmUp (web): $e');
+        }),
+        ChatCacheService.warmUp().catchError((Object e) {
+          debugPrint('ChatCacheService warmUp (web): $e');
+        }),
+        FeedSyncService.init().catchError((Object e) {
+          debugPrint('FeedSyncService init (web): $e');
+        }),
+      ]),
+    );
 
     // Web launch path must stay extremely light, especially on Safari/iPhone.
     // Delay all heavyweight local caches, realtime, and sync services until the

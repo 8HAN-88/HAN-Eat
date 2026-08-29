@@ -739,6 +739,13 @@ class ChannelPostsListState extends State<ChannelPostsList> {
         _scrollController.jumpTo(0);
       }
     });
+    unawaited(
+      ChannelCacheService.saveCachedPosts(
+        channelId: widget.channelId,
+        posts: List<PostModel>.from(_posts),
+        postType: widget.postType,
+      ),
+    );
   }
 
   @override
@@ -791,27 +798,46 @@ class ChannelPostsListState extends State<ChannelPostsList> {
       return;
     }
 
-    final keepExisting = refresh && _posts.isNotEmpty;
-    _requestInFlight = true;
-    setState(() {
-      _isLoading = !keepExisting;
-      _isLoadingMore = false;
-      if (refresh) {
-        _offset = 0;
-        _hasMoreOld = true;
-        _postsLoadError = null;
+    if (_posts.isEmpty) {
+      final cached = await ChannelCacheService.loadCachedPosts(
+        channelId: widget.channelId,
+        postType: widget.postType,
+      );
+      if (cached != null && cached.isNotEmpty && mounted) {
+        setState(() {
+          _posts = cached;
+          _isLoading = false;
+          _postsLoadError = null;
+        });
       }
-    });
+    }
+
+    final keepExisting = _posts.isNotEmpty;
+    _requestInFlight = true;
+    if (mounted) {
+      setState(() {
+        _isLoading = !keepExisting;
+        _isLoadingMore = false;
+        if (refresh) {
+          _offset = 0;
+          _hasMoreOld = true;
+          if (!keepExisting) {
+            _postsLoadError = null;
+          }
+        }
+      });
+    }
 
     try {
-      // Загружаем с сервера (кэш пропускаем для правильной логики Telegram)
       await _loadPostsFromServer(refresh: refresh);
     } catch (e) {
       debugPrint('Ошибка загрузки постов: $e');
       if (mounted) {
         setState(() {
           _hasMoreOld = false;
-          _postsLoadError = e;
+          if (_posts.isEmpty) {
+            _postsLoadError = e;
+          }
         });
       }
     } finally {
@@ -834,7 +860,9 @@ class ChannelPostsListState extends State<ChannelPostsList> {
       postType: widget.postType,
       fresh: refresh,
     ).timeout(
-      const Duration(seconds: 10),
+      _posts.isNotEmpty
+          ? const Duration(seconds: 20)
+          : const Duration(seconds: 15),
       onTimeout: () {
         throw Exception('Таймаут загрузки постов');
       },
@@ -862,6 +890,13 @@ class ChannelPostsListState extends State<ChannelPostsList> {
         _hasMoreOld = _posts.length < response.total;
         _postsLoadError = null;
       });
+      unawaited(
+        ChannelCacheService.saveCachedPosts(
+          channelId: widget.channelId,
+          posts: posts,
+          postType: widget.postType,
+        ),
+      );
 
       if (refresh && _posts.isNotEmpty) {
         WidgetsBinding.instance.addPostFrameCallback((_) {

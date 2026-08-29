@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import '../core/network/api_endpoint_resolver.dart';
 import '../core/network/api_rate_limit_backoff.dart';
 import '../core/network/haneat_http_client.dart';
+import '../core/network/weak_net_policy.dart';
 import 'auth_service.dart';
 import 'server_config.dart';
 
@@ -26,9 +27,18 @@ class MediaUploadService {
   }
 
   static Future<void> _waitForRateLimit() async {
+    final started = DateTime.now();
     while (ApiRateLimitBackoff.isActive) {
-      final wait = ApiRateLimitBackoff.remaining ?? const Duration(seconds: 15);
-      await Future<void>.delayed(wait);
+      final elapsed = DateTime.now().difference(started);
+      if (WeakNetPolicy.shouldStopRateLimitWait(elapsed)) break;
+      final remaining =
+          ApiRateLimitBackoff.remaining ?? const Duration(seconds: 2);
+      final slice = WeakNetPolicy.mediaRateLimitDelay(
+        remaining: remaining,
+        elapsed: elapsed,
+      );
+      if (slice <= Duration.zero) break;
+      await Future<void>.delayed(slice);
     }
   }
 

@@ -60,6 +60,17 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
       _channelLoadError = null;
     });
     try {
+      final cached = await ChannelCacheService.loadCachedChannel(
+        widget.channelId,
+      );
+      if (cached != null && mounted) {
+        _tabController?.dispose();
+        _tabController = TabController(length: 2, vsync: this);
+        setState(() {
+          _channel = cached;
+          _isLoading = false;
+        });
+      }
       final channel = await ChannelCacheService.getChannel(
         widget.channelId,
         forceRefresh: true,
