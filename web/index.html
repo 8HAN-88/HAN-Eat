@@ -712,7 +712,14 @@
           maybeHideSplash();
         });
         window.addEventListener('offline', function () {
-          if (!firstFrame) failBoot('offline');
+          // Session + cached chats: keep booting Flutter instead of a dead splash.
+          if (!firstFrame && !hasSession()) {
+            failBoot('offline');
+            return;
+          }
+          if (!firstFrame && sub) {
+            sub.textContent = 'Нет сети — открываем сохранённые данные…';
+          }
         });
 
         // VPN often delays /health — do not block Flutter boot on it.

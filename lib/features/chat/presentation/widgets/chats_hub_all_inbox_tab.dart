@@ -29,6 +29,7 @@ import '../../../navigation/application/shell_tab_visibility.dart';
 import '../../application/chat_inbox_optimistic.dart';
 import '../../application/chat_realtime_signals.dart';
 import '../../application/chat_thread_prefetch.dart';
+import '../../application/inbox_cache_keep.dart';
 import '../../application/chats_hub_refresh_provider.dart';
 import '../../application/join_requests_bulk.dart';
 import '../../widgets/inbox_slidable_tile.dart';
@@ -368,9 +369,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         updatedAt: DateTime.now(),
       );
 
-  void _hydrateFromCache() {
-    final cached = ChatCacheService.peekConversations();
-    if (cached == null || cached.isEmpty) return;
+  void _applyCachedConversations(List<ChatConversation> cached) {
     final cachedSaved = _extractSavedChat(cached);
     final cachedRest = _activeInboxChats(cached, cachedSaved);
     if (cachedSaved != null) _savedChat = cachedSaved;
@@ -380,6 +379,22 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     _servingFromCache = true;
     _loading = false;
     unawaited(_refreshDrafts());
+  }
+
+  void _hydrateFromCache() {
+    final cached = ChatCacheService.peekConversations();
+    if (cached != null && cached.isNotEmpty) {
+      _applyCachedConversations(cached);
+      return;
+    }
+    unawaited(_hydrateFromDisk());
+  }
+
+  Future<void> _hydrateFromDisk() async {
+    final cached = await ChatCacheService.loadConversations();
+    if (!mounted || cached == null || cached.isEmpty) return;
+    if (_entries.isNotEmpty) return;
+    setState(() => _applyCachedConversations(cached));
   }
 
   void _applyPersonalChatStateEvent(UserRealtimeEvent event) {
@@ -1075,6 +1090,17 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
           _chatsPartialError = null;
           _joinInboxPartialError = null;
           _loading = false;
+        });
+        return;
+      }
+      if (keepStaleInboxOnEmptyFetch(
+        hasLocalInbox: _entries.isNotEmpty || _savedChat != null,
+        fetchReturnedItems: false,
+      )) {
+        setState(() {
+          _error = null;
+          _loading = false;
+          _servingFromCache = true;
         });
         return;
       }

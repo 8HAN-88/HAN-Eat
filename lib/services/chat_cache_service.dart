@@ -198,6 +198,14 @@ class ChatCacheService {
 
   static Future<void> warmUp() async {
     _memoryConversations = await _loadConversationsFromDisk();
+    final chats = _memoryConversations;
+    if (chats == null || chats.isEmpty) return;
+    var n = 0;
+    for (final chat in chats) {
+      if (chat.id <= 0) continue;
+      await loadThread(chat.id);
+      if (++n >= 8) break;
+    }
   }
 
   static Future<List<ChatConversation>?> loadConversations() async {
