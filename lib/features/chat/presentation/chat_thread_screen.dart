@@ -46,6 +46,8 @@ import '../../../services/chat_cache_service.dart';
 import '../../../services/chat_media_outbox_service.dart';
 import '../../../services/feed_sync_service.dart';
 import '../../../services/paid_features_service.dart';
+import '../../../services/subscription_status_cache.dart';
+import '../../subscription/application/flex_entitlements.dart';
 import '../../../services/product_analytics.dart';
 import '../../../services/chat_service.dart';
 import '../../../services/chat_stream_service.dart';
@@ -606,8 +608,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   String? _pendingMediaAutoRetryClientMessageId;
   String? _pendingMediaAutoRetryReason;
 
-  static const _quickReactions = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
-  static const _overlayReactions = ['👍', '👌', '❤️', '🔥', '👎', '🥰', '👏'];
+  bool get _exclusiveReactions =>
+      SubscriptionStatusCache.peek()?.hasEntitlement('exclusive_reactions') ??
+      false;
+
+  List<String> get _quickReactions =>
+      flexChatQuickReactions(_exclusiveReactions);
+
+  List<String> get _overlayReactions =>
+      flexChatOverlayReactions(_exclusiveReactions);
   static const _uiAnimDuration = Duration(milliseconds: 160);
   static const _composerIconSize = 20.0;
   static const _composerButtonSide = 40.0;

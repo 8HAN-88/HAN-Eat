@@ -552,6 +552,8 @@ class UserProfile {
       'last_seen_privacy': json['last_seen_privacy'],
       'show_read_receipts': json['show_read_receipts'],
       'created_at': json['created_at'],
+      'premium_badge': json['premium_badge'],
+      'profile_decoration': json['profile_decoration'],
     };
 
     return UserProfile(

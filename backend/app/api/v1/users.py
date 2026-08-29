@@ -363,11 +363,16 @@ async def get_user_profile(
     if not current_user or current_user.id != user_id:
         stats = stats.model_copy(update={"saved_count": 0})
 
+    from app.services.subscription_service import SubscriptionService
+
+    sub = SubscriptionService(db)
     return UserProfileResponse(
         **UserResponse.model_validate(user).model_dump(),
         stats=stats,
         is_following=is_following,
-        is_followed_by=is_followed_by
+        is_followed_by=is_followed_by,
+        premium_badge=sub.has_entitlement(user_id, "premium_badge"),
+        profile_decoration=sub.has_entitlement(user_id, "profile_decoration"),
     )
 
 

@@ -91,11 +91,9 @@ class FeedService:
         dismissed_ids = self._get_recent_dismissed_post_ids(user_id)
 
         from app.services.subscription_service import SubscriptionService
-        from app.core.entitlements import subscription_entitlements
 
-        tier, tier_active = SubscriptionService(self.db).effective_tier(user_id)
-        hide_promoted = tier_active and subscription_entitlements(tier).get(
-            "ad_free", False
+        hide_promoted = SubscriptionService(self.db).has_entitlement(
+            user_id, "ad_free"
         )
 
         # Проверяем кэш (только если нет курсора, т.к. курсор означает новую страницу)

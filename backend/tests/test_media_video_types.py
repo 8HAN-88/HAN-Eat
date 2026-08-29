@@ -40,3 +40,24 @@ def test_generate_presigned_url_accepts_quicktime(mock_s3):
         user_id=42,
     )
     assert result["file_key"].endswith(".mov")
+
+
+@patch.object(MediaService, "_init_s3_client", return_value=None)
+def test_larger_uploads_raise_image_limit(mock_s3):
+    svc = MediaService()
+    too_big = 12 * 1024 * 1024
+    with pytest.raises(ValueError):
+        svc.generate_presigned_url(
+            file_type="image",
+            content_type="image/jpeg",
+            file_size=too_big,
+            user_id=1,
+        )
+    result = svc.generate_presigned_url(
+        file_type="image",
+        content_type="image/jpeg",
+        file_size=too_big,
+        user_id=1,
+        size_multiplier=2.5,
+    )
+    assert result["file_key"].endswith(".jpeg") or result["file_key"].endswith(".jpg")

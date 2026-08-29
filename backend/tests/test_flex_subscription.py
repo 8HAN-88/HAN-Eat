@@ -250,3 +250,38 @@ def test_multiple_features_can_share_a_level(db_session):
     ]
     assert "premium_badge" in at_two
     assert "larger_uploads" in at_two
+
+
+def test_flex_entitlements_follow_unlocked_slugs(db_session):
+    from app.services.subscription_service import SubscriptionService
+
+    _user(db_session)
+    FlexSubscriptionService(db_session).activate(1, 1)
+    db_session.commit()
+    sub = SubscriptionService(db_session)
+    assert sub.has_entitlement(1, "ad_free")
+    assert sub.has_entitlement(1, "premium_badge")
+    assert not sub.has_entitlement(1, "creator_tools")
+    assert not sub.has_pro_access(1)
+    status = sub.get_status_dict(1)
+    assert status["is_active"] is True
+    assert status["entitlements"]["ad_free"] is True
+    assert status["entitlements"].get("creator_tools") is not True
+
+
+def test_flex_level_10_unlocks_pro_support(db_session):
+    from app.services.subscription_service import SubscriptionService
+
+    _user(db_session)
+    FlexSubscriptionService(db_session).activate(1, 10)
+    db_session.commit()
+    sub = SubscriptionService(db_session)
+    assert sub.has_pro_access(1)
+    assert sub.has_entitlement(1, "priority_support")
+    assert sub.has_entitlement(1, "pro")
+    assert sub.has_creator_access(1)
+    assert sub.has_ai_access(1)
+    status = sub.get_status_dict(1)
+    assert status["subscription_type"] == "pro"
+    assert status["has_creator"] is True
+    assert status["has_ai"] is True

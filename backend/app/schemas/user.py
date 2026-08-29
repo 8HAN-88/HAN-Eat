@@ -87,6 +87,8 @@ class UserProfileResponse(UserResponse):
     stats: "UserStats"
     is_following: Optional[bool] = None
     is_followed_by: Optional[bool] = None
+    premium_badge: bool = False
+    profile_decoration: bool = False
 
 
 class UserStats(BaseModel):

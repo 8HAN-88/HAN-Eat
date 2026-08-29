@@ -3322,15 +3322,19 @@ async def list_message_edits(
 async def translate_chat_text(
     body: TranslateTextRequest,
     current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
 ):
-    del current_user  # auth required; no per-user state
     text = (body.text or "").strip()
     if not text:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "empty_text")
     target = (body.target_lang or "ru").strip().lower()[:8] or "ru"
+    from app.services.subscription_service import SubscriptionService
     from app.services.text_translation import translate_text
 
-    translated = translate_text(text, target)
+    priority = SubscriptionService(db).has_entitlement(
+        current_user.id, "ai_priority_speed"
+    )
+    translated = translate_text(text, target, priority=priority)
     return TranslateTextResponse(
         text=text,
         translated=translated or text,
@@ -3360,6 +3364,22 @@ async def add_message_reaction(
         )
         if not msg:
             raise ValueError("not_found")
+        from app.core.entitlements import EXCLUSIVE_REACTION_EMOJIS
+        from app.services.subscription_service import SubscriptionService
+
+        if (body.emoji or "").strip() in EXCLUSIVE_REACTION_EMOJIS:
+            if not SubscriptionService(db).has_entitlement(
+                current_user.id, "exclusive_reactions"
+            ):
+                from app.core.entitlements import HAN_PLUS_REQUIRED_CODE
+
+                raise HTTPException(
+                    status.HTTP_403_FORBIDDEN,
+                    detail={
+                        "code": HAN_PLUS_REQUIRED_CODE,
+                        "message": "Эксклюзивные реакции доступны по подписке",
+                    },
+                )
         if stars > 0:
             from app.services.paid_features_service import PaidFeaturesService
 

@@ -191,10 +191,16 @@ class SubscriptionStatusResponse {
     this.upgradeOptions = const [],
   });
 
-  bool get hasAnyPaid => isActive && subscriptionType != 'free';
+  bool hasEntitlement(String slug) => entitlements[slug] == true;
+
+  bool get hasAnyPaid =>
+      isActive &&
+      (subscriptionType != 'free' || entitlements.values.any((v) => v));
 
   bool get hasPro =>
-      isActive && (subscriptionType == 'pro' || entitlements['pro'] == true);
+      hasEntitlement('pro') ||
+      hasEntitlement('priority_support') ||
+      (isActive && subscriptionType == 'pro');
 
   bool trialEligibleFor(String product) =>
       trialEligible?[product] == true;

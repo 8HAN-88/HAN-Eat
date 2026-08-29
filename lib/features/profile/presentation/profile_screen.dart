@@ -739,10 +739,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: LinearGradient(
-                    colors: [
-                      scheme.primary.withValues(alpha: 0.88),
-                      scheme.tertiary.withValues(alpha: 0.58),
-                    ],
+                    colors: user.profileDecoration
+                        ? [
+                            const Color(0xFFFFD54F),
+                            scheme.primary,
+                            scheme.tertiary,
+                          ]
+                        : [
+                            scheme.primary.withValues(alpha: 0.88),
+                            scheme.tertiary.withValues(alpha: 0.58),
+                          ],
                   ),
                   boxShadow: [
                     BoxShadow(
@@ -790,6 +796,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                           ),
                         ),
                       ),
+                      if (user.premiumBadge) ...[
+                        const SizedBox(width: 6),
+                        Tooltip(
+                          message: 'Подписка HanWe',
+                          child: Icon(
+                            Icons.verified_rounded,
+                            color: scheme.primary,
+                            size: 22,
+                          ),
+                        ),
+                      ],
                       if (worn != null) ...[
                         const SizedBox(width: 8),
                         Tooltip(

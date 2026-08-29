@@ -62,7 +62,13 @@ def cache_translation(text: str, target_lang: str, translated: str) -> None:
         logger.warning("Redis translation cache write error: %s", e)
 
 
-def translate_text(text: str, target_lang: str, max_retries: int = 3) -> str:
+def translate_text(
+    text: str,
+    target_lang: str,
+    max_retries: int = 3,
+    *,
+    priority: bool = False,
+) -> str:
     if not text or not target_lang or target_lang == "en":
         return text
     if not TRANSLATOR_AVAILABLE:
@@ -110,7 +116,7 @@ def translate_text(text: str, target_lang: str, max_retries: int = 3) -> str:
                 or "timeout" in error_str.lower()
             )
             if is_connection_error and attempt < max_retries - 1:
-                wait_time = (2**attempt) + random.uniform(0, 1)
+                wait_time = 0.15 if priority else (2**attempt) + random.uniform(0, 1)
                 logger.warning(
                     "Translation connection error (attempt %s/%s), retrying in %.1fs...",
                     attempt + 1,
