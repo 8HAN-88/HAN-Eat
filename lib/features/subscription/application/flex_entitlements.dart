@@ -1,5 +1,4 @@
 import '../../../models/video_quality_preference.dart';
-import '../../../services/subscription_service.dart';
 
 /// Эксклюзивные реакции, те же что на бэкенде.
 const flexExclusiveReactions = ['💎', '👑', '⚡', '🦄', '✨', '🖤'];
