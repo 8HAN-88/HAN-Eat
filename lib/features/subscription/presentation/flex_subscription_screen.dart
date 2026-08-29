@@ -5,10 +5,15 @@ import '../../../app/app_router.dart';
 import '../../../services/flex_subscription_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
+import '../application/flex_boundary_bands.dart';
+import '../application/flex_purchase_ladder.dart';
 import 'flex_preview_sheet.dart';
 
 class FlexSubscriptionScreen extends StatefulWidget {
-  const FlexSubscriptionScreen({super.key});
+  const FlexSubscriptionScreen({super.key, this.initialLevel = 0});
+
+  /// Подскролл к уровню, если открыли со старого тарифа.
+  final int initialLevel;
 
   @override
   State<FlexSubscriptionScreen> createState() => _FlexSubscriptionScreenState();
@@ -19,6 +24,10 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
   String? _error;
   bool _loading = true;
   bool _busy = false;
+  final Map<int, GlobalKey> _levelKeys = {};
+
+  GlobalKey _keyFor(int level) =>
+      _levelKeys.putIfAbsent(level, GlobalKey.new);
 
   @override
   void initState() {
@@ -38,6 +47,7 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
         _me = me;
         _loading = false;
       });
+      _scrollToInitial();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -47,9 +57,25 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
     }
   }
 
-  Future<void> _changeLevel(int level) async {
+  void _scrollToInitial() {
+    final target = widget.initialLevel;
+    if (target < 1) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _keyFor(target).currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(
+          ctx,
+          duration: const Duration(milliseconds: 320),
+          alignment: 0.2,
+        );
+      }
+    });
+  }
+
+  Future<void> _buyLevel(int level) async {
     final me = _me;
     if (me == null || _busy) return;
+    if (me.active && me.currentLevel == level) return;
     setState(() => _busy = true);
     try {
       final preview = await FlexSubscriptionApi.preview(level);
@@ -71,12 +97,19 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
     }
   }
 
+  FlexFeature? _featureAt(FlexMe me, int level) {
+    for (final item in me.levels) {
+      if (item.assignedLevel == level) return item;
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final me = _me;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Моя подписка'),
+        title: const Text('Подписка'),
         actions: [
           IconButton(
             tooltip: 'Все возможности',
@@ -96,80 +129,44 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
                       padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
                       children: [
                         _HeroCard(me: me!),
-                        const SizedBox(height: 18),
-                        Text(
-                          'Доступно',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w800,
-                              ),
-                        ),
-                        const SizedBox(height: 8),
-                        for (final feature in me.levels)
-                          ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: Icon(
-                              feature.unlocked
-                                  ? Icons.check_circle_rounded
-                                  : Icons.lock_outline_rounded,
-                              color: feature.unlocked
-                                  ? Theme.of(context).colorScheme.primary
-                                  : Theme.of(context).colorScheme.outline,
-                            ),
-                            title: Text(feature.title),
-                            subtitle: Text(
-                              feature.unlocked
-                                  ? 'Уровень ${feature.assignedLevel}'
-                                  : 'С уровня ${feature.assignedLevel}',
-                            ),
-                          ),
                         const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            if (me.currentLevel > 1)
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: _busy
-                                      ? null
-                                      : () => _changeLevel(me.currentLevel - 1),
-                                  child: Text(
-                                    '← Уровень ${me.currentLevel - 1}',
-                                  ),
-                                ),
+                        Text(
+                          'Одна подписка. Выберите уровень — внутри границы можно переставить возможности.',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
                               ),
-                            if (me.currentLevel > 1 && me.nextLevel != null)
-                              const SizedBox(width: 10),
-                            if (me.nextLevel != null)
-                              Expanded(
-                                child: FilledButton(
-                                  onPressed: _busy
-                                      ? null
-                                      : () => _changeLevel(me.nextLevel!),
-                                  child: Text(
-                                    'Уровень ${me.nextLevel} →',
-                                  ),
-                                ),
-                              ),
-                          ],
                         ),
-                        if (me.nextFeature != null) ...[
-                          const SizedBox(height: 16),
-                          _NextCta(
-                            feature: me.nextFeature!,
-                            price: me.nextPriceRub ?? (me.priceRub + 10),
-                            onOpen: _busy
-                                ? null
-                                : () => _changeLevel(me.nextLevel ?? (me.currentLevel + 1)),
-                          ),
+                        const SizedBox(height: 18),
+                        for (final band in flexBoundaryBands(
+                          blocks: me.blocks,
+                          maxLevel: me.maxLevel,
+                        )) ...[
+                          _BandTitle(band: band),
+                          const SizedBox(height: 8),
+                          for (var level = band.minLevel;
+                              level <= band.maxLevel;
+                              level++)
+                            KeyedSubtree(
+                              key: _keyFor(level),
+                              child: _LevelBuyTile(
+                                level: level,
+                                price: FlexPurchaseLadder.priceRub(level),
+                                feature: _featureAt(me, level),
+                                current: me.active && me.currentLevel == level,
+                                highlight: widget.initialLevel == level,
+                                busy: _busy,
+                                onBuy: () => _buyLevel(level),
+                              ),
+                            ),
+                          const SizedBox(height: 8),
                         ],
-                        const SizedBox(height: 16),
-                        FilledButton.tonal(
-                          onPressed: () => context.push(FlexConstructorRoute.path),
-                          child: const Text('⚙️ Настроить подписку'),
-                        ),
                         const SizedBox(height: 8),
-                        TextButton(
-                          onPressed: () => context.push(SubscriptionRoute.path),
-                          child: const Text('Классические тарифы AI / Creator / Pro'),
+                        FilledButton.tonal(
+                          onPressed: () =>
+                              context.push(FlexConstructorRoute.path),
+                          child: const Text('Переставить возможности'),
                         ),
                       ],
                     ),
@@ -187,7 +184,9 @@ class _HeroCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final level = me.currentLevel < 1 ? 1 : me.currentLevel;
-    final price = me.currentLevel < 1 ? 39 : me.priceRub;
+    final price = me.currentLevel < 1
+        ? FlexPurchaseLadder.basePriceRub
+        : me.priceRub;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -202,17 +201,22 @@ class _HeroCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Моя подписка', style: TextStyle(color: scheme.onPrimaryContainer)),
+          Text(
+            'HanWe подписка',
+            style: TextStyle(color: scheme.onPrimaryContainer),
+          ),
           const SizedBox(height: 6),
           Text(
-            'Уровень $level',
+            me.active ? 'Уровень $level' : 'Выберите уровень',
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                   fontWeight: FontWeight.w900,
                 ),
           ),
           const SizedBox(height: 4),
           Text(
-            me.active ? '$price ₽ / месяц' : 'Соберите набор от 39 ₽ / месяц',
+            me.active
+                ? '$price ₽ / месяц'
+                : 'От ${FlexPurchaseLadder.basePriceRub} ₽ / месяц',
             style: Theme.of(context).textTheme.titleMedium,
           ),
         ],
@@ -221,40 +225,71 @@ class _HeroCard extends StatelessWidget {
   }
 }
 
-class _NextCta extends StatelessWidget {
-  const _NextCta({
-    required this.feature,
-    required this.price,
-    required this.onOpen,
-  });
-
-  final FlexFeature feature;
-  final int price;
-  final VoidCallback? onOpen;
+class _BandTitle extends StatelessWidget {
+  const _BandTitle({required this.band});
+  final FlexBoundaryBand band;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Text(
+      '${band.title} · ${band.minLevel}–${band.maxLevel}',
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w800,
+            color: scheme.primary,
+          ),
+    );
+  }
+}
+
+class _LevelBuyTile extends StatelessWidget {
+  const _LevelBuyTile({
+    required this.level,
+    required this.price,
+    required this.feature,
+    required this.current,
+    required this.highlight,
+    required this.busy,
+    required this.onBuy,
+  });
+
+  final int level;
+  final int price;
+  final FlexFeature? feature;
+  final bool current;
+  final bool highlight;
+  final bool busy;
+  final VoidCallback onBuy;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Следующая возможность', style: TextStyle(fontWeight: FontWeight.w800)),
-            const SizedBox(height: 6),
-            Text('🔓 ${feature.title}'),
-            const SizedBox(height: 4),
-            Text(
-              'Открой всего за +10 ₽/мес. Итого $price ₽.',
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
-            ),
-            const SizedBox(height: 10),
-            FilledButton(
-              onPressed: onOpen,
-              child: const Text('Открыть за +10 ₽'),
-            ),
-          ],
+      margin: const EdgeInsets.only(bottom: 10),
+      color: current
+          ? scheme.primaryContainer
+          : highlight
+              ? scheme.secondaryContainer.withValues(alpha: 0.7)
+              : null,
+      child: ListTile(
+        title: Text(
+          'Уровень $level · $price ₽/мес',
+          style: const TextStyle(fontWeight: FontWeight.w800),
         ),
+        subtitle: Text(
+          feature == null
+              ? 'Свободный слот'
+              : current
+                  ? 'Сейчас: ${feature!.title}'
+                  : feature!.title,
+        ),
+        trailing: current
+            ? const Text('Ваш')
+            : FilledButton(
+                onPressed: busy ? null : onBuy,
+                child: const Text('Оформить'),
+              ),
+        onTap: current || busy ? null : onBuy,
       ),
     );
   }

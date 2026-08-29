@@ -33,7 +33,6 @@ class NewFeedScreen extends ConsumerStatefulWidget {
     /// Тип ленты с родителя ([MainFeedScreen]); если null — экран сам хранит фильтр (полный Scaffold).
     this.externalFeedType,
     this.externalSortMode,
-    this.externalFollowingOnly,
     this.deferLoad = false,
   });
 
@@ -45,9 +44,6 @@ class NewFeedScreen extends ConsumerStatefulWidget {
 
   /// Сортировка с родителя; если null — personalized.
   final FeedSortMode? externalSortMode;
-
-  /// true — только подписки; false — рекомендации; null — рекомендации.
-  final bool? externalFollowingOnly;
 
   /// Не загружать ленту до первого показа таба (web).
   final bool deferLoad;
@@ -65,7 +61,6 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
   String? _nextCursor;
   String _feedType = 'all';
   FeedSortMode _sortMode = FeedSortMode.personalized;
-  bool _followingOnly = true;
   bool _pendingLoadMore = false;
   bool _loadKickoff = false;
   int _loadGeneration = 0;
@@ -91,14 +86,8 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
     await _loadFeed(refresh: true);
   }
 
-  String _cacheVariant([
-    String? feedType,
-    FeedSortMode? sortMode,
-    bool? followingOnly,
-  ]) {
-    final source = (followingOnly ?? _followingOnly) ? 'following' : 'rec';
-    return '${source}_${AppVariant.current.name}_${feedType ?? _feedType}_${(sortMode ?? _sortMode).value}';
-  }
+  String _cacheVariant([String? feedType, FeedSortMode? sortMode]) =>
+      'rec_${AppVariant.current.name}_${feedType ?? _feedType}_${(sortMode ?? _sortMode).value}';
 
   @override
   bool get wantKeepAlive => true;
@@ -108,7 +97,6 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
     super.initState();
     _feedType = widget.externalFeedType ?? 'all';
     _sortMode = widget.externalSortMode ?? FeedSortMode.personalized;
-    _followingOnly = widget.externalFollowingOnly ?? true;
     _scrollController.addListener(_onScroll);
     final cached = FeedApiCache.peek(_cacheVariant());
     if (cached.isNotEmpty) {
@@ -159,11 +147,6 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
       _sortMode = sort;
       _loadFeed(refresh: true);
     }
-    final following = widget.externalFollowingOnly;
-    if (following != null && following != oldWidget.externalFollowingOnly) {
-      _followingOnly = following;
-      _loadFeed(refresh: true);
-    }
   }
 
   @override
@@ -198,12 +181,8 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
     final requestId = ++_loadGeneration;
     final requestedFeedType = _feedType;
     final requestedSortMode = _sortMode;
-    final requestedFollowing = _followingOnly;
-    final requestedCacheVariant = _cacheVariant(
-      requestedFeedType,
-      requestedSortMode,
-      requestedFollowing,
-    );
+    final requestedCacheVariant =
+        _cacheVariant(requestedFeedType, requestedSortMode);
 
     if (refresh) {
       final cached = await FeedApiCache.load(requestedCacheVariant);
@@ -266,7 +245,6 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
         cursor: refresh ? null : _nextCursor,
         limit: 20,
         feedType: requestedFeedType,
-        followingOnly: requestedFollowing,
         sortMode: requestedSortMode,
       );
 

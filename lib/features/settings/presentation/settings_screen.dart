@@ -299,16 +299,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         onTap: () => context.push(SupportContactRoute.path),
       ),
       _SettingsItem(
-        title: 'Моя подписка',
-        icon: Icons.tune_rounded,
-        subtitle: 'Соберите набор функций — от 39 ₽/мес',
-        onTap: () => context.push(FlexSubscriptionRoute.path),
-      ),
-      _SettingsItem(
-        title: 'Классические тарифы',
+        title: 'Подписка',
         icon: Icons.workspace_premium_outlined,
-        subtitle: 'AI, Creator и Pro — от 199 ₽/мес',
-        onTap: () => context.push(SubscriptionRoute.path),
+        subtitle: 'Одна подписка — от 39 ₽/мес, возможности можно переставить',
+        onTap: () => context.push(FlexSubscriptionRoute.path),
       ),
       _SettingsItem(
         title: 'Звёзды и кошелёк',
