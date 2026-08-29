@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../services/flex_subscription_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
+import '../application/flex_boundary_bands.dart';
 
 class FlexConstructorScreen extends StatefulWidget {
   const FlexConstructorScreen({super.key});
@@ -82,6 +83,13 @@ class _FlexConstructorScreenState extends State<FlexConstructorScreen> {
     }
   }
 
+  FlexFeature? _featureAt(FlexMe me, int level) {
+    for (final item in me.levels) {
+      if (item.assignedLevel == level) return item;
+    }
+    return null;
+  }
+
   Future<void> _save() async {
     final me = _me;
     if (me == null) return;
@@ -123,70 +131,137 @@ class _FlexConstructorScreenState extends State<FlexConstructorScreen> {
             ? const Center(child: CircularProgressIndicator())
             : _error != null
                 ? Center(child: Text(_error!))
-                : ListView.builder(
+                : ListView(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-                    itemCount: me!.maxLevel,
-                    itemBuilder: (context, index) {
-                      final level = index + 1;
-                      FlexFeature? feature;
-                      for (final item in me.levels) {
-                        if (item.assignedLevel == level) {
-                          feature = item;
-                          break;
-                        }
-                      }
-                      final price = 39 + (level - 1) * 10;
-                      return DragTarget<FlexFeature>(
-                        onWillAcceptWithDetails: (details) {
-                          setState(() {
-                            _hoverLevel = level;
-                            _dragging = details.data;
-                          });
-                          return details.data.canPlace(level) ||
-                              details.data.assignedLevel == level;
-                        },
-                        onLeave: (_) {
-                          if (_hoverLevel == level) {
-                            setState(() => _hoverLevel = null);
-                          }
-                        },
-                        onAcceptWithDetails: (details) => _drop(details.data, level),
-                        builder: (context, candidate, rejected) {
-                          return AnimatedContainer(
-                            duration: const Duration(milliseconds: 160),
-                            margin: const EdgeInsets.only(bottom: 12),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: _zoneColor(level),
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(
-                                color: candidate.isNotEmpty
-                                    ? (candidate.first?.canPlace(level) == true
-                                        ? const Color(0xFF2E7D32)
-                                        : const Color(0xFFC62828))
-                                    : Theme.of(context).colorScheme.outlineVariant,
-                              ),
+                    children: [
+                      Text(
+                        'Одна подписка. Возможности перетаскиваются только внутри своей границы.',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
                             ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'УРОВЕНЬ $level — $price ₽',
-                                  style: const TextStyle(fontWeight: FontWeight.w800),
-                                ),
-                                const SizedBox(height: 8),
-                                if (feature == null)
-                                  const Text('Свободный слот')
-                                else
-                                  _DraggableFeature(feature: feature),
-                              ],
-                            ),
-                          );
-                        },
-                      );
-                    },
+                      ),
+                      const SizedBox(height: 16),
+                      for (final band in flexBoundaryBands(
+                        blocks: me!.blocks,
+                        maxLevel: me.maxLevel,
+                      )) ...[
+                        _BoundaryHeader(band: band),
+                        const SizedBox(height: 8),
+                        for (var level = band.minLevel;
+                            level <= band.maxLevel;
+                            level++)
+                          _LevelDropZone(
+                            level: level,
+                            feature: _featureAt(me, level),
+                            color: _zoneColor(level),
+                            onWillAccept: (feature) {
+                              setState(() {
+                                _hoverLevel = level;
+                                _dragging = feature;
+                              });
+                              return feature.canPlace(level) ||
+                                  feature.assignedLevel == level;
+                            },
+                            onLeave: () {
+                              if (_hoverLevel == level) {
+                                setState(() => _hoverLevel = null);
+                              }
+                            },
+                            onAccept: (feature) => _drop(feature, level),
+                          ),
+                        const SizedBox(height: 8),
+                      ],
+                    ],
                   ),
       ),
+    );
+  }
+}
+
+class _BoundaryHeader extends StatelessWidget {
+  const _BoundaryHeader({required this.band});
+  final FlexBoundaryBand band;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: scheme.primaryContainer.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: scheme.primary.withValues(alpha: 0.35)),
+      ),
+      child: Text(
+        '${band.title} · уровни ${band.minLevel}–${band.maxLevel}',
+        style: TextStyle(
+          fontWeight: FontWeight.w800,
+          color: scheme.onPrimaryContainer,
+        ),
+      ),
+    );
+  }
+}
+
+class _LevelDropZone extends StatelessWidget {
+  const _LevelDropZone({
+    required this.level,
+    required this.feature,
+    required this.color,
+    required this.onWillAccept,
+    required this.onLeave,
+    required this.onAccept,
+  });
+
+  final int level;
+  final FlexFeature? feature;
+  final Color color;
+  final bool Function(FlexFeature feature) onWillAccept;
+  final VoidCallback onLeave;
+  final ValueChanged<FlexFeature> onAccept;
+
+  @override
+  Widget build(BuildContext context) {
+    final price = 39 + (level - 1) * 10;
+    return DragTarget<FlexFeature>(
+      onWillAcceptWithDetails: (details) => onWillAccept(details.data),
+      onLeave: (_) => onLeave(),
+      onAcceptWithDetails: (details) => onAccept(details.data),
+      builder: (context, candidate, rejected) {
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: candidate.isNotEmpty
+                  ? (candidate.first?.canPlace(level) == true
+                      ? const Color(0xFF2E7D32)
+                      : const Color(0xFFC62828))
+                  : Theme.of(context).colorScheme.outlineVariant,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'УРОВЕНЬ $level — $price ₽',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 8),
+              if (feature == null)
+                const Text('Свободный слот')
+              else
+                _DraggableFeature(feature: feature!),
+            ],
+          ),
+        );
+      },
     );
   }
 }

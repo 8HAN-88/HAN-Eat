@@ -9,16 +9,16 @@ import '../../../app/web_app_path.dart';
 import '../../../core/app/kitchen_removed_notice.dart';
 import '../../../services/feed_ui_prefs.dart';
 import '../../../models/post_types.dart';
-import 'subscriptions_feed_screen.dart';
 import '../../reels/presentation/reels_feed_screen.dart';
 import 'new_feed_screen.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/notification_bell_button.dart';
 import '../../../widgets/telegram_ui.dart';
+import '../application/feed_tab_layout.dart';
 import 'feed_section_tabs.dart';
 import '../../navigation/application/feed_scroll_chrome.dart';
 
-/// Главный экран ленты с табами: Подписки, Рекомендации, Рилсы
+/// Главный экран: одна лента (подписки) и рилсы.
 class MainFeedScreen extends ConsumerStatefulWidget {
   const MainFeedScreen({super.key});
 
@@ -30,21 +30,24 @@ class _MainFeedScreenState extends ConsumerState<MainFeedScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
-  String _subsFeedType = 'all';
-  String _recFeedType = 'all';
-  FeedSortMode _subsSortMode = FeedSortMode.recent;
-  FeedSortMode _recSortMode = FeedSortMode.personalized;
+  String _homeFeedType = 'all';
+  FeedSortMode _homeSortMode = FeedSortMode.recent;
+  bool _homeFollowingOnly = true;
   bool _reelsFollowingOnly = false;
 
   /// На web не грузим все табы сразу — только активный и уже открытые.
-  final Set<int> _activatedTabs = kIsWeb ? {1} : {0, 1, 2};
+  final Set<int> _activatedTabs = kIsWeb ? {FeedTabLayout.home} : {0, 1};
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this, initialIndex: 1);
+    _tabController = TabController(
+      length: FeedTabLayout.count,
+      vsync: this,
+      initialIndex: FeedTabLayout.home,
+    );
     _tabController.addListener(_onTabUi);
-    feedScrollChromeActive.value = _tabController.index != 2;
+    feedScrollChromeActive.value = !FeedTabLayout.isReels(_tabController.index);
     unawaited(_restoreUiPrefs());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !KitchenRemovedNotice.take()) return;
@@ -61,33 +64,32 @@ class _MainFeedScreenState extends ConsumerState<MainFeedScreen>
       FeedUiPrefs.loadTabIndex(),
       FeedUiPrefs.loadSubsFeedType(),
       FeedUiPrefs.loadSubsSortMode(),
-      FeedUiPrefs.loadRecFeedType(),
-      FeedUiPrefs.loadRecSortMode(),
+      FeedUiPrefs.loadHomeFollowingOnly(),
       FeedUiPrefs.loadReelsFollowingOnly(),
     ]);
     if (!mounted) return;
     var tab = results[0] as int;
-    // Холодный старт с /app/?go=1: не прыгаем в рилсы, пока роутер не стабилен.
-    if (kIsWeb && FeedShellLaunch.takeSkipReelsTab() && tab == 2) {
-      tab = 1;
+    if (kIsWeb &&
+        FeedShellLaunch.takeSkipReelsTab() &&
+        FeedTabLayout.isReels(tab)) {
+      tab = FeedTabLayout.home;
     }
     setState(() {
-      _subsFeedType = results[1] as String;
-      _subsSortMode = results[2] as FeedSortMode;
-      _recFeedType = results[3] as String;
-      _recSortMode = results[4] as FeedSortMode;
-      _reelsFollowingOnly = results[5] as bool;
+      _homeFeedType = results[1] as String;
+      _homeSortMode = results[2] as FeedSortMode;
+      _homeFollowingOnly = results[3] as bool;
+      _reelsFollowingOnly = results[4] as bool;
     });
     if (tab != _tabController.index) {
       _tabController.index = tab;
-      feedScrollChromeActive.value = tab != 2;
+      feedScrollChromeActive.value = !FeedTabLayout.isReels(tab);
       if (kIsWeb) _activatedTabs.add(tab);
     }
   }
 
   void _onTabUi() {
     if (_tabController.indexIsChanging) return;
-    final isReels = _tabController.index == 2;
+    final isReels = FeedTabLayout.isReels(_tabController.index);
     feedScrollChromeActive.value = !isReels;
     if (isReels) resetFeedScrollChrome();
     unawaited(FeedUiPrefs.saveTabIndex(_tabController.index));
@@ -141,26 +143,21 @@ class _MainFeedScreenState extends ConsumerState<MainFeedScreen>
             Expanded(
               child: FeedSectionTabs(
                 controller: _tabController,
-                subsFeedType: _subsFeedType,
-                subsSortMode: _subsSortMode,
-                recFeedType: _recFeedType,
-                recSortMode: _recSortMode,
+                homeFeedType: _homeFeedType,
+                homeSortMode: _homeSortMode,
+                homeFollowingOnly: _homeFollowingOnly,
                 reelsFollowingOnly: _reelsFollowingOnly,
-                onSubsFilterChanged: (value) {
-                  setState(() => _subsFeedType = value);
+                onHomeFilterChanged: (value) {
+                  setState(() => _homeFeedType = value);
                   unawaited(FeedUiPrefs.saveSubsFeedType(value));
                 },
-                onSubsSortChanged: (mode) {
-                  setState(() => _subsSortMode = mode);
+                onHomeSortChanged: (mode) {
+                  setState(() => _homeSortMode = mode);
                   unawaited(FeedUiPrefs.saveSubsSortMode(mode));
                 },
-                onRecFilterChanged: (value) {
-                  setState(() => _recFeedType = value);
-                  unawaited(FeedUiPrefs.saveRecFeedType(value));
-                },
-                onRecSortChanged: (mode) {
-                  setState(() => _recSortMode = mode);
-                  unawaited(FeedUiPrefs.saveRecSortMode(mode));
+                onHomeFollowingChanged: (followingOnly) {
+                  setState(() => _homeFollowingOnly = followingOnly);
+                  unawaited(FeedUiPrefs.saveHomeFollowingOnly(followingOnly));
                 },
                 onReelsFilterChanged: (followingOnly) {
                   setState(() => _reelsFollowingOnly = followingOnly);
@@ -188,7 +185,7 @@ class _MainFeedScreenState extends ConsumerState<MainFeedScreen>
             child: ValueListenableBuilder<bool>(
               valueListenable: feedScrollChromeHidden,
               builder: (context, hidden, child) {
-                final isReels = _tabController.index == 2;
+                final isReels = FeedTabLayout.isReels(_tabController.index);
                 final topInset = isReels
                     ? 0.0
                     : (hidden ? 0.0 : feedChromeTopInset(context));
@@ -202,20 +199,18 @@ class _MainFeedScreenState extends ConsumerState<MainFeedScreen>
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  SubscriptionsFeedScreen(
-                    deferLoad: kIsWeb && !_activatedTabs.contains(0),
-                    externalFeedType: _subsFeedType,
-                    externalSortMode: _subsSortMode,
-                  ),
                   NewFeedScreen(
                     hideScaffold: true,
-                    deferLoad: kIsWeb && !_activatedTabs.contains(1),
-                    externalFeedType: _recFeedType,
-                    externalSortMode: _recSortMode,
+                    deferLoad: kIsWeb &&
+                        !_activatedTabs.contains(FeedTabLayout.home),
+                    externalFeedType: _homeFeedType,
+                    externalSortMode: _homeSortMode,
+                    externalFollowingOnly: _homeFollowingOnly,
                   ),
                   ReelsFeedScreen(
                     hideScaffold: true,
-                    isTabVisible: _tabController.index == 2,
+                    isTabVisible:
+                        FeedTabLayout.isReels(_tabController.index),
                     externalFollowingOnly: _reelsFollowingOnly,
                   ),
                 ],

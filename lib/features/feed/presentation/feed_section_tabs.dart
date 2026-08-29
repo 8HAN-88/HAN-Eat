@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../models/post_types.dart';
 import '../../../core/haptics/app_haptics.dart';
+import '../application/feed_tab_layout.dart';
 import 'feed_filter_menu.dart';
 
 /// Вкладки ленты: стандартный [TabBar] с плавным индикатором (как в «Чатах»).
@@ -9,80 +10,61 @@ class FeedSectionTabs extends StatelessWidget {
   const FeedSectionTabs({
     super.key,
     required this.controller,
-    required this.subsFeedType,
-    required this.subsSortMode,
-    required this.recFeedType,
-    required this.recSortMode,
+    required this.homeFeedType,
+    required this.homeSortMode,
+    required this.homeFollowingOnly,
     required this.reelsFollowingOnly,
-    required this.onSubsFilterChanged,
-    required this.onSubsSortChanged,
-    required this.onRecFilterChanged,
-    required this.onRecSortChanged,
+    required this.onHomeFilterChanged,
+    required this.onHomeSortChanged,
+    required this.onHomeFollowingChanged,
     required this.onReelsFilterChanged,
   });
 
   final TabController controller;
-  final String subsFeedType;
-  final FeedSortMode subsSortMode;
-  final String recFeedType;
-  final FeedSortMode recSortMode;
+  final String homeFeedType;
+  final FeedSortMode homeSortMode;
+  final bool homeFollowingOnly;
   final bool reelsFollowingOnly;
-  final ValueChanged<String> onSubsFilterChanged;
-  final ValueChanged<FeedSortMode> onSubsSortChanged;
-  final ValueChanged<String> onRecFilterChanged;
-  final ValueChanged<FeedSortMode> onRecSortChanged;
+  final ValueChanged<String> onHomeFilterChanged;
+  final ValueChanged<FeedSortMode> onHomeSortChanged;
+  final ValueChanged<bool> onHomeFollowingChanged;
   final ValueChanged<bool> onReelsFilterChanged;
 
-  static const labels = ['Подписки', 'Рекомендации', 'Рилсы'];
-
-  List<PopupMenuEntry<String>> _filterItems(int index) {
-    if (index == 2) {
-      return reelsSourceFilterMenuItems(
-        followingOnly: reelsFollowingOnly,
-      );
-    }
-    return feedContentFilterMenuItems(
-      index == 0 ? subsFeedType : recFeedType,
-    );
-  }
-
-  List<PopupMenuEntry<String>> _feedTabFilterItems(int index) {
-    return feedTabFilterMenuItems(
-      currentType: index == 0 ? subsFeedType : recFeedType,
-      currentSort: index == 0 ? subsSortMode : recSortMode,
-    );
-  }
+  static const labels = FeedTabLayout.labels;
 
   List<PopupMenuEntry<String>> _itemsForTab(int index) {
-    if (index == 2) {
+    if (FeedTabLayout.isReels(index)) {
       return reelsSourceFilterMenuItems(
         followingOnly: reelsFollowingOnly,
       );
     }
-    if (index == 0 || index == 1) return _feedTabFilterItems(index);
-    return _filterItems(index);
+    return homeFeedFilterMenuItems(
+      followingOnly: homeFollowingOnly,
+      currentType: homeFeedType,
+      currentSort: homeSortMode,
+    );
   }
 
   void _onFilterSelected(int index, String value) {
     AppHaptics.selection();
-    if ((index == 0 || index == 1) && value.startsWith('sort:')) {
-      final sort = FeedSortMode.fromString(value.substring(5));
-      if (sort == null) return;
-      if (index == 0) {
-        onSubsSortChanged(sort);
-      } else {
-        onRecSortChanged(sort);
-      }
+    if (FeedTabLayout.isReels(index)) {
+      onReelsFilterChanged(value == 'following');
       return;
     }
-    switch (index) {
-      case 0:
-        onSubsFilterChanged(value);
-      case 1:
-        onRecFilterChanged(value);
-      case 2:
-        onReelsFilterChanged(value == 'following');
+    if (value == 'source:following') {
+      onHomeFollowingChanged(true);
+      return;
     }
+    if (value == 'source:recommended') {
+      onHomeFollowingChanged(false);
+      return;
+    }
+    if (value.startsWith('sort:')) {
+      final sort = FeedSortMode.fromString(value.substring(5));
+      if (sort != null) onHomeSortChanged(sort);
+      return;
+    }
+    onHomeFilterChanged(value);
   }
 
   @override
