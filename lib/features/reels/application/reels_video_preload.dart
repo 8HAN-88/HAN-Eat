@@ -9,8 +9,12 @@ Future<void> initializeReelVideosStaggered({
   required List<int> indices,
   required int priorityIndex,
   required Future<void> Function(int index) initSingle,
-  Duration neighborDelay = const Duration(milliseconds: 400),
+  Duration? neighborDelay,
 }) async {
+  final stagger = neighborDelay ??
+      (kIsWeb
+          ? const Duration(milliseconds: 80)
+          : const Duration(milliseconds: 400));
   if (indices.isEmpty) return;
   final pending = indices.toSet();
 
@@ -26,7 +30,7 @@ Future<void> initializeReelVideosStaggered({
   final next = priorityIndex + 1;
   if (pending.contains(next)) {
     unawaited(
-      Future<void>.delayed(neighborDelay, () => initNeighbor(next)),
+      Future<void>.delayed(stagger, () => initNeighbor(next)),
     );
   }
 
@@ -34,7 +38,7 @@ Future<void> initializeReelVideosStaggered({
   if (pending.contains(prev)) {
     unawaited(
       Future<void>.delayed(
-        neighborDelay + const Duration(milliseconds: 140),
+        stagger + const Duration(milliseconds: 140),
         () => initNeighbor(prev),
       ),
     );
@@ -42,7 +46,7 @@ Future<void> initializeReelVideosStaggered({
 
   for (final i in pending.toList()) {
     if ((i - priorityIndex).abs() > 1) continue;
-    final delay = neighborDelay +
+    final delay = stagger +
         Duration(milliseconds: 180 * (i - priorityIndex).abs());
     unawaited(Future<void>.delayed(delay, () => initNeighbor(i)));
   }
