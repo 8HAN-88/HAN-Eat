@@ -738,10 +738,16 @@
             }
           }, 2500);
 
-          // Give VPN / slow mobile more time before recovery UI.
+          setTimeout(function () {
+            if (!firstFrame && sub) {
+              sub.textContent = 'Слабый интернет — ещё загружаем…';
+            }
+          }, 10000);
+
+          // Slow 3G on iPhone: first JS chunk can exceed 20s.
           setTimeout(function () {
             if (!firstFrame) failBoot(ok ? 'timeout' : 'health');
-          }, isIOS ? (ok ? 20000 : 28000) : 24000);
+          }, isIOS ? (ok ? 35000 : 42000) : 30000);
         });
       }
 

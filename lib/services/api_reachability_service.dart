@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import '../core/network/api_endpoint_resolver.dart';
 import '../core/network/haneat_http_client.dart';
+import '../core/network/weak_net_policy.dart';
 import '../core/platform/web_page_visibility.dart';
 import 'auth_service.dart';
 import 'feed_sync_service.dart';
@@ -86,7 +87,8 @@ class ApiReachabilityService {
       ? (kIsWeb ? const Duration(seconds: 10) : const Duration(seconds: 12))
       : (kIsWeb ? const Duration(seconds: 8) : const Duration(seconds: 10));
 
-  int get _failuresBeforeDown => kIsWeb ? 3 : 3;
+  int get _failuresBeforeDown =>
+      kIsWeb ? WeakNetPolicy.webFailuresBeforeDown : 3;
 
   void _schedulePeriodicCheck() {
     _timer?.cancel();
