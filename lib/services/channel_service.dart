@@ -580,6 +580,7 @@ class ChannelService {
     int offset = 0,
     String? postType, // Фильтр по типу: text, photo, recipe, reel
     String? search, // Поисковый запрос
+    bool fresh = false,
   }) async {
     var token = await AuthService.getAccessTokenForApi();
 
@@ -587,6 +588,9 @@ class ChannelService {
       'limit': limit.toString(),
       'offset': offset.toString(),
     };
+    if (fresh) {
+      queryParams['fresh'] = 'true';
+    }
     if (postType != null && postType.isNotEmpty) {
       queryParams['post_type'] = postType;
     }
