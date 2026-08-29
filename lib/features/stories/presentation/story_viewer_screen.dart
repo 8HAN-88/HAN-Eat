@@ -11,6 +11,8 @@ import 'package:uuid/uuid.dart';
 import '../../../app/app_router.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/auth_service.dart';
+import '../../../services/subscription_status_cache.dart';
+import '../../subscription/application/flex_entitlements.dart';
 import '../../../services/server_config.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../utils/video_player_helper.dart';
@@ -73,7 +75,10 @@ class StoryViewerScreen extends StatefulWidget {
 
 class _StoryViewerScreenState extends State<StoryViewerScreen>
     with SingleTickerProviderStateMixin {
-  static const _quickReactions = ['👍', '❤️', '😂', '🔥', '😮', '😢'];
+  List<String> get _quickReactions => flexChatQuickReactions(
+        SubscriptionStatusCache.peek()?.hasEntitlement('exclusive_reactions') ??
+            false,
+      );
 
   late PageController _pageController;
   late int _currentIndex;

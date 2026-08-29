@@ -14,6 +14,9 @@ LOGIN_REQUIRED_CODE = "LOGIN_REQUIRED"
 
 VALID_PRODUCTS = frozenset({"ai", "creator", "pro"})
 
+EXCLUSIVE_REACTION_EMOJIS = frozenset({"💎", "👑", "⚡", "🦄", "✨", "🖤"})
+LARGER_UPLOAD_MULTIPLIER = 2.5
+
 
 def normalize_tier(subscription_type: Optional[str]) -> SubscriptionTier:
     if not subscription_type:

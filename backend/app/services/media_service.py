@@ -98,6 +98,7 @@ class MediaService:
         file_size: int,
         user_id: int,
         prefer_api: bool = False,
+        size_multiplier: float = 1.0,
     ) -> Dict[str, str]:
         """
         Генерация presigned URL для загрузки файла
@@ -141,6 +142,9 @@ class MediaService:
                 f"Invalid file_type: {file_type}. Must be 'image', 'video', 'audio' or 'document'"
             )
         
+        if max_size is not None:
+            factor = size_multiplier if size_multiplier and size_multiplier > 1 else 1.0
+            max_size = int(max_size * factor)
         if max_size is not None and file_size > max_size:
             raise ValueError(f"File size exceeds maximum: {max_size / (1024*1024):.1f}MB")
         

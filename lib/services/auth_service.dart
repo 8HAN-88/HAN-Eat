@@ -1265,6 +1265,8 @@ class User {
   final String? legalConsentVersion;
   final bool phoneLinked;
   final String? phone;
+  final bool premiumBadge;
+  final bool profileDecoration;
 
   // Геттер для совместимости с Firebase Auth
   String get uid => id.toString();
@@ -1291,6 +1293,8 @@ class User {
     this.legalConsentVersion,
     this.phoneLinked = false,
     this.phone,
+    this.premiumBadge = false,
+    this.profileDecoration = false,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -1323,6 +1327,8 @@ class User {
       legalConsentVersion: json['legal_consent_version'] as String?,
       phoneLinked: json['phone_linked'] as bool? ?? false,
       phone: json['phone'] as String?,
+      premiumBadge: json['premium_badge'] as bool? ?? false,
+      profileDecoration: json['profile_decoration'] as bool? ?? false,
     );
   }
 
@@ -1350,6 +1356,8 @@ class User {
         'legal_consent_version': legalConsentVersion,
       'phone_linked': phoneLinked,
       if (phone != null) 'phone': phone,
+      'premium_badge': premiumBadge,
+      'profile_decoration': profileDecoration,
     };
   }
 
@@ -1392,6 +1400,8 @@ class User {
           legalConsentVersion ?? this.legalConsentVersion,
       phoneLinked: phoneLinked ?? this.phoneLinked,
       phone: clearPhone ? null : (phone ?? this.phone),
+      premiumBadge: premiumBadge,
+      profileDecoration: profileDecoration,
     );
   }
 }

@@ -122,7 +122,8 @@ class CompleteUploadRequest(BaseModel):
 @router.post("/init")
 async def init_upload(
     request: InitUploadRequest,
-    current_user: User = Depends(get_current_user_required)
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
 ):
     """
     Инициализация загрузки (получить presigned URL)
@@ -140,6 +141,12 @@ async def init_upload(
             if cached:
                 return cached
 
+        from app.core.entitlements import LARGER_UPLOAD_MULTIPLIER
+        from app.services.subscription_service import SubscriptionService
+
+        larger = SubscriptionService(db).has_entitlement(
+            current_user.id, "larger_uploads"
+        )
         media_service = MediaService()
         result = media_service.generate_presigned_url(
             file_type=request.file_type,
@@ -147,6 +154,7 @@ async def init_upload(
             file_size=request.file_size,
             user_id=current_user.id,
             prefer_api=request.prefer_api,
+            size_multiplier=LARGER_UPLOAD_MULTIPLIER if larger else 1.0,
         )
         # API-загрузка: запоминаем upload_id → file_key
         if result.get("upload_via") == "api":

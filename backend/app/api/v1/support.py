@@ -51,8 +51,7 @@ async def create_support_ticket(
         related_entity_type = "subscription"
         related_entity_id = subscription.id
     
-    tier, active = SubscriptionService(db).effective_tier(current_user.id)
-    is_priority = active and tier == "pro"
+    is_priority = SubscriptionService(db).has_pro_access(current_user.id)
 
     # Создаем обращение
     ticket = SupportTicket(

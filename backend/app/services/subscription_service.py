@@ -13,6 +13,7 @@ from app.core.config import settings
 from app.core.entitlements import (
     SubscriptionTier,
     normalize_tier,
+    subscription_entitlements,
     subscription_status_payload,
     tier_includes_ai,
     tier_includes_creator,
@@ -211,6 +212,51 @@ class SubscriptionService:
             return bool(slugs & PRO_FEATURE_SLUGS)
         return False
 
+    def unlocked_entitlement_slugs(self, user_id: int) -> set[str]:
+        """Классический тариф + разблокированные slug Flex."""
+        out: set[str] = set()
+        tier, active = self.effective_tier(user_id)
+        if active:
+            for key, enabled in subscription_entitlements(tier).items():
+                if enabled:
+                    out.add(key)
+        try:
+            from app.services.flex_subscription_service import FlexSubscriptionService
+
+            flex = FlexSubscriptionService(self.db)
+            if flex.is_flex_active(user_id):
+                slugs = flex.unlocked_slugs(user_id)
+                out |= slugs
+                if "offline_saved_posts" in out:
+                    out.add("offline_recipes")
+                if slugs & {
+                    "ai_recommendations",
+                    "ai_priority_speed",
+                    "offline_saved_posts",
+                }:
+                    out.add("is_plus")
+        except Exception:
+            pass
+        return out
+
+    def has_entitlement(self, user_id: int, slug: str) -> bool:
+        return slug in self.unlocked_entitlement_slugs(user_id)
+
+    def is_paid_active(self, user_id: int) -> bool:
+        _, classic = self.effective_tier(user_id)
+        if classic:
+            return True
+        try:
+            from app.services.flex_subscription_service import FlexSubscriptionService
+
+            return FlexSubscriptionService(self.db).is_flex_active(user_id)
+        except Exception:
+            return False
+
+    def has_pro_access(self, user_id: int) -> bool:
+        slugs = self.unlocked_entitlement_slugs(user_id)
+        return "pro" in slugs or "priority_support" in slugs
+
     def get_status_dict(self, user_id: int) -> Dict[str, Any]:
         user = self.db.query(User).filter(User.id == user_id).first()
         if not user:
@@ -266,23 +312,19 @@ class SubscriptionService:
             }
         else:
             payload["subscription"] = None
+        slugs = self.unlocked_entitlement_slugs(user_id)
+        if slugs:
+            ents = dict(payload.get("entitlements") or {})
+            for slug in slugs:
+                ents[slug] = True
+            payload["entitlements"] = ents
+        flex_active = False
         try:
             from app.services.flex_subscription_service import FlexSubscriptionService
 
             flex = FlexSubscriptionService(self.db)
-            if flex.is_flex_active(user_id):
-                slugs = flex.unlocked_slugs(user_id)
-                ents = dict(payload.get("entitlements") or {})
-                for slug in slugs:
-                    ents[slug] = True
-                if slugs:
-                    ents["premium_badge"] = True
-                    ents["ad_free"] = ents.get("ad_free") or ("ad_free" in slugs)
-                payload["entitlements"] = ents
-                payload["has_ai"] = bool(payload.get("has_ai")) or self.has_ai_access(user_id)
-                payload["has_creator"] = bool(payload.get("has_creator")) or self.has_creator_access(
-                    user_id
-                )
+            flex_active = flex.is_flex_active(user_id)
+            if flex_active:
                 me = flex.me_payload(user_id)
                 payload["flex"] = {
                     "active": True,
@@ -290,8 +332,24 @@ class SubscriptionService:
                     "price_rub": me.get("price_rub"),
                     "expires_at": me.get("expires_at"),
                 }
+                if not is_active:
+                    payload["is_active"] = True
+                    payload["subscription_status"] = "active"
+                    flex_row = flex.get_flex(user_id)
+                    if flex_row and flex_row.expires_at:
+                        payload["subscription_expire_at"] = flex_row.expires_at.isoformat()
+                    if payload.get("subscription_type") == "free":
+                        if self.has_pro_access(user_id):
+                            payload["subscription_type"] = "pro"
+                        elif self.has_creator_access(user_id):
+                            payload["subscription_type"] = "creator"
+                        elif self.has_ai_access(user_id):
+                            payload["subscription_type"] = "ai"
         except Exception:
             pass
+        payload["has_ai"] = self.has_ai_access(user_id)
+        payload["has_creator"] = self.has_creator_access(user_id)
+        payload["is_plus"] = bool(payload.get("has_ai"))
         return payload
 
     def create_subscription(

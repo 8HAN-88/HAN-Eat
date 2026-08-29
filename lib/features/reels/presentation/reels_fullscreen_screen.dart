@@ -26,6 +26,9 @@ import '../../navigation/application/root_shell_chrome.dart';
 import '../application/reels_swipe_policy.dart';
 import '../application/reels_video_preload.dart';
 import '../../settings/application/video_playback_controller.dart';
+import '../../../services/subscription_status_cache.dart';
+import '../../subscription/application/flex_entitlements.dart';
+import '../../../models/video_quality_preference.dart';
 import 'reels_feed_screen.dart';
 
 class ReelsFullscreenScreen extends ConsumerStatefulWidget {
@@ -56,6 +59,13 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
   final Set<int> _impressedReelIds = {};
   bool _sessionMuted = kIsWeb;
   bool _appVisible = true;
+
+  VideoQualityPreference get _playPref => flexReelQuality(
+        ref.read(videoPlaybackProvider),
+        priority: SubscriptionStatusCache.peek()
+                ?.hasEntitlement('priority_reels_quality') ??
+            false,
+      );
   bool _openingComments = false;
   final Set<int> _videoInitInFlight = {};
 
@@ -231,7 +241,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
       }
 
       try {
-        final qualityPref = ref.read(videoPlaybackProvider);
+        final qualityPref = _playPref;
         final playback = await VideoPlayerHelper.createReelPlayback(
           sources: sources,
           qualityPref: qualityPref,
@@ -305,7 +315,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
   }
 
   void _prefetchAdjacentReelFiles(int index) {
-    final pref = ref.read(videoPlaybackProvider);
+    final pref = _playPref;
     final urls = <String?>[
       if (index > 0) _reels[index - 1].reelVideoSources.prefetchUrl(pref),
       if (index + 1 < _reels.length)

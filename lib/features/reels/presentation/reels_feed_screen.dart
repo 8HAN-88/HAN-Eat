@@ -38,6 +38,8 @@ import '../application/reels_feed_refresh_provider.dart';
 import '../application/reels_swipe_policy.dart';
 import '../application/reels_video_preload.dart';
 import '../../settings/application/video_playback_controller.dart';
+import '../../../services/subscription_status_cache.dart';
+import '../../subscription/application/flex_entitlements.dart';
 
 class ReelsFeedScreen extends ConsumerStatefulWidget {
   const ReelsFeedScreen({
@@ -90,6 +92,13 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
 
   bool _followingOnly = false;
   StreamSubscription<UserRealtimeEvent>? _realtimeSub;
+
+  VideoQualityPreference get _playPref => flexReelQuality(
+        ref.read(videoPlaybackProvider),
+        priority: SubscriptionStatusCache.peek()
+                ?.hasEntitlement('priority_reels_quality') ??
+            false,
+      );
   final Set<int> _videoInitInFlight = {};
 
   String get _cacheVariant =>
@@ -144,7 +153,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
         return;
       }
       try {
-        final qualityPref = ref.read(videoPlaybackProvider);
+        final qualityPref = _playPref;
         final playback = await VideoPlayerHelper.createReelPlayback(
           sources: sources,
           qualityPref: qualityPref,
@@ -196,7 +205,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
           );
         }
       } catch (e) {
-        final startUrl = sources.fastStartUrl(ref.read(videoPlaybackProvider));
+        final startUrl = sources.fastStartUrl(_playPref);
         debugPrint('Ошибка инициализации видео $i ($startUrl): $e');
         if (mounted) {
           setState(() => _videoInitFailed[i] = true);
@@ -227,7 +236,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
 
   void _prefetchAdjacentReelFiles(int index) {
     if (index < 0 || index >= _reels.length) return;
-    final pref = ref.read(videoPlaybackProvider);
+    final pref = _playPref;
     final urls = <String?>[
       if (index > 0) _reels[index - 1].reelVideoSources.prefetchUrl(pref),
       if (index + 1 < _reels.length)
@@ -273,7 +282,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
   void _retainMatchingControllerOnRefresh(List<PostModel> nextReels) {
     final kept = <int, VideoPlayerController>{};
     final cur = _currentIndex;
-    final pref = ref.read(videoPlaybackProvider);
+    final pref = _playPref;
     if (cur >= 0 &&
         cur < _reels.length &&
         cur < nextReels.length &&
