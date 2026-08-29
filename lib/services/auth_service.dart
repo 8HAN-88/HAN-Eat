@@ -9,6 +9,7 @@ import '../core/config/google_auth_config.dart';
 import '../core/phone/phone_hash.dart';
 import '../core/network/haneat_http_client.dart';
 import '../core/network/api_endpoint_resolver.dart';
+import '../core/network/cold_start_policy.dart';
 import 'account_session_service.dart';
 import 'server_config.dart';
 
@@ -251,7 +252,11 @@ class AuthService {
           final uri = Uri.parse('$baseUrl/users/me');
           final response = await http
               .get(uri, headers: {'Authorization': 'Bearer $token'})
-              .timeout(const Duration(seconds: 8));
+              .timeout(
+                kIsWeb
+                    ? ColdStartPolicy.webUsersMeTimeout
+                    : const Duration(seconds: 8),
+              );
           if (response.statusCode == 200) {
             final restored = User.fromJson(
               jsonDecode(response.body) as Map<String, dynamic>,
