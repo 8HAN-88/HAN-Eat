@@ -15,6 +15,7 @@ import '../../../services/server_config.dart';
 import '../../../services/share_link_service.dart';
 import '../../../app/app_router.dart';
 import '../application/channels_list_refresh_provider.dart';
+import '../application/channel_posts_phase.dart';
 import 'channel_settings_bottom_sheet.dart';
 import 'channel_detail_screen_tabs.dart';
 import 'channel_search_screen.dart';
@@ -711,7 +712,8 @@ class ChannelPostsList extends StatefulWidget {
 class ChannelPostsListState extends State<ChannelPostsList> {
   List<PostModel> _posts = [];
   Object? _postsLoadError;
-  bool _isLoading = false;
+  bool _isLoading = true;
+  bool _requestInFlight = false;
   bool _hasMoreOld = true; // Есть ли старые посты (при прокрутке вниз)
   int _offset = 0;
   int? _totalPosts;
@@ -719,7 +721,6 @@ class ChannelPostsListState extends State<ChannelPostsList> {
   late final PageStorageKey _pageStorageKey;
   Timer? _scrollDebounce;
   bool _isLoadingMore = false;
-  bool _initialScrollDone = false;
 
   void refreshPosts() {
     _loadPosts(refresh: true);
@@ -769,8 +770,7 @@ class ChannelPostsListState extends State<ChannelPostsList> {
       final maxScroll = position.maxScrollExtent;
       final currentScroll = position.pixels;
 
-      // При использовании reverse: true, прокрутка вниз означает загрузку старых постов
-      // Прокрутка вниз (к старым постам) - загружаем старые посты
+      // Новые сверху: вниз — более старые посты.
       if (currentScroll >= maxScroll * 0.85) {
         if (!_isLoading && !_isLoadingMore && _hasMoreOld) {
           _loadOldPosts();
@@ -780,7 +780,7 @@ class ChannelPostsListState extends State<ChannelPostsList> {
   }
 
   Future<void> _loadPosts({bool refresh = false}) async {
-    if (_isLoading && !refresh) return;
+    if (_requestInFlight && !refresh) return;
     if (!widget.channel.canViewPosts) {
       if (mounted) {
         setState(() {
@@ -791,15 +791,14 @@ class ChannelPostsListState extends State<ChannelPostsList> {
       return;
     }
 
+    final keepExisting = refresh && _posts.isNotEmpty;
+    _requestInFlight = true;
     setState(() {
-      _isLoading = refresh;
-      _isLoadingMore = !refresh;
+      _isLoading = !keepExisting;
+      _isLoadingMore = false;
       if (refresh) {
-        _posts = [];
         _offset = 0;
         _hasMoreOld = true;
-        _totalPosts = null;
-        _initialScrollDone = false;
         _postsLoadError = null;
       }
     });
@@ -812,12 +811,11 @@ class ChannelPostsListState extends State<ChannelPostsList> {
       if (mounted) {
         setState(() {
           _hasMoreOld = false;
-          if (refresh) {
-            _postsLoadError = e;
-          }
+          _postsLoadError = e;
         });
       }
     } finally {
+      _requestInFlight = false;
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -865,18 +863,11 @@ class ChannelPostsListState extends State<ChannelPostsList> {
         _postsLoadError = null;
       });
 
-      // Прокручиваем вниз к новым постам после первой загрузки
-      // При reverse: true, нужно прокрутить к началу (index 0), так как новые посты внизу
-      if (!_initialScrollDone && _posts.isNotEmpty) {
-        // Используем несколько кадров для надежной прокрутки
+      if (refresh && _posts.isNotEmpty) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_scrollController.hasClients && mounted) {
-              // При reverse: true, прокручиваем к началу списка (к новым постам внизу)
-              _scrollController.jumpTo(0);
-              _initialScrollDone = true;
-            }
-          });
+          if (_scrollController.hasClients && mounted) {
+            _scrollController.jumpTo(0);
+          }
         });
       }
     }
@@ -907,9 +898,6 @@ class ChannelPostsListState extends State<ChannelPostsList> {
       if (!mounted) return;
       if (response.posts.isNotEmpty) {
         setState(() {
-          // При reverse: true, элементы массива отображаются в обратном порядке
-          // Чтобы старые посты отображались вверху, добавляем их в конец массива
-          // _posts[0] отображается внизу (новые), _posts[last] отображается вверху (старые)
           final newPosts = response.posts
               .map((p) {
                 try {
@@ -944,22 +932,24 @@ class ChannelPostsListState extends State<ChannelPostsList> {
 
   @override
   Widget build(BuildContext context) {
-    if (_posts.isEmpty && _isLoading) {
-      return ListView.builder(
-        controller: _scrollController,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        itemCount: 3,
-        itemBuilder: (context, index) => Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 600),
-            child: _SkeletonPostCard(),
+    switch (channelPostsPhase(
+      hasPosts: _posts.isNotEmpty,
+      isLoading: _isLoading,
+      error: _postsLoadError,
+    )) {
+      case ChannelPostsPhase.loading:
+        return ListView.builder(
+          controller: _scrollController,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          itemCount: 3,
+          itemBuilder: (context, index) => Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 600),
+              child: _SkeletonPostCard(),
+            ),
           ),
-        ),
-      );
-    }
-
-    if (_posts.isEmpty) {
-      if (_postsLoadError != null) {
+        );
+      case ChannelPostsPhase.error:
         return AppEmptyState(
           icon: Icons.cloud_off_rounded,
           title: 'Не удалось загрузить посты',
@@ -972,19 +962,19 @@ class ChannelPostsListState extends State<ChannelPostsList> {
             child: const Text('Повторить'),
           ),
         );
-      }
-      return const ChannelTabEmptyPlaceholder(
-        icon: Icons.inbox_outlined,
-        title: 'Здесь пока нет постов',
-        subtitle: 'Как только автор что-то опубликует — вы увидите это здесь.',
-      );
+      case ChannelPostsPhase.empty:
+        return const ChannelTabEmptyPlaceholder(
+          icon: Icons.inbox_outlined,
+          title: 'Здесь пока нет постов',
+          subtitle: 'Как только автор что-то опубликует — вы увидите это здесь.',
+        );
+      case ChannelPostsPhase.list:
+        break;
     }
 
     return ListView.builder(
       key: _pageStorageKey,
       controller: _scrollController,
-      reverse:
-          true, // Используем reverse, чтобы новые посты были внизу визуально
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       itemCount: _posts.length + (_hasMoreOld && _isLoadingMore ? 1 : 0),
       itemBuilder: (context, index) {

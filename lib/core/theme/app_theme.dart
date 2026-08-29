@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'app_tokens.dart';
 import 'app_typography.dart';
 import 'color_schemes.dart';
+import 'web_page_transitions.dart';
 
 class AppTheme {
   const AppTheme._();
@@ -40,15 +41,7 @@ class AppTheme {
         color: scheme.primary,
         circularTrackColor: scheme.primaryContainer.withValues(alpha: 0.6),
       ),
-      pageTransitionsTheme: const PageTransitionsTheme(
-        builders: {
-          TargetPlatform.android: ZoomPageTransitionsBuilder(),
-          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-          TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
-          TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
-          TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
-        },
-      ),
+      pageTransitionsTheme: appPageTransitionsTheme(),
       cardTheme: CardThemeData(
         color: scheme.surface,
         elevation: 0,
@@ -292,15 +285,7 @@ class AppTheme {
         color: scheme.primary,
         circularTrackColor: scheme.primaryContainer.withValues(alpha: 0.45),
       ),
-      pageTransitionsTheme: const PageTransitionsTheme(
-        builders: {
-          TargetPlatform.android: ZoomPageTransitionsBuilder(),
-          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-          TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
-          TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
-          TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
-        },
-      ),
+      pageTransitionsTheme: appPageTransitionsTheme(),
       cardTheme: CardThemeData(
         color: scheme.surface,
         elevation: 0,

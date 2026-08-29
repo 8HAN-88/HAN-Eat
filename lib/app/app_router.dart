@@ -1007,6 +1007,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           }
           final postType = state.uri.queryParameters['type'] ?? 'text';
           return MaterialPage(
+            fullscreenDialog: true,
             child: CreateChannelPostScreen(
               channelId: channelId,
               postType: postType,
@@ -1033,6 +1034,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   ? extra.toJson()
                   : null;
           return MaterialPage(
+            fullscreenDialog: true,
             child: CreateChannelPostScreen(
               channelId: channelId,
               postId: postId,
