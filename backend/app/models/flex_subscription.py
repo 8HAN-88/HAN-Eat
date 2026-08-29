@@ -76,7 +76,6 @@ class UserFlexSlot(Base):
     __tablename__ = "user_flex_slots"
     __table_args__ = (
         UniqueConstraint("user_id", "feature_id", name="uq_flex_slot_user_feature"),
-        UniqueConstraint("user_id", "assigned_level", name="uq_flex_slot_user_level"),
     )
 
     id = Column(Integer, primary_key=True, index=True)

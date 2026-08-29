@@ -9,9 +9,13 @@ void main() {
   });
 
   test('classic products land on the same ladder', () {
-    expect(FlexPurchaseLadder.levelForClassicProduct('ai'), 4);
-    expect(FlexPurchaseLadder.levelForClassicProduct('creator'), 7);
+    expect(FlexPurchaseLadder.levelForClassicProduct('ai'), 6);
+    expect(FlexPurchaseLadder.levelForClassicProduct('creator'), 9);
     expect(FlexPurchaseLadder.levelForClassicProduct('pro'), 10);
     expect(FlexPurchaseLadder.levelForClassicProduct(null), 0);
+    expect(FlexPurchaseLadder.classicProductAtLevel(6), 'ai');
+    expect(FlexPurchaseLadder.classicProductAtLevel(9), 'creator');
+    expect(FlexPurchaseLadder.classicProductAtLevel(10), 'pro');
+    expect(FlexPurchaseLadder.classicProductAtLevel(4), isNull);
   });
 }

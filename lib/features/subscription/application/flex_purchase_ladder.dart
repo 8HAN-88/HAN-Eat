@@ -12,17 +12,32 @@ class FlexPurchaseLadder {
     return basePriceRub + (clamped - 1) * stepPriceRub;
   }
 
-  /// Старые AI / Creator / Pro открывают ту же ленту на нужной границе.
+  /// Старые AI / Creator / Pro открывают полный набор того тарифа, не первый
+  /// уровень границы: AI = вся зона B, Creator = авторские до Pro, Pro = 10.
   static int levelForClassicProduct(String? product) {
     switch (product) {
       case 'ai':
-        return 4;
+        return 6;
       case 'creator':
-        return 7;
+        return 9;
       case 'pro':
         return 10;
       default:
         return 0;
+    }
+  }
+
+  /// Обратная метка на лестнице: какой классический пакет закрывает уровень.
+  static String? classicProductAtLevel(int level) {
+    switch (level) {
+      case 6:
+        return 'ai';
+      case 9:
+        return 'creator';
+      case 10:
+        return 'pro';
+      default:
+        return null;
     }
   }
 }
