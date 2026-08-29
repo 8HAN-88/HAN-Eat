@@ -73,64 +73,21 @@ def _ru_subscription_prices_response(
         "currency": "RUB",
         "trial_days": settings.SUBSCRIPTION_TRIAL_DAYS,
         "checkout_available": checkout_available,
-        "tiers": {
-            "ai": {
-                "name": "HanWe AI",
-                "monthly": {
-                    "price": settings.AI_MONTHLY_PRICE_RUB,
-                    "currency": "RUB",
-                    "interval": "month",
-                },
-                "trial_eligible": True,
-                "benefits": [
-                    "Ускоренная работа AI в приложении",
-                    "Сохранённые посты офлайн",
-                    "Расширенные рекомендации в ленте",
-                    "Без рекламы (когда появится в приложении)",
-                ],
-            },
-            "creator": {
-                "name": "HanWe Creator",
-                "monthly": {
-                    "price": settings.CREATOR_MONTHLY_PRICE_RUB,
-                    "currency": "RUB",
-                    "interval": "month",
-                },
-                "trial_eligible": False,
-                "benefits": [
-                    "Аналитика канала и контента",
-                    "Продвижение постов",
-                    "Закрепление важных публикаций",
-                    "Отложенная публикация",
-                    "Оформление и бейдж канала",
-                    "Инструменты для авторов",
-                    "Без рекламы (когда появится в приложении)",
-                ],
-            },
-            "pro": {
-                "name": "HanWe Pro",
-                "monthly": {
-                    "price": settings.PRO_MONTHLY_PRICE_RUB,
-                    "currency": "RUB",
-                    "interval": "month",
-                },
-                "trial_eligible": True,
-                "recommended": True,
-                "benefits": [
-                    "Всё из тарифа HanWe AI",
-                    "Всё из тарифа HanWe Creator",
-                    "Приоритетная поддержка",
-                    "Максимальный доступ ко всем функциям",
-                ],
-            },
+        "model": "flex",
+        "flex": {
+            "base_price_rub": 39,
+            "step_price_rub": 10,
+            "max_level": 10,
+            "formula": "39 + (level - 1) * 10",
         },
+        "tiers": {},
         "monthly": {
-            "price": settings.PRO_MONTHLY_PRICE_RUB,
+            "price": 39,
             "currency": "RUB",
             "interval": "month",
         },
         "yearly": {
-            "price": settings.PLUS_YEARLY_PRICE_RUB,
+            "price": 390,
             "currency": "RUB",
             "interval": "year",
         },
@@ -141,8 +98,9 @@ def _ru_subscription_prices_response(
 
 
 class CreateCheckoutSessionRequest(BaseModel):
-    plan: str = "monthly"  # monthly | yearly
-    product: str = "pro"  # ai | creator | pro
+    plan: str = "monthly"
+    product: str = "flex"
+    flex_level: Optional[int] = None
     success_url: Optional[str] = None
     cancel_url: Optional[str] = None
 
@@ -374,18 +332,39 @@ async def create_checkout_session(
             detail="Plan must be 'monthly' or 'yearly'",
         )
 
-    product = (request.product or "pro").strip().lower()
-    if product not in ("ai", "creator", "pro"):
+    product = (request.product or "flex").strip().lower()
+    if product in ("ai", "creator", "pro"):
+        from app.services.flex_subscription_service import LEGACY_TIER_LEVELS, price_for_level
+
+        mapped = LEGACY_TIER_LEVELS.get(product, 6)
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail={
+                "code": "FLEX_SUBSCRIPTION_ONLY",
+                "message": "Классические тарифы отключены. Оформите гибкую подписку.",
+                "flex_level": mapped,
+                "price_rub": price_for_level(mapped),
+            },
+        )
+    if product != "flex":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Product must be 'ai', 'creator', or 'pro'",
+            detail="Product must be 'flex'",
         )
 
+    from app.services.flex_subscription_service import price_for_level
+
     subscription_service = SubscriptionService(db)
-    estimate = subscription_service.estimate_upgrade_charge(
-        current_user.id, product, request.plan
-    )
-    amount = float(estimate["amount_due"])
+    flex_level = int(request.flex_level or 1)
+    flex_level = max(1, min(10, flex_level))
+    amount = float(price_for_level(flex_level))
+    estimate = {
+        "amount_due": amount,
+        "full_price": amount,
+        "is_upgrade": False,
+        "credit_rub": 0,
+        "from_tier": "flex",
+    }
 
     try:
         if provider == "tbank":
@@ -396,8 +375,7 @@ async def create_checkout_session(
                     detail="Payment service (T-Bank) is not available",
                 )
 
-            tier_names = {"ai": "HanWe AI", "creator": "HanWe Creator", "pro": "HanWe Pro"}
-            description = f"Подписка {tier_names.get(product, product)} (месяц)"
+            description = f"Гибкая подписка · уровень {flex_level} ({int(amount)} ₽/мес)"
             if estimate.get("is_upgrade"):
                 description += (
                     f", апгрейд с {_tier_label(estimate.get('from_tier'))}, "
@@ -408,14 +386,14 @@ async def create_checkout_session(
             if estimate.get("is_upgrade"):
                 receipt_line += f", апгрейд −{estimate.get('credit_rub', 0):.0f} ₽"
 
-            metadata_extra = {}
+            metadata_extra = {"flex_level": str(flex_level)}
             if estimate.get("is_upgrade"):
-                metadata_extra = {
+                metadata_extra.update({
                     "is_upgrade": "1",
                     "upgrade_from": str(estimate.get("from_tier") or ""),
                     "credit_rub": f"{estimate.get('credit_rub', 0):.2f}",
                     "full_price_rub": f"{estimate.get('full_price', amount):.2f}",
-                }
+                })
 
             success_url = (
                 request.success_url or f"{settings.FRONTEND_URL}/subscription/success"
@@ -472,8 +450,7 @@ async def create_checkout_session(
                     detail="Payment service (YooKassa) is not available"
                 )
             
-            tier_names = {"ai": "HanWe AI", "creator": "HanWe Creator", "pro": "HanWe Pro"}
-            description = f"Подписка {tier_names.get(product, product)} (месяц)"
+            description = f"Гибкая подписка · уровень {flex_level} ({int(amount)} ₽/мес)"
             if estimate.get("is_upgrade"):
                 description += (
                     f", апгрейд с {_tier_label(estimate.get('from_tier'))}, "
@@ -484,14 +461,14 @@ async def create_checkout_session(
             if estimate.get("is_upgrade"):
                 receipt_line += f", апгрейд −{estimate.get('credit_rub', 0):.0f} ₽"
 
-            metadata_extra = {}
+            metadata_extra = {"flex_level": str(flex_level)}
             if estimate.get("is_upgrade"):
-                metadata_extra = {
+                metadata_extra.update({
                     "is_upgrade": "1",
                     "upgrade_from": str(estimate.get("from_tier") or ""),
                     "credit_rub": f"{estimate.get('credit_rub', 0):.2f}",
                     "full_price_rub": f"{estimate.get('full_price', amount):.2f}",
-                }
+                })
 
             result = yookassa_service.create_payment(
                 user_id=current_user.id,

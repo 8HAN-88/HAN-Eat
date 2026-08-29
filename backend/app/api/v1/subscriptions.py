@@ -1,5 +1,5 @@
 """
-API endpoints для подписок (тарифы free | ai | creator | pro).
+API endpoints для подписок (гибкие уровни).
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -46,7 +46,7 @@ class SubscriptionResponse(BaseModel):
 
 
 class StartTrialRequest(BaseModel):
-    product: str = "ai"  # ai | pro
+    product: str = "flex"
 
 
 class CancelSubscriptionRequest(BaseModel):
@@ -60,21 +60,21 @@ async def start_subscription_trial(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    """Бесплатный пробный период (без ЮKassa), только ai/pro."""
-    product = (request.product or "ai").strip().lower()
-    if product not in ("ai", "pro"):
+    """Бесплатный пробный период гибкой подписки (уровень 6)."""
+    product = (request.product or "flex").strip().lower()
+    if product not in ("flex", "ai", "pro"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Trial is only available for 'ai' or 'pro'",
+            detail="Trial is only available for the flexible subscription",
         )
     svc = SubscriptionService(db)
-    if not svc.trial_eligible(current_user.id, product):
+    if not svc.trial_eligible(current_user.id, "flex"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Trial is not available for this account",
         )
     try:
-        sub = svc.start_trial(current_user.id, product)
+        sub = svc.start_trial(current_user.id, "flex")
         from app.services.analytics_service import AnalyticsService
 
         AnalyticsService(db).log_event(
@@ -95,7 +95,7 @@ async def start_subscription_trial(
         return {
             "success": True,
             "subscription": SubscriptionResponse.model_validate(sub),
-            "message": f"Пробный период HanWe {product.upper()} активирован",
+            "message": "Пробный период гибкой подписки активирован",
         }
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

@@ -19,7 +19,7 @@ void main() {
       _wrap(const SubscriptionScreen()),
     );
     await tester.pump();
-    expect(find.text('Подписка'), findsOneWidget);
+    expect(find.text('Моя подписка'), findsWidgets);
   });
 
   testWidgets('CreatorToolsScreen mounts', (tester) async {

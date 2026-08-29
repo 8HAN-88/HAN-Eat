@@ -14,8 +14,6 @@ from app.core.entitlements import (
     SubscriptionTier,
     normalize_tier,
     subscription_status_payload,
-    tier_includes_ai,
-    tier_includes_creator,
 )
 from app.models.subscription import Subscription
 from app.models.user import User
@@ -46,43 +44,8 @@ def _is_trial_status(status: Optional[str]) -> bool:
 
 
 def upgrade_options_for_tier(tier: SubscriptionTier, is_active: bool) -> list:
-    """Какие тарифы можно оформить поверх текущего (оплата через ЮKassa)."""
-    if not is_active:
-        return [
-            {"product": p, "name": _tier_display(p), "monthly_price": TIER_PRICES_RUB[p]()}
-            for p in ("ai", "creator", "pro")
-        ]
-    if tier == "pro":
-        return []
-    options = []
-    if tier == "ai":
-        options.append(
-            {
-                "product": "pro",
-                "name": "HanWe Pro",
-                "monthly_price": TIER_PRICES_RUB["pro"](),
-                "reason": "Добавит инструменты автора (Creator) к вашему AI",
-            }
-        )
-    elif tier == "creator":
-        options.append(
-            {
-                "product": "pro",
-                "name": "HanWe Pro",
-                "monthly_price": TIER_PRICES_RUB["pro"](),
-                "reason": "Добавит AI-возможности к Creator",
-            }
-        )
-    elif tier == "free":
-        for p in ("ai", "creator", "pro"):
-            options.append(
-                {
-                    "product": p,
-                    "name": _tier_display(p),
-                    "monthly_price": TIER_PRICES_RUB[p](),
-                }
-            )
-    return options
+    """Классические тарифы сняты — апгрейд только через уровни flex."""
+    return []
 
 
 def _tier_display(product: str) -> str:
@@ -176,20 +139,27 @@ class SubscriptionService:
 
     def is_user_plus(self, user_id: int) -> bool:
         """Совместимость: Plus = доступ к AI."""
-        tier, active = self.effective_tier(user_id)
-        return active and tier_includes_ai(tier)
+        return self.has_ai_access(user_id)
 
     def has_ai_access(self, user_id: int) -> bool:
-        tier, active = self.effective_tier(user_id)
-        if active and tier_includes_ai(tier):
-            return True
+        self._ensure_flex(user_id)
         return self._flex_has_any(user_id, "ai")
 
     def has_creator_access(self, user_id: int) -> bool:
-        tier, active = self.effective_tier(user_id)
-        if active and tier_includes_creator(tier):
-            return True
+        self._ensure_flex(user_id)
         return self._flex_has_any(user_id, "creator")
+
+    def has_priority_support(self, user_id: int) -> bool:
+        self._ensure_flex(user_id)
+        return self._flex_has_any(user_id, "pro")
+
+    def _ensure_flex(self, user_id: int) -> None:
+        try:
+            from app.services.flex_subscription_service import FlexSubscriptionService
+
+            FlexSubscriptionService(self.db).migrate_legacy_if_needed(user_id)
+        except Exception:
+            return
 
     def _flex_has_any(self, user_id: int, kind: str) -> bool:
         try:
@@ -243,14 +213,8 @@ class SubscriptionService:
             is_active=is_active,
         )
         payload["in_grace_period"] = self.in_grace_period(user_id)
-        payload["upgrade_options"] = build_upgrade_options(
-            self.db, user_id, tier, is_active
-        )
-        if tier == "free":
-            payload["trial_eligible"] = {
-                "ai": self.trial_eligible(user_id, "ai"),
-                "pro": self.trial_eligible(user_id, "pro"),
-            }
+        payload["upgrade_options"] = []
+        payload["trial_eligible"] = {"flex": self.trial_eligible(user_id, "flex")}
         if sub:
             payload["subscription"] = {
                 "id": sub.id,
@@ -267,22 +231,30 @@ class SubscriptionService:
         else:
             payload["subscription"] = None
         try:
-            from app.services.flex_subscription_service import FlexSubscriptionService
+            from app.services.flex_subscription_service import (
+                AI_FEATURE_SLUGS,
+                CREATOR_FEATURE_SLUGS,
+                PRO_FEATURE_SLUGS,
+                FlexSubscriptionService,
+            )
 
             flex = FlexSubscriptionService(self.db)
+            flex.migrate_legacy_if_needed(user_id)
             if flex.is_flex_active(user_id):
                 slugs = flex.unlocked_slugs(user_id)
-                ents = dict(payload.get("entitlements") or {})
+                ents = {k: False for k in (payload.get("entitlements") or {})}
                 for slug in slugs:
                     ents[slug] = True
-                if slugs:
-                    ents["premium_badge"] = True
-                    ents["ad_free"] = ents.get("ad_free") or ("ad_free" in slugs)
+                ents["ad_free"] = "ad_free" in slugs
+                ents["premium_badge"] = bool(slugs)
+                ents["is_plus"] = bool(slugs & AI_FEATURE_SLUGS)
+                ents["pro"] = bool(slugs & PRO_FEATURE_SLUGS)
                 payload["entitlements"] = ents
-                payload["has_ai"] = bool(payload.get("has_ai")) or self.has_ai_access(user_id)
-                payload["has_creator"] = bool(payload.get("has_creator")) or self.has_creator_access(
-                    user_id
-                )
+                payload["has_ai"] = bool(slugs & AI_FEATURE_SLUGS)
+                payload["has_creator"] = bool(slugs & CREATOR_FEATURE_SLUGS)
+                payload["is_plus"] = payload["has_ai"]
+                payload["is_active"] = True
+                payload["subscription_type"] = "flex"
                 me = flex.me_payload(user_id)
                 payload["flex"] = {
                     "active": True,
@@ -290,6 +262,9 @@ class SubscriptionService:
                     "price_rub": me.get("price_rub"),
                     "expires_at": me.get("expires_at"),
                 }
+                expires = me.get("expires_at")
+                if expires:
+                    payload["subscription_expire_at"] = expires
         except Exception:
             pass
         return payload
@@ -310,10 +285,16 @@ class SubscriptionService:
         platform: Optional[str] = None,
         receipt_url: Optional[str] = None,
     ) -> Subscription:
-        p = (product or "pro").strip().lower()
-        if p not in ("ai", "creator", "pro"):
-            p = "pro"
-        product = p
+        p = (product or "flex").strip().lower()
+        from app.services.flex_subscription_service import LEGACY_TIER_LEVELS
+
+        flex_level = LEGACY_TIER_LEVELS.get(p)
+        if p == "flex":
+            flex_level = flex_level or 6
+        elif p not in ("ai", "creator", "pro", "flex"):
+            p = "flex"
+            flex_level = 6
+        product = "flex"
 
         for sub in self.db.query(Subscription).filter(
             Subscription.user_id == user_id,
@@ -346,13 +327,27 @@ class SubscriptionService:
 
         user = self.db.query(User).filter(User.id == user_id).first()
         if user:
-            user.subscription_type = product
+            user.subscription_type = "flex"
             user.subscription_status = sub_status
             user.subscription_expires_at = expires_at
             user.subscription_platform = platform or payment_provider
             user.subscription_auto_renew = auto_renew
 
         self.db.add(subscription)
+        self.db.flush()
+        try:
+            from app.services.flex_subscription_service import FlexSubscriptionService
+
+            flex_row = FlexSubscriptionService(self.db).activate(
+                user_id,
+                int(flex_level or 6),
+                payment_subscription_id=subscription.id,
+                months=1,
+                auto_renew=auto_renew,
+            )
+            flex_row.expires_at = expires_at
+        except Exception:
+            pass
         self.db.commit()
         self.db.refresh(subscription)
 
@@ -713,9 +708,9 @@ class SubscriptionService:
         return True
 
     def trial_eligible(self, user_id: int, product: str) -> bool:
-        """Пробный период: только ai/pro, если пользователь ещё не имел подписки."""
-        p = normalize_tier(product)
-        if p not in ("ai", "pro"):
+        """Один пробный период гибкой подписки, если ещё не было оплат."""
+        p = (product or "flex").strip().lower()
+        if p not in ("flex", "ai", "pro"):
             return False
         had_any = (
             self.db.query(Subscription.id)
@@ -724,15 +719,15 @@ class SubscriptionService:
         )
         return had_any is None
 
-    def start_trial(self, user_id: int, product: str) -> Subscription:
-        if not self.trial_eligible(user_id, product):
+    def start_trial(self, user_id: int, product: str = "flex") -> Subscription:
+        if not self.trial_eligible(user_id, "flex"):
             raise ValueError("Пробный период недоступен")
         days = int(settings.SUBSCRIPTION_TRIAL_DAYS or 7)
         expires_at = datetime.utcnow() + timedelta(days=days)
         return self.create_subscription(
             user_id=user_id,
             plan="monthly",
-            product=product,
+            product="flex",
             payment_provider="trial",
             payment_provider_subscription_id=f"trial-{user_id}-{int(datetime.utcnow().timestamp())}",
             amount=0.0,

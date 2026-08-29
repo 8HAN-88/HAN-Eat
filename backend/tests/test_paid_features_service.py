@@ -333,6 +333,21 @@ def db_session():
             )
             """
         )
+        conn.exec_driver_sql(
+            """
+            CREATE TABLE user_flex_subscriptions (
+                id INTEGER PRIMARY KEY,
+                user_id INTEGER UNIQUE NOT NULL,
+                current_level INTEGER NOT NULL DEFAULT 0,
+                status VARCHAR(20) NOT NULL DEFAULT 'inactive',
+                expires_at DATETIME,
+                auto_renew BOOLEAN NOT NULL DEFAULT 0,
+                payment_subscription_id INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
     Session = sessionmaker(bind=engine)
     session = Session()
     try:
@@ -810,7 +825,7 @@ def test_premium_giveaway_grants_pro(db_session):
     db_session.flush()
     assert giveaway.status == "completed"
     winner = db_session.query(User).filter(User.id == 2).first()
-    assert winner.subscription_type == "pro"
+    assert winner.subscription_type == "flex"
     assert winner.subscription_status == "active"
     assert winner.subscription_expires_at is not None
     assert service.star_balance(2) == 0

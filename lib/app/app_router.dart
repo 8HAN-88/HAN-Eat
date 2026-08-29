@@ -10,7 +10,6 @@ import '../screens/post_by_id_screen.dart';
 import '../features/navigation/presentation/root_shell.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/settings/presentation/profile_auth_screen.dart';
-import '../features/settings/presentation/subscription_screen.dart';
 import '../features/subscription/presentation/flex_subscription_screen.dart';
 import '../features/subscription/presentation/flex_constructor_screen.dart';
 import '../features/subscription/presentation/flex_shop_screen.dart';
@@ -480,12 +479,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: SubscriptionRoute.path,
         name: SubscriptionRoute.name,
-        pageBuilder: (context, state) {
-          final product = state.uri.queryParameters['product'];
-          return MaterialPage(
-            child: SubscriptionScreen(initialProduct: product),
-          );
-        },
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: FlexSubscriptionScreen()),
       ),
       GoRoute(
         path: FlexSubscriptionRoute.path,
@@ -1568,8 +1563,7 @@ class SubscriptionRoute {
   static const path = '/subscription';
   static const name = 'subscription';
 
-  static String pathWithProduct(String product) =>
-      '$path?product=${Uri.encodeComponent(product)}';
+  static String pathWithProduct(String product) => FlexSubscriptionRoute.path;
 }
 
 class FlexSubscriptionRoute {

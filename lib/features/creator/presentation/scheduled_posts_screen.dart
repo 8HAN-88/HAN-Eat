@@ -191,7 +191,7 @@ class _ScheduledPostsScreenState extends ConsumerState<ScheduledPostsScreen> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Доступно с тарифом HanWe Creator или Pro.',
+                'Откройте «Отложенные посты» в гибкой подписке.',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 20),

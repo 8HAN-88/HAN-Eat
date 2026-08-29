@@ -5,5 +5,5 @@ import '../../app/app_router.dart';
 
 /// Opens Creator subscription for gated author actions (schedule, analytics, etc.).
 Future<void> showCreatorUpsell(BuildContext context) async {
-  await context.push(SubscriptionRoute.pathWithProduct('creator'));
+  await context.push(FlexSubscriptionRoute.path);
 }
