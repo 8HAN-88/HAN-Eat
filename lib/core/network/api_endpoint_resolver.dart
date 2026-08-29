@@ -141,12 +141,15 @@ class ApiEndpointResolver {
     // screen / "server stopped responding", even when /api is healthy via nginx.
     _resolvedRoot = sameOrigin;
     usingIpFallback = false;
-    final ok = await _probeHealthJson(sameOrigin);
-    debugPrint(
-      ok
-          ? '📡 Web API: same-origin $sameOrigin'
-          : '📡 Web API: same-origin $sameOrigin (health probe slow/failed, still pinned)',
-    );
+    // Don't await /health here — it blocked StartupShell up to 5s on 3G.
+    unawaited(() async {
+      final ok = await _probeHealthJson(sameOrigin);
+      debugPrint(
+        ok
+            ? '📡 Web API: same-origin $sameOrigin'
+            : '📡 Web API: same-origin $sameOrigin (health probe slow/failed, still pinned)',
+      );
+    }());
   }
 
   static Future<bool> _probeHealthJson(String root) async {

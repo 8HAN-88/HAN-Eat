@@ -18,6 +18,8 @@
   <link rel="icon" type="image/png" href="favicon.png"/>
   <title>HanWe</title>
   <link rel="manifest" href="manifest.json">
+  <link rel="preload" href="flutter_bootstrap.js?v=__HAN_BUILD_ID__" as="script">
+  <link rel="preload" href="main.dart.js" as="script">
   <style>
     :root {
       --bg: #0F1319;
@@ -619,7 +621,7 @@
         flutterStarted = true;
         showOnly('boot-splash');
         var sub = document.getElementById('boot-splash-sub');
-        sub.textContent = 'Проверяем связь…';
+        sub.textContent = 'Загружаем приложение…';
         ping('flutter=1');
 
         var bootRetry = params.get('retry') === '1';
@@ -722,40 +724,36 @@
           }
         });
 
-        // VPN often delays /health — do not block Flutter boot on it.
+        scriptEl = document.createElement('script');
+        scriptEl.src = 'flutter_bootstrap.js?v=' + encodeURIComponent(BUILD);
+        scriptEl.async = true;
+        scriptEl.onerror = function () { failBoot('bootstrap'); };
+        document.head.appendChild(scriptEl);
+
         preflightHealth().then(function (ok) {
-          if (settled) return;
-          if (!ok) {
-            sub.textContent = 'Слабая связь / VPN — всё равно загружаем…';
+          if (settled || firstFrame) return;
+          if (!ok && sub) {
+            sub.textContent = 'Слабая связь — загружаем…';
             ping('health_soft=1');
-          } else {
-            sub.textContent = 'Загружаем приложение…';
           }
-
-          scriptEl = document.createElement('script');
-          scriptEl.src = 'flutter_bootstrap.js?v=' + encodeURIComponent(BUILD);
-          scriptEl.async = true;
-          scriptEl.onerror = function () { failBoot('bootstrap'); };
-          document.head.appendChild(scriptEl);
-
-          setTimeout(function () {
-            if (firstFrame && !primaryUiReady) {
-              primaryUiReady = true;
-              maybeHideSplash();
-            }
-          }, 2500);
-
-          setTimeout(function () {
-            if (!firstFrame && sub) {
-              sub.textContent = 'Слабый интернет — ещё загружаем…';
-            }
-          }, 10000);
-
-          // Slow 3G on iPhone: first JS chunk can exceed 20s.
-          setTimeout(function () {
-            if (!firstFrame) failBoot(ok ? 'timeout' : 'health');
-          }, isIOS ? (ok ? 35000 : 42000) : 30000);
         });
+
+        setTimeout(function () {
+          if (firstFrame && !primaryUiReady) {
+            primaryUiReady = true;
+            maybeHideSplash();
+          }
+        }, 2500);
+
+        setTimeout(function () {
+          if (!firstFrame && sub) {
+            sub.textContent = 'Слабый интернет — ещё загружаем…';
+          }
+        }, 8000);
+
+        setTimeout(function () {
+          if (!firstFrame) failBoot('timeout');
+        }, isIOS ? 35000 : 30000);
       }
 
       function startFlutterAtApp() {
@@ -907,8 +905,13 @@
 
       if (atRoot) {
         if (hasSession()) {
-          openContinueOrAuto();
-          ping('root=1');
+          if (hasBootOk()) {
+            startFlutterAtApp();
+            ping('root=1&fast=1');
+          } else {
+            openContinueOrAuto();
+            ping('root=1');
+          }
         } else {
           showOnly('auth-gate');
           ping('auth=1&root=1');

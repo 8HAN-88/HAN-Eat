@@ -28,7 +28,7 @@ Future<void> bootstrapEarly() async {
   // Web must resolve too: otherwise we stay on api.haneat.app and can brick
   // the PWA when CORS/env drifts (blank/white boot).
   await ApiEndpointResolver.resolve().timeout(
-    Duration(seconds: kIsWeb ? 5 : 3),
+    Duration(seconds: kIsWeb ? 1 : 3),
     onTimeout: () {
       debugPrint(
         '⚠️ ApiEndpointResolver: timeout — продолжаем с конфигом по умолчанию',
