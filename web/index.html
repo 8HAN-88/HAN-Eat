@@ -34,6 +34,7 @@
       min-height: 100%;
       overflow: hidden;
       overscroll-behavior: none;
+      overscroll-behavior-x: none;
       background: radial-gradient(120% 80% at 50% -10%, #243041 0%, var(--bg) 55%);
       color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
@@ -190,6 +191,9 @@
     flt-scene-host, flt-glass-pane, flutter-view, flt-renderer, canvas {
       background-color: var(--bg) !important;
       overscroll-behavior: none;
+      overscroll-behavior-x: none;
+      width: 100% !important;
+      max-width: 100% !important;
     }
     /* Flutter web puts <video> in a platform view that steals taps.
        Reels pause / like must reach Flutter. Controls stay in the app UI. */
@@ -288,6 +292,29 @@
       var flutterStarted = false;
       var isIOS = /iP(hone|od|ad)/.test(navigator.userAgent) ||
         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      // iOS PWA swipe-from-edge walks browser history and shows two screens
+      // side by side (chats | channel, channel | compose). Keep back in-app.
+      if (isIOS) {
+        var edgeStartX = 0;
+        var edgeStartY = 0;
+        var edgeTracking = false;
+        document.addEventListener('touchstart', function (e) {
+          if (!e.touches || !e.touches[0]) return;
+          edgeStartX = e.touches[0].clientX;
+          edgeStartY = e.touches[0].clientY;
+          var edge = 28;
+          edgeTracking = edgeStartX <= edge ||
+            edgeStartX >= (window.innerWidth - edge);
+        }, { capture: true, passive: true });
+        document.addEventListener('touchmove', function (e) {
+          if (!edgeTracking || !e.touches || !e.touches[0]) return;
+          var dx = e.touches[0].clientX - edgeStartX;
+          var dy = e.touches[0].clientY - edgeStartY;
+          if (Math.abs(dx) > Math.abs(dy) + 4) {
+            e.preventDefault();
+          }
+        }, { capture: true, passive: false });
+      }
       // After one successful Flutter paint, skip the manual continue tap next time.
       var BOOT_OK_KEY = 'han_ios_boot_ok_v1';
 

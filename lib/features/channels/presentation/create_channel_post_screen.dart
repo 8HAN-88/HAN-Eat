@@ -1032,7 +1032,16 @@ class _CreateChannelPostScreenState
           (!isEditing) ? _tryParsePost(createdPostJson) : null;
       if (mounted) {
         final scheduled = _scheduledPublishAt != null && widget.postId == null;
-        ScaffoldMessenger.of(context).showSnackBar(
+        final messenger = ScaffoldMessenger.maybeOf(context);
+        if (!isEditing &&
+            !scheduled &&
+            (_selectedPostType == 'reel' || (createdPost?.type == 'reel'))) {
+          await FeedApiCache.clear('rec_reels');
+          notifyReelsFeedRefresh(ref);
+        }
+        if (!context.mounted) return;
+        context.pop(createdPost ?? true);
+        messenger?.showSnackBar(
           SnackBar(
             content: Text(
               widget.postId != null
@@ -1043,13 +1052,6 @@ class _CreateChannelPostScreenState
             ),
           ),
         );
-        if (!isEditing &&
-            !scheduled &&
-            (_selectedPostType == 'reel' || (createdPost?.type == 'reel'))) {
-          await FeedApiCache.clear('rec_reels');
-          notifyReelsFeedRefresh(ref);
-        }
-        context.pop(createdPost ?? true);
       }
     } on ApiClientException catch (e) {
       if (!mounted) return;

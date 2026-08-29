@@ -156,7 +156,7 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
               color: canvas,
               child: DefaultTextStyle(
                 style: defaultBody.copyWith(color: Colors.white),
-                child: content,
+                child: kIsWeb ? ClipRect(child: content) : content,
               ),
             ),
           );

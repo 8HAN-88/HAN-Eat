@@ -53,6 +53,10 @@ jobs:
           mv build/web build/web-social
           mv build/web_root build/web-social-root
 
+          # Slim-plugin recompile leaves a registrant without instance
+          # registerPlugins(); the next variant then fails dart2js.
+          rm -rf .dart_tool/flutter_build
+
           ./scripts/build_web_release.sh https://api.haneat.app kitchen
           rm -rf build/web-kitchen build/web-kitchen-root
           mv build/web build/web-kitchen
