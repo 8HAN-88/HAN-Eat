@@ -15,64 +15,71 @@ Future<bool?> showFlexPreviewSheet(
       return SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                confirmDowngrade ? 'Понизить уровень?' : 'Твоя подписка',
-                style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-              ),
-              const SizedBox(height: 6),
-              Text('Уровень ${preview.level} · ${preview.priceRub} ₽ / месяц'),
-              const SizedBox(height: 12),
-              Text(
-                confirmDowngrade ? 'Станут недоступны' : 'Ты получишь',
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 6),
-              if (confirmDowngrade)
-                for (final f in preview.disabled)
-                  Text('⚠️ ${f.title}')
-              else
-                for (final f in preview.features)
-                  Text('✅ ${f.title}'),
-              if (!confirmDowngrade && preview.nextFeature != null) ...[
-                const SizedBox(height: 14),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Text(
-                  'Следующий уровень · ${preview.nextPriceRub} ₽ / месяц',
+                  confirmDowngrade ? 'Понизить уровень?' : 'Твоя подписка',
+                  style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                const SizedBox(height: 6),
+                Text('Уровень ${preview.level} · ${preview.priceRub} ₽ / месяц'),
+                const SizedBox(height: 12),
+                Text(
+                  confirmDowngrade ? 'Станут недоступны' : 'Ты получишь',
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
-                const SizedBox(height: 4),
-                Text('➕ ${preview.nextFeature!.title}'),
-              ],
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: const Text('Отмена'),
-                    ),
+                const SizedBox(height: 6),
+                if (confirmDowngrade)
+                  for (final f in preview.disabled)
+                    Text('⚠️ ${f.title}')
+                else
+                  for (final f in preview.features)
+                    Text('✅ ${f.title}'),
+                if (!confirmDowngrade &&
+                    (preview.nextFeatures.isNotEmpty ||
+                        preview.nextFeature != null)) ...[
+                  const SizedBox(height: 14),
+                  Text(
+                    'Следующий уровень · ${preview.nextPriceRub} ₽ / месяц',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      child: Text(
-                        confirmDowngrade
-                            ? 'Понизить уровень'
-                            : preview.deltaRub > 0
-                                ? 'Оплатить ${preview.priceRub} ₽'
-                                : 'Продолжить',
+                  const SizedBox(height: 4),
+                  for (final feature in preview.nextFeatures.isNotEmpty
+                      ? preview.nextFeatures
+                      : [preview.nextFeature!])
+                    Text('➕ ${feature.title}'),
+                ],
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Отмена'),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ],
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: Text(
+                          confirmDowngrade
+                              ? 'Понизить уровень'
+                              : preview.deltaRub > 0
+                                  ? 'Оплатить ${preview.priceRub} ₽'
+                                  : 'Продолжить',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       );

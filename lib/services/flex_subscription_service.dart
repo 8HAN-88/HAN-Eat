@@ -285,6 +285,7 @@ class FlexPreview {
     this.nextLevel,
     this.nextPriceRub,
     this.nextFeature,
+    this.nextFeatures = const [],
     this.disabled = const [],
     this.added = const [],
   });
@@ -294,6 +295,7 @@ class FlexPreview {
   final int? nextLevel;
   final int? nextPriceRub;
   final FlexFeature? nextFeature;
+  final List<FlexFeature> nextFeatures;
   final List<FlexFeature> features;
   final List<FlexFeature> disabled;
   final List<FlexFeature> added;
@@ -308,6 +310,10 @@ class FlexPreview {
         nextFeature: json['next_feature'] is Map<String, dynamic>
             ? FlexFeature.fromJson(json['next_feature'] as Map<String, dynamic>)
             : null,
+        nextFeatures: [
+          for (final raw in (json['next_features'] as List<dynamic>? ?? const []))
+            if (raw is Map<String, dynamic>) FlexFeature.fromJson(raw),
+        ],
         features: [
           for (final raw in (json['features'] as List<dynamic>? ?? const []))
             if (raw is Map<String, dynamic>) FlexFeature.fromJson(raw),

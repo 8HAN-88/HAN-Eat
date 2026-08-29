@@ -163,10 +163,114 @@ DEFAULT_FEATURES = (
         "block_key": "C",
     },
     {
+        "slug": "premium_badge",
+        "title": "Значок подписчика",
+        "description": "Отметка в профиле, что есть платная подписка.",
+        "icon": "verified",
+        "default_level": 1,
+        "min_level": 1,
+        "max_level": 3,
+        "feature_type": "movable",
+        "movable": True,
+        "required": False,
+        "block_key": "A",
+    },
+    {
+        "slug": "larger_uploads",
+        "title": "Большие загрузки",
+        "description": "Выше лимит размера фото, видео и файлов.",
+        "icon": "cloud_upload",
+        "default_level": 2,
+        "min_level": 1,
+        "max_level": 3,
+        "feature_type": "movable",
+        "movable": True,
+        "required": False,
+        "block_key": "A",
+    },
+    {
+        "slug": "priority_reels_quality",
+        "title": "Качество рилсов",
+        "description": "Приоритет более чёткого видео в рилсах.",
+        "icon": "hd",
+        "default_level": 3,
+        "min_level": 1,
+        "max_level": 3,
+        "feature_type": "movable",
+        "movable": True,
+        "required": False,
+        "block_key": "A",
+    },
+    {
+        "slug": "creator_badge",
+        "title": "Бейдж автора",
+        "description": "Оформление и бейдж канала.",
+        "icon": "workspace_premium",
+        "default_level": 7,
+        "min_level": 7,
+        "max_level": 10,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "C",
+    },
+    {
+        "slug": "creator_promotion",
+        "title": "Продвижение постов",
+        "description": "Продвижение публикаций в каналах.",
+        "icon": "campaign",
+        "default_level": 8,
+        "min_level": 7,
+        "max_level": 10,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "C",
+    },
+    {
+        "slug": "creator_pinned",
+        "title": "Закрепление постов",
+        "description": "Закрепление важных публикаций в канале.",
+        "icon": "push_pin",
+        "default_level": 8,
+        "min_level": 7,
+        "max_level": 10,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "C",
+    },
+    {
+        "slug": "advanced_stats",
+        "title": "Расширенная статистика",
+        "description": "Подробная статистика каналов и контента.",
+        "icon": "query_stats",
+        "default_level": 9,
+        "min_level": 7,
+        "max_level": 10,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "C",
+    },
+    {
         "slug": "priority_support",
         "title": "Приоритетная поддержка",
         "description": "Обращения обрабатываются вне общей очереди.",
         "icon": "support_agent",
+        "default_level": 10,
+        "min_level": 10,
+        "max_level": 10,
+        "feature_type": "fixed",
+        "movable": False,
+        "required": True,
+        "block_key": "C",
+    },
+    {
+        "slug": "pro",
+        "title": "Полный доступ Pro",
+        "description": "Максимальный доступ ко всем функциям подписки.",
+        "icon": "diamond",
         "default_level": 10,
         "min_level": 10,
         "max_level": 10,
@@ -200,14 +304,22 @@ class FlexSubscriptionService:
         self.db = db
 
     def ensure_catalog(self) -> None:
-        if self.db.query(SubscriptionFeatureBlock).count() == 0:
-            for row in DEFAULT_BLOCKS:
+        existing_blocks = {
+            row.key for row in self.db.query(SubscriptionFeatureBlock).all()
+        }
+        for row in DEFAULT_BLOCKS:
+            if row["key"] not in existing_blocks:
                 self.db.add(SubscriptionFeatureBlock(**row))
-            self.db.flush()
-        if self.db.query(SubscriptionFeature).count() == 0:
-            for index, row in enumerate(DEFAULT_FEATURES, start=1):
-                self.db.add(SubscriptionFeature(sort_order=index, **row))
-            self.db.flush()
+        existing_slugs = {
+            row.slug for row in self.db.query(SubscriptionFeature).all()
+        }
+        next_order = self.db.query(SubscriptionFeature).count()
+        for index, row in enumerate(DEFAULT_FEATURES, start=1):
+            if row["slug"] in existing_slugs:
+                continue
+            next_order += 1
+            self.db.add(SubscriptionFeature(sort_order=next_order or index, **row))
+        self.db.flush()
 
     def list_blocks(self) -> list[SubscriptionFeatureBlock]:
         self.ensure_catalog()
@@ -265,13 +377,9 @@ class FlexSubscriptionService:
     def resolved_layout(self, user_id: Optional[int]) -> list[dict[str, Any]]:
         features = self.list_features()
         overrides = self._user_slots(user_id) if user_id else {}
-        used_levels: set[int] = set()
         layout: list[dict[str, Any]] = []
         for feat in features:
             level = int(overrides.get(feat.id) or feat.default_level or 1)
-            if level in used_levels:
-                level = int(feat.default_level or 1)
-            used_levels.add(level)
             layout.append({"feature": feat, "level": level})
         layout.sort(key=lambda item: (item["level"], item["feature"].id))
         return layout
@@ -339,7 +447,6 @@ class FlexSubscriptionService:
             raise FlexMoveError("Пустая конфигурация", code="flex_empty")
         features = {f.id: f for f in self.list_features()}
         seen_features: set[int] = set()
-        seen_levels: set[int] = set()
         resolved: list[tuple[SubscriptionFeature, int]] = []
         for raw in slots:
             fid = int(raw.get("feature_id") or 0)
@@ -349,8 +456,6 @@ class FlexSubscriptionService:
                 raise FlexMoveError("Функция не найдена", code="flex_feature_missing")
             if fid in seen_features:
                 raise FlexMoveError("Функция указана дважды", code="flex_duplicate_feature")
-            if level in seen_levels:
-                raise FlexMoveError("На одном уровне две функции", code="flex_duplicate_level")
             ok, reason = self.can_place(feat, level, moving=True)
             default_level = self.feature_level(user_id, feat) if user_id else int(feat.default_level)
             if level != default_level and not ok:
@@ -364,7 +469,6 @@ class FlexSubscriptionService:
                 if not ok:
                     raise FlexMoveError(reason)
             seen_features.add(fid)
-            seen_levels.add(level)
             resolved.append((feat, level))
 
         for feat in features.values():
@@ -402,20 +506,12 @@ class FlexSubscriptionService:
         if not moving:
             raise FlexMoveError("Функция не найдена", code="flex_feature_missing")
         feat: SubscriptionFeature = moving["feature"]
-        source = int(moving["level"])
         dest = int(target_level)
-        if source == dest:
+        if int(moving["level"]) == dest:
             return layout
         ok, reason = self.can_place(feat, dest, moving=True)
         if not ok:
             raise FlexMoveError(reason)
-        occupant = next((item for item in layout if int(item["level"]) == dest), None)
-        if occupant:
-            other: SubscriptionFeature = occupant["feature"]
-            ok_other, reason_other = self.can_place(other, source, moving=True)
-            if not ok_other:
-                raise FlexMoveError(reason_other)
-            occupant["level"] = source
         moving["level"] = dest
         payload = [
             {"feature_id": item["feature"].id, "level": int(item["level"])}
@@ -573,6 +669,11 @@ class FlexSubscriptionService:
                 self._feature_item(i["feature"], i["level"], unlocked_now)
                 for i in layout
                 if int(i["level"]) <= dest
+            ],
+            "next_features": [
+                self._feature_item(i["feature"], dest + 1, unlocked_now)
+                for i in layout
+                if dest < MAX_LEVEL and int(i["level"]) == dest + 1
             ],
             "next_feature": self._feature_item(
                 next(i["feature"] for i in layout if int(i["level"]) == dest + 1),

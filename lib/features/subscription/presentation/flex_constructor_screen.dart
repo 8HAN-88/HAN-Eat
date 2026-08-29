@@ -4,6 +4,7 @@ import '../../../services/flex_subscription_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../application/flex_boundary_bands.dart';
+import '../application/flex_level_features.dart';
 import '../application/flex_purchase_ladder.dart';
 
 class FlexConstructorScreen extends StatefulWidget {
@@ -84,12 +85,8 @@ class _FlexConstructorScreenState extends State<FlexConstructorScreen> {
     }
   }
 
-  FlexFeature? _featureAt(FlexMe me, int level) {
-    for (final item in me.levels) {
-      if (item.assignedLevel == level) return item;
-    }
-    return null;
-  }
+  List<FlexFeature> _featuresAt(FlexMe me, int level) =>
+      flexFeaturesAtLevel(me.levels, level);
 
   Future<void> _save() async {
     final me = _me;
@@ -155,7 +152,7 @@ class _FlexConstructorScreenState extends State<FlexConstructorScreen> {
                             level++)
                           _LevelDropZone(
                             level: level,
-                            feature: _featureAt(me, level),
+                            features: _featuresAt(me, level),
                             color: _zoneColor(level),
                             onWillAccept: (feature) {
                               setState(() {
@@ -210,7 +207,7 @@ class _BoundaryHeader extends StatelessWidget {
 class _LevelDropZone extends StatelessWidget {
   const _LevelDropZone({
     required this.level,
-    required this.feature,
+    required this.features,
     required this.color,
     required this.onWillAccept,
     required this.onLeave,
@@ -218,7 +215,7 @@ class _LevelDropZone extends StatelessWidget {
   });
 
   final int level;
-  final FlexFeature? feature;
+  final List<FlexFeature> features;
   final Color color;
   final bool Function(FlexFeature feature) onWillAccept;
   final VoidCallback onLeave;
@@ -255,10 +252,11 @@ class _LevelDropZone extends StatelessWidget {
                 style: const TextStyle(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 8),
-              if (feature == null)
+              if (features.isEmpty)
                 const Text('Свободный слот')
               else
-                _DraggableFeature(feature: feature!),
+                for (final feature in features)
+                  _DraggableFeature(feature: feature),
             ],
           ),
         );
