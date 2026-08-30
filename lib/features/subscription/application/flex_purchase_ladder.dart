@@ -5,7 +5,7 @@ class FlexPurchaseLadder {
   static const int basePriceRub = 39;
   static const int stepPriceRub = 10;
   static const int minLevel = 1;
-  static const int maxLevel = 18;
+  static const int maxLevel = 79;
 
   static int priceRub(int level) {
     final clamped = level.clamp(minLevel, maxLevel);

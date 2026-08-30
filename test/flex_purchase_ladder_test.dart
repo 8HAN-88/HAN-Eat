@@ -7,6 +7,7 @@ void main() {
     expect(FlexPurchaseLadder.priceRub(2), 49);
     expect(FlexPurchaseLadder.priceRub(10), 129);
     expect(FlexPurchaseLadder.priceRub(18), 209);
+    expect(FlexPurchaseLadder.priceRub(79), 819);
   });
 
   test('classic products land on the same ladder', () {

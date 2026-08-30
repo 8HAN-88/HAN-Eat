@@ -71,6 +71,7 @@ def test_price_formula():
     assert price_for_level(5) == 79
     assert price_for_level(10) == 129
     assert price_for_level(18) == 209
+    assert price_for_level(79) == 819
 
 
 def test_catalog_seed_and_default_layout(db_session):
@@ -84,8 +85,13 @@ def test_catalog_seed_and_default_layout(db_session):
     assert "pro" in slugs
     assert "larger_uploads" in slugs
     defaults = [int(item["level"]) for item in layout]
-    assert len(defaults) == 18
-    assert defaults == list(range(1, 19))
+    assert len(defaults) == 79
+    assert defaults == list(range(1, 80))
+    assert any(item["feature"].slug == "chat_translation" and item["level"] == 19 for item in layout)
+    assert any(
+        item["feature"].slug == "custom_emoji_reactions" and item["level"] == 79
+        for item in layout
+    )
     assert any(item["feature"].slug == "ad_free" and item["level"] == 1 for item in layout)
     assert any(
         item["feature"].slug == "priority_support" and item["level"] == 17
@@ -128,7 +134,7 @@ def test_activate_unlocks_assigned_levels(db_session):
     assert me["current_level"] == 7
     assert me["price_rub"] == 99
     assert me["next_feature"]["slug"] == "ai_priority_speed"
-    assert me["max_level"] == 18
+    assert me["max_level"] == 79
 
 
 def test_downgrade_preview_lists_disabled(db_session):
@@ -271,10 +277,11 @@ def test_flex_level_10_unlocks_pro_support(db_session):
     assert status["subscription_type"] == "pro"
     assert status["has_creator"] is True
     assert status["has_ai"] is True
-    from app.core.entitlements import ALL_CATALOG_SLUGS
+    from app.core.entitlements import CORE_CATALOG_SLUGS
 
-    for slug in ALL_CATALOG_SLUGS:
+    for slug in CORE_CATALOG_SLUGS:
         assert sub.has_entitlement(1, slug)
+    assert not sub.has_entitlement(1, "chat_translation")
 
 
 def test_flex_level_7_does_not_unlock_schedule_or_promote(db_session):
@@ -368,3 +375,23 @@ def test_remap_compact_subscribers_keeps_pro_at_top(db_session):
     db_session.commit()
     assert svc.get_flex(1).current_level == 18
     assert svc.remap_compact_subscribers() == 0
+
+
+def test_messenger_tail_starts_after_pro(db_session):
+    from app.services.subscription_service import SubscriptionService
+
+    _user(db_session)
+    svc = FlexSubscriptionService(db_session)
+    svc.activate(1, 18)
+    db_session.commit()
+    sub = SubscriptionService(db_session)
+    assert sub.has_entitlement(1, "pro")
+    assert not sub.has_entitlement(1, "chat_translation")
+    svc.activate(1, 19)
+    db_session.commit()
+    assert sub.has_entitlement(1, "chat_translation")
+    assert not sub.has_entitlement(1, "custom_emoji_reactions")
+    svc.activate(1, 79)
+    db_session.commit()
+    assert sub.has_entitlement(1, "custom_emoji_reactions")
+    assert sub.has_entitlement(1, "business_greeting")

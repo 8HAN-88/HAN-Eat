@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.entitlements import (
-    ALL_CATALOG_SLUGS,
+    CORE_CATALOG_SLUGS,
     SubscriptionTier,
     normalize_tier,
     subscription_entitlements,
@@ -239,7 +239,7 @@ class SubscriptionService:
         except Exception:
             pass
         if "pro" in out:
-            out |= set(ALL_CATALOG_SLUGS)
+            out |= set(CORE_CATALOG_SLUGS)
         return out
 
     def has_entitlement(self, user_id: int, slug: str) -> bool:
