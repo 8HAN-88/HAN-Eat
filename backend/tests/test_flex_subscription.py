@@ -70,6 +70,7 @@ def test_price_formula():
     assert price_for_level(4) == 69
     assert price_for_level(5) == 79
     assert price_for_level(10) == 129
+    assert price_for_level(18) == 209
 
 
 def test_catalog_seed_and_default_layout(db_session):
@@ -82,11 +83,15 @@ def test_catalog_seed_and_default_layout(db_session):
     assert "creator_promotion" in slugs
     assert "pro" in slugs
     assert "larger_uploads" in slugs
+    defaults = [int(item["level"]) for item in layout]
+    assert len(defaults) == 18
+    assert defaults == list(range(1, 19))
     assert any(item["feature"].slug == "ad_free" and item["level"] == 1 for item in layout)
     assert any(
-        item["feature"].slug == "priority_support" and item["level"] == 10
+        item["feature"].slug == "priority_support" and item["level"] == 17
         for item in layout
     )
+    assert any(item["feature"].slug == "pro" and item["level"] == 18 for item in layout)
 
 
 def test_cannot_move_fixed_feature(db_session):
@@ -107,33 +112,34 @@ def test_move_within_block_and_reject_outside(db_session):
     level = svc.feature_level(1, reactions)
     assert level == 3
     with pytest.raises(FlexMoveError):
-        svc.move_feature(1, reactions.id, 5)
+        svc.move_feature(1, reactions.id, 8)
 
 
 def test_activate_unlocks_assigned_levels(db_session):
     _user(db_session)
     svc = FlexSubscriptionService(db_session)
-    svc.activate(1, 4)
+    svc.activate(1, 7)
     db_session.commit()
     slugs = svc.unlocked_slugs(1)
     assert "ad_free" in slugs
     assert "ai_recommendations" in slugs
     assert "creator_tools" not in slugs
     me = svc.me_payload(1)
-    assert me["current_level"] == 4
-    assert me["price_rub"] == 69
+    assert me["current_level"] == 7
+    assert me["price_rub"] == 99
     assert me["next_feature"]["slug"] == "ai_priority_speed"
+    assert me["max_level"] == 18
 
 
 def test_downgrade_preview_lists_disabled(db_session):
     _user(db_session)
     svc = FlexSubscriptionService(db_session)
-    svc.activate(1, 5)
+    svc.activate(1, 8)
     db_session.commit()
-    preview = svc.preview_payload(1, 4)
+    preview = svc.preview_payload(1, 7)
     assert preview["needs_confirm"] is True
     assert any(f["slug"] == "ai_priority_speed" for f in preview["disabled"])
-    assert preview["price_rub"] == 69
+    assert preview["price_rub"] == 99
 
 
 def test_save_custom_layout(db_session):
@@ -141,42 +147,22 @@ def test_save_custom_layout(db_session):
     svc = FlexSubscriptionService(db_session)
     features = {f.slug: f for f in svc.list_features()}
     slots = [
-        {"feature_id": features["ad_free"].id, "level": 1},
-        {"feature_id": features["profile_decoration"].id, "level": 2},
-        {"feature_id": features["exclusive_reactions"].id, "level": 3},
-        {"feature_id": features["ai_recommendations"].id, "level": 4},
-        {"feature_id": features["ai_priority_speed"].id, "level": 5},
-        {"feature_id": features["offline_saved_posts"].id, "level": 6},
-        {"feature_id": features["creator_tools"].id, "level": 7},
-        {"feature_id": features["creator_scheduled_posts"].id, "level": 8},
-        {"feature_id": features["creator_analytics"].id, "level": 9},
-        {"feature_id": features["priority_support"].id, "level": 10},
+        {
+            "feature_id": feat.id,
+            "level": 2 if slug == "profile_decoration" else 5 if slug == "premium_badge" else int(feat.default_level),
+        }
+        for slug, feat in features.items()
     ]
-    for slug, feat in features.items():
-        if slug in {
-            "ad_free",
-            "profile_decoration",
-            "exclusive_reactions",
-            "ai_recommendations",
-            "ai_priority_speed",
-            "offline_saved_posts",
-            "creator_tools",
-            "creator_scheduled_posts",
-            "creator_analytics",
-            "priority_support",
-        }:
-            continue
-        slots.append({"feature_id": feat.id, "level": int(feat.default_level)})
     svc.save_layout(1, slots)
     db_session.commit()
     assert svc.feature_level(1, features["profile_decoration"]) == 2
-    assert svc.feature_level(1, features["exclusive_reactions"]) == 3
+    assert svc.feature_level(1, features["premium_badge"]) == 5
 
 
 def test_expired_flex_has_no_features(db_session):
     _user(db_session)
     svc = FlexSubscriptionService(db_session)
-    row = svc.activate(1, 4)
+    row = svc.activate(1, 7)
     row.expires_at = datetime.utcnow() - timedelta(minutes=1)
     db_session.commit()
     assert svc.unlocked_slugs(1) == set()
@@ -209,7 +195,7 @@ def test_catalog_covers_classic_entitlements(db_session):
 def test_classic_ai_level_unlocks_full_ai_pack(db_session):
     _user(db_session)
     svc = FlexSubscriptionService(db_session)
-    svc.activate(1, 6)
+    svc.activate(1, 9)
     db_session.commit()
     slugs = svc.unlocked_slugs(1)
     assert AI_FEATURE_SLUGS <= slugs
@@ -220,7 +206,7 @@ def test_classic_ai_level_unlocks_full_ai_pack(db_session):
 def test_classic_creator_level_unlocks_full_creator_pack(db_session):
     _user(db_session)
     svc = FlexSubscriptionService(db_session)
-    svc.activate(1, 9)
+    svc.activate(1, 16)
     db_session.commit()
     slugs = svc.unlocked_slugs(1)
     assert AI_FEATURE_SLUGS <= slugs
@@ -233,34 +219,34 @@ def test_preview_lists_all_next_features(db_session):
     svc = FlexSubscriptionService(db_session)
     preview = svc.preview_payload(1, 1)
     next_slugs = {item["slug"] for item in preview["next_features"]}
-    assert "exclusive_reactions" in next_slugs
-    assert "larger_uploads" in next_slugs
+    assert next_slugs == {"premium_badge"}
 
 
 def test_multiple_features_can_share_a_level(db_session):
     _user(db_session)
     svc = FlexSubscriptionService(db_session)
-    badge = next(f for f in svc.list_features() if f.slug == "premium_badge")
-    svc.move_feature(1, badge.id, 2)
+    reactions = next(f for f in svc.list_features() if f.slug == "exclusive_reactions")
+    svc.move_feature(1, reactions.id, 4)
     db_session.commit()
-    at_two = [
+    at_four = [
         item["feature"].slug
         for item in svc.resolved_layout(1)
-        if int(item["level"]) == 2
+        if int(item["level"]) == 4
     ]
-    assert "premium_badge" in at_two
-    assert "larger_uploads" in at_two
+    assert "exclusive_reactions" in at_four
+    assert "larger_uploads" in at_four
 
 
 def test_flex_entitlements_follow_unlocked_slugs(db_session):
     from app.services.subscription_service import SubscriptionService
 
     _user(db_session)
-    FlexSubscriptionService(db_session).activate(1, 1)
+    FlexSubscriptionService(db_session).activate(1, 2)
     db_session.commit()
     sub = SubscriptionService(db_session)
     assert sub.has_entitlement(1, "ad_free")
     assert sub.has_entitlement(1, "premium_badge")
+    assert not sub.has_entitlement(1, "exclusive_reactions")
     assert not sub.has_entitlement(1, "creator_tools")
     assert not sub.has_pro_access(1)
     status = sub.get_status_dict(1)
@@ -273,7 +259,7 @@ def test_flex_level_10_unlocks_pro_support(db_session):
     from app.services.subscription_service import SubscriptionService
 
     _user(db_session)
-    FlexSubscriptionService(db_session).activate(1, 10)
+    FlexSubscriptionService(db_session).activate(1, 18)
     db_session.commit()
     sub = SubscriptionService(db_session)
     assert sub.has_pro_access(1)
@@ -296,11 +282,11 @@ def test_flex_level_7_does_not_unlock_schedule_or_promote(db_session):
     from app.services.subscription_service import SubscriptionService
 
     user = _user(db_session)
-    FlexSubscriptionService(db_session).activate(1, 7)
+    FlexSubscriptionService(db_session).activate(1, 10)
     db_session.commit()
     sub = SubscriptionService(db_session)
     assert sub.has_entitlement(1, "creator_tools")
-    assert sub.has_entitlement(1, "creator_badge")
+    assert not sub.has_entitlement(1, "creator_badge")
     assert not sub.has_entitlement(1, "creator_scheduled_posts")
     assert not sub.has_entitlement(1, "creator_promotion")
     assert not sub.has_entitlement(1, "creator_pinned")
@@ -310,22 +296,75 @@ def test_flex_level_7_does_not_unlock_schedule_or_promote(db_session):
         require_creator_for_schedule(db_session, user, future)
     assert err.value.status_code == 403
 
-    FlexSubscriptionService(db_session).activate(1, 8)
+    FlexSubscriptionService(db_session).activate(1, 12)
     db_session.commit()
     require_creator_for_schedule(db_session, user, future)
     assert sub.has_entitlement(1, "creator_scheduled_posts")
-    assert sub.has_entitlement(1, "creator_promotion")
-    assert sub.has_entitlement(1, "creator_pinned")
+    assert not sub.has_entitlement(1, "creator_promotion")
+    assert not sub.has_entitlement(1, "creator_pinned")
 
 
 def test_flex_level_4_unlocks_ai_recommendations_only(db_session):
     from app.services.subscription_service import SubscriptionService
 
     _user(db_session)
-    FlexSubscriptionService(db_session).activate(1, 4)
+    FlexSubscriptionService(db_session).activate(1, 7)
     db_session.commit()
     sub = SubscriptionService(db_session)
     assert sub.has_entitlement(1, "ai_recommendations")
     assert not sub.has_entitlement(1, "ai_priority_speed")
     assert not sub.has_entitlement(1, "offline_saved_posts")
     assert sub.has_ai_access(1)
+
+
+def test_ensure_catalog_updates_existing_levels(db_session):
+    svc = FlexSubscriptionService(db_session)
+    svc.ensure_catalog()
+    db_session.commit()
+    pro = db_session.query(SubscriptionFeature).filter_by(slug="pro").one()
+    pro.default_level = 10
+    pro.min_level = 10
+    pro.max_level = 10
+    block_c = db_session.query(SubscriptionFeatureBlock).filter_by(key="C").one()
+    block_c.max_level = 10
+    db_session.commit()
+    svc.ensure_catalog()
+    db_session.commit()
+    pro = db_session.query(SubscriptionFeature).filter_by(slug="pro").one()
+    assert pro.default_level == 18
+    assert pro.max_level == 18
+    assert db_session.query(SubscriptionFeatureBlock).filter_by(key="C").one().max_level == 18
+
+
+def test_ensure_catalog_remaps_compact_subscriber(db_session):
+    _user(db_session)
+    svc = FlexSubscriptionService(db_session)
+    svc.ensure_catalog()
+    pro = db_session.query(SubscriptionFeature).filter_by(slug="pro").one()
+    pro.default_level = 10
+    pro.min_level = 10
+    pro.max_level = 10
+    row = svc.activate(1, 10)
+    row.current_level = 10
+    db_session.commit()
+    svc.ensure_catalog()
+    db_session.commit()
+    assert svc.get_flex(1).current_level == 18
+    assert db_session.query(SubscriptionFeature).filter_by(slug="pro").one().default_level == 18
+
+
+def test_remap_compact_subscribers_keeps_pro_at_top(db_session):
+    from app.services.flex_subscription_service import remap_compact_level
+
+    assert remap_compact_level(10) == 18
+    assert remap_compact_level(7) == 11
+    _user(db_session)
+    svc = FlexSubscriptionService(db_session)
+    svc.ensure_catalog()
+    row = svc.activate(1, 10)
+    row.current_level = 10
+    db_session.commit()
+    assert svc.remap_compact_subscribers() == 1
+    db_session.commit()
+    assert svc.get_flex(1).current_level == 18
+    assert svc.remap_compact_subscribers() == 0

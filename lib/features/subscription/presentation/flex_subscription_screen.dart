@@ -103,32 +103,17 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
                       children: [
                         _StatusLine(me: me!),
                         const SizedBox(height: 10),
-                        Card(
-                          margin: EdgeInsets.zero,
-                          clipBehavior: Clip.antiAlias,
-                          child: Column(
-                            children: [
-                              for (var level = 1;
-                                  level <= me.maxLevel;
-                                  level++) ...[
-                                if (level > 1) const Divider(height: 1),
-                                _LevelRow(
-                                  level: level,
-                                  price: FlexPurchaseLadder.priceRub(level),
-                                  features: flexFeaturesAtLevel(
-                                    me.levels,
-                                    level,
-                                  ),
-                                  current:
-                                      me.active && me.currentLevel == level,
-                                  highlight: widget.initialLevel == level,
-                                  busy: _busy,
-                                  onBuy: () => _buyLevel(level),
-                                ),
-                              ],
-                            ],
+                        for (var level = 1; level <= me.maxLevel; level++)
+                          _LevelCard(
+                            level: level,
+                            last: level == me.maxLevel,
+                            price: FlexPurchaseLadder.priceRub(level),
+                            features: flexFeaturesAtLevel(me.levels, level),
+                            current: me.active && me.currentLevel == level,
+                            highlight: widget.initialLevel == level,
+                            busy: _busy,
+                            onBuy: () => _buyLevel(level),
                           ),
-                        ),
                         const SizedBox(height: 12),
                         FilledButton.tonal(
                           onPressed: () =>
@@ -152,7 +137,7 @@ class _StatusLine extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final text = me.active
         ? 'Уровень ${me.currentLevel} · ${me.priceRub} ₽/мес'
-        : 'Одна подписка · ${me.maxLevel} уровней · от ${FlexPurchaseLadder.basePriceRub} ₽';
+        : 'Одна подписка · ${me.maxLevel} ступеней · от ${FlexPurchaseLadder.basePriceRub} ₽';
     return Text(
       text,
       style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -163,9 +148,10 @@ class _StatusLine extends StatelessWidget {
   }
 }
 
-class _LevelRow extends StatelessWidget {
-  const _LevelRow({
+class _LevelCard extends StatelessWidget {
+  const _LevelCard({
     required this.level,
+    required this.last,
     required this.price,
     required this.features,
     required this.current,
@@ -175,6 +161,7 @@ class _LevelRow extends StatelessWidget {
   });
 
   final int level;
+  final bool last;
   final int price;
   final List<FlexFeature> features;
   final bool current;
@@ -185,62 +172,97 @@ class _LevelRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final titles = features.isEmpty
+    final title = features.isEmpty
         ? 'Свободный слот'
         : features.map((f) => f.title).join(' · ');
-    return Material(
-      color: current
-          ? scheme.primaryContainer
-          : highlight
-              ? scheme.secondaryContainer.withValues(alpha: 0.65)
-              : Colors.transparent,
-      child: InkWell(
-        onTap: current || busy ? null : onBuy,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 28,
-                child: Text(
-                  '$level',
-                  style: const TextStyle(fontWeight: FontWeight.w900),
-                ),
-              ),
-              SizedBox(
-                width: 64,
-                child: Text(
-                  '$price ₽',
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
-              Expanded(
-                child: Text(
-                  titles,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    height: 1.2,
-                    color: scheme.onSurface,
+    final description = features
+        .map((f) => f.description?.trim() ?? '')
+        .where((text) => text.isNotEmpty)
+        .join(' ');
+    return Padding(
+      padding: EdgeInsets.only(bottom: last ? 0 : 8),
+      child: Card(
+        margin: EdgeInsets.zero,
+        color: current
+            ? scheme.primaryContainer
+            : highlight
+                ? scheme.secondaryContainer.withValues(alpha: 0.7)
+                : null,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: current || busy ? null : onBuy,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  radius: 16,
+                  backgroundColor: current
+                      ? scheme.primary
+                      : scheme.surfaceContainerHighest,
+                  child: Text(
+                    '$level',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 13,
+                      color: current
+                          ? scheme.onPrimary
+                          : scheme.onSurface,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 6),
-              if (current)
-                Text(
-                  'Ваш',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: scheme.primary,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15,
+                          height: 1.25,
+                        ),
+                      ),
+                      if (description.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          description,
+                          style: TextStyle(
+                            fontSize: 13,
+                            height: 1.3,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 6),
+                      Text(
+                        '$price ₽/мес',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ],
                   ),
-                )
-              else
-                TextButton(
-                  onPressed: busy ? null : onBuy,
-                  child: const Text('Оформить'),
                 ),
-            ],
+                const SizedBox(width: 8),
+                if (current)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      'Ваш',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: scheme.primary,
+                      ),
+                    ),
+                  )
+                else
+                  TextButton(
+                    onPressed: busy ? null : onBuy,
+                    child: const Text('Оформить'),
+                  ),
+              ],
+            ),
           ),
         ),
       ),

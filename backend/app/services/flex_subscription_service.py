@@ -19,8 +19,22 @@ from app.models.subscription import Subscription
 
 BASE_PRICE_RUB = 39
 LEVEL_STEP_RUB = 10
-MAX_LEVEL = 10
+MAX_LEVEL = 18
 MIN_LEVEL = 1
+
+# Compact 10-level catalog → one feature per step. Apply once, highest first.
+COMPACT_LEVEL_TO_LONG = {
+    1: 1,
+    2: 4,
+    3: 6,
+    4: 7,
+    5: 8,
+    6: 9,
+    7: 11,
+    8: 14,
+    9: 16,
+    10: 18,
+}
 
 AI_FEATURE_SLUGS = frozenset(
     {"ai_recommendations", "ai_priority_speed", "offline_saved_posts"}
@@ -39,9 +53,9 @@ CREATOR_FEATURE_SLUGS = frozenset(
 PRO_FEATURE_SLUGS = frozenset({"priority_support", "pro"})
 
 DEFAULT_BLOCKS = (
-    {"key": "A", "title": "Базовые функции", "min_level": 1, "max_level": 3, "sort_order": 1},
-    {"key": "B", "title": "Расширенные функции", "min_level": 4, "max_level": 6, "sort_order": 2},
-    {"key": "C", "title": "PRO", "min_level": 7, "max_level": 10, "sort_order": 3},
+    {"key": "A", "title": "Базовые функции", "min_level": 1, "max_level": 6, "sort_order": 1},
+    {"key": "B", "title": "Расширенные функции", "min_level": 7, "max_level": 9, "sort_order": 2},
+    {"key": "C", "title": "PRO", "min_level": 10, "max_level": 18, "sort_order": 3},
 )
 
 DEFAULT_FEATURES = (
@@ -59,117 +73,26 @@ DEFAULT_FEATURES = (
         "block_key": "A",
     },
     {
-        "slug": "exclusive_reactions",
-        "title": "Эксклюзивные реакции",
-        "description": "Дополнительные реакции в чатах и на постах.",
-        "icon": "favorite",
-        "default_level": 2,
-        "min_level": 1,
-        "max_level": 3,
-        "feature_type": "movable",
-        "movable": True,
-        "required": False,
-        "block_key": "A",
-    },
-    {
-        "slug": "profile_decoration",
-        "title": "Оформление профиля",
-        "description": "Значок подписчика и оформление карточки профиля.",
-        "icon": "palette",
-        "default_level": 3,
-        "min_level": 1,
-        "max_level": 3,
-        "feature_type": "movable",
-        "movable": True,
-        "required": False,
-        "block_key": "A",
-    },
-    {
-        "slug": "ai_recommendations",
-        "title": "AI-рекомендации",
-        "description": "Умная лента и подсказки, что смотреть дальше.",
-        "icon": "auto_awesome",
-        "default_level": 4,
-        "min_level": 4,
-        "max_level": 6,
-        "feature_type": "blocked",
-        "movable": True,
-        "required": False,
-        "block_key": "B",
-    },
-    {
-        "slug": "ai_priority_speed",
-        "title": "Приоритет AI",
-        "description": "Быстрее ответы ассистента и переводчика.",
-        "icon": "bolt",
-        "default_level": 5,
-        "min_level": 4,
-        "max_level": 6,
-        "feature_type": "blocked",
-        "movable": True,
-        "required": False,
-        "block_key": "B",
-    },
-    {
-        "slug": "offline_saved_posts",
-        "title": "Офлайн-сохранёнки",
-        "description": "Сохранённые посты доступны без сети.",
-        "icon": "offline_pin",
-        "default_level": 6,
-        "min_level": 4,
-        "max_level": 6,
-        "feature_type": "blocked",
-        "movable": True,
-        "required": False,
-        "block_key": "B",
-    },
-    {
-        "slug": "creator_tools",
-        "title": "Инструменты автора",
-        "description": "Панель автора и закрытые каналы.",
-        "icon": "handyman",
-        "default_level": 7,
-        "min_level": 7,
-        "max_level": 10,
-        "feature_type": "premium",
-        "movable": True,
-        "required": False,
-        "block_key": "C",
-    },
-    {
-        "slug": "creator_scheduled_posts",
-        "title": "Отложенные посты",
-        "description": "Публикация по расписанию в каналах.",
-        "icon": "schedule",
-        "default_level": 8,
-        "min_level": 7,
-        "max_level": 10,
-        "feature_type": "blocked",
-        "movable": True,
-        "required": False,
-        "block_key": "C",
-    },
-    {
-        "slug": "creator_analytics",
-        "title": "Аналитика автора",
-        "description": "Расширенная статистика каналов и постов.",
-        "icon": "insights",
-        "default_level": 9,
-        "min_level": 7,
-        "max_level": 10,
-        "feature_type": "blocked",
-        "movable": True,
-        "required": False,
-        "block_key": "C",
-    },
-    {
         "slug": "premium_badge",
         "title": "Значок подписчика",
         "description": "Отметка в профиле, что есть платная подписка.",
         "icon": "verified",
-        "default_level": 1,
+        "default_level": 2,
         "min_level": 1,
-        "max_level": 3,
+        "max_level": 6,
+        "feature_type": "movable",
+        "movable": True,
+        "required": False,
+        "block_key": "A",
+    },
+    {
+        "slug": "exclusive_reactions",
+        "title": "Эксклюзивные реакции",
+        "description": "Дополнительные реакции в чатах и на постах.",
+        "icon": "favorite",
+        "default_level": 3,
+        "min_level": 1,
+        "max_level": 6,
         "feature_type": "movable",
         "movable": True,
         "required": False,
@@ -180,9 +103,22 @@ DEFAULT_FEATURES = (
         "title": "Большие загрузки",
         "description": "Выше лимит размера фото, видео и файлов.",
         "icon": "cloud_upload",
-        "default_level": 2,
+        "default_level": 4,
         "min_level": 1,
-        "max_level": 3,
+        "max_level": 6,
+        "feature_type": "movable",
+        "movable": True,
+        "required": False,
+        "block_key": "A",
+    },
+    {
+        "slug": "profile_decoration",
+        "title": "Оформление профиля",
+        "description": "Рамка аватара и оформление карточки профиля.",
+        "icon": "palette",
+        "default_level": 5,
+        "min_level": 1,
+        "max_level": 6,
         "feature_type": "movable",
         "movable": True,
         "required": False,
@@ -193,22 +129,87 @@ DEFAULT_FEATURES = (
         "title": "Качество рилсов",
         "description": "Приоритет более чёткого видео в рилсах.",
         "icon": "hd",
-        "default_level": 3,
+        "default_level": 6,
         "min_level": 1,
-        "max_level": 3,
+        "max_level": 6,
         "feature_type": "movable",
         "movable": True,
         "required": False,
         "block_key": "A",
     },
     {
+        "slug": "ai_recommendations",
+        "title": "AI-рекомендации",
+        "description": "Умная лента и подсказки, что смотреть дальше.",
+        "icon": "auto_awesome",
+        "default_level": 7,
+        "min_level": 7,
+        "max_level": 9,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "B",
+    },
+    {
+        "slug": "ai_priority_speed",
+        "title": "Приоритет AI",
+        "description": "Быстрее ответы ассистента и переводчика.",
+        "icon": "bolt",
+        "default_level": 8,
+        "min_level": 7,
+        "max_level": 9,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "B",
+    },
+    {
+        "slug": "offline_saved_posts",
+        "title": "Офлайн-сохранёнки",
+        "description": "Сохранённые посты доступны без сети.",
+        "icon": "offline_pin",
+        "default_level": 9,
+        "min_level": 7,
+        "max_level": 9,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "B",
+    },
+    {
+        "slug": "creator_tools",
+        "title": "Инструменты автора",
+        "description": "Панель автора и закрытые каналы.",
+        "icon": "handyman",
+        "default_level": 10,
+        "min_level": 10,
+        "max_level": 16,
+        "feature_type": "premium",
+        "movable": True,
+        "required": False,
+        "block_key": "C",
+    },
+    {
         "slug": "creator_badge",
         "title": "Бейдж автора",
         "description": "Оформление и бейдж канала.",
         "icon": "workspace_premium",
-        "default_level": 7,
-        "min_level": 7,
-        "max_level": 10,
+        "default_level": 11,
+        "min_level": 10,
+        "max_level": 16,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "C",
+    },
+    {
+        "slug": "creator_scheduled_posts",
+        "title": "Отложенные посты",
+        "description": "Публикация по расписанию в каналах.",
+        "icon": "schedule",
+        "default_level": 12,
+        "min_level": 10,
+        "max_level": 16,
         "feature_type": "blocked",
         "movable": True,
         "required": False,
@@ -219,9 +220,9 @@ DEFAULT_FEATURES = (
         "title": "Продвижение постов",
         "description": "Продвижение публикаций в каналах.",
         "icon": "campaign",
-        "default_level": 8,
-        "min_level": 7,
-        "max_level": 10,
+        "default_level": 13,
+        "min_level": 10,
+        "max_level": 16,
         "feature_type": "blocked",
         "movable": True,
         "required": False,
@@ -232,9 +233,22 @@ DEFAULT_FEATURES = (
         "title": "Закрепление постов",
         "description": "Закрепление важных публикаций в канале.",
         "icon": "push_pin",
-        "default_level": 8,
-        "min_level": 7,
-        "max_level": 10,
+        "default_level": 14,
+        "min_level": 10,
+        "max_level": 16,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "C",
+    },
+    {
+        "slug": "creator_analytics",
+        "title": "Аналитика автора",
+        "description": "Расширенная статистика каналов и постов.",
+        "icon": "insights",
+        "default_level": 15,
+        "min_level": 10,
+        "max_level": 16,
         "feature_type": "blocked",
         "movable": True,
         "required": False,
@@ -245,9 +259,9 @@ DEFAULT_FEATURES = (
         "title": "Расширенная статистика",
         "description": "Подробная статистика каналов и контента.",
         "icon": "query_stats",
-        "default_level": 9,
-        "min_level": 7,
-        "max_level": 10,
+        "default_level": 16,
+        "min_level": 10,
+        "max_level": 16,
         "feature_type": "blocked",
         "movable": True,
         "required": False,
@@ -258,9 +272,9 @@ DEFAULT_FEATURES = (
         "title": "Приоритетная поддержка",
         "description": "Обращения обрабатываются вне общей очереди.",
         "icon": "support_agent",
-        "default_level": 10,
-        "min_level": 10,
-        "max_level": 10,
+        "default_level": 17,
+        "min_level": 17,
+        "max_level": 17,
         "feature_type": "fixed",
         "movable": False,
         "required": True,
@@ -271,15 +285,20 @@ DEFAULT_FEATURES = (
         "title": "Полный доступ Pro",
         "description": "Максимальный доступ ко всем функциям подписки.",
         "icon": "diamond",
-        "default_level": 10,
-        "min_level": 10,
-        "max_level": 10,
+        "default_level": 18,
+        "min_level": 18,
+        "max_level": 18,
         "feature_type": "fixed",
         "movable": False,
         "required": True,
         "block_key": "C",
     },
 )
+
+
+def remap_compact_level(level: int) -> int:
+    n = int(level or 0)
+    return COMPACT_LEVEL_TO_LONG.get(n, n)
 
 
 def price_for_level(level: int) -> int:
@@ -304,22 +323,68 @@ class FlexSubscriptionService:
         self.db = db
 
     def ensure_catalog(self) -> None:
+        existing_features = {
+            row.slug: row for row in self.db.query(SubscriptionFeature).all()
+        }
+        pro = existing_features.get("pro")
+        compact_catalog = pro is not None and int(pro.default_level or 0) <= 10
         existing_blocks = {
-            row.key for row in self.db.query(SubscriptionFeatureBlock).all()
+            row.key: row for row in self.db.query(SubscriptionFeatureBlock).all()
         }
         for row in DEFAULT_BLOCKS:
-            if row["key"] not in existing_blocks:
+            current = existing_blocks.get(row["key"])
+            if current is None:
                 self.db.add(SubscriptionFeatureBlock(**row))
-        existing_slugs = {
-            row.slug for row in self.db.query(SubscriptionFeature).all()
-        }
-        next_order = self.db.query(SubscriptionFeature).count()
+                continue
+            current.title = row["title"]
+            current.min_level = row["min_level"]
+            current.max_level = row["max_level"]
+            current.sort_order = row["sort_order"]
+        existing = existing_features
+        next_order = len(existing)
         for index, row in enumerate(DEFAULT_FEATURES, start=1):
-            if row["slug"] in existing_slugs:
+            current = existing.get(row["slug"])
+            if current is not None:
+                current.title = row["title"]
+                current.description = row["description"]
+                current.icon = row["icon"]
+                current.block_key = row["block_key"]
+                current.default_level = row["default_level"]
+                current.min_level = row["min_level"]
+                current.max_level = row["max_level"]
+                current.feature_type = row["feature_type"]
+                current.movable = row["movable"]
+                current.required = row["required"]
+                current.sort_order = index
                 continue
             next_order += 1
             self.db.add(SubscriptionFeature(sort_order=next_order or index, **row))
         self.db.flush()
+        if compact_catalog:
+            self.remap_compact_subscribers()
+
+    def remap_compact_subscribers(self) -> int:
+        """Map paid 1–10 compact levels onto the long staircase. Idempotent if anyone is already above 10."""
+        rows = self.db.query(UserFlexSubscription).all()
+        if not rows:
+            return 0
+        if any(int(row.current_level or 0) > 10 for row in rows):
+            return 0
+        changed = 0
+        for row in rows:
+            mapped = remap_compact_level(int(row.current_level or 0))
+            if mapped != int(row.current_level or 0):
+                row.current_level = mapped
+                changed += 1
+        features = {feat.id: feat for feat in self.db.query(SubscriptionFeature).all()}
+        for slot in self.db.query(UserFlexSlot).all():
+            mapped = remap_compact_level(int(slot.assigned_level or 0))
+            feat = features.get(slot.feature_id)
+            if feat is not None:
+                mapped = max(int(feat.min_level), min(int(feat.max_level), mapped))
+            slot.assigned_level = mapped
+        self.db.flush()
+        return changed
 
     def list_blocks(self) -> list[SubscriptionFeatureBlock]:
         self.ensure_catalog()

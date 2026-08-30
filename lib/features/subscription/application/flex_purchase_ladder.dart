@@ -5,23 +5,22 @@ class FlexPurchaseLadder {
   static const int basePriceRub = 39;
   static const int stepPriceRub = 10;
   static const int minLevel = 1;
-  static const int maxLevel = 10;
+  static const int maxLevel = 18;
 
   static int priceRub(int level) {
     final clamped = level.clamp(minLevel, maxLevel);
     return basePriceRub + (clamped - 1) * stepPriceRub;
   }
 
-  /// Старые AI / Creator / Pro открывают полный набор того тарифа, не первый
-  /// уровень границы: AI = вся зона B, Creator = авторские до Pro, Pro = 10.
+  /// Старые AI / Creator / Pro открывают полный набор того тарифа.
   static int levelForClassicProduct(String? product) {
     switch (product) {
       case 'ai':
-        return 6;
-      case 'creator':
         return 9;
+      case 'creator':
+        return 16;
       case 'pro':
-        return 10;
+        return 18;
       default:
         return 0;
     }
@@ -30,11 +29,11 @@ class FlexPurchaseLadder {
   /// Обратная метка на лестнице: какой классический пакет закрывает уровень.
   static String? classicProductAtLevel(int level) {
     switch (level) {
-      case 6:
-        return 'ai';
       case 9:
+        return 'ai';
+      case 16:
         return 'creator';
-      case 10:
+      case 18:
         return 'pro';
       default:
         return null;
