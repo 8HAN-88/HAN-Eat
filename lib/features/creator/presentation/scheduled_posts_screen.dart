@@ -36,7 +36,7 @@ class _ScheduledPostsScreenState extends ConsumerState<ScheduledPostsScreen> {
     });
     try {
       final status = await SubscriptionService.getSubscriptionStatus();
-      if (!status.hasCreator) {
+      if (!status.canSchedulePosts) {
         if (!mounted) return;
         setState(() {
           _loading = false;
@@ -175,7 +175,7 @@ class _ScheduledPostsScreenState extends ConsumerState<ScheduledPostsScreen> {
     }
 
     if (_error == 'creator_required' ||
-        (status != null && !status.hasCreator)) {
+        (status != null && !status.canSchedulePosts)) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),

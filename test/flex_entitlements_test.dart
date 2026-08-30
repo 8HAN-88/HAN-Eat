@@ -7,6 +7,8 @@ void main() {
   test('exclusive reactions appear only when unlocked', () {
     expect(flexChatQuickReactions(false), isNot(contains('💎')));
     expect(flexChatQuickReactions(true), contains('💎'));
+    expect(flexPostReactions(false), isNot(contains('💎')));
+    expect(flexPostReactions(true), contains('💎'));
   });
 
   test('priority reels bump auto to 1080p', () {
@@ -30,5 +32,18 @@ void main() {
     expect(status.hasPro, isTrue);
     expect(status.hasEntitlement('priority_support'), isTrue);
     expect(status.hasAnyPaid, isTrue);
+  });
+
+  test('creator slugs are checked separately', () {
+    final status = SubscriptionStatusResponse(
+      isPlus: false,
+      isActive: true,
+      subscriptionType: 'free',
+      entitlements: const {'creator_tools': true},
+    );
+    expect(status.canCreatorTools, isTrue);
+    expect(status.canSchedulePosts, isFalse);
+    expect(status.canPromotePosts, isFalse);
+    expect(status.canOfflineSaved, isFalse);
   });
 }

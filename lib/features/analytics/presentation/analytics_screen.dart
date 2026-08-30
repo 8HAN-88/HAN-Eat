@@ -33,7 +33,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
   
   Future<void> _loadAnalytics() async {
     final status = ref.read(subscriptionStatusProvider).asData?.value;
-    if (status != null && !status.hasCreator) {
+    if (status != null && !status.canCreatorAnalytics) {
       return;
     }
 
@@ -122,7 +122,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
       );
     }
 
-    if (status != null && !status.hasCreator) {
+    if (status != null && !status.canCreatorAnalytics) {
       return Scaffold(
         appBar: AppBar(title: const Text('Аналитика')),
         body: _creatorUpsell(),
@@ -262,6 +262,8 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
             ),
             const SizedBox(height: 16),
           ],
+          if (analytics.advancedUnlocked && analytics.advanced != null)
+            _buildAdvancedCard(analytics.advanced!),
         ],
       ),
     );
@@ -408,11 +410,48 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
             _buildTopPostsCard(analytics.topPosts),
             const SizedBox(height: 16),
           ],
+          if (analytics.advancedUnlocked && analytics.advanced != null)
+            _buildAdvancedCard(analytics.advanced!),
         ],
       ),
     );
   }
   
+  Widget _buildAdvancedCard(Map<String, dynamic> advanced) {
+    final unique = advanced['unique_engagers'];
+    final bestHour = advanced['best_hour'];
+    final byType = advanced['posts_by_type'] as Map<String, dynamic>? ??
+        advanced['events_by_type'] as Map<String, dynamic>? ??
+        const {};
+    return _buildMetricsCard(
+      title: 'Расширенная статистика',
+      metrics: [
+        if (unique != null)
+          _MetricItem(
+            label: 'Уникальные реакции',
+            value: '$unique',
+            icon: Icons.people_alt_outlined,
+            color: Colors.teal,
+          ),
+        if (bestHour != null)
+          _MetricItem(
+            label: 'Лучший час',
+            value: '$bestHour:00',
+            icon: Icons.schedule,
+            color: Colors.indigo,
+          ),
+        ...byType.entries.take(4).map(
+              (e) => _MetricItem(
+                label: e.key,
+                value: '${e.value}',
+                icon: Icons.pie_chart_outline,
+                color: Colors.orange,
+              ),
+            ),
+      ],
+    );
+  }
+
   Widget _buildMetricsCard({
     required String title,
     required List<_MetricItem> metrics,

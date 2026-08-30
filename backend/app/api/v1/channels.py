@@ -234,8 +234,10 @@ async def create_channel(
             )
         
         is_public = request.is_public if request.is_public is not None else True
-        has_creator = SubscriptionService(db).has_creator_access(current_user.id)
-        assert_can_create_private_channel(is_public, has_creator)
+        has_tools = SubscriptionService(db).has_entitlement(
+            current_user.id, "creator_tools"
+        )
+        assert_can_create_private_channel(is_public, has_tools)
 
         # Создаем канал
         channel = Channel(
@@ -353,9 +355,11 @@ async def update_channel(
         channel.cover_url = request.cover_url
     if request.avatar_url is not None:
         channel.avatar_url = request.avatar_url
-    has_creator = SubscriptionService(db).has_creator_access(current_user.id)
+    has_tools = SubscriptionService(db).has_entitlement(
+        current_user.id, "creator_tools"
+    )
     if request.is_public is not None:
-        assert_can_create_private_channel(request.is_public, has_creator)
+        assert_can_create_private_channel(request.is_public, has_tools)
         channel.is_public = request.is_public
     if request.category is not None:
         channel.category = request.category
@@ -1314,6 +1318,11 @@ async def get_channel_posts(
     poll_bodies = enrich_posts_poll_batch(
         db, posts, current_user.id if current_user else None
     )
+    from app.services.post_reaction_service import summarize_post_reactions
+
+    reactions_by_post = summarize_post_reactions(
+        db, post_ids, current_user.id if current_user else None
+    )
 
     # Формируем ответ
     posts_data = []
@@ -1340,6 +1349,7 @@ async def get_channel_posts(
             "comments_count": comments_count,
             "views_count": views_count,
             "is_liked": is_liked,
+            "reactions": reactions_by_post.get(post.id, []),
         })
     
     # total уже вычислен выше

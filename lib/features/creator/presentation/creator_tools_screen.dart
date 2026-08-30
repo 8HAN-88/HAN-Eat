@@ -32,7 +32,10 @@ class _CreatorToolsScreenState extends State<CreatorToolsScreen> {
     });
     try {
       final status = await SubscriptionService.getSubscriptionStatus();
-      if (!status.hasCreator) {
+      if (!status.canCreatorTools &&
+          !status.canPromotePosts &&
+          !status.canSchedulePosts &&
+          !status.canCreatorAnalytics) {
         if (!mounted) return;
         setState(() {
           _loading = false;
@@ -98,7 +101,13 @@ class _CreatorToolsScreenState extends State<CreatorToolsScreen> {
       children: [
         Card(
           child: InkWell(
-            onTap: () => context.push(PromotedPostsRoute.path),
+            onTap: () {
+              if (stats.canPromote) {
+                context.push(PromotedPostsRoute.path);
+              } else {
+                context.push(SubscriptionRoute.pathWithProduct('creator'));
+              }
+            },
             borderRadius: BorderRadius.circular(12),
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -152,7 +161,13 @@ class _CreatorToolsScreenState extends State<CreatorToolsScreen> {
                   : 'Отложенная публикация в каналах',
             ),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () => context.push(ScheduledPostsRoute.path),
+            onTap: () {
+              if (stats.canSchedule) {
+                context.push(ScheduledPostsRoute.path);
+              } else {
+                context.push(SubscriptionRoute.pathWithProduct('creator'));
+              }
+            },
           ),
         ),
         const SizedBox(height: 12),
@@ -162,7 +177,13 @@ class _CreatorToolsScreenState extends State<CreatorToolsScreen> {
             title: const Text('Аналитика'),
             subtitle: const Text('Статистика постов и канала'),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () => context.pushNamed('analytics'),
+            onTap: () {
+              if (stats.canAnalytics) {
+                context.pushNamed('analytics');
+              } else {
+                context.push(SubscriptionRoute.pathWithProduct('creator'));
+              }
+            },
           ),
         ),
         const SizedBox(height: 12),

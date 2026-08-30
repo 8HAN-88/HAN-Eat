@@ -128,6 +128,8 @@ class PostAnalyticsResponse {
   final double engagementRate;
   final int? avgViewDurationSec;
   final Map<String, dynamic>? demographics;
+  final bool advancedUnlocked;
+  final Map<String, dynamic>? advanced;
   
   PostAnalyticsResponse({
     required this.postId,
@@ -142,6 +144,8 @@ class PostAnalyticsResponse {
     required this.engagementRate,
     this.avgViewDurationSec,
     this.demographics,
+    this.advancedUnlocked = false,
+    this.advanced,
   });
   
   factory PostAnalyticsResponse.fromJson(Map<String, dynamic> json) {
@@ -163,6 +167,8 @@ class PostAnalyticsResponse {
         engagementRate: (json['engagement_rate'] as num).toDouble(),
         avgViewDurationSec: json['avg_view_duration_sec'] as int?,
         demographics: json['demographics'] as Map<String, dynamic>?,
+        advancedUnlocked: json['advanced_unlocked'] as bool? ?? false,
+        advanced: json['advanced'] as Map<String, dynamic>?,
       );
     } else {
       // Старый формат (из существующего analytics_service.dart)
@@ -192,6 +198,8 @@ class PostAnalyticsResponse {
         engagementRate: (metrics['engagement_rate'] as num).toDouble(),
         avgViewDurationSec: null,
         demographics: null,
+        advancedUnlocked: json['advanced_unlocked'] as bool? ?? false,
+        advanced: json['advanced'] as Map<String, dynamic>?,
       );
     }
   }
@@ -269,6 +277,8 @@ class ProfileAnalyticsResponse {
   /// Реакции к просмотрам по всем постам за период, 0–100.
   final double engagementRatePercent;
   final Map<String, dynamic>? demographics;
+  final bool advancedUnlocked;
+  final Map<String, dynamic>? advanced;
 
   ProfileAnalyticsResponse({
     required this.userId,
@@ -285,6 +295,8 @@ class ProfileAnalyticsResponse {
     required this.viewsByDay,
     required this.engagementRatePercent,
     this.demographics,
+    this.advancedUnlocked = false,
+    this.advanced,
   });
 
   factory ProfileAnalyticsResponse.fromJson(Map<String, dynamic> json) {
@@ -339,6 +351,8 @@ class ProfileAnalyticsResponse {
         }).toList(),
         engagementRatePercent: engagementRate,
         demographics: json['demographics'] as Map<String, dynamic>?,
+        advancedUnlocked: json['advanced_unlocked'] as bool? ?? false,
+        advanced: json['advanced'] as Map<String, dynamic>?,
       );
     } catch (e) {
       debugPrint('Ошибка парсинга аналитики профиля: $e');
@@ -358,6 +372,8 @@ class ProfileAnalyticsResponse {
         viewsByDay: [],
         engagementRatePercent: 0.0,
         demographics: null,
+        advancedUnlocked: false,
+        advanced: null,
       );
     }
   }

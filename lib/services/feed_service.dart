@@ -220,15 +220,42 @@ class FeedService {
   }
 }
 
+class FeedWatchNextItem {
+  const FeedWatchNextItem({
+    required this.id,
+    this.title,
+    this.type,
+    this.description,
+  });
+
+  final int id;
+  final String? title;
+  final String? type;
+  final String? description;
+
+  factory FeedWatchNextItem.fromJson(Map<String, dynamic> json) {
+    return FeedWatchNextItem(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      title: json['title'] as String?,
+      type: json['type'] as String?,
+      description: json['description'] as String?,
+    );
+  }
+}
+
 class FeedResponse {
   final List<PostModel> items;
   final String? nextCursor;
   final bool hasMore;
+  final bool aiRecommendations;
+  final List<FeedWatchNextItem> watchNext;
 
   FeedResponse({
     required this.items,
     this.nextCursor,
     required this.hasMore,
+    this.aiRecommendations = false,
+    this.watchNext = const [],
   });
 
   factory FeedResponse.fromJson(Map<String, dynamic> json) {
@@ -250,6 +277,12 @@ class FeedResponse {
       items: posts,
       nextCursor: json['next_cursor'] as String?,
       hasMore: json['has_more'] as bool? ?? false,
+      aiRecommendations: json['ai_recommendations'] as bool? ?? false,
+      watchNext: (json['watch_next'] as List<dynamic>? ?? const [])
+          .whereType<Map>()
+          .map((e) => FeedWatchNextItem.fromJson(Map<String, dynamic>.from(e)))
+          .where((e) => e.id > 0)
+          .toList(),
     );
   }
 }

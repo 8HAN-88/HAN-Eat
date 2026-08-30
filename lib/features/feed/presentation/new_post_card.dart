@@ -7,6 +7,9 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../../models/post_model.dart';
 import '../../../models/post.dart' show PollData;
 import '../../../services/like_service.dart';
+import '../../../services/post_reaction_service.dart';
+import '../../../services/subscription_status_cache.dart';
+import '../../subscription/application/flex_entitlements.dart';
 import '../../../services/saved_posts_service.dart';
 import '../../../services/repost_service.dart';
 import '../../../widgets/report_content_dialog.dart';
@@ -99,6 +102,8 @@ class _NewPostCardState extends State<NewPostCard>
   bool _isReposting = false;
   bool _isSendingDonation = false;
   bool _isBoosting = false;
+  List<PostReactionChip> _reactions = const [];
+  bool _isReacting = false;
   int? _currentUserId;
   bool _showLikeAnimation = false;
   bool _captionExpanded = false;
@@ -153,6 +158,7 @@ class _NewPostCardState extends State<NewPostCard>
     _isReposted = widget.post.isReposted ?? false;
     _repostsCount = widget.post.repostsCount;
     _displayCommentsCount = widget.post.commentsCount;
+    _reactions = widget.post.reactions;
     _currentUserId =
         AuthService.instance.currentUser?.id ?? _cachedCurrentUserId;
     if (_currentUserId == null) {
@@ -235,6 +241,7 @@ class _NewPostCardState extends State<NewPostCard>
     _isReposted = widget.post.isReposted ?? false;
     _repostsCount = widget.post.repostsCount;
     _displayCommentsCount = widget.post.commentsCount;
+    _reactions = widget.post.reactions;
     _syncFeedChannelRepostFuture();
   }
 
@@ -341,6 +348,43 @@ class _NewPostCardState extends State<NewPostCard>
   }
 
 
+  Widget _buildPostReactions(ColorScheme scheme) {
+    final exclusive = SubscriptionStatusCache.peek()
+            ?.hasEntitlement('exclusive_reactions') ??
+        false;
+    final choices = flexPostReactions(exclusive);
+    final mine = {
+      for (final item in _reactions)
+        if (item.reactedByMe) item.emoji,
+    };
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final emoji in choices)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: ActionChip(
+                visualDensity: VisualDensity.compact,
+                label: Text(
+                  () {
+                    final count = _reactions
+                        .where((item) => item.emoji == emoji)
+                        .fold<int>(0, (sum, item) => sum + item.count);
+                    return count > 0 ? '$emoji $count' : emoji;
+                  }(),
+                ),
+                backgroundColor: mine.contains(emoji)
+                    ? scheme.primaryContainer
+                    : scheme.surfaceContainerHighest,
+                onPressed: _isReacting ? null : () => _togglePostReaction(emoji),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _toggleLike() async {
     if (_isLiking) return;
 
@@ -376,6 +420,31 @@ class _NewPostCardState extends State<NewPostCard>
     } finally {
       if (mounted) {
         setState(() => _isLiking = false);
+      }
+    }
+  }
+
+  Future<void> _togglePostReaction(String emoji) async {
+    if (_isReacting) return;
+    setState(() => _isReacting = true);
+    try {
+      final next = await PostReactionService.toggle(
+        postId: widget.post.id,
+        emoji: emoji,
+      );
+      if (!mounted) return;
+      setState(() => _reactions = next);
+    } catch (e) {
+      if (mounted) {
+        showErrorSnackBar(
+          context,
+          e,
+          fallback: 'Не удалось поставить реакцию',
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isReacting = false);
       }
     }
   }
@@ -1606,6 +1675,8 @@ class _NewPostCardState extends State<NewPostCard>
                     ),
                   ],
                 ),
+                const SizedBox(height: 8),
+                _buildPostReactions(scheme),
                 if (_likesCount > 0) ...[
                   const SizedBox(height: 8),
                   GestureDetector(

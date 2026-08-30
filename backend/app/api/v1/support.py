@@ -3,7 +3,8 @@ API endpoints для поддержки
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from typing import Optional, List
+from sqlalchemy import or_
+from typing import Optional
 from pydantic import BaseModel
 from datetime import datetime
 from app.core.database import get_db
@@ -14,6 +15,34 @@ from app.models.subscription import Subscription
 from app.services.subscription_service import SubscriptionService
 
 router = APIRouter()
+
+
+def _ticket_queue_position(db: Session, ticket: SupportTicket) -> Optional[int]:
+    if ticket.status not in ("open", "in_progress"):
+        return None
+    if bool(ticket.is_priority):
+        ahead = (
+            db.query(SupportTicket.id)
+            .filter(
+                SupportTicket.status.in_(("open", "in_progress")),
+                SupportTicket.is_priority.is_(True),
+                SupportTicket.created_at < ticket.created_at,
+            )
+            .count()
+        )
+    else:
+        ahead = (
+            db.query(SupportTicket.id)
+            .filter(
+                SupportTicket.status.in_(("open", "in_progress")),
+                or_(
+                    SupportTicket.is_priority.is_(True),
+                    SupportTicket.created_at < ticket.created_at,
+                ),
+            )
+            .count()
+        )
+    return int(ahead) + 1
 
 
 class CreateTicketRequest(BaseModel):
@@ -77,9 +106,10 @@ async def create_support_ticket(
         "message": (
             "Обращение создано. Мы ответим в ближайшее время."
             if not is_priority
-            else "Приоритетное обращение HanWe Pro создано — обработаем в первую очередь."
+            else "Приоритетное обращение создано — обработаем вне общей очереди."
         ),
         "is_priority": is_priority,
+        "queue_position": _ticket_queue_position(db, ticket),
     }
 
 
@@ -112,6 +142,8 @@ async def get_user_tickets(
                 "resolution_comment": t.resolution_comment,
                 "created_at": t.created_at.isoformat() if t.created_at else None,
                 "resolved_at": t.resolved_at.isoformat() if t.resolved_at else None,
+                "is_priority": bool(getattr(t, "is_priority", False)),
+                "queue_position": _ticket_queue_position(db, t),
             }
             for t in tickets
         ],
@@ -146,6 +178,8 @@ async def get_ticket(
         "resolution_comment": ticket.resolution_comment,
         "created_at": ticket.created_at.isoformat() if ticket.created_at else None,
         "resolved_at": ticket.resolved_at.isoformat() if ticket.resolved_at else None,
+        "is_priority": bool(getattr(ticket, "is_priority", False)),
+        "queue_position": _ticket_queue_position(db, ticket),
     }
 
 
@@ -218,6 +252,7 @@ async def resolve_ticket(
 async def get_all_tickets(
     status_filter: Optional[str] = Query(None, alias="status"),
     type_filter: Optional[str] = Query(None, alias="type"),
+    priority: Optional[bool] = Query(None),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_admin_required),
@@ -232,6 +267,11 @@ async def get_all_tickets(
     
     if type_filter:
         query = query.filter(SupportTicket.type == type_filter)
+
+    if priority is True:
+        query = query.filter(SupportTicket.is_priority.is_(True))
+    elif priority is False:
+        query = query.filter(SupportTicket.is_priority.is_(False))
     
     tickets = (
         query.order_by(

@@ -728,7 +728,9 @@ class _ChannelManagementScreenState
             hintText: 'выпечка, здоровое, завтрак',
           ),
         ),
-        if (ref.watch(subscriptionStatusProvider).asData?.value?.hasCreator ??
+        if (ref.watch(subscriptionStatusProvider).asData?.value?.hasEntitlement(
+                  'creator_badge',
+                ) ??
             false) ...[
           const SizedBox(height: 16),
           TextFormField(

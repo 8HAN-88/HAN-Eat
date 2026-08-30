@@ -9384,6 +9384,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       case 'translate':
         unawaited(_translateMessage(msg));
         break;
+      case 'assist':
+        unawaited(_assistReply(msg));
+        break;
       case 'report':
         unawaited(_reportMessage(msg));
         break;
@@ -9409,6 +9412,62 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       conversationId: widget.conversationId,
       messageId: msg.id,
     );
+  }
+
+  Future<void> _assistReply(ChatMessage msg) async {
+    final source = _copyableText(msg).trim();
+    if (source.isEmpty) return;
+    try {
+      final result = await ChatService.assistText(text: source, mode: 'reply');
+      if (!mounted) return;
+      if (result.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Ассистент не смог ответить')),
+        );
+        return;
+      }
+      await showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        builder: (ctx) {
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Ответ от AI',
+                    style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(result, style: Theme.of(ctx).textTheme.bodyLarge),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: () {
+                      _controller.text = result;
+                      _controller.selection = TextSelection.collapsed(
+                        offset: result.length,
+                      );
+                      Navigator.pop(ctx);
+                    },
+                    child: const Text('Вставить в ответ'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
   }
 
   Future<void> _translateMessage(ChatMessage msg) async {
@@ -10720,6 +10779,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       canCopyLink: msg.id > 0,
       canForward: !protectContent,
       canTranslate: copyable,
+      canAssist: copyable &&
+          (SubscriptionStatusCache.peek()?.canAiAssist ?? false),
       canReport: !msg.isMine && msg.id > 0,
       canRefundPaidMedia: msg.isMine &&
           msg.id > 0 &&

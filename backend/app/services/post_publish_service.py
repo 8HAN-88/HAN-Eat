@@ -3,17 +3,16 @@
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.core.entitlements import HAN_CREATOR_REQUIRED_CODE
+from app.api.dependencies import require_entitlement_or_403
 from app.models.post import Post
 from app.models.user import User
-from app.services.subscription_service import SubscriptionService
 
 MAX_PROMOTED_POSTS = 5
 
@@ -48,14 +47,13 @@ def require_creator_for_schedule(db: Session, user: User, scheduled_at: Optional
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="scheduled_publish_at must be in the future",
         )
-    if not SubscriptionService(db).has_creator_access(user.id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": HAN_CREATOR_REQUIRED_CODE,
-                "message": "Отложенная публикация доступна с тарифом HanWe Creator или Pro",
-            },
-        )
+    require_entitlement_or_403(
+        db,
+        user.id,
+        "creator_scheduled_posts",
+        "Отложенная публикация доступна с тарифом HanWe Creator или Pro",
+        code=HAN_CREATOR_REQUIRED_CODE,
+    )
 
 
 def defer_post_if_scheduled(
@@ -149,14 +147,13 @@ def promote_post(db: Session, post_id: int, user_id: int) -> Post:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only published posts can be promoted",
         )
-    if not SubscriptionService(db).has_creator_access(user_id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": HAN_CREATOR_REQUIRED_CODE,
-                "message": "Продвижение доступно с тарифом HanWe Creator или Pro",
-            },
-        )
+    require_entitlement_or_403(
+        db,
+        user_id,
+        "creator_promotion",
+        "Продвижение доступно с тарифом HanWe Creator или Pro",
+        code=HAN_CREATOR_REQUIRED_CODE,
+    )
 
     active_promoted = (
         db.query(Post.id)
@@ -188,14 +185,13 @@ def unpromote_post(db: Session, post_id: int, user_id: int) -> Post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
     if post.user_id != user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your post")
-    if not SubscriptionService(db).has_creator_access(user_id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": HAN_CREATOR_REQUIRED_CODE,
-                "message": "Продвижение доступно с тарифом HanWe Creator или Pro",
-            },
-        )
+    require_entitlement_or_403(
+        db,
+        user_id,
+        "creator_promotion",
+        "Продвижение доступно с тарифом HanWe Creator или Pro",
+        code=HAN_CREATOR_REQUIRED_CODE,
+    )
     post.is_promoted = False
     return post
 
@@ -220,14 +216,13 @@ def pin_post(db: Session, post_id: int, user_id: int) -> Post:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only channel posts can be pinned",
         )
-    if not SubscriptionService(db).has_creator_access(user_id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": HAN_CREATOR_REQUIRED_CODE,
-                "message": "Закрепление доступно с тарифом HanWe Creator или Pro",
-            },
-        )
+    require_entitlement_or_403(
+        db,
+        user_id,
+        "creator_pinned",
+        "Закрепление доступно с тарифом HanWe Creator или Pro",
+        code=HAN_CREATOR_REQUIRED_CODE,
+    )
 
     others = (
         db.query(Post)
@@ -256,13 +251,12 @@ def unpin_post(db: Session, post_id: int, user_id: int) -> Post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
     if post.user_id != user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your post")
-    if not SubscriptionService(db).has_creator_access(user_id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": HAN_CREATOR_REQUIRED_CODE,
-                "message": "Закрепление доступно с тарифом HanWe Creator или Pro",
-            },
-        )
+    require_entitlement_or_403(
+        db,
+        user_id,
+        "creator_pinned",
+        "Закрепление доступно с тарифом HanWe Creator или Pro",
+        code=HAN_CREATOR_REQUIRED_CODE,
+    )
     post.is_pinned = False
     return post

@@ -12,6 +12,8 @@ import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/telegram_ui.dart';
 import 'package:go_router/go_router.dart';
+import '../../../app/app_router.dart';
+import '../../settings/application/subscription_status_provider.dart';
 
 class CreateChannelScreen extends ConsumerStatefulWidget {
   const CreateChannelScreen({super.key});
@@ -364,6 +366,20 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
                       ),
                       value: _isPublic,
                       onChanged: (value) {
+                        if (!value) {
+                          final canTools = ref
+                                  .read(subscriptionStatusProvider)
+                                  .asData
+                                  ?.value
+                                  ?.canCreatorTools ??
+                              false;
+                          if (!canTools) {
+                            context.push(
+                              SubscriptionRoute.pathWithProduct('creator'),
+                            );
+                            return;
+                          }
+                        }
                         setState(() => _isPublic = value);
                       },
                     ),

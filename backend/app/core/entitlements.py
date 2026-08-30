@@ -3,6 +3,8 @@
 """
 from typing import Any, Dict, Literal, Optional
 
+from app.core.flex_catalog import CATALOG_FEATURE_SLUGS, CORE_FEATURE_SLUGS
+
 SubscriptionTier = Literal["free", "ai", "creator", "pro"]
 SubscriptionStatus = Literal["active", "expired", "canceled", "trial"]
 
@@ -15,7 +17,11 @@ LOGIN_REQUIRED_CODE = "LOGIN_REQUIRED"
 VALID_PRODUCTS = frozenset({"ai", "creator", "pro"})
 
 EXCLUSIVE_REACTION_EMOJIS = frozenset({"💎", "👑", "⚡", "🦄", "✨", "🖤"})
+STANDARD_POST_REACTION_EMOJIS = ("👍", "❤️", "😂", "🔥", "😮", "😢")
 LARGER_UPLOAD_MULTIPLIER = 2.5
+
+ALL_CATALOG_SLUGS = CATALOG_FEATURE_SLUGS | frozenset({"offline_recipes", "is_plus"})
+CORE_CATALOG_SLUGS = CORE_FEATURE_SLUGS | frozenset({"offline_recipes", "is_plus"})
 
 
 def normalize_tier(subscription_type: Optional[str]) -> SubscriptionTier:

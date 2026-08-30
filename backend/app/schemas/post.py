@@ -82,6 +82,12 @@ class PostChannelResponse(BaseModel):
         from_attributes = True
 
 
+class PostReactionSummary(BaseModel):
+    emoji: str
+    count: int = 0
+    reacted_by_me: bool = False
+
+
 class PostResponse(BaseModel):
     id: int
     type: str
@@ -115,6 +121,7 @@ class PostResponse(BaseModel):
     purchased: bool = True
     is_liked: bool = False
     is_saved: bool = False
+    reactions: List[PostReactionSummary] = []
     published_at: Optional[datetime] = None
     scheduled_publish_at: Optional[datetime] = None
 
@@ -155,6 +162,7 @@ class PostResponse(BaseModel):
             'purchased': True,
             'is_liked': getattr(obj, 'is_liked', False),
             'is_saved': getattr(obj, 'is_saved', False),
+            'reactions': getattr(obj, 'reactions', None) or [],
         }
         
         # Добавляем данные автора, если доступны
