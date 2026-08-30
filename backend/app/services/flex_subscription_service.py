@@ -126,7 +126,7 @@ DEFAULT_FEATURES = (
     {
         "slug": "creator_tools",
         "title": "Инструменты автора",
-        "description": "Панель автора, продвижение и закреп постов.",
+        "description": "Панель автора и закрытые каналы.",
         "icon": "handyman",
         "default_level": 7,
         "min_level": 7,

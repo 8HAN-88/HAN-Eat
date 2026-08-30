@@ -12,7 +12,7 @@ def channel_has_creator_badge(db: Session, channel: Channel) -> bool:
     admin_id = getattr(channel, "admin_user_id", None)
     if not admin_id:
         return False
-    return SubscriptionService(db).has_creator_access(int(admin_id))
+    return SubscriptionService(db).has_entitlement(int(admin_id), "creator_badge")
 
 
 def channel_presentation_fields(db: Session, channel: Channel) -> dict:

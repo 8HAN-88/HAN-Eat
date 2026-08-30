@@ -202,6 +202,15 @@ class SubscriptionStatusResponse {
       hasEntitlement('priority_support') ||
       (isActive && subscriptionType == 'pro');
 
+  bool get canSchedulePosts => hasEntitlement('creator_scheduled_posts');
+  bool get canPromotePosts => hasEntitlement('creator_promotion');
+  bool get canPinPosts => hasEntitlement('creator_pinned');
+  bool get canCreatorAnalytics => hasEntitlement('creator_analytics');
+  bool get canCreatorTools => hasEntitlement('creator_tools');
+  bool get canAdvancedStats => hasEntitlement('advanced_stats');
+  bool get canOfflineSaved => hasEntitlement('offline_saved_posts');
+  bool get canAiAssist => hasAi || hasEntitlement('ai_priority_speed');
+
   bool trialEligibleFor(String product) =>
       trialEligible?[product] == true;
 

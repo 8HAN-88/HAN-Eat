@@ -56,6 +56,7 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
     with AutomaticKeepAliveClientMixin {
   final ScrollController _scrollController = ScrollController();
   List<PostModel> _posts = [];
+  List<FeedWatchNextItem> _watchNext = [];
   bool _isLoading = false;
   bool _hasMore = true;
   String? _nextCursor;
@@ -254,6 +255,7 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
           refresh ? response.items : <PostModel>[..._posts, ...response.items];
       setState(() {
         _posts = nextPosts;
+        _watchNext = refresh ? response.watchNext : _watchNext;
         _nextCursor = response.nextCursor;
         _hasMore = response.hasMore;
         _lastLoadError = null;
@@ -316,6 +318,44 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
 
   Future<void> _loadMore() async {
     await _loadFeed(refresh: false);
+  }
+
+  Widget _buildWatchNext() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Смотреть дальше',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 36,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _watchNext.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                final item = _watchNext[index];
+                final label = (item.title ?? item.description ?? 'Пост').trim();
+                return ActionChip(
+                  label: Text(
+                    label.isEmpty ? 'Пост ${item.id}' : label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  onPressed: () => context.push(PostRoute.pathFor(item.id)),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   double _listBottomPadding(BuildContext context, bool chromeHidden) {
@@ -389,8 +429,14 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
                         (_hasMore ? 1 : 0),
                     itemBuilder: (context, index) {
                       if (index == 0) {
-                        return FeedStoriesStrip(
-                          refreshToken: _storiesRefreshToken,
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            FeedStoriesStrip(
+                              refreshToken: _storiesRefreshToken,
+                            ),
+                            if (_watchNext.isNotEmpty) _buildWatchNext(),
+                          ],
                         );
                       }
                       final banner = _showCacheBanner ? 1 : 0;

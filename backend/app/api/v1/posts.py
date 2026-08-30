@@ -8,6 +8,7 @@ from app.core.database import get_db
 from app.api.dependencies import get_current_user_required, get_current_user
 from app.models.user import User
 from app.models.post import Post
+from pydantic import BaseModel, Field
 from app.schemas.post import (
     CreatePostRequest,
     PollVoteRequest,
@@ -59,12 +60,17 @@ def _apply_viewer_post_flags(
             "media_count": media_count,
         }
     if current_user is None:
+        from app.services.post_reaction_service import summarize_post_reactions
+
         return response.model_copy(
             update={
                 "is_liked": False,
                 "is_saved": False,
                 "purchased": purchased,
                 "body": body,
+                "reactions": summarize_post_reactions(db, [post_id], None).get(
+                    post_id, []
+                ),
             }
         )
     liked = (
@@ -79,12 +85,16 @@ def _apply_viewer_post_flags(
         .first()
         is not None
     )
+    from app.services.post_reaction_service import summarize_post_reactions
+
+    reactions = summarize_post_reactions(db, [post_id], current_user.id).get(post_id, [])
     return response.model_copy(
         update={
             "is_liked": liked,
             "is_saved": saved,
             "purchased": purchased,
             "body": body,
+            "reactions": reactions,
         }
     )
 
@@ -777,4 +787,24 @@ async def get_post(
     if body is not None and body != post.body:
         pr = pr.model_copy(update={"body": body})
     return _apply_viewer_post_flags(db, post_id, pr, current_user)
+
+
+class PostReactionRequest(BaseModel):
+    emoji: str = Field(..., min_length=1, max_length=16)
+
+
+@router.post("/{post_id}/reactions")
+async def set_post_reaction_endpoint(
+    post_id: int,
+    body: PostReactionRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.services.post_reaction_service import set_post_reaction
+
+    reactions = set_post_reaction(
+        db, post_id=post_id, user_id=current_user.id, emoji=body.emoji
+    )
+    db.commit()
+    return {"reactions": reactions}
 

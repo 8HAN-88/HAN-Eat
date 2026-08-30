@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import (
     get_current_user_required,
-    require_han_creator_subscriber,
+    require_entitlement_or_403,
 )
 from app.core.database import get_db
 from app.models.user import User
@@ -74,11 +74,19 @@ async def log_client_event(
 async def get_post_analytics(
     post_id: int,
     days: int = Query(30, ge=1, le=365),
-    current_user: User = Depends(require_han_creator_subscriber),
+    current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    """Получить аналитику поста (автор + тариф Creator/Pro)."""
+    """Получить аналитику поста (автор + creator_analytics)."""
     from app.models.post import Post
+    from app.services.subscription_service import SubscriptionService
+
+    require_entitlement_or_403(
+        db,
+        current_user.id,
+        "creator_analytics",
+        "Аналитика доступна с тарифом Creator или Pro",
+    )
     
     # Проверяем, что пост существует и пользователь является автором
     post = db.query(Post).filter(
@@ -98,32 +106,60 @@ async def get_post_analytics(
         author_id=current_user.id,
         days=days
     )
-    
+    advanced = SubscriptionService(db).has_entitlement(
+        current_user.id, "advanced_stats"
+    )
+    analytics["advanced_unlocked"] = advanced
+    if advanced:
+        analytics["advanced"] = analytics_service.get_post_advanced_stats(
+            post_id=post_id, days=days
+        )
     return analytics
 
 
 @router.get("/profile")
 async def get_profile_analytics(
     days: int = Query(30, ge=1, le=365),
-    current_user: User = Depends(require_han_creator_subscriber),
+    current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    """Получить аналитику профиля (тариф Creator/Pro)."""
+    """Получить аналитику профиля (creator_analytics)."""
+    from app.services.subscription_service import SubscriptionService
+
+    require_entitlement_or_403(
+        db,
+        current_user.id,
+        "creator_analytics",
+        "Аналитика доступна с тарифом Creator или Pro",
+    )
     analytics_service = AnalyticsService(db)
     analytics = analytics_service.get_profile_analytics(
         user_id=current_user.id,
         days=days
     )
-    
+    advanced = SubscriptionService(db).has_entitlement(
+        current_user.id, "advanced_stats"
+    )
+    analytics["advanced_unlocked"] = advanced
+    if advanced:
+        analytics["advanced"] = analytics_service.get_profile_advanced_stats(
+            user_id=current_user.id, days=days
+        )
     return analytics
 
 
 @router.get("/chat-channel")
 async def get_chat_channel_analytics(
     days: int = Query(30, ge=1, le=365),
-    current_user: User = Depends(require_han_creator_subscriber),
+    current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    require_entitlement_or_403(
+        db,
+        current_user.id,
+        "creator_analytics",
+        "Аналитика доступна с тарифом Creator или Pro",
+    )
     analytics_service = AnalyticsService(db)
     return analytics_service.get_chat_channel_insights(
         user_id=current_user.id,

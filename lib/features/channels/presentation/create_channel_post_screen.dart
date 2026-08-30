@@ -97,8 +97,8 @@ class _CreateChannelPostScreenState
 
 
 
-  bool _hasCreatorAccess() {
-    return ref.read(subscriptionStatusProvider).asData?.value?.hasCreator ??
+  bool _canSchedulePosts() {
+    return ref.read(subscriptionStatusProvider).asData?.value?.canSchedulePosts ??
         false;
   }
 
@@ -734,7 +734,7 @@ class _CreateChannelPostScreenState
 
   Widget _buildScheduleTile() {
     final status = ref.watch(subscriptionStatusProvider).asData?.value;
-    final hasCreator = status?.hasCreator ?? false;
+    final hasCreator = status?.canSchedulePosts ?? _canSchedulePosts();
     final label = _scheduledPublishAt == null
         ? 'Опубликовать сразу'
         : 'Запланировано: ${_formatSchedule(_scheduledPublishAt!)}';
@@ -1091,12 +1091,6 @@ class _CreateChannelPostScreenState
 
   @override
   Widget build(BuildContext context) {
-    final status = ref.watch(subscriptionStatusProvider);
-    final hasCreator = status.when(
-      data: (s) => s?.hasCreator ?? false,
-      loading: () => false,
-      error: (_, __) => false,
-    );
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: scheme.surfaceContainerLowest,

@@ -289,6 +289,103 @@ class AnalyticsService:
             "top_posts": top_posts,
             "by_day": daily_stats,
         }
+
+    def get_post_advanced_stats(self, post_id: int, days: int = 30) -> Dict[str, Any]:
+        start_date = datetime.utcnow() - timedelta(days=days)
+        by_type = (
+            self.db.query(AnalyticsEvent.event_type, func.count(AnalyticsEvent.id))
+            .filter(
+                AnalyticsEvent.entity_type == "post",
+                AnalyticsEvent.entity_id == post_id,
+                AnalyticsEvent.created_at >= start_date,
+            )
+            .group_by(AnalyticsEvent.event_type)
+            .all()
+        )
+        by_hour = (
+            self.db.query(
+                func.extract("hour", AnalyticsEvent.created_at).label("hour"),
+                func.count(AnalyticsEvent.id),
+            )
+            .filter(
+                AnalyticsEvent.entity_type == "post",
+                AnalyticsEvent.entity_id == post_id,
+                AnalyticsEvent.event_type == "view",
+                AnalyticsEvent.created_at >= start_date,
+            )
+            .group_by(func.extract("hour", AnalyticsEvent.created_at))
+            .all()
+        )
+        unique_engagers = (
+            self.db.query(func.count(func.distinct(AnalyticsEvent.user_id)))
+            .filter(
+                AnalyticsEvent.entity_type == "post",
+                AnalyticsEvent.entity_id == post_id,
+                AnalyticsEvent.event_type.in_(["like", "comment", "save", "repost"]),
+                AnalyticsEvent.created_at >= start_date,
+            )
+            .scalar()
+            or 0
+        )
+        hour_rows = [
+            {"hour": int(hour or 0), "views": int(cnt)} for hour, cnt in by_hour
+        ]
+        best_hour = max(hour_rows, key=lambda row: row["views"])["hour"] if hour_rows else None
+        return {
+            "events_by_type": {str(name): int(cnt) for name, cnt in by_type},
+            "views_by_hour": hour_rows,
+            "best_hour": best_hour,
+            "unique_engagers": int(unique_engagers),
+        }
+
+    def get_profile_advanced_stats(self, user_id: int, days: int = 30) -> Dict[str, Any]:
+        start_date = datetime.utcnow() - timedelta(days=days)
+        posts = (
+            self.db.query(Post.id, Post.type)
+            .filter(
+                Post.user_id == user_id,
+                Post.status == "published",
+                Post.deleted_at.is_(None),
+            )
+            .all()
+        )
+        post_ids = [row[0] for row in posts]
+        by_type: Dict[str, int] = {}
+        for _, post_type in posts:
+            key = str(post_type or "text")
+            by_type[key] = by_type.get(key, 0) + 1
+        if not post_ids:
+            return {
+                "posts_by_type": by_type,
+                "events_by_type": {},
+                "unique_engagers": 0,
+            }
+        events = (
+            self.db.query(AnalyticsEvent.event_type, func.count(AnalyticsEvent.id))
+            .filter(
+                AnalyticsEvent.entity_type == "post",
+                AnalyticsEvent.entity_id.in_(post_ids),
+                AnalyticsEvent.created_at >= start_date,
+            )
+            .group_by(AnalyticsEvent.event_type)
+            .all()
+        )
+        unique_engagers = (
+            self.db.query(func.count(func.distinct(AnalyticsEvent.user_id)))
+            .filter(
+                AnalyticsEvent.entity_type == "post",
+                AnalyticsEvent.entity_id.in_(post_ids),
+                AnalyticsEvent.event_type.in_(["like", "comment", "save", "repost"]),
+                AnalyticsEvent.created_at >= start_date,
+            )
+            .scalar()
+            or 0
+        )
+        return {
+            "posts_by_type": by_type,
+            "events_by_type": {str(name): int(cnt) for name, cnt in events},
+            "unique_engagers": int(unique_engagers),
+        }
     
     def _get_daily_stats(
         self,

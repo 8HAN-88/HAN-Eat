@@ -95,11 +95,14 @@ class FeedService:
         hide_promoted = SubscriptionService(self.db).has_entitlement(
             user_id, "ad_free"
         )
+        ai_recommendations = SubscriptionService(self.db).has_entitlement(
+            user_id, "ai_recommendations"
+        )
 
         # Проверяем кэш (только если нет курсора, т.к. курсор означает новую страницу)
         cache_key = (
-            f"feed:v2:{user_id}:{feed_type}:include_recipes={include_recipes}:following_only={following_only}"
-            f":sort={sort_by}:hide_promo={hide_promoted}"
+            f"feed:v3:{user_id}:{feed_type}:include_recipes={include_recipes}:following_only={following_only}"
+            f":sort={sort_by}:hide_promo={hide_promoted}:ai={ai_recommendations}"
         )
         cached_data = None
 
@@ -154,6 +157,7 @@ class FeedService:
                 posts,
                 user_id,
                 following_only=following_only,
+                ai_personalized=ai_recommendations,
             )
         if dismissed_ids:
             ranked_posts = [p for p in ranked_posts if p.id not in dismissed_ids]
@@ -187,10 +191,24 @@ class FeedService:
         has_more = len(ranked_posts) > start_index + limit
         # Курсор — последний отданный пост: клиент передаёт его id, мы начинаем со следующего индекса.
         last_in_window = window[-1] if window else None
+        watch_next = []
+        if ai_recommendations and has_more:
+            next_window = ranked_posts[start_index + limit : start_index + limit + 3]
+            watch_next = [
+                {
+                    "id": post.id,
+                    "title": post.title,
+                    "type": post.type,
+                    "description": (post.description or "")[:160],
+                }
+                for post in next_window
+            ]
         feed_result = {
             "items": enriched_posts,
             "next_cursor": self._generate_cursor(last_in_window) if has_more else None,
             "has_more": has_more,
+            "ai_recommendations": bool(ai_recommendations),
+            "watch_next": watch_next,
         }
         
         # Кэшируем результат (только первую страницу и только непустой)
@@ -424,6 +442,7 @@ class FeedService:
         posts: List[Post],
         user_id: int,
         following_only: bool = False,
+        ai_personalized: bool = False,
     ) -> List[Post]:
         """
         Ранжирование постов по релевантности с персонализацией
@@ -465,6 +484,10 @@ class FeedService:
                 skipped_author_ids=skipped_author_ids,
                 viewed_author_ids=viewed_author_ids,
             )
+            if ai_personalized:
+                personalization_boost = 1.0 + (personalization_boost - 1.0) * 1.45
+            else:
+                personalization_boost = 1.0 + (personalization_boost - 1.0) * 0.2
             score *= personalization_boost
             
             scored_posts.append((score, post))
@@ -1781,6 +1804,10 @@ class FeedService:
             SavedPost.post_id.in_(post_ids),
         ).all()
         user_saved_post_ids = {row[0] for row in user_saved_rows}
+
+        from app.services.post_reaction_service import summarize_post_reactions
+
+        reactions_by_post = summarize_post_reactions(self.db, post_ids, user_id)
         
         # 6. Загружаем всех авторов одним запросом
         authors = self.db.query(User).filter(User.id.in_(user_ids)).all()
@@ -1965,6 +1992,7 @@ class FeedService:
                 "reposts_count": reposts_counts_dict.get(post.id, 0),
                 "is_liked": post.id in user_liked_post_ids,
                 "is_saved": post.id in user_saved_post_ids,
+                "reactions": reactions_by_post.get(post.id, []),
                 "is_reposted": post.id in user_reposted_post_ids,
                 "author": {
                     "id": author.id if author else None,

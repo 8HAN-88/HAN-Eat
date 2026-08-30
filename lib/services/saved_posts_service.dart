@@ -10,6 +10,7 @@ import 'api_service.dart';
 import '../models/post_model.dart';
 import '../utils/api_error_parser.dart';
 import 'feed_cache_service.dart';
+import 'subscription_status_cache.dart';
 
 class SavedSyncResult {
   const SavedSyncResult({
@@ -207,8 +208,10 @@ class SavedPostsService {
       }
     }
     
-    final cached = _getPostFromLocalCache(postId);
-    if (cached != null) return cached;
+    if (_offlineAllowed()) {
+      final cached = _getPostFromLocalCache(postId);
+      if (cached != null) return cached;
+    }
 
     try {
       final fromFeed = FeedCacheService.instance.getCachedPostModel(postId);
@@ -218,10 +221,13 @@ class SavedPostsService {
     return null;
   }
   
+  static bool _offlineAllowed() =>
+      SubscriptionStatusCache.peek()?.canOfflineSaved ?? false;
+
   /// Сохранить пост локально
   static Future<void> _savePostLocally(PostModel post) async {
     await init();
-    if (_box == null) return;
+    if (_box == null || !_offlineAllowed()) return;
     final json = jsonEncode(post.toJson());
     await _box!.put('post_${post.id}', json);
   }
@@ -391,6 +397,12 @@ class SavedPostsService {
       }
     }
     
+    if (!_offlineAllowed()) {
+      lastLoadFromCache = false;
+      throw const ApiClientException(
+        message: 'Офлайн-сохранёнки доступны с соответствующей функцией подписки',
+      );
+    }
     lastLoadFromCache = true;
     return _getSavedPostsFromLocalCache(limit: limit, offset: offset, postType: postType);
   }

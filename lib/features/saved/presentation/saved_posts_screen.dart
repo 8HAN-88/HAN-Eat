@@ -283,7 +283,9 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
           MaterialBanner(
             content: Text(
               _isOffline
-                  ? 'Офлайн — показаны сохранённые на устройстве посты'
+                  ? (_loadedFromCache
+                      ? 'Офлайн — показаны сохранённые на устройстве посты'
+                      : 'Офлайн-сохранёнки доступны с соответствующей функцией подписки')
                   : 'Показаны данные с устройства — потяните вниз для обновления',
             ),
             leading: Icon(

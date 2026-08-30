@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_current_user_required
+from app.api.dependencies import get_current_user_required, require_entitlement_or_403
 from app.core.database import get_db
 from app.models.post import Post
 from app.models.user import User
@@ -65,7 +65,12 @@ async def creator_stats(
 ):
     svc = SubscriptionService(db)
     has_creator = svc.has_creator_access(current_user.id)
-    promoted = count_promoted_posts(db, current_user.id) if has_creator else 0
+    can_promote = svc.has_entitlement(current_user.id, "creator_promotion")
+    can_schedule = svc.has_entitlement(current_user.id, "creator_scheduled_posts")
+    can_pin = svc.has_entitlement(current_user.id, "creator_pinned")
+    can_analytics = svc.has_entitlement(current_user.id, "creator_analytics")
+    can_tools = svc.has_entitlement(current_user.id, "creator_tools")
+    promoted = count_promoted_posts(db, current_user.id) if can_promote else 0
     scheduled = (
         db.query(Post.id)
         .filter(
@@ -74,11 +79,16 @@ async def creator_stats(
             Post.deleted_at.is_(None),
         )
         .count()
-        if has_creator
+        if can_schedule
         else 0
     )
     return {
         "has_creator": has_creator,
+        "can_promote": can_promote,
+        "can_schedule": can_schedule,
+        "can_pin": can_pin,
+        "can_analytics": can_analytics,
+        "can_tools": can_tools,
         "promoted_count": promoted,
         "promoted_limit": MAX_PROMOTED_POSTS,
         "scheduled_count": scheduled,
@@ -139,16 +149,12 @@ async def list_promoted_posts(
     db: Session = Depends(get_db),
 ):
     """Активные продвигаемые посты автора."""
-    if not SubscriptionService(db).has_creator_access(current_user.id):
-        from app.core.entitlements import HAN_CREATOR_REQUIRED_CODE
-
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": HAN_CREATOR_REQUIRED_CODE,
-                "message": "Требуется тариф Creator или Pro",
-            },
-        )
+    require_entitlement_or_403(
+        db,
+        current_user.id,
+        "creator_promotion",
+        "Требуется тариф Creator или Pro",
+    )
     posts = (
         db.query(Post)
         .filter(
@@ -181,16 +187,12 @@ async def list_scheduled_posts(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    if not SubscriptionService(db).has_creator_access(current_user.id):
-        from app.core.entitlements import HAN_CREATOR_REQUIRED_CODE
-
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": HAN_CREATOR_REQUIRED_CODE,
-                "message": "Требуется тариф Creator или Pro",
-            },
-        )
+    require_entitlement_or_403(
+        db,
+        current_user.id,
+        "creator_scheduled_posts",
+        "Требуется тариф Creator или Pro",
+    )
     posts = (
         db.query(Post)
         .filter(
@@ -229,16 +231,12 @@ async def reschedule_post(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    if not SubscriptionService(db).has_creator_access(current_user.id):
-        from app.core.entitlements import HAN_CREATOR_REQUIRED_CODE
-
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": HAN_CREATOR_REQUIRED_CODE,
-                "message": "Требуется тариф Creator или Pro",
-            },
-        )
+    require_entitlement_or_403(
+        db,
+        current_user.id,
+        "creator_scheduled_posts",
+        "Требуется тариф Creator или Pro",
+    )
 
     post = (
         db.query(Post)

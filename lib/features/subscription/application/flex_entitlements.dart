@@ -13,6 +13,16 @@ List<String> flexChatQuickReactions(bool exclusive) => [
       if (exclusive) ...flexExclusiveReactions,
     ];
 
+List<String> flexPostReactions(bool exclusive) => [
+      '👍',
+      '❤️',
+      '😂',
+      '🔥',
+      '😮',
+      '😢',
+      if (exclusive) ...flexExclusiveReactions,
+    ];
+
 List<String> flexChatOverlayReactions(bool exclusive) => [
       '👍',
       '👌',

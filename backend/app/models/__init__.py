@@ -8,6 +8,7 @@ from app.models.follower import Follower
 from app.models.community_member import ChannelMember
 from app.models.saved_post import SavedPost
 from app.models.like import Like
+from app.models.post_reaction import PostReaction
 from app.models.comment import Comment
 from app.models.repost import Repost
 from app.models.moderation_queue import ModerationQueue
@@ -73,7 +74,7 @@ CommunityMember = ChannelMember
 
 __all__ = [
     "User", "AuthSession", "Post", "PostView", "Channel", "Follower", "ChannelMember",
-    "SavedPost", "Like", "Comment", "Repost", "ModerationQueue",
+    "SavedPost", "Like", "PostReaction", "Comment", "Repost", "ModerationQueue",
     "ContentReport", "ModerationAuditLog", "AnalyticsEvent", "Notification",
     "Subscription", "SupportTicket", "NotificationPreferences",
     "VideoProcessing", "ImageProcessing", "Community", "CommunityMember",

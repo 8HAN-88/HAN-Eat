@@ -1449,12 +1449,22 @@ class ChannelsListResponse {
 
 class CreatorStats {
   final bool hasCreator;
+  final bool canPromote;
+  final bool canSchedule;
+  final bool canPin;
+  final bool canAnalytics;
+  final bool canTools;
   final int promotedCount;
   final int promotedLimit;
   final int scheduledCount;
 
   CreatorStats({
     required this.hasCreator,
+    this.canPromote = false,
+    this.canSchedule = false,
+    this.canPin = false,
+    this.canAnalytics = false,
+    this.canTools = false,
     required this.promotedCount,
     required this.promotedLimit,
     required this.scheduledCount,
@@ -1463,6 +1473,11 @@ class CreatorStats {
   factory CreatorStats.fromJson(Map<String, dynamic> json) {
     return CreatorStats(
       hasCreator: json['has_creator'] as bool? ?? false,
+      canPromote: json['can_promote'] as bool? ?? false,
+      canSchedule: json['can_schedule'] as bool? ?? false,
+      canPin: json['can_pin'] as bool? ?? false,
+      canAnalytics: json['can_analytics'] as bool? ?? false,
+      canTools: json['can_tools'] as bool? ?? false,
       promotedCount: json['promoted_count'] as int? ?? 0,
       promotedLimit: json['promoted_limit'] as int? ?? 5,
       scheduledCount: json['scheduled_count'] as int? ?? 0,

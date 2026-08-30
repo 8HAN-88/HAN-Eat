@@ -285,3 +285,47 @@ def test_flex_level_10_unlocks_pro_support(db_session):
     assert status["subscription_type"] == "pro"
     assert status["has_creator"] is True
     assert status["has_ai"] is True
+    from app.core.entitlements import ALL_CATALOG_SLUGS
+
+    for slug in ALL_CATALOG_SLUGS:
+        assert sub.has_entitlement(1, slug)
+
+
+def test_flex_level_7_does_not_unlock_schedule_or_promote(db_session):
+    from app.services.post_publish_service import require_creator_for_schedule
+    from app.services.subscription_service import SubscriptionService
+
+    user = _user(db_session)
+    FlexSubscriptionService(db_session).activate(1, 7)
+    db_session.commit()
+    sub = SubscriptionService(db_session)
+    assert sub.has_entitlement(1, "creator_tools")
+    assert sub.has_entitlement(1, "creator_badge")
+    assert not sub.has_entitlement(1, "creator_scheduled_posts")
+    assert not sub.has_entitlement(1, "creator_promotion")
+    assert not sub.has_entitlement(1, "creator_pinned")
+    assert not sub.has_entitlement(1, "creator_analytics")
+    future = datetime.utcnow() + timedelta(days=1)
+    with pytest.raises(HTTPException) as err:
+        require_creator_for_schedule(db_session, user, future)
+    assert err.value.status_code == 403
+
+    FlexSubscriptionService(db_session).activate(1, 8)
+    db_session.commit()
+    require_creator_for_schedule(db_session, user, future)
+    assert sub.has_entitlement(1, "creator_scheduled_posts")
+    assert sub.has_entitlement(1, "creator_promotion")
+    assert sub.has_entitlement(1, "creator_pinned")
+
+
+def test_flex_level_4_unlocks_ai_recommendations_only(db_session):
+    from app.services.subscription_service import SubscriptionService
+
+    _user(db_session)
+    FlexSubscriptionService(db_session).activate(1, 4)
+    db_session.commit()
+    sub = SubscriptionService(db_session)
+    assert sub.has_entitlement(1, "ai_recommendations")
+    assert not sub.has_entitlement(1, "ai_priority_speed")
+    assert not sub.has_entitlement(1, "offline_saved_posts")
+    assert sub.has_ai_access(1)

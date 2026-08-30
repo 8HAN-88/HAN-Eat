@@ -71,6 +71,32 @@ class PostLikerPreview {
       };
 }
 
+class PostReactionChip {
+  const PostReactionChip({
+    required this.emoji,
+    required this.count,
+    required this.reactedByMe,
+  });
+
+  final String emoji;
+  final int count;
+  final bool reactedByMe;
+
+  factory PostReactionChip.fromJson(Map<String, dynamic> json) {
+    return PostReactionChip(
+      emoji: json['emoji'] as String? ?? '',
+      count: _jsonCount(json['count']),
+      reactedByMe: json['reacted_by_me'] as bool? ?? false,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'emoji': emoji,
+        'count': count,
+        'reacted_by_me': reactedByMe,
+      };
+}
+
 class PostModel {
   final int id;
   /// text | photo | reel | link | poll | …; `recipe` — legacy kitchen posts.
@@ -105,6 +131,7 @@ class PostModel {
   final bool isLiked;
   final bool? isSaved;
   final bool? isReposted;
+  final List<PostReactionChip> reactions;
   final PostAuthorModel? author;
   final PostAuthorModel? repostedBy;  // Информация о том, кто репостнул
   final ChannelModel? channel;  // Информация о канале (если пост из канала)
@@ -191,6 +218,7 @@ class PostModel {
     required this.isLiked,
     this.isSaved,
     this.isReposted,
+    this.reactions = const [],
     this.author,
     this.repostedBy,
     this.channel,
@@ -225,6 +253,7 @@ class PostModel {
       isLiked: p.isLiked,
       isSaved: p.isSaved,
       isReposted: null,
+      reactions: const [],
       author: p.author != null
           ? PostAuthorModel(
               id: p.author!.id,
@@ -323,6 +352,11 @@ class PostModel {
       isLiked: json['is_liked'] as bool? ?? false,
       isSaved: json['is_saved'] as bool?,
       isReposted: json['is_reposted'] as bool?,
+      reactions: (json['reactions'] as List<dynamic>? ?? const [])
+          .whereType<Map>()
+          .map((e) => PostReactionChip.fromJson(Map<String, dynamic>.from(e)))
+          .where((e) => e.emoji.isNotEmpty && e.count > 0)
+          .toList(),
       author: json['author'] != null
           ? PostAuthorModel.fromJson(json['author'] as Map<String, dynamic>)
           : null,
@@ -365,6 +399,7 @@ class PostModel {
       'is_liked': isLiked,
       'is_saved': isSaved,
       'is_reposted': isReposted,
+      'reactions': reactions.map((e) => e.toJson()).toList(),
       'author': author?.toJson(),
       'reposted_by': repostedBy?.toJson(),
       'channel': channel?.toJson(),
@@ -384,6 +419,7 @@ class PostModel {
     bool? isSaved,
     bool? isReposted,
     bool? purchased,
+    List<PostReactionChip>? reactions,
   }) {
     return PostModel(
       id: id,
@@ -413,6 +449,7 @@ class PostModel {
       isLiked: isLiked ?? this.isLiked,
       isSaved: isSaved ?? this.isSaved,
       isReposted: isReposted ?? this.isReposted,
+      reactions: reactions ?? this.reactions,
       author: author,
       repostedBy: repostedBy,
       channel: channel,

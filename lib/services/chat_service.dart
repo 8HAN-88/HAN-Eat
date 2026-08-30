@@ -553,6 +553,25 @@ class ChatService {
     );
   }
 
+  static Future<String> assistText({
+    required String text,
+    String mode = 'reply',
+  }) async {
+    final uri = Uri.parse('$_base/ai/assist');
+    final response = await _post(
+      uri,
+      body: jsonEncode({
+        'text': text,
+        'mode': mode,
+      }),
+    );
+    _ensureOk(response, 'Не удалось получить ответ ассистента');
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return (data['result'] as String?)?.trim().isNotEmpty == true
+        ? (data['result'] as String)
+        : text;
+  }
+
   static Future<String> translateText({
     required String text,
     String targetLang = 'ru',

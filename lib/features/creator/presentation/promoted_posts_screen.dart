@@ -33,7 +33,7 @@ class _PromotedPostsScreenState extends State<PromotedPostsScreen> {
     });
     try {
       final status = await SubscriptionService.getSubscriptionStatus();
-      if (!status.hasCreator) {
+      if (!status.canPromotePosts) {
         if (!mounted) return;
         setState(() {
           _loading = false;

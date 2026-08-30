@@ -147,3 +147,24 @@ async def require_han_creator_subscriber(
         )
     return current_user
 
+
+def require_entitlement_or_403(
+    db,
+    user_id: int,
+    slug: str,
+    message: str,
+    *,
+    code: str | None = None,
+):
+    if SubscriptionService(db).has_entitlement(user_id, slug):
+        return
+    from app.core.entitlements import HAN_CREATOR_REQUIRED_CODE
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={
+            "code": code or HAN_CREATOR_REQUIRED_CODE,
+            "message": message,
+        },
+    )
+

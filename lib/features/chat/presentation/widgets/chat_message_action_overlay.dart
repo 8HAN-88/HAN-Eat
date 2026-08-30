@@ -133,6 +133,7 @@ class ChatMessageActionOverlay extends StatefulWidget {
     this.canCopyLink = false,
     this.canForward = true,
     this.canTranslate = false,
+    this.canAssist = false,
     this.canReport = false,
     this.canRefundPaidMedia = false,
     this.bottomComposerReserve = 88,
@@ -153,6 +154,7 @@ class ChatMessageActionOverlay extends StatefulWidget {
   final bool canCopyLink;
   final bool canForward;
   final bool canTranslate;
+  final bool canAssist;
   final bool canReport;
   final bool canRefundPaidMedia;
   final ValueChanged<String> onReaction;
@@ -180,6 +182,7 @@ class ChatMessageActionOverlay extends StatefulWidget {
     bool canCopyLink = false,
     bool canForward = true,
     bool canTranslate = false,
+    bool canAssist = false,
     bool canReport = false,
     bool canRefundPaidMedia = false,
     double bottomComposerReserve = 88,
@@ -212,6 +215,7 @@ class ChatMessageActionOverlay extends StatefulWidget {
         canCopyLink: canCopyLink,
         canForward: canForward,
         canTranslate: canTranslate,
+        canAssist: canAssist,
         canReport: canReport,
         canRefundPaidMedia: canRefundPaidMedia,
         bottomComposerReserve: bottomComposerReserve,
@@ -321,6 +325,12 @@ class _ChatMessageActionOverlayState extends State<ChatMessageActionOverlay>
           action: 'translate',
           icon: Icons.translate_rounded,
           label: 'Перевести',
+        ),
+      if (widget.canAssist)
+        _MenuItem(
+          action: 'assist',
+          icon: Icons.auto_awesome_rounded,
+          label: 'Ответ от AI',
         ),
       if (widget.canSaveToFavorites && widget.canForward)
         _MenuItem(
