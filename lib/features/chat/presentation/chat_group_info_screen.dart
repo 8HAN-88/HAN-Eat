@@ -1826,7 +1826,9 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                                 ? 'Выключено'
                                 : 'Через ${_autoDeleteLabel(_conversation.autoDeleteSeconds)}',
                           ),
-                          trailing: const Icon(Icons.chevron_right),
+                          trailing: _canManagePostingPermissions
+                              ? const Icon(Icons.chevron_right)
+                              : null,
                           onTap: (_busy || !_canManagePostingPermissions)
                               ? null
                               : _configureAutoDelete,
@@ -1839,7 +1841,9 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                                 ? 'Выключен'
                                 : '${_slowModeLabel(_conversation.slowModeSeconds)} между сообщениями',
                           ),
-                          trailing: const Icon(Icons.chevron_right),
+                          trailing: _canManagePostingPermissions
+                              ? const Icon(Icons.chevron_right)
+                              : null,
                           onTap: (_busy || !_canManagePostingPermissions)
                               ? null
                               : _configureSlowMode,
@@ -1852,7 +1856,9 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                                 ? 'Выключен'
                                 : '${_conversation.antiFloodMaxMessagesPerMinute} сообщений/мин',
                           ),
-                          trailing: const Icon(Icons.chevron_right),
+                          trailing: _canManagePostingPermissions
+                              ? const Icon(Icons.chevron_right)
+                              : null,
                           onTap: (_busy || !_canManagePostingPermissions)
                               ? null
                               : _configureAntiFloodLimit,
@@ -1884,50 +1890,46 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                               ? null
                               : _openInviteLinkSheet,
                         ),
-                        ListTile(
-                          leading: const Icon(Icons.pending_actions_outlined),
-                          title: const Text('Заявки на вступление'),
-                          trailing: _conversation.pendingJoinRequestsCount > 0
-                              ? Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 3,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color:
-                                        Theme.of(context).colorScheme.primary,
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                  child: Text(
-                                    '${_conversation.pendingJoinRequestsCount}',
-                                    style: TextStyle(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onPrimary,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 12,
+                        if (_canManageMembers) ...[
+                          ListTile(
+                            leading: const Icon(Icons.pending_actions_outlined),
+                            title: const Text('Заявки на вступление'),
+                            trailing: _conversation.pendingJoinRequestsCount > 0
+                                ? Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 3,
                                     ),
-                                  ),
-                                )
-                              : null,
-                          onTap: (_busy || !_canManageMembers)
-                              ? null
-                              : _openJoinRequestsSheet,
-                        ),
-                        ListTile(
-                          leading: const Icon(Icons.block_outlined),
-                          title: const Text('Бан-лист группы'),
-                          onTap: (_busy || !_canManageMembers)
-                              ? null
-                              : _openBansSheet,
-                        ),
-                        ListTile(
-                          leading: const Icon(Icons.history_outlined),
-                          title: const Text('История модерации'),
-                          onTap: (_busy || !_canManageMembers)
-                              ? null
-                              : _openModerationLog,
-                        ),
+                                    decoration: BoxDecoration(
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text(
+                                      '${_conversation.pendingJoinRequestsCount}',
+                                      style: TextStyle(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onPrimary,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  )
+                                : null,
+                            onTap: _busy ? null : _openJoinRequestsSheet,
+                          ),
+                          ListTile(
+                            leading: const Icon(Icons.block_outlined),
+                            title: const Text('Бан-лист группы'),
+                            onTap: _busy ? null : _openBansSheet,
+                          ),
+                          ListTile(
+                            leading: const Icon(Icons.history_outlined),
+                            title: const Text('История модерации'),
+                            onTap: _busy ? null : _openModerationLog,
+                          ),
+                        ],
                         const Divider(),
                         Padding(
                           padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),

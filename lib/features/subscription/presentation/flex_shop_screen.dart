@@ -14,15 +14,32 @@ class FlexShopScreen extends StatefulWidget {
   State<FlexShopScreen> createState() => _FlexShopScreenState();
 }
 
-class _FlexShopScreenState extends State<FlexShopScreen> {
+class _FlexShopScreenState extends State<FlexShopScreen>
+    with WidgetsBindingObserver {
   FlexShop? _shop;
   bool _loading = true;
   String? _error;
+  bool _awaitingCheckoutReturn = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _awaitingCheckoutReturn) {
+      _awaitingCheckoutReturn = false;
+      _load();
+    }
   }
 
   Future<void> _load() async {
@@ -53,6 +70,8 @@ class _FlexShopScreenState extends State<FlexShopScreen> {
       final ok = await showFlexPreviewSheet(context, preview: preview);
       if (ok != true || !mounted) return;
       await FlexSubscriptionApi.checkout(level);
+      _awaitingCheckoutReturn = true;
+      if (mounted) await _load();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -88,7 +107,22 @@ class _FlexShopScreenState extends State<FlexShopScreen> {
         child: _loading
             ? const Center(child: CircularProgressIndicator())
             : _error != null
-                ? Center(child: Text(_error!))
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(_error!, textAlign: TextAlign.center),
+                          const SizedBox(height: 12),
+                          FilledButton(
+                            onPressed: _load,
+                            child: const Text('Повторить'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
                 : ListView.builder(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
                     itemCount: _shop!.features.length,

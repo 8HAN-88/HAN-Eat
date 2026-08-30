@@ -5,6 +5,7 @@ import '../../../app/app_router.dart';
 import '../../../services/flex_subscription_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
+import '../../support/presentation/widgets/subscription_cancel_survey_sheet.dart';
 import '../application/flex_level_features.dart';
 import '../application/flex_purchase_ladder.dart';
 import 'flex_preview_sheet.dart';
@@ -19,16 +20,33 @@ class FlexSubscriptionScreen extends StatefulWidget {
   State<FlexSubscriptionScreen> createState() => _FlexSubscriptionScreenState();
 }
 
-class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
+class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen>
+    with WidgetsBindingObserver {
   FlexMe? _me;
   String? _error;
   bool _loading = true;
   bool _busy = false;
+  bool _awaitingCheckoutReturn = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _awaitingCheckoutReturn) {
+      _awaitingCheckoutReturn = false;
+      _load();
+    }
   }
 
   Future<void> _load() async {
@@ -67,6 +85,8 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
       );
       if (ok != true || !mounted) return;
       await FlexSubscriptionApi.checkout(level);
+      _awaitingCheckoutReturn = true;
+      if (mounted) await _load();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -95,7 +115,22 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
         child: _loading
             ? const Center(child: CircularProgressIndicator())
             : _error != null
-                ? Center(child: Text(_error!))
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(_error!, textAlign: TextAlign.center),
+                          const SizedBox(height: 12),
+                          FilledButton(
+                            onPressed: _load,
+                            child: const Text('Повторить'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
                 : RefreshIndicator(
                     onRefresh: _load,
                     child: ListView(
@@ -120,6 +155,21 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
                               context.push(FlexConstructorRoute.path),
                           child: const Text('Переставить возможности'),
                         ),
+                        if (me.active) ...[
+                          const SizedBox(height: 8),
+                          TextButton(
+                            onPressed: _busy
+                                ? null
+                                : () async {
+                                    final ok =
+                                        await runSubscriptionCancelFlow(
+                                      context,
+                                    );
+                                    if (ok && mounted) await _load();
+                                  },
+                            child: const Text('Отменить подписку'),
+                          ),
+                        ],
                       ],
                     ),
                   ),

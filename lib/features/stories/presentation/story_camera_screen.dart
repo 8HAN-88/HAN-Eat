@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -28,9 +29,9 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
     ('private', 'Только я', Icons.lock_outline),
   ];
 
-  Future<void> _takePhoto() async {
+  Future<void> _pickImage(ImageSource source) async {
     final XFile? photo = await _picker.pickImage(
-      source: ImageSource.camera,
+      source: source,
       maxWidth: 1920,
       imageQuality: 92,
     );
@@ -42,9 +43,9 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
     });
   }
 
-  Future<void> _recordVideo() async {
+  Future<void> _pickVideo(ImageSource source) async {
     final XFile? video = await _picker.pickVideo(
-      source: ImageSource.camera,
+      source: source,
       maxDuration: const Duration(seconds: 30),
     );
     if (video == null) return;
@@ -244,16 +245,30 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
           children: [
             const Icon(Icons.camera_alt, size: 80, color: Colors.white54),
             const SizedBox(height: 24),
+            if (!kIsWeb) ...[
+              FilledButton.icon(
+                onPressed: () => _pickImage(ImageSource.camera),
+                icon: const Icon(Icons.photo_camera),
+                label: const Text('Сделать фото'),
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: () => _pickVideo(ImageSource.camera),
+                icon: const Icon(Icons.videocam),
+                label: const Text('Записать видео (до 30 сек)'),
+              ),
+              const SizedBox(height: 12),
+            ],
             FilledButton.icon(
-              onPressed: _takePhoto,
-              icon: const Icon(Icons.photo_camera),
-              label: const Text('Сделать фото'),
+              onPressed: () => _pickImage(ImageSource.gallery),
+              icon: const Icon(Icons.photo_library_outlined),
+              label: const Text('Фото из галереи'),
             ),
             const SizedBox(height: 12),
             FilledButton.icon(
-              onPressed: _recordVideo,
-              icon: const Icon(Icons.videocam),
-              label: const Text('Записать видео (до 30 сек)'),
+              onPressed: () => _pickVideo(ImageSource.gallery),
+              icon: const Icon(Icons.video_library_outlined),
+              label: const Text('Видео из галереи (до 30 сек)'),
             ),
           ],
         ),

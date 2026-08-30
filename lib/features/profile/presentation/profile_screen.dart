@@ -666,6 +666,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 ),
                 const SizedBox(width: 8),
                 NeoCircleAction(
+                  icon: Icons.edit_outlined,
+                  tooltip: 'Редактировать профиль',
+                  onPressed: () => context.push(ProfileAuthRoute.path),
+                ),
+                const SizedBox(width: 8),
+                NeoCircleAction(
                   icon: Icons.settings_outlined,
                   tooltip: 'Настройки приложения',
                   onPressed: () {
@@ -800,10 +806,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                         const SizedBox(width: 6),
                         Tooltip(
                           message: 'Подписка HanWe',
-                          child: Icon(
-                            Icons.verified_rounded,
-                            color: scheme.primary,
-                            size: 22,
+                          child: InkWell(
+                            onTap: isOwnProfile
+                                ? () => context.push(FlexSubscriptionRoute.path)
+                                : null,
+                            customBorder: const CircleBorder(),
+                            child: Icon(
+                              Icons.verified_rounded,
+                              color: scheme.primary,
+                              size: 22,
+                            ),
                           ),
                         ),
                       ],
@@ -874,7 +886,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                       InkWell(
                         onTap: isOwnProfile
                             ? () => context.push(StarGiftsInventoryRoute.path)
-                            : null,
+                            : () => context.push(
+                                  StarGiftsMarketplaceRoute.path,
+                                ),
                         borderRadius: BorderRadius.circular(8),
                         child: Text(
                           isOwnProfile ? 'Подарки' : 'Подарки профиля',
@@ -950,6 +964,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 postsCount: stats.postsCount,
                 followersCount: stats.followersCount,
                 followingCount: stats.followingCount,
+                onPostsTap: () {
+                  if (_tabControllerReady) {
+                    _tabController.animateTo(0);
+                  }
+                },
                 onFollowersTap: () => context.push(
                   ProfileFollowersRoute.withUserId(_effectiveUserId),
                 ),
@@ -1294,6 +1313,7 @@ class _ProfileStatsRow extends StatelessWidget {
     required this.postsCount,
     required this.followersCount,
     required this.followingCount,
+    this.onPostsTap,
     this.onFollowersTap,
     this.onFollowingTap,
   });
@@ -1301,6 +1321,7 @@ class _ProfileStatsRow extends StatelessWidget {
   final int postsCount;
   final int followersCount;
   final int followingCount;
+  final VoidCallback? onPostsTap;
   final VoidCallback? onFollowersTap;
   final VoidCallback? onFollowingTap;
 
@@ -1327,6 +1348,7 @@ class _ProfileStatsRow extends StatelessWidget {
               child: _ProfileStatCell(
                 value: '$postsCount',
                 label: 'Посты',
+                onTap: onPostsTap,
               ),
             ),
             VerticalDivider(

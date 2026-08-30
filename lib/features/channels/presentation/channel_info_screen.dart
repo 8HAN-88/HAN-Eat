@@ -531,7 +531,7 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
                             ),
                             IconButton(
                               tooltip: 'Скопировать',
-                              icon: const Icon(Icons.qr_code_2, size: 22),
+                              icon: const Icon(Icons.copy_rounded, size: 22),
                               onPressed: _copyChannelLink,
                               visualDensity: VisualDensity.compact,
                             ),

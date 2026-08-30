@@ -6244,6 +6244,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (peer != null) _openUserProfile(peer.id);
   }
 
+  bool _canOpenForwardAttribution(ChatMessage msg) {
+    final srcConvId = msg.forwardedFromConversationId;
+    final srcMsgId = msg.forwardedFromMessageId;
+    final canOpenOriginal = srcConvId != null &&
+        srcConvId > 0 &&
+        srcMsgId != null &&
+        srcMsgId > 0;
+    final canOpenProfile =
+        msg.forwardFromUserId != null && msg.forwardFromUserId! > 0;
+    return canOpenOriginal || canOpenProfile;
+  }
+
   Future<void> _onForwardAttributionTap(ChatMessage msg) async {
     final srcConvId = msg.forwardedFromConversationId;
     final srcMsgId = msg.forwardedFromMessageId;
@@ -9916,7 +9928,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           : null,
       onMentionTap: interactive ? _openMentionProfile : null,
       mentionLabels: _mentionLabels,
-      onForwardFromTap: interactive && msg.isForwarded
+      onForwardFromTap: interactive &&
+              msg.isForwarded &&
+              _canOpenForwardAttribution(msg)
           ? () => unawaited(_onForwardAttributionTap(msg))
           : null,
       onVoiceCompleted: interactive ? _playNextVoiceAfter : null,
@@ -13181,11 +13195,24 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Future<void> _recordAndSendVideoNote() async {
     try {
       final picker = ImagePicker();
-      final file = await picker.pickVideo(
-        source: ImageSource.camera,
+      XFile? file = await picker.pickVideo(
+        source: kIsWeb ? ImageSource.gallery : ImageSource.camera,
         maxDuration: const Duration(seconds: 60),
       );
-      if (file == null || !mounted) return;
+      if (file == null && !kIsWeb && mounted) {
+        file = await picker.pickVideo(
+          source: ImageSource.gallery,
+          maxDuration: const Duration(seconds: 60),
+        );
+      }
+      if (file == null || !mounted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Видео не выбрано')),
+          );
+        }
+        return;
+      }
 
       _setUploadProgress(0.05, status: 'Загрузка…');
       final prepared = await _normalizeVideoFileForUpload(file);

@@ -1497,9 +1497,12 @@ class _GifPickPanelState extends State<_GifPickPanel> {
       children: [
         TextField(
           controller: _searchController,
+          enabled: _catalogConfigured,
           textInputAction: TextInputAction.search,
           decoration: InputDecoration(
-            hintText: 'Поиск GIF',
+            hintText: _catalogConfigured
+                ? 'Поиск GIF'
+                : 'Каталог GIF недоступен',
             prefixIcon: const Icon(Icons.search),
             suffixIcon: _searchController.text.isEmpty
                 ? null

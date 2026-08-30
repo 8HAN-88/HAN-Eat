@@ -142,6 +142,7 @@ class _ChannelSettingsBottomSheetState
                 leading: const Icon(Icons.settings),
                 title: const Text('Управление каналом'),
                 onTap: () {
+                  Navigator.of(context).pop();
                   widget.onManage?.call();
                 },
               ),
@@ -150,6 +151,7 @@ class _ChannelSettingsBottomSheetState
                 leading: const Icon(Icons.analytics_outlined),
                 title: const Text('Аналитика'),
                 onTap: () {
+                  Navigator.of(context).pop();
                   widget.onAnalytics?.call();
                 },
               ),
