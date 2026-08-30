@@ -123,6 +123,19 @@ class ChatUserBrief {
     DateTime? lastSeenAt,
     bool clearLastSeenAt = false,
     int? paidMessageStars,
+    bool? isGroupAdmin,
+    bool? canManageMembers,
+    bool? canManagePostingPermissions,
+    bool? canChangeInfo,
+    bool? canDeleteMessages,
+    bool? canPinMessages,
+    bool? canInviteUsers,
+    bool? canManageVideoChats,
+    bool? sendRestricted,
+    DateTime? sendRestrictedUntil,
+    bool clearSendRestrictedUntil = false,
+    String? sendRestrictionReason,
+    bool clearSendRestrictionReason = false,
   }) {
     return ChatUserBrief(
       id: id,
@@ -131,18 +144,23 @@ class ChatUserBrief {
       avatarUrl: avatarUrl ?? this.avatarUrl,
       lastSeenAt: clearLastSeenAt ? null : (lastSeenAt ?? this.lastSeenAt),
       isBot: isBot,
-      isGroupAdmin: isGroupAdmin,
+      isGroupAdmin: isGroupAdmin ?? this.isGroupAdmin,
       isGroupCreator: isGroupCreator,
-      canManageMembers: canManageMembers,
-      canManagePostingPermissions: canManagePostingPermissions,
-      canChangeInfo: canChangeInfo,
-      canDeleteMessages: canDeleteMessages,
-      canPinMessages: canPinMessages,
-      canInviteUsers: canInviteUsers,
-      canManageVideoChats: canManageVideoChats,
-      sendRestricted: sendRestricted,
-      sendRestrictedUntil: sendRestrictedUntil,
-      sendRestrictionReason: sendRestrictionReason,
+      canManageMembers: canManageMembers ?? this.canManageMembers,
+      canManagePostingPermissions:
+          canManagePostingPermissions ?? this.canManagePostingPermissions,
+      canChangeInfo: canChangeInfo ?? this.canChangeInfo,
+      canDeleteMessages: canDeleteMessages ?? this.canDeleteMessages,
+      canPinMessages: canPinMessages ?? this.canPinMessages,
+      canInviteUsers: canInviteUsers ?? this.canInviteUsers,
+      canManageVideoChats: canManageVideoChats ?? this.canManageVideoChats,
+      sendRestricted: sendRestricted ?? this.sendRestricted,
+      sendRestrictedUntil: clearSendRestrictedUntil
+          ? null
+          : (sendRestrictedUntil ?? this.sendRestrictedUntil),
+      sendRestrictionReason: clearSendRestrictionReason
+          ? null
+          : (sendRestrictionReason ?? this.sendRestrictionReason),
       paidMessageStars: paidMessageStars ?? this.paidMessageStars,
     );
   }
@@ -979,6 +997,22 @@ class ChatGroupInviteLink {
           : null,
     );
   }
+
+  ChatGroupInviteLink copyWith({
+    DateTime? revokedAt,
+    bool clearRevokedAt = false,
+  }) {
+    return ChatGroupInviteLink(
+      id: id,
+      token: token,
+      inviteLink: inviteLink,
+      createdAt: createdAt,
+      expiresAt: expiresAt,
+      maxUses: maxUses,
+      usesCount: usesCount,
+      revokedAt: clearRevokedAt ? null : (revokedAt ?? this.revokedAt),
+    );
+  }
 }
 
 class ChatJoinByInviteResult {
@@ -1116,6 +1150,19 @@ class ChatUserSearchItem {
         username: username,
         avatarUrl: avatarUrl,
       );
+
+  ChatUserSearchItem copyWith({
+    bool? isContact,
+  }) {
+    return ChatUserSearchItem(
+      id: id,
+      name: name,
+      username: username,
+      avatarUrl: avatarUrl,
+      isContact: isContact ?? this.isContact,
+      phoneHash: phoneHash,
+    );
+  }
 
   factory ChatUserSearchItem.fromJson(Map<String, dynamic> json) {
     return ChatUserSearchItem(

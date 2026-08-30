@@ -84,11 +84,13 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
     _load();
   }
 
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     try {
       final conv = await ChatService.getConversation(_conversation.id);
       final members = await ChatService.listMembers(_conversation.id);
@@ -102,10 +104,12 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
         _members = members;
         _paid = paid;
         _loading = false;
+        _error = null;
       });
       widget.onConversationChanged?.call(conv);
     } catch (e) {
       if (!mounted) return;
+      if (silent) return;
       setState(() {
         _error = e;
         _loading = false;
@@ -178,25 +182,13 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
     );
     controller.dispose();
     if (next == null || next.isEmpty || !mounted) return;
-    setState(() => _busy = true);
-    try {
-      final conv = await ChatService.updateGroupTitle(
+    await _commitConversation(
+      optimistic: _conversation.copyWith(title: next),
+      request: () => ChatService.updateGroupTitle(
         conversationId: _conversation.id,
         title: next,
-      );
-      if (!mounted) return;
-      setState(() {
-        _conversation = conv;
-        _busy = false;
-      });
-      widget.onConversationChanged?.call(conv);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
-    }
+      ),
+    );
   }
 
   void _applyConversation(ChatConversation next) {
@@ -671,22 +663,34 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       },
     );
     if (picked == null || picked.isEmpty || !mounted) return;
-    setState(() => _busy = true);
+    final added = [
+      for (final user in candidates)
+        if (picked.contains(user.id)) user,
+    ];
+    final previousMembers = List<ChatUserBrief>.from(_members);
+    final previousConv = _conversation;
+    setState(() {
+      _members = [..._members, ...added];
+      _conversation = _conversation.copyWith(
+        memberCount: _conversation.memberCount + added.length,
+      );
+    });
+    widget.onConversationChanged?.call(_conversation);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Добавлено: ${added.length}')),
+    );
     try {
       await ChatService.addGroupMembers(
         conversationId: _conversation.id,
         userIds: picked,
       );
-      if (!mounted) return;
-      await _load();
-      if (!mounted) return;
-      setState(() => _busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Добавлено: ${picked.length}')),
-      );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _busy = false);
+      setState(() {
+        _members = previousMembers;
+        _conversation = previousConv;
+      });
+      widget.onConversationChanged?.call(previousConv);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -712,50 +716,77 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       ),
     );
     if (ok != true || !mounted) return;
-    setState(() => _busy = true);
+    _removeMemberLocally(member);
     try {
       await ChatService.removeGroupMember(
         conversationId: _conversation.id,
         userId: member.id,
       );
-      if (!mounted) return;
-      await _load();
-      if (!mounted) return;
-      setState(() => _busy = false);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _busy = false);
+      _restoreMemberLocally(member);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
     }
   }
 
+  void _replaceMemberLocally(ChatUserBrief member) {
+    setState(() {
+      _members = [
+        for (final row in _members)
+          if (row.id == member.id) member else row,
+      ];
+    });
+  }
+
+  void _removeMemberLocally(ChatUserBrief member) {
+    setState(() {
+      _members = [for (final row in _members) if (row.id != member.id) row];
+      _conversation = _conversation.copyWith(
+        memberCount: _conversation.memberCount > 0
+            ? _conversation.memberCount - 1
+            : 0,
+      );
+    });
+    widget.onConversationChanged?.call(_conversation);
+  }
+
+  void _restoreMemberLocally(ChatUserBrief member) {
+    if (_members.any((row) => row.id == member.id)) {
+      _replaceMemberLocally(member);
+      return;
+    }
+    setState(() {
+      _members = [..._members, member];
+      _conversation = _conversation.copyWith(
+        memberCount: _conversation.memberCount + 1,
+      );
+    });
+    widget.onConversationChanged?.call(_conversation);
+  }
+
   Future<void> _setMemberAdmin(ChatUserBrief member, bool isAdmin) async {
     if (!_isCreator || !mounted) return;
-    setState(() => _busy = true);
+    _replaceMemberLocally(member.copyWith(isGroupAdmin: isAdmin));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          isAdmin
+              ? 'Пользователь назначен модератором'
+              : 'Права модератора сняты',
+        ),
+      ),
+    );
     try {
       await ChatService.setGroupMemberAdmin(
         conversationId: _conversation.id,
         userId: member.id,
         isAdmin: isAdmin,
       );
-      if (!mounted) return;
-      await _load();
-      if (!mounted) return;
-      setState(() => _busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            isAdmin
-                ? 'Пользователь назначен модератором'
-                : 'Права модератора сняты',
-          ),
-        ),
-      );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _busy = false);
+      _replaceMemberLocally(member);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -856,7 +887,19 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       ),
     );
     if (confirmed != true || !mounted) return;
-    setState(() => _busy = true);
+    final next = member.copyWith(
+      canManageMembers: canManageMembers,
+      canManagePostingPermissions: canManagePostingPermissions,
+      canChangeInfo: canChangeInfo,
+      canDeleteMessages: canDeleteMessages,
+      canPinMessages: canPinMessages,
+      canInviteUsers: canInviteUsers,
+      canManageVideoChats: canManageVideoChats,
+    );
+    _replaceMemberLocally(next);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Права модератора обновлены')),
+    );
     try {
       await ChatService.setGroupMemberPermissions(
         conversationId: _conversation.id,
@@ -869,16 +912,9 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
         canInviteUsers: canInviteUsers,
         canManageVideoChats: canManageVideoChats,
       );
-      if (!mounted) return;
-      await _load();
-      if (!mounted) return;
-      setState(() => _busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Права модератора обновлены')),
-      );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _busy = false);
+      _replaceMemberLocally(member);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -979,6 +1015,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
         ),
       ),
     );
+    final reasonText = reasonController.text.trim();
     reasonController.dispose();
     if (confirmed != true || !mounted) return;
     if (sendRestricted && withDeadline && until == null) {
@@ -987,31 +1024,36 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       );
       return;
     }
-    setState(() => _busy = true);
+    final nextUntil = sendRestricted && withDeadline ? until : null;
+    final nextReason = sendRestricted ? reasonText : null;
+    final next = member.copyWith(
+      sendRestricted: sendRestricted,
+      sendRestrictedUntil: nextUntil,
+      clearSendRestrictedUntil: nextUntil == null,
+      sendRestrictionReason: nextReason,
+      clearSendRestrictionReason: nextReason == null || nextReason.isEmpty,
+    );
+    _replaceMemberLocally(next);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          sendRestricted
+              ? 'Ограничение на отправку установлено'
+              : 'Ограничение на отправку снято',
+        ),
+      ),
+    );
     try {
       await ChatService.setGroupMemberSendRestriction(
         conversationId: _conversation.id,
         userId: member.id,
         sendRestricted: sendRestricted,
-        sendRestrictedUntil: sendRestricted && withDeadline ? until : null,
-        reason: sendRestricted ? reasonController.text : null,
-      );
-      if (!mounted) return;
-      await _load();
-      if (!mounted) return;
-      setState(() => _busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            sendRestricted
-                ? 'Ограничение на отправку установлено'
-                : 'Ограничение на отправку снято',
-          ),
-        ),
+        sendRestrictedUntil: nextUntil,
+        reason: nextReason,
       );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _busy = false);
+      _replaceMemberLocally(member);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -1098,6 +1140,8 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
         ),
       ),
     );
+    final reason = reasonController.text;
+    reasonController.dispose();
     if (confirmed != true || !mounted) return;
     if (withDeadline && until == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1105,30 +1149,25 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       );
       return;
     }
-    setState(() => _busy = true);
+    _removeMemberLocally(member);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Пользователь забанен и удален из группы'),
+      ),
+    );
     try {
       await ChatService.banGroupMember(
         conversationId: _conversation.id,
         userId: member.id,
-        reason: reasonController.text,
+        reason: reason,
         bannedUntil: withDeadline ? until : null,
-      );
-      if (!mounted) return;
-      await _load();
-      if (!mounted) return;
-      setState(() => _busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Пользователь забанен и удален из группы')),
       );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _busy = false);
+      _restoreMemberLocally(member);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
-    } finally {
-      reasonController.dispose();
     }
   }
 
@@ -1138,95 +1177,9 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            Future<List<ChatGroupBanEntry>> load() =>
-                ChatService.listGroupBans(_conversation.id);
-            return FutureBuilder<List<ChatGroupBanEntry>>(
-              future: load(),
-              builder: (context, snap) {
-                if (snap.connectionState != ConnectionState.done) {
-                  return const SafeArea(
-                    child: SizedBox(
-                      height: 260,
-                      child: Center(child: CircularProgressIndicator()),
-                    ),
-                  );
-                }
-                if (snap.hasError) {
-                  return SafeArea(
-                    child: SizedBox(
-                      height: 260,
-                      child: Center(
-                        child: Text(userVisibleError(snap.error!)),
-                      ),
-                    ),
-                  );
-                }
-                final items = snap.data ?? const <ChatGroupBanEntry>[];
-                return SafeArea(
-                  child: SizedBox(
-                    height: 420,
-                    child: items.isEmpty
-                        ? const Center(child: Text('Бан-лист пуст'))
-                        : ListView.builder(
-                            itemCount: items.length,
-                            itemBuilder: (context, index) {
-                              final row = items[index];
-                              final until = row.bannedUntil;
-                              return ListTile(
-                                leading: const Icon(Icons.block_outlined),
-                                title: Text(row.user.displayName),
-                                subtitle: Text(
-                                  [
-                                    if (until == null)
-                                      'Бессрочно'
-                                    else
-                                      'До ${until.toLocal().day.toString().padLeft(2, '0')}.${until.toLocal().month.toString().padLeft(2, '0')}.${until.toLocal().year}',
-                                    if ((row.reason ?? '').trim().isNotEmpty)
-                                      row.reason!.trim(),
-                                  ].join(' • '),
-                                ),
-                                trailing: TextButton(
-                                  onPressed: () async {
-                                    try {
-                                      await ChatService.unbanGroupMember(
-                                        conversationId: _conversation.id,
-                                        userId: row.user.id,
-                                      );
-                                      setModalState(() {});
-                                      if (mounted) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          const SnackBar(
-                                              content: Text(
-                                                  'Пользователь разбанен')),
-                                        );
-                                      }
-                                    } catch (e) {
-                                      if (mounted) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          SnackBar(
-                                            content: Text(userVisibleError(e)),
-                                          ),
-                                        );
-                                      }
-                                    }
-                                  },
-                                  child: const Text('Разбанить'),
-                                ),
-                              );
-                            },
-                          ),
-                  ),
-                );
-              },
-            );
-          },
-        );
-      },
+      builder: (ctx) => _GroupBansSheet(
+        conversationId: _conversation.id,
+      ),
     );
   }
 
@@ -1305,18 +1258,28 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
           }
 
           Future<void> revoke(ChatGroupInviteLink link) async {
-            setModalState(() => loading = true);
+            final previous = List<ChatGroupInviteLink>.from(links);
+            setModalState(() {
+              links = [
+                for (final row in links)
+                  if (row.id == link.id)
+                    row.copyWith(revokedAt: DateTime.now())
+                  else
+                    row,
+              ];
+            });
             try {
               await ChatService.revokeGroupInviteLink(
                 conversationId: _conversation.id,
                 inviteLinkId: link.id,
               );
-              await reload();
             } catch (e) {
-              setModalState(() {
-                loading = false;
-                err = userVisibleError(e);
-              });
+              setModalState(() => links = previous);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(userVisibleError(e))),
+                );
+              }
             }
           }
 
@@ -1571,7 +1534,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       builder: (ctx) => _GroupJoinRequestsSheet(
         conversationId: _conversation.id,
         onChanged: () {
-          if (mounted) unawaited(_load());
+          if (mounted) unawaited(_load(silent: true));
         },
       ),
     );
@@ -1585,7 +1548,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
         ),
       ),
     );
-    if (mounted) _load();
+    if (mounted) unawaited(_load(silent: true));
   }
 
   Future<void> _leaveGroup() async {
@@ -2096,6 +2059,137 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
   }
 }
 
+class _GroupBansSheet extends StatefulWidget {
+  const _GroupBansSheet({required this.conversationId});
+
+  final int conversationId;
+
+  @override
+  State<_GroupBansSheet> createState() => _GroupBansSheetState();
+}
+
+class _GroupBansSheetState extends State<_GroupBansSheet> {
+  List<ChatGroupBanEntry>? _items;
+  Object? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_reload());
+  }
+
+  Future<void> _reload() async {
+    setState(() => _error = null);
+    try {
+      final rows = await ChatService.listGroupBans(widget.conversationId);
+      if (!mounted) return;
+      setState(() => _items = rows);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e);
+    }
+  }
+
+  Future<void> _unban(ChatGroupBanEntry row) async {
+    final items = List<ChatGroupBanEntry>.from(_items ?? const []);
+    final index = items.indexWhere((r) => r.user.id == row.user.id);
+    if (index < 0) return;
+    setState(() {
+      _items = [...items]..removeAt(index);
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Пользователь разбанен')),
+    );
+    try {
+      await ChatService.unbanGroupMember(
+        conversationId: widget.conversationId,
+        userId: row.user.id,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        final current = List<ChatGroupBanEntry>.from(_items ?? const []);
+        if (!current.any((r) => r.user.id == row.user.id)) {
+          current.insert(index.clamp(0, current.length), row);
+        }
+        _items = current;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final items = _items;
+    final error = _error;
+    if (error != null && items == null) {
+      return SafeArea(
+        child: SizedBox(
+          height: 260,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(userVisibleError(error)),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: _reload,
+                    child: const Text('Повторить'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    if (items == null) {
+      return const SafeArea(
+        child: SizedBox(
+          height: 260,
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+    return SafeArea(
+      child: SizedBox(
+        height: 420,
+        child: items.isEmpty
+            ? const Center(child: Text('Бан-лист пуст'))
+            : ListView.builder(
+                itemCount: items.length,
+                itemBuilder: (context, index) {
+                  final row = items[index];
+                  final until = row.bannedUntil;
+                  return ListTile(
+                    leading: const Icon(Icons.block_outlined),
+                    title: Text(row.user.displayName),
+                    subtitle: Text(
+                      [
+                        if (until == null)
+                          'Бессрочно'
+                        else
+                          'До ${until.toLocal().day.toString().padLeft(2, '0')}.${until.toLocal().month.toString().padLeft(2, '0')}.${until.toLocal().year}',
+                        if ((row.reason ?? '').trim().isNotEmpty)
+                          row.reason!.trim(),
+                      ].join(' • '),
+                    ),
+                    trailing: TextButton(
+                      onPressed: () => _unban(row),
+                      child: const Text('Разбанить'),
+                    ),
+                  );
+                },
+              ),
+      ),
+    );
+  }
+}
+
 class _GroupJoinRequestsSheet extends StatefulWidget {
   const _GroupJoinRequestsSheet({
     required this.conversationId,
@@ -2140,19 +2234,28 @@ class _GroupJoinRequestsSheetState extends State<_GroupJoinRequestsSheet> {
   }
 
   Future<void> _reviewOne(ChatGroupJoinRequest row, {required bool approve}) async {
+    final items = List<ChatGroupJoinRequest>.from(_items ?? const []);
+    final index = items.indexWhere((r) => r.id == row.id);
+    if (index < 0) return;
+    setState(() {
+      _items = [...items]..removeAt(index);
+    });
+    widget.onChanged();
     try {
       await ChatService.reviewGroupJoinRequest(
         conversationId: widget.conversationId,
         requestId: row.id,
         approve: approve,
       );
-      if (!mounted) return;
-      setState(() {
-        _items = [...?_items]..removeWhere((r) => r.id == row.id);
-      });
-      widget.onChanged();
     } catch (e) {
       if (!mounted) return;
+      setState(() {
+        final current = List<ChatGroupJoinRequest>.from(_items ?? const []);
+        if (!current.any((r) => r.id == row.id)) {
+          current.insert(index.clamp(0, current.length), row);
+        }
+        _items = current;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -2182,7 +2285,11 @@ class _GroupJoinRequestsSheetState extends State<_GroupJoinRequestsSheet> {
       );
       if (ok != true || !mounted) return;
     }
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _items = const [];
+    });
+    widget.onChanged();
     final result = await reviewJoinRequestsBulk<ChatGroupJoinRequest>(
       items: items,
       review: (row) => ChatService.reviewGroupJoinRequest(
@@ -2192,10 +2299,12 @@ class _GroupJoinRequestsSheetState extends State<_GroupJoinRequestsSheet> {
       ),
     );
     if (!mounted) return;
-    setState(() => _busy = false);
-    widget.onChanged();
-    await _reload();
-    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      if (result.failedItems.isNotEmpty) {
+        _items = result.failedItems;
+      }
+    });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(

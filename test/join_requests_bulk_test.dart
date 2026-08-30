@@ -12,6 +12,7 @@ void main() {
       );
       expect(result.succeeded, 2);
       expect(result.failed, 2);
+      expect(result.failedItems, [2, 4]);
       expect(result.total, 4);
     });
 
