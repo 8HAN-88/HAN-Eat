@@ -436,7 +436,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
         if (bestHour != null)
           _MetricItem(
             label: 'Лучший час',
-            value: '${bestHour}:00',
+            value: '$bestHour:00',
             icon: Icons.schedule,
             color: Colors.indigo,
           ),

@@ -348,7 +348,7 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  onPressed: () => context.push(PostRoute.pathFor(item.id)),
+                  onPressed: () => context.push(PostFeedRoute.pathFor(item.id)),
                 );
               },
             ),
