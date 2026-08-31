@@ -303,6 +303,16 @@ class _ChannelSuggestedPostsScreenState
                 : 'Предложите пост в канал за ★ — админ примет или вернёт оплату.',
             textAlign: TextAlign.center,
           ),
+          if (_canSuggest) ...[
+            const SizedBox(height: 16),
+            Center(
+              child: FilledButton.icon(
+                onPressed: _suggest,
+                icon: const Icon(Icons.outgoing_mail),
+                label: const Text('Предложить пост'),
+              ),
+            ),
+          ],
         ],
       );
     }

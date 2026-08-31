@@ -1159,7 +1159,23 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                     child: SizedBox(
                       height: 260,
                       child: Center(
-                        child: Text(userVisibleError(snap.error!)),
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                userVisibleError(snap.error!),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 12),
+                              FilledButton(
+                                onPressed: () => setModalState(() {}),
+                                child: const Text('Повторить'),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   );
@@ -2250,7 +2266,25 @@ class _GroupJoinRequestsSheetState extends State<_GroupJoinRequestsSheet> {
             if (_busy) const LinearProgressIndicator(minHeight: 2),
             Expanded(
               child: _error != null
-                  ? Center(child: Text(userVisibleError(_error!)))
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              userVisibleError(_error!),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 12),
+                            FilledButton(
+                              onPressed: _reload,
+                              child: const Text('Повторить'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
                   : items == null
                       ? const Center(child: CircularProgressIndicator())
                       : items.isEmpty

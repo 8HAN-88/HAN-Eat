@@ -9,6 +9,7 @@ import '../../../services/media_upload_service.dart';
 import '../../../services/server_config.dart';
 import '../../../services/sticker_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/app_empty_state.dart';
 
 class StickerPackManageScreen extends StatefulWidget {
   const StickerPackManageScreen({
@@ -345,7 +346,24 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : (pack == null
-              ? const Center(child: Text('Стикерпак не найден'))
+              ? AppEmptyState(
+                  icon: Icons.sticky_note_2_outlined,
+                  title: 'Стикерпак не найден',
+                  subtitle: 'Не удалось открыть этот пак',
+                  action: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      FilledButton(
+                        onPressed: _load,
+                        child: const Text('Повторить'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.of(context).maybePop(),
+                        child: const Text('Назад'),
+                      ),
+                    ],
+                  ),
+                )
               : Column(
                   children: [
                     if (_saving) const LinearProgressIndicator(minHeight: 2),

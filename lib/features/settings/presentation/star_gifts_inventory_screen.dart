@@ -465,12 +465,20 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
           24,
           24 + floatingBottomPadding(context),
         ),
-        children: const [
-          Icon(Icons.card_giftcard_rounded, size: 48),
-          SizedBox(height: 12),
-          Text(
+        children: [
+          const Icon(Icons.card_giftcard_rounded, size: 48),
+          const SizedBox(height: 12),
+          const Text(
             'Пока нет подарков.\nКогда вам пришлют Stars Gift — он появится здесь.',
             textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: FilledButton.icon(
+              onPressed: () => context.push(StarGiftsMarketplaceRoute.path),
+              icon: const Icon(Icons.storefront_outlined),
+              label: const Text('Витрина подарков'),
+            ),
           ),
         ],
       );
@@ -742,7 +750,23 @@ class _GiftTransferUserPickerState extends State<_GiftTransferUserPicker> {
                 child: _loading
                     ? const Center(child: CircularProgressIndicator())
                     : _error != null
-                        ? Center(child: Text(_error!))
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(_error!, textAlign: TextAlign.center),
+                                  const SizedBox(height: 12),
+                                  FilledButton(
+                                    onPressed: () =>
+                                        unawaited(_search(_controller.text)),
+                                    child: const Text('Повторить'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
                         : _results.isEmpty
                             ? const Center(
                                 child: Text('Начните вводить имя'),

@@ -490,6 +490,16 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
                 : 'Активных розыгрышей нет.',
             textAlign: TextAlign.center,
           ),
+          if (widget.canManage) ...[
+            const SizedBox(height: 16),
+            Center(
+              child: FilledButton.icon(
+                onPressed: _create,
+                icon: const Icon(Icons.celebration_outlined),
+                label: const Text('Создать розыгрыш'),
+              ),
+            ),
+          ],
         ],
       );
     }

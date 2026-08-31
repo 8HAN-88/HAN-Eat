@@ -4,6 +4,7 @@ import '../../../models/sticker_models.dart';
 import '../../../services/server_config.dart';
 import '../../../services/sticker_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/app_empty_state.dart';
 
 class StickerPackPreviewScreen extends StatefulWidget {
   const StickerPackPreviewScreen({
@@ -74,7 +75,24 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : (pack == null
-              ? const Center(child: Text('Пак не найден'))
+              ? AppEmptyState(
+                  icon: Icons.sticky_note_2_outlined,
+                  title: 'Пак не найден',
+                  subtitle: 'Ссылка устарела или пак удалили',
+                  action: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      FilledButton(
+                        onPressed: _load,
+                        child: const Text('Повторить'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.of(context).maybePop(),
+                        child: const Text('Назад'),
+                      ),
+                    ],
+                  ),
+                )
               : Column(
                   children: [
                     Padding(

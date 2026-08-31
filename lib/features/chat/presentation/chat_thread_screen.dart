@@ -7023,9 +7023,24 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 ),
               ),
               if (_groupMembers.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Center(child: Text('Нет данных об участниках')),
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    children: [
+                      const Text(
+                        'Нет данных об участниках',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                      FilledButton(
+                        onPressed: () async {
+                          Navigator.pop(ctx);
+                          await _openMembersSheet();
+                        },
+                        child: const Text('Повторить'),
+                      ),
+                    ],
+                  ),
                 ),
             ],
           ),

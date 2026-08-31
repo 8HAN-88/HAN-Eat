@@ -150,12 +150,20 @@ class _PaidMessageExceptionsScreenState
           24,
           24 + floatingBottomPadding(context),
         ),
-        children: const [
-          Icon(Icons.star_border_rounded, size: 48),
-          SizedBox(height: 12),
-          Text(
+        children: [
+          const Icon(Icons.star_border_rounded, size: 48),
+          const SizedBox(height: 12),
+          const Text(
             'Никого нет в исключениях.\nДобавьте друзей — они смогут писать вам без Stars.',
             textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: FilledButton.icon(
+              onPressed: _addUser,
+              icon: const Icon(Icons.person_add_alt_1_outlined),
+              label: const Text('Добавить'),
+            ),
           ),
         ],
       );
@@ -279,7 +287,23 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
                 child: _loading
                     ? const Center(child: CircularProgressIndicator())
                     : _error != null
-                        ? Center(child: Text(_error!))
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(_error!, textAlign: TextAlign.center),
+                                  const SizedBox(height: 12),
+                                  FilledButton(
+                                    onPressed: () =>
+                                        unawaited(_search(_controller.text)),
+                                    child: const Text('Повторить'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
                         : _results.isEmpty
                             ? const Center(
                                 child: Text('Начните вводить имя'),

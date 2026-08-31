@@ -7,7 +7,10 @@ import '../../../app/app_router.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/chat_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/app_empty_state.dart';
 import '../application/chat_thread_prefetch.dart';
+import '../application/chats_hub_refresh_provider.dart';
+import 'widgets/chats_hub_contacts_tab.dart';
 
 class ChatCreateGroupScreen extends StatefulWidget {
   const ChatCreateGroupScreen({super.key});
@@ -102,6 +105,11 @@ class _ChatCreateGroupScreenState extends State<ChatCreateGroupScreen> {
     }
   }
 
+  void _openContactsHub() {
+    requestChatsHubTab(ChatsHubContactsTab.contactsTabIndex);
+    context.go(ChatsRoute.path);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -155,10 +163,25 @@ class _ChatCreateGroupScreenState extends State<ChatCreateGroupScreen> {
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : _error != null
-                    ? Center(child: Text(userVisibleError(_error!)))
+                    ? AppEmptyState(
+                        icon: Icons.cloud_off_outlined,
+                        title: 'Не удалось загрузить контакты',
+                        subtitle: userVisibleError(_error!),
+                        action: FilledButton(
+                          onPressed: _loadContacts,
+                          child: const Text('Повторить'),
+                        ),
+                      )
                     : _contacts.isEmpty
-                        ? const Center(
-                            child: Text('Добавьте контакты, чтобы создать группу'),
+                        ? AppEmptyState(
+                            icon: Icons.group_add_outlined,
+                            title: 'Нет контактов',
+                            subtitle:
+                                'Добавьте людей в контакты, чтобы собрать группу',
+                            action: FilledButton(
+                              onPressed: _openContactsHub,
+                              child: const Text('К контактам'),
+                            ),
                           )
                         : ListView.builder(
                             itemCount: _contacts.length,

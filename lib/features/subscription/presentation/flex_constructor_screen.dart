@@ -128,7 +128,22 @@ class _FlexConstructorScreenState extends State<FlexConstructorScreen> {
         child: _loading
             ? const Center(child: CircularProgressIndicator())
             : _error != null
-                ? Center(child: Text(_error!))
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(_error!, textAlign: TextAlign.center),
+                          const SizedBox(height: 12),
+                          FilledButton(
+                            onPressed: _load,
+                            child: const Text('Повторить'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
                 : ListView(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
                     children: [

@@ -354,6 +354,26 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
               },
               child: _loading && count == 0
                   ? const Center(child: CircularProgressIndicator())
+                  : _error != null && count == 0
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  _error!,
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 12),
+                                FilledButton(
+                                  onPressed: _reload,
+                                  child: const Text('Повторить'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
                   : _filter == _MediaFilter.links
                       ? links.isEmpty
                           ? const Center(

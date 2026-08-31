@@ -9,6 +9,7 @@ import '../../../services/api_service.dart';
 import '../../../services/chat_service.dart';
 import '../../../services/paid_features_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/telegram_ui.dart';
 import '../../miniapps/data/miniapp_models.dart';
@@ -742,7 +743,26 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
               child: _isLoading && bot == null
                   ? const Center(child: CircularProgressIndicator())
                   : bot == null
-                      ? const Center(child: Text('Бот не найден'))
+                      ? AppEmptyState(
+                          icon: Icons.smart_toy_outlined,
+                          title: 'Бот не найден',
+                          subtitle:
+                              'Не удалось загрузить @${widget.botUsername}',
+                          action: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              FilledButton(
+                                onPressed: _loadBot,
+                                child: const Text('Повторить'),
+                              ),
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.of(context).maybePop(),
+                                child: const Text('Назад'),
+                              ),
+                            ],
+                          ),
+                        )
                       : RefreshIndicator(
                           onRefresh: _loadBot,
                           child: ListView(
