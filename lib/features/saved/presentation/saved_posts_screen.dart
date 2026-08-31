@@ -10,6 +10,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import '../../feed/presentation/new_post_card.dart';
 import '../../../widgets/post_card_skeleton.dart';
 import '../../../core/layout/long_label_tab_bar.dart';
+import '../../../app/app_router.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/app_gradient_background.dart';
 
@@ -207,10 +208,14 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
           ),
         );
       }
-      return const AppEmptyState(
+      return AppEmptyState(
         icon: Icons.bookmark_border,
         title: 'Нет сохранённых постов',
         subtitle: 'Сохраняйте посты — они появятся здесь',
+        action: FilledButton(
+          onPressed: () => context.go(FeedRoute.path),
+          child: const Text('Открыть ленту'),
+        ),
       );
     }
     

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/app_router.dart';
+
 /// Экран отмены оплаты подписки
 class SubscriptionCancelScreen extends StatelessWidget {
   const SubscriptionCancelScreen({super.key});
@@ -38,14 +40,14 @@ class SubscriptionCancelScreen extends StatelessWidget {
               const SizedBox(height: 32),
               FilledButton(
                 onPressed: () {
-                  context.go('/subscription');
+                  context.go(FlexSubscriptionRoute.path);
                 },
                 child: const Text('Вернуться к подписке'),
               ),
               const SizedBox(height: 16),
               TextButton(
                 onPressed: () {
-                  context.go('/');
+                  context.go(FeedRoute.path);
                 },
                 child: const Text('На главную'),
               ),

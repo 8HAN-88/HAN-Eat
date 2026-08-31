@@ -210,10 +210,15 @@ class _ChannelSettingsBottomSheetState
             ListTile(
               leading: const Icon(Icons.notifications_outlined),
               title: const Text('Уведомления'),
-              trailing: Switch(
-                value: _notificationsEnabled,
-                onChanged: widget.channel.isMember
-                    ? (value) async {
+              subtitle: widget.channel.isMember
+                  ? null
+                  : const Text(
+                      'Подпишитесь на канал, чтобы управлять уведомлениями',
+                    ),
+              trailing: widget.channel.isMember
+                  ? Switch(
+                      value: _notificationsEnabled,
+                      onChanged: (value) async {
                         try {
                           await ChannelSheetPrefs.setNotificationsEnabled(
                             widget.channelId,
@@ -235,9 +240,9 @@ class _ChannelSettingsBottomSheetState
                             );
                           }
                         }
-                      }
-                    : null,
-              ),
+                      },
+                    )
+                  : null,
             ),
             ListTile(
               leading: const Icon(Icons.feed_outlined),

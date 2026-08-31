@@ -489,7 +489,10 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
                                                 child: InlineVideoPlayer(
                                                   videoUrl: ServerConfig
                                                       .resolveMediaUrl(url),
-                                                  onTap: () {},
+                                                  onTap: () => _openExternal(
+                                                    ServerConfig
+                                                        .resolveMediaUrl(url),
+                                                  ),
                                                 ),
                                               ),
                                             ),

@@ -8252,25 +8252,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       subtitle: 'Как в Telegram: звёзды появятся сообщением в чате.',
     );
     if (payload == null || !mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(
-      SnackBar(content: Text('Отправлено ${payload.amount} ★')),
-    );
-    unawaited(() async {
-      try {
-        final result = await PaidFeaturesService.donate(
-          recipientId: peer.id,
-          amountStars: payload.amount,
-          message: payload.message,
-        );
-        if (mounted && result.messageId != null) {
-          unawaited(_pollNew());
-        }
-      } catch (e) {
-        if (!mounted) return;
-        await showStarsRequiredSnack(context, e);
+    try {
+      final result = await PaidFeaturesService.donate(
+        recipientId: peer.id,
+        amountStars: payload.amount,
+        message: payload.message,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Отправлено ${payload.amount} ★')),
+      );
+      if (result.messageId != null) {
+        unawaited(_pollNew());
       }
-    }());
+    } catch (e) {
+      if (!mounted) return;
+      await showStarsRequiredSnack(context, e);
+    }
   }
 
   Future<void> _startVideoCall() async {

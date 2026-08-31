@@ -78,6 +78,8 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
                     : '${user.email}\nАктивные сеансы на устройствах',
               ),
               isThreeLine: true,
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push(ProfileAuthRoute.path),
             ),
           ),
           const SizedBox(height: 12),

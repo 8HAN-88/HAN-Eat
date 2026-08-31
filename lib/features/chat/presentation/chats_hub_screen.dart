@@ -13,6 +13,7 @@ import '../../../services/auth_service.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/telegram_ui.dart';
 import '../../channels/application/channels_list_refresh_provider.dart';
+import '../application/chats_hub_refresh_provider.dart';
 import 'chat_archived_screen.dart';
 import 'chat_create_group_screen.dart';
 import 'chat_people_search_screen.dart';
@@ -46,10 +47,22 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
     );
     _lastTabIndex = _tabs.index;
     _tabs.addListener(_onTabChanged);
+    chatsHubRequestedTab.addListener(_applyRequestedTab);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AppBootstrapState.primaryUiReady.value = true;
       notifyPrimaryUiReady();
+      _applyRequestedTab();
     });
+  }
+
+  void _applyRequestedTab() {
+    final next = chatsHubRequestedTab.value;
+    if (next == null || !mounted) return;
+    chatsHubRequestedTab.value = null;
+    final index = next.clamp(0, _tabs.length - 1);
+    if (_tabs.index != index) {
+      _tabs.animateTo(index);
+    }
   }
 
   void _onTabChanged() {
@@ -61,6 +74,7 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
 
   @override
   void dispose() {
+    chatsHubRequestedTab.removeListener(_applyRequestedTab);
     _tabs.removeListener(_onTabChanged);
     _tabs.dispose();
     _searchController.dispose();

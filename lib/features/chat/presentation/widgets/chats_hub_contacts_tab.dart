@@ -691,6 +691,11 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
                     kIsWeb
                         ? 'Импортируйте контакты с телефона или добавьте номера вручную.'
                         : 'В телефонной книге нет номеров с кодом страны или добавьте людей через поиск.',
+                action: FilledButton.icon(
+                  onPressed: _addPhoneContact,
+                  icon: const Icon(Icons.person_add_outlined),
+                  label: const Text('Добавить контакт'),
+                ),
               ),
             ),
         ],

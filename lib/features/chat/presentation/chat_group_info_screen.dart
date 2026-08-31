@@ -1651,47 +1651,53 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                       children: [
                         const SizedBox(height: 16),
                         Center(
-                          child: GestureDetector(
-                            onTap: (_busy || !_canChangeInfo)
-                                ? null
-                                : _changeGroupPhoto,
-                            child: Stack(
-                              alignment: Alignment.bottomRight,
-                              children: [
-                                CircleAvatar(
-                                  radius: 40,
-                                  backgroundImage: resolvedAvatarImage(
-                                    _conversation.avatarUrl,
-                                    decodeWidth: 160,
-                                  ),
-                                  child: resolvedAvatarImage(
-                                            _conversation.avatarUrl,
-                                            decodeWidth: 160,
-                                          ) ==
-                                          null
-                                      ? Text(
-                                          _conversation.displayTitle.characters
-                                              .first
-                                              .toUpperCase(),
-                                          style: theme.textTheme.headlineMedium,
-                                        )
-                                      : null,
-                                ),
-                                if (_canChangeInfo)
-                                  Container(
-                                    padding: const EdgeInsets.all(4),
-                                    decoration: BoxDecoration(
-                                      color: theme.colorScheme.primary,
-                                      shape: BoxShape.circle,
+                          child: Builder(
+                            builder: (context) {
+                              final avatar = Stack(
+                                alignment: Alignment.bottomRight,
+                                children: [
+                                  CircleAvatar(
+                                    radius: 40,
+                                    backgroundImage: resolvedAvatarImage(
+                                      _conversation.avatarUrl,
+                                      decodeWidth: 160,
                                     ),
-                                    child: Icon(
-                                      Icons.camera_alt_outlined,
-                                      size: 16,
-                                      color: theme.colorScheme.onPrimary,
-                                    ),
+                                    child: resolvedAvatarImage(
+                                              _conversation.avatarUrl,
+                                              decodeWidth: 160,
+                                            ) ==
+                                            null
+                                        ? Text(
+                                            _conversation
+                                                .displayTitle.characters
+                                                .first
+                                                .toUpperCase(),
+                                            style:
+                                                theme.textTheme.headlineMedium,
+                                          )
+                                        : null,
                                   ),
-                              ],
-                            ),
+                                  if (_canChangeInfo)
+                                    Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: theme.colorScheme.primary,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        Icons.camera_alt_outlined,
+                                        size: 16,
+                                        color: theme.colorScheme.onPrimary,
+                                      ),
+                                    ),
+                                ],
+                              );
+                              if (!_canChangeInfo) return avatar;
+                              return GestureDetector(
+                                onTap: _busy ? null : _changeGroupPhoto,
+                                child: avatar,
+                              );
+                            },
                           ),
                         ),
                         const SizedBox(height: 12),
