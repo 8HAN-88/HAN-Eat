@@ -420,6 +420,7 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
             : _PrivateChannelPostsLocked(
                 channel: c,
                 onUnlocked: () => _loadChannel(forceRefresh: true),
+                onOpenInfo: _openChannelInfoPage,
               ),
       ),
       floatingActionButton: c.canCreatePosts
@@ -535,10 +536,12 @@ class _PrivateChannelPostsLocked extends StatefulWidget {
   const _PrivateChannelPostsLocked({
     required this.channel,
     required this.onUnlocked,
+    required this.onOpenInfo,
   });
 
   final ChannelDetail channel;
   final VoidCallback onUnlocked;
+  final VoidCallback onOpenInfo;
 
   @override
   State<_PrivateChannelPostsLocked> createState() =>
@@ -619,6 +622,14 @@ class _PrivateChannelPostsLockedState
                   style:
                       TextStyle(color: scheme.onSurfaceVariant, height: 1.35),
                 ),
+                if (!paidLocked && !channel.isPending) ...[
+                  const SizedBox(height: 18),
+                  FilledButton.icon(
+                    onPressed: widget.onOpenInfo,
+                    icon: const Icon(Icons.info_outline),
+                    label: const Text('Информация о канале'),
+                  ),
+                ],
                 if (paidLocked) ...[
                   const SizedBox(height: 16),
                   _PaidChannelBenefitRow(

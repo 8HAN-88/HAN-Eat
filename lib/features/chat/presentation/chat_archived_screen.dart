@@ -495,12 +495,22 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
                     ),
                   )
                 : isEmpty
-                    ? const AppEmptyState(
+                    ? AppEmptyState(
                         icon: Icons.archive_outlined,
                         title: 'Архив пуст',
                         subtitle:
                             'Свайпните чат или канал влево в списке «Чаты», '
                             'или удержите строку и выберите «В архив».',
+                        action: FilledButton(
+                          onPressed: () {
+                            if (context.canPop()) {
+                              context.pop();
+                            } else {
+                              context.go(ChatsRoute.path);
+                            }
+                          },
+                          child: const Text('К чатам'),
+                        ),
                       )
                     : RefreshIndicator(
                         onRefresh: _selectionMode ? () async {} : _load,
