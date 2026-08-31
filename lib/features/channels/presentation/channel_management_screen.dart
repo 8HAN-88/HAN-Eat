@@ -1,4 +1,5 @@
 // Экран управления каналом (для владельца и админов)
+import 'dart:async';
 import 'dart:io';
 import '../../../utils/api_error_parser.dart';
 import 'dart:typed_data';
@@ -16,6 +17,8 @@ import '../../../core/layout/long_label_tab_bar.dart';
 import '../../../widgets/app_avatar.dart';
 import '../../chat/application/join_requests_bulk.dart';
 import '../../settings/application/subscription_status_provider.dart';
+import '../../../core/share/system_share.dart';
+import '../../../services/share_link_service.dart';
 import '../../../widgets/app_empty_state.dart';
 
 const _permissionLabels = <String, (String, String)>{
@@ -980,10 +983,27 @@ class _ChannelManagementScreenState
         ),
         const SizedBox(height: 16),
         if (_members.isEmpty)
-          const AppEmptyState(
+          AppEmptyState(
             icon: Icons.people_outline_rounded,
             title: 'Нет подписчиков',
             subtitle: 'Подписчики канала появятся здесь',
+            action: FilledButton.icon(
+              onPressed: () {
+                final name = _channel?.name ?? 'Канал';
+                unawaited(
+                  SystemShare.shareText(
+                    context,
+                    text: ShareLinkService.channelShareText(
+                      widget.channelId,
+                      name,
+                    ),
+                    subject: name,
+                  ),
+                );
+              },
+              icon: const Icon(Icons.ios_share_outlined),
+              label: const Text('Пригласить'),
+            ),
           )
         else
           ..._members.map((member) {

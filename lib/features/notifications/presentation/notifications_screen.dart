@@ -426,11 +426,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                             child: const Text('Повторить'),
                           ),
                         )
-                      : const AppEmptyState(
+                      : AppEmptyState(
                           icon: Icons.notifications_none_rounded,
                           title: 'Нет уведомлений',
                           subtitle:
                               'Здесь появятся лайки, комментарии и подписки',
+                          action: FilledButton(
+                            onPressed: () => context.go(FeedRoute.path),
+                            child: const Text('Открыть ленту'),
+                          ),
                         ),
                 ],
               )

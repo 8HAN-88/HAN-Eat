@@ -1584,14 +1584,28 @@ class _GifPickPanelState extends State<_GifPickPanel> {
         else if (_catalogItems.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Text(
-              searching
-                  ? 'Ничего не найдено. Попробуйте другой запрос.'
-                  : 'Пока нет популярных GIF.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: scheme.onSurfaceVariant,
+            child: Column(
+              children: [
+                Text(
+                  searching
+                      ? 'Ничего не найдено. Попробуйте другой запрос.'
+                      : 'Пока нет популярных GIF.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                ),
+                if (searching) ...[
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: () {
+                      _searchController.clear();
+                      unawaited(_loadCatalog(query: ''));
+                    },
+                    child: const Text('Очистить поиск'),
                   ),
+                ],
+              ],
             ),
           )
         else ...[

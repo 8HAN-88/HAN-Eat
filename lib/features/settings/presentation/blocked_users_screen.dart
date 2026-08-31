@@ -110,12 +110,19 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
           24,
           24 + floatingBottomPadding(context),
         ),
-        children: const [
-          Icon(Icons.block_outlined, size: 48),
-          SizedBox(height: 12),
-          Text(
+        children: [
+          const Icon(Icons.block_outlined, size: 48),
+          const SizedBox(height: 12),
+          const Text(
             'Нет заблокированных пользователей',
             textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: FilledButton(
+              onPressed: () => Navigator.of(context).maybePop(),
+              child: const Text('Назад'),
+            ),
           ),
         ],
       );

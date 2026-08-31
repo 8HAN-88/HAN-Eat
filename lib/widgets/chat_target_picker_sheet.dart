@@ -169,6 +169,16 @@ class _ChatTargetPickerSheetState extends State<_ChatTargetPickerSheet> {
                 filled: true,
                 fillColor:
                     scheme.surfaceContainerHighest.withValues(alpha: 0.45),
+                suffixIcon: q.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'Очистить',
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          setState(() {});
+                        },
+                        icon: const Icon(Icons.close),
+                      ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide.none,
@@ -191,10 +201,26 @@ class _ChatTargetPickerSheetState extends State<_ChatTargetPickerSheet> {
               child: filtered.isEmpty
                   ? Padding(
                       padding: const EdgeInsets.symmetric(vertical: 28),
-                      child: Text(
-                        'Чаты не найдены',
-                        style: textTheme.bodyMedium
-                            ?.copyWith(color: scheme.onSurfaceVariant),
+                      child: Column(
+                        children: [
+                          Text(
+                            q.isEmpty
+                                ? 'Нет чатов для пересылки'
+                                : 'Чаты не найдены',
+                            style: textTheme.bodyMedium
+                                ?.copyWith(color: scheme.onSurfaceVariant),
+                          ),
+                          if (q.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            TextButton(
+                              onPressed: () {
+                                _searchCtrl.clear();
+                                setState(() {});
+                              },
+                              child: const Text('Очистить поиск'),
+                            ),
+                          ],
+                        ],
                       ),
                     )
                   : ListView.builder(

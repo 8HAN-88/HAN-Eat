@@ -500,10 +500,24 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
           backgroundColor: Colors.black,
           iconTheme: const IconThemeData(color: Colors.white),
         ),
-        body: const Center(
-          child: Text(
-            'Нет активных сторис',
-            style: TextStyle(color: Colors.white70),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Нет активных сторис',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white70),
+                ),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  child: const Text('Закрыть'),
+                ),
+              ],
+            ),
           ),
         ),
       );

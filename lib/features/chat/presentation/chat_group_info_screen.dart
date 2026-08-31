@@ -1185,7 +1185,22 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                   child: SizedBox(
                     height: 420,
                     child: items.isEmpty
-                        ? const Center(child: Text('Бан-лист пуст'))
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text('Бан-лист пуст'),
+                                  const SizedBox(height: 12),
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context),
+                                    child: const Text('Закрыть'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
                         : ListView.builder(
                             itemCount: items.length,
                             itemBuilder: (context, index) {
@@ -2288,7 +2303,23 @@ class _GroupJoinRequestsSheetState extends State<_GroupJoinRequestsSheet> {
                   : items == null
                       ? const Center(child: CircularProgressIndicator())
                       : items.isEmpty
-                          ? const Center(child: Text('Нет активных заявок'))
+                          ? Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(24),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Text('Нет активных заявок'),
+                                    const SizedBox(height: 12),
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(context).maybePop(),
+                                      child: const Text('Закрыть'),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            )
                           : ListView.builder(
                               itemCount: items.length,
                               itemBuilder: (context, index) {

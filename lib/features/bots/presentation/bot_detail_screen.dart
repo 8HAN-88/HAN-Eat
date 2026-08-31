@@ -479,7 +479,33 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
                   const Divider(height: 1),
                   Expanded(
                     child: invoices.isEmpty
-                        ? const Center(child: Text('Пока нет счетов'))
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text(
+                                    'Пока нет счетов',
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  FilledButton.icon(
+                                    onPressed: () {
+                                      Navigator.pop(ctx);
+                                      unawaited(_createStarsInvoice());
+                                    },
+                                    icon: const Icon(Icons.add),
+                                    label: const Text('Создать счёт'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx),
+                                    child: const Text('Закрыть'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
                         : ListView.separated(
                             itemCount: invoices.length,
                             separatorBuilder: (_, __) =>
@@ -525,7 +551,13 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_listStarsInvoices()),
+          ),
+        ),
       );
     }
   }

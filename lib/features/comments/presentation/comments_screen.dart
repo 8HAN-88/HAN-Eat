@@ -330,10 +330,14 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
           child: _comments.isEmpty && _isLoading
               ? const Center(child: CircularProgressIndicator())
               : _comments.isEmpty
-                  ? const AppEmptyState(
+                  ? AppEmptyState(
                       icon: Icons.comment_outlined,
                       title: 'Нет комментариев',
                       subtitle: 'Будьте первым!',
+                      action: FilledButton(
+                        onPressed: _focusCommentInput,
+                        child: const Text('Написать'),
+                      ),
                     )
                   : RefreshIndicator(
                       onRefresh: () => _loadComments(refresh: true),

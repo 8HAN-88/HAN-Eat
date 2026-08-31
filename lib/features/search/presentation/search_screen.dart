@@ -965,6 +965,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
             ),
+            if (query.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () {
+                  _searchController.clear();
+                  setState(() {});
+                },
+                child: const Text('Очистить запрос'),
+              ),
+            ],
           ],
         ),
       );

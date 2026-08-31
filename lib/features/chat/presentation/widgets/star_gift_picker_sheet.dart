@@ -115,6 +115,12 @@ class _StarGiftPickerSheetState extends State<_StarGiftPickerSheet> {
     _future = PaidFeaturesService.getGifts();
   }
 
+  void _reload() {
+    setState(() {
+      _future = PaidFeaturesService.getGifts();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -146,9 +152,19 @@ class _StarGiftPickerSheetState extends State<_StarGiftPickerSheet> {
                 if (snapshot.hasError) {
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 24),
-                    child: Text(
-                      'Не удалось загрузить каталог',
-                      style: TextStyle(color: scheme.error),
+                    child: Column(
+                      children: [
+                        Text(
+                          'Не удалось загрузить каталог',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: scheme.error),
+                        ),
+                        const SizedBox(height: 12),
+                        FilledButton(
+                          onPressed: _reload,
+                          child: const Text('Повторить'),
+                        ),
+                      ],
                     ),
                   );
                 }
@@ -160,9 +176,25 @@ class _StarGiftPickerSheetState extends State<_StarGiftPickerSheet> {
                 }
                 final gifts = snapshot.data!;
                 if (gifts.isEmpty) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 24),
-                    child: Text('Каталог пуст'),
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    child: Column(
+                      children: [
+                        const Text(
+                          'Каталог пуст',
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 12),
+                        FilledButton(
+                          onPressed: _reload,
+                          child: const Text('Повторить'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.of(context).maybePop(),
+                          child: const Text('Закрыть'),
+                        ),
+                      ],
+                    ),
                   );
                 }
                 return GridView.builder(
