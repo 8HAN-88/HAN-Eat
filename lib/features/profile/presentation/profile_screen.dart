@@ -359,25 +359,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       if (!mounted) return;
       final idem =
           'flutter:profile-gift:${user.id}:${draft.gift.id}:${const Uuid().v4()}';
-      final messenger = ScaffoldMessenger.of(context);
-      unawaited(() async {
-        try {
-          final real = conv.id > 0
-              ? conv
-              : await ChatOpenDirect.resolve(user.id);
-          await PaidFeaturesService.sendGift(
-            giftId: draft.gift.id,
-            conversationId: real.id,
-            message: draft.message,
-            hideName: draft.hideName,
-            idempotencyKey: idem,
-          );
-        } catch (e) {
-          if (!mounted) return;
-          await showStarsRequiredSnack(context, e);
-        }
-      }());
-      messenger.showSnackBar(
+      final real = conv.id > 0 ? conv : await ChatOpenDirect.resolve(user.id);
+      await PaidFeaturesService.sendGift(
+        giftId: draft.gift.id,
+        conversationId: real.id,
+        message: draft.message,
+        hideName: draft.hideName,
+        idempotencyKey: idem,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             draft.hideName
@@ -386,7 +377,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           ),
         ),
       );
-      context.push(ChatThreadRoute.pathFor(conv), extra: conv);
+      context.push(ChatThreadRoute.pathFor(real), extra: real);
     } catch (e) {
       if (!mounted) return;
       await showStarsRequiredSnack(context, e);

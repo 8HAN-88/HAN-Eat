@@ -188,7 +188,13 @@ class _StarGiftPickerSheetState extends State<_StarGiftPickerSheet> {
                         child: InkWell(
                           borderRadius: BorderRadius.circular(16),
                           onTap: soldOut
-                              ? null
+                              ? () {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Этот подарок распродан'),
+                                    ),
+                                  );
+                                }
                               : () => Navigator.pop(context, gift),
                           child: Padding(
                             padding: const EdgeInsets.all(10),

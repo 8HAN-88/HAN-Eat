@@ -484,6 +484,10 @@ class _CreateChannelPostScreenState
   }
 
   Future<void> _pickCameraImage() async {
+    if (kIsWeb) {
+      await _pickImage();
+      return;
+    }
     try {
       final image = await _imagePicker.pickImage(
         source: ImageSource.camera,
@@ -1326,11 +1330,12 @@ class _CreateChannelPostScreenState
               selected: _selectedImages.isNotEmpty,
               onPressed: disabled ? null : _pickImage,
             ),
-            _ComposerToolButton(
-              icon: Icons.photo_camera_outlined,
-              tooltip: 'Камера',
-              onPressed: disabled ? null : _pickCameraImage,
-            ),
+            if (!kIsWeb)
+              _ComposerToolButton(
+                icon: Icons.photo_camera_outlined,
+                tooltip: 'Камера',
+                onPressed: disabled ? null : _pickCameraImage,
+              ),
             _ComposerToolButton(
               icon: Icons.play_circle_outline_rounded,
               tooltip: 'Видео в рилсы',

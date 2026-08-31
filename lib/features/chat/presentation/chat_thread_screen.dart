@@ -7958,32 +7958,30 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     setState(() => _sendingStarGift = true);
     final idem =
         'flutter:gift:${widget.conversationId}:${gift.id}:${const Uuid().v4()}';
-    final messenger = ScaffoldMessenger.of(context);
-    unawaited(() async {
-      try {
-        await PaidFeaturesService.sendGift(
-          giftId: gift.id,
-          conversationId: widget.conversationId,
-          message: draft.message,
-          hideName: draft.hideName,
-          idempotencyKey: idem,
-        );
-        if (mounted) unawaited(_pollNew());
-      } catch (e) {
-        if (mounted) await showStarsRequiredSnack(context, e);
-      } finally {
-        if (mounted) setState(() => _sendingStarGift = false);
-      }
-    }());
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          draft.hideName
-              ? 'Подарок ${gift.emoji} отправлен анонимно'
-              : 'Подарок ${gift.emoji} отправлен',
+    try {
+      await PaidFeaturesService.sendGift(
+        giftId: gift.id,
+        conversationId: widget.conversationId,
+        message: draft.message,
+        hideName: draft.hideName,
+        idempotencyKey: idem,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            draft.hideName
+                ? 'Подарок ${gift.emoji} отправлен анонимно'
+                : 'Подарок ${gift.emoji} отправлен',
+          ),
         ),
-      ),
-    );
+      );
+      unawaited(_pollNew());
+    } catch (e) {
+      if (mounted) await showStarsRequiredSnack(context, e);
+    } finally {
+      if (mounted) setState(() => _sendingStarGift = false);
+    }
   }
 
   int? _userGiftIdFromMessage(ChatMessage msg) {

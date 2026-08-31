@@ -159,6 +159,10 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   }
 
   Future<void> _pickCameraImage() async {
+    if (kIsWeb) {
+      await _pickImage();
+      return;
+    }
     try {
       final image = await _imagePicker.pickImage(
         source: ImageSource.camera,
@@ -1026,11 +1030,12 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
               tooltip: 'Фото',
               onTap: _isLoading ? null : _pickImage,
             ),
-            _ComposerToolButton(
-              icon: Icons.photo_camera_outlined,
-              tooltip: 'Камера',
-              onTap: _isLoading ? null : _pickCameraImage,
-            ),
+            if (!kIsWeb)
+              _ComposerToolButton(
+                icon: Icons.photo_camera_outlined,
+                tooltip: 'Камера',
+                onTap: _isLoading ? null : _pickCameraImage,
+              ),
             _ComposerToolButton(
               icon: Icons.video_library_outlined,
               tooltip: 'Видео в рилсы',
