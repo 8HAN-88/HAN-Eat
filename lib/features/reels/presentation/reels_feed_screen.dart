@@ -757,7 +757,11 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
                       icon: const Icon(Icons.refresh),
                       label: const Text('Повторить'),
                     )
-                  : null,
+                  : FilledButton.icon(
+                      onPressed: () => context.push(CreateReelRoute.path),
+                      icon: const Icon(Icons.videocam_outlined),
+                      label: const Text('Снять рилс'),
+                    ),
             ),
           ),
         ],

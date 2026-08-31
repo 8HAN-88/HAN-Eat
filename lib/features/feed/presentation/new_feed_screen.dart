@@ -398,13 +398,15 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
                                 : 'Пока нет постов',
                             subtitle: _lastLoadError ??
                                 'Обновите ленту или смените фильтр в меню выше.',
-                            action: _lastLoadError != null
-                                ? FilledButton.icon(
-                                    onPressed: () => unawaited(_refreshAll()),
-                                    icon: const Icon(Icons.refresh),
-                                    label: const Text('Повторить'),
-                                  )
-                                : null,
+                            action: FilledButton.icon(
+                              onPressed: () => unawaited(_refreshAll()),
+                              icon: const Icon(Icons.refresh),
+                              label: Text(
+                                _lastLoadError != null
+                                    ? 'Повторить'
+                                    : 'Обновить',
+                              ),
+                            ),
                           ),
                         ),
                       ),

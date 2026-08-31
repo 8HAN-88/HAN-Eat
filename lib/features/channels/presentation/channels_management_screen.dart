@@ -204,7 +204,12 @@ class _ChannelsManagementScreenState
                         },
                         child: const Text('Сбросить фильтры'),
                       )
-                    : null,
+                    : FilledButton.icon(
+                        onPressed: () =>
+                            context.push(CreateChannelRoute.path),
+                        icon: const Icon(Icons.add_rounded),
+                        label: const Text('Создать канал'),
+                      ),
               ),
             ),
           ],

@@ -219,10 +219,14 @@ class _ScheduledPostsScreenState extends ConsumerState<ScheduledPostsScreen> {
     }
 
     if (_posts.isEmpty) {
-      return const AppEmptyState(
+      return AppEmptyState(
         icon: Icons.schedule_rounded,
         title: 'Нет запланированных постов',
         subtitle: 'При создании поста выберите «Время публикации»',
+        action: FilledButton(
+          onPressed: () => context.push(CreatePostRoute.path),
+          child: const Text('Создать пост'),
+        ),
       );
     }
 

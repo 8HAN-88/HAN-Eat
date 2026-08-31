@@ -607,10 +607,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         }
         return Scaffold(
           appBar: AppBar(title: const Text('Профиль')),
-          body: const AppEmptyState(
+          body: AppEmptyState(
             icon: Icons.person_off_outlined,
             title: 'Пользователь не найден',
             subtitle: 'Возможно, профиль удалён или скрыт',
+            action: FilledButton(
+              onPressed: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go(FeedRoute.path);
+                }
+              },
+              child: const Text('Назад'),
+            ),
           ),
         );
       }
@@ -1042,6 +1052,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       ),
       userId: _effectiveUserId,
       postType: postType,
+      onCreate: _isOwnProfileView(profileUserId: _effectiveUserId)
+          ? () => unawaited(_openCreateContent())
+          : null,
     );
   }
 
@@ -1066,11 +1079,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
 class _PostsListWidget extends StatefulWidget {
   final int userId;
   final String? postType;
+  final VoidCallback? onCreate;
 
   const _PostsListWidget({
     super.key,
     required this.userId,
     this.postType,
+    this.onCreate,
   });
 
   @override
@@ -1236,17 +1251,32 @@ class _PostsListWidgetState extends State<_PostsListWidget> {
           ),
         );
       }
+      final isReel = widget.postType == 'reel';
+      final canCreate = widget.onCreate != null;
       return RefreshIndicator(
         onRefresh: () => _loadPosts(refresh: true),
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: EdgeInsets.only(bottom: floatingBottomPadding(context)),
-          children: const [
-            SizedBox(height: 80),
+          children: [
+            const SizedBox(height: 80),
             AppEmptyState(
-              icon: Icons.post_add_outlined,
-              title: 'Нет постов',
-              subtitle: 'Здесь появятся публикации пользователя',
+              icon: isReel
+                  ? Icons.video_library_outlined
+                  : Icons.post_add_outlined,
+              title: isReel ? 'Нет рилсов' : 'Нет постов',
+              subtitle: canCreate
+                  ? (isReel
+                      ? 'Снимите первый рилс'
+                      : 'Опубликуйте первый пост')
+                  : 'Здесь появятся публикации пользователя',
+              action: canCreate
+                  ? FilledButton.icon(
+                      onPressed: widget.onCreate,
+                      icon: const Icon(Icons.add_rounded),
+                      label: Text(isReel ? 'Снять рилс' : 'Создать пост'),
+                    )
+                  : null,
             ),
           ],
         ),

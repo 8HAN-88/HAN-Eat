@@ -151,6 +151,14 @@ class _FollowListScreenState extends State<FollowListScreen> {
                             title: widget.type == FollowListType.followers
                                 ? 'Подписчиков пока нет'
                                 : 'Подписок пока нет',
+                            action: widget.type == FollowListType.following
+                                ? FilledButton.icon(
+                                    onPressed: () =>
+                                        context.push(SearchRoute.path),
+                                    icon: const Icon(Icons.search),
+                                    label: const Text('Найти людей'),
+                                  )
+                                : null,
                           ),
                         ],
                       )
