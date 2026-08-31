@@ -356,10 +356,20 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
       }
       return Scaffold(
         appBar: AppBar(title: const Text('Канал')),
-        body: const AppEmptyState(
+        body: AppEmptyState(
           icon: Icons.group_off_outlined,
           title: 'Канал не найден',
           subtitle: 'Возможно, он удалён или у вас нет доступа',
+          action: FilledButton(
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(ChatsRoute.path);
+              }
+            },
+            child: const Text('Назад'),
+          ),
         ),
       );
     }

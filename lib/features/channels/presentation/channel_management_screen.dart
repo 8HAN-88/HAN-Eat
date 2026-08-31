@@ -532,10 +532,20 @@ class _ChannelManagementScreenState
       }
       return Scaffold(
         appBar: AppBar(title: const Text('Управление каналом')),
-        body: const AppEmptyState(
+        body: AppEmptyState(
           icon: Icons.group_off_outlined,
           title: 'Канал не найден',
           subtitle: 'Возможно, он удалён или у вас нет доступа',
+          action: FilledButton(
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(ChatsRoute.path);
+              }
+            },
+            child: const Text('Назад'),
+          ),
         ),
       );
     }
@@ -546,8 +556,20 @@ class _ChannelManagementScreenState
     if (!canOpenManagement) {
       return Scaffold(
         appBar: AppBar(title: const Text('Управление каналом')),
-        body: const Center(
-          child: Text('У вас нет прав для управления этим каналом'),
+        body: AppEmptyState(
+          icon: Icons.lock_outline,
+          title: 'Нет доступа',
+          subtitle: 'У вас нет прав для управления этим каналом',
+          action: FilledButton(
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(ChatsRoute.path);
+              }
+            },
+            child: const Text('Назад'),
+          ),
         ),
       );
     }

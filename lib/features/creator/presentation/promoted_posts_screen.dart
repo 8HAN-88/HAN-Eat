@@ -131,11 +131,15 @@ class _PromotedPostsScreenState extends State<PromotedPostsScreen> {
     }
 
     if (_posts.isEmpty) {
-      return const AppEmptyState(
+      return AppEmptyState(
         icon: Icons.trending_up_rounded,
         title: 'Нет активных продвижений',
         subtitle:
             'Откройте пост в канале → «⋯» → «Продвинуть в ленте»',
+        action: FilledButton(
+          onPressed: () => context.push(ChannelsManagementRoute.path),
+          child: const Text('К каналам'),
+        ),
       );
     }
 

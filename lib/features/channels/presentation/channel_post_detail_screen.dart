@@ -165,10 +165,20 @@ class _ChannelPostDetailScreenState
       }
       return Scaffold(
         appBar: AppBar(title: const Text('Пост')),
-        body: const AppEmptyState(
+        body: AppEmptyState(
           icon: Icons.article_outlined,
           title: 'Пост не найден',
           subtitle: 'Возможно, он удалён или недоступен',
+          action: FilledButton(
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(FeedRoute.path);
+              }
+            },
+            child: const Text('Назад'),
+          ),
         ),
       );
     }

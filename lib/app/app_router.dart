@@ -1163,10 +1163,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final initialPeer =
               openArgs?.peer ?? (extra is ChatUserBrief ? extra : null);
           if (id == null) {
-            return const MaterialPage(
-              child: AppEmptyState(
-                icon: Icons.chat_bubble_outline,
-                title: 'Чат не найден',
+            return MaterialPage(
+              child: Scaffold(
+                appBar: AppBar(title: const Text('Чат')),
+                body: AppEmptyState(
+                  icon: Icons.chat_bubble_outline,
+                  title: 'Чат не найден',
+                  subtitle: 'Ссылка устарела или диалог недоступен',
+                  action: FilledButton(
+                    onPressed: () => context.go(ChatsRoute.path),
+                    child: const Text('К чатам'),
+                  ),
+                ),
               ),
             );
           }

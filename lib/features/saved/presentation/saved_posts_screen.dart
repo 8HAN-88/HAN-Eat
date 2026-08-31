@@ -275,10 +275,20 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
       return const Center(child: CircularProgressIndicator());
     }
     if (!_canViewSavedPosts()) {
-      return const AppEmptyState(
+      return AppEmptyState(
         icon: Icons.lock_outline,
         title: 'Сохранённые недоступны',
         subtitle: 'Только вы можете видеть свои сохранённые посты',
+        action: FilledButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(FeedRoute.path);
+            }
+          },
+          child: const Text('Назад'),
+        ),
       );
     }
 

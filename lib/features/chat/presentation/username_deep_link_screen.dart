@@ -64,13 +64,21 @@ class _UsernameDeepLinkScreenState extends State<UsernameDeepLinkScreen> {
                     const SizedBox(height: 16),
                     FilledButton(
                       onPressed: () {
+                        setState(() => _error = null);
+                        _open();
+                      },
+                      child: const Text('Повторить'),
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: () {
                         if (context.canPop()) {
                           context.pop();
                         } else {
                           context.go(ChatsRoute.path);
                         }
                       },
-                      child: const Text('Назад'),
+                      child: const Text('К чатам'),
                     ),
                   ],
                 ),
