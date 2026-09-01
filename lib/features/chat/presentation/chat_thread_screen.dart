@@ -118,6 +118,7 @@ import '../widgets/chat_voice_mic_button.dart';
 import '../widgets/chat_voice_waveform.dart';
 import 'chat_group_info_screen.dart';
 import 'chat_media_gallery_screen.dart';
+import 'chat_people_search_screen.dart';
 import 'manual_retry_utils.dart';
 import 'chat_voice_bubble.dart';
 
@@ -6714,6 +6715,33 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
+  Future<void> _offerFindPeopleForForward() async {
+    final findPeople = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Нет других чатов'),
+        content: const Text(
+          'Найдите человека или начните диалог, чтобы переслать сообщение.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Закрыть'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Найти людей'),
+          ),
+        ],
+      ),
+    );
+    if (findPeople == true && mounted) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(builder: (_) => const ChatPeopleSearchScreen()),
+      );
+    }
+  }
+
   Future<void> _forwardMessage(ChatMessage msg) async {
     if (_conversation.protectContent) {
       if (!mounted) return;
@@ -6730,9 +6758,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final targets =
           chats.where((c) => c.id != widget.conversationId).toList();
       if (targets.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Нет других чатов для пересылки')),
-        );
+        await _offerFindPeopleForForward();
         return;
       }
       final picked = await showChatTargetPickerResult(
@@ -9275,9 +9301,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final targets =
           chats.where((c) => c.id != widget.conversationId).toList();
       if (targets.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Нет других чатов для пересылки')),
-        );
+        await _offerFindPeopleForForward();
         return;
       }
       final picked = await showChatTargetPickerResult(
