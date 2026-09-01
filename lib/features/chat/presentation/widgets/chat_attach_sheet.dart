@@ -579,7 +579,9 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
       case ChatAttachTab.location:
         return 'Отправьте текущее местоположение';
       case ChatAttachTab.videoNote:
-        return 'Короткое круглое видеосообщение (до 60 сек)';
+        return kIsWeb
+            ? 'Короткое круглое видео из галереи (до 60 сек)'
+            : 'Короткое круглое видеосообщение (до 60 сек)';
       case ChatAttachTab.sticker:
         return 'Паки, избранные и недавние';
     }
@@ -1921,7 +1923,9 @@ class _VideoNotePickPanel extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          'Запишите короткое видео — оно отправится кружком, как в Telegram.',
+          kIsWeb
+              ? 'Выберите короткое видео из галереи — оно отправится кружком, как в Telegram.'
+              : 'Запишите короткое видео — оно отправится кружком, как в Telegram.',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: scheme.onSurfaceVariant,
@@ -1930,8 +1934,10 @@ class _VideoNotePickPanel extends StatelessWidget {
         const SizedBox(height: 28),
         FilledButton.icon(
           onPressed: onRecord,
-          icon: const Icon(Icons.fiber_manual_record),
-          label: const Text('Записать кружок'),
+          icon: Icon(
+            kIsWeb ? Icons.video_library_outlined : Icons.fiber_manual_record,
+          ),
+          label: Text(kIsWeb ? 'Выбрать видео' : 'Записать кружок'),
         ),
       ],
     );
