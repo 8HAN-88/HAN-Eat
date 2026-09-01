@@ -14710,7 +14710,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                       child: const Icon(Icons.schedule_outlined),
                     ),
                   ),
-                  if ((!isGroup && peer != null) || isGroup) ...[
+                  if ((!isGroup && peer != null) ||
+                      (isGroup && _canManageGroupCalls)) ...[
                     IconButton(
                       tooltip: 'Связь',
                       icon: const Icon(Icons.call_outlined),
