@@ -173,6 +173,11 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
                   ),
                   ChatsHubContactsTab(
                     tabController: _tabs,
+                    searchQuery: _searchQuery,
+                    onClearSearch: () {
+                      _searchController.clear();
+                      setState(() => _searchQuery = '');
+                    },
                   ),
                 ],
               ),

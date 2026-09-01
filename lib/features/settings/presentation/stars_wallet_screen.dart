@@ -218,9 +218,22 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
                       margin: EdgeInsets.zero,
                       child: Padding(
                         padding: const EdgeInsets.all(18),
-                        child: Text(
-                          'Операций пока нет',
-                          style: TextStyle(color: scheme.onSurfaceVariant),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Операций пока нет',
+                              style: TextStyle(color: scheme.onSurfaceVariant),
+                            ),
+                            if (_filter != WalletFilter.all) ...[
+                              const SizedBox(height: 12),
+                              TextButton(
+                                onPressed: () =>
+                                    setState(() => _filter = WalletFilter.all),
+                                child: const Text('Все операции'),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                     )

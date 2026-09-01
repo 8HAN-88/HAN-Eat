@@ -17,6 +17,7 @@ class CloseFriendsScreen extends StatefulWidget {
 
 class _CloseFriendsScreenState extends State<CloseFriendsScreen> {
   final _searchController = TextEditingController();
+  final _searchFocus = FocusNode();
   bool _loading = true;
   bool _busy = false;
   String? _error;
@@ -34,6 +35,7 @@ class _CloseFriendsScreenState extends State<CloseFriendsScreen> {
   void dispose() {
     _debounce?.cancel();
     _searchController.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
@@ -151,6 +153,7 @@ class _CloseFriendsScreenState extends State<CloseFriendsScreen> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: _searchController,
+                      focusNode: _searchFocus,
                       enabled: !_busy,
                       decoration: const InputDecoration(
                         labelText: 'Найти пользователя',
@@ -190,10 +193,18 @@ class _CloseFriendsScreenState extends State<CloseFriendsScreen> {
                     ),
                     const SizedBox(height: 8),
                     if (_friends.isEmpty)
-                      const ListTile(
+                      ListTile(
                         contentPadding: EdgeInsets.zero,
-                        title: Text('Пока пусто'),
-                        subtitle: Text('Добавьте людей через поиск выше'),
+                        title: const Text('Пока пусто'),
+                        subtitle: const Text(
+                          'Добавьте людей через поиск выше',
+                        ),
+                        trailing: TextButton(
+                          onPressed: _busy
+                              ? null
+                              : () => _searchFocus.requestFocus(),
+                          child: const Text('Найти'),
+                        ),
                       )
                     else
                       ..._friends.map(

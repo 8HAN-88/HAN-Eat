@@ -525,12 +525,30 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
                 else if (visible.isEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 24),
-                    child: Text(
-                      _searchQuery.isNotEmpty
-                          ? 'Ничего не найдено'
-                          : 'Нет чатов для добавления. Используйте фильтры выше.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: scheme.onSurfaceVariant),
+                    child: Column(
+                      children: [
+                        Text(
+                          _searchQuery.isNotEmpty
+                              ? 'Ничего не найдено'
+                              : 'Нет чатов для добавления. Используйте фильтры выше.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: scheme.onSurfaceVariant),
+                        ),
+                        if (_searchQuery.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          TextButton(
+                            onPressed: () => _searchController.clear(),
+                            child: const Text('Очистить поиск'),
+                          ),
+                        ] else if (_tab != _FolderPickTab.all) ...[
+                          const SizedBox(height: 8),
+                          TextButton(
+                            onPressed: () =>
+                                setState(() => _tab = _FolderPickTab.all),
+                            child: const Text('Все чаты'),
+                          ),
+                        ],
+                      ],
                     ),
                   )
                 else

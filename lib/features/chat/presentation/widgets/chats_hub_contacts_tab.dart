@@ -26,12 +26,14 @@ class ChatsHubContactsTab extends StatefulWidget {
     super.key,
     required this.tabController,
     this.searchQuery = '',
+    this.onClearSearch,
   });
 
   static const contactsTabIndex = 1;
 
   final TabController tabController;
   final String searchQuery;
+  final VoidCallback? onClearSearch;
 
   @override
   State<ChatsHubContactsTab> createState() => _ChatsHubContactsTabState();
@@ -478,12 +480,18 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
         _error == null) {
       return ListView(
         padding: EdgeInsets.only(bottom: floatingBottomPadding(context)),
-        children: const [
-          SizedBox(height: 48),
+        children: [
+          const SizedBox(height: 48),
           AppEmptyState(
             icon: Icons.search_off,
             title: 'Ничего не найдено',
             subtitle: 'Попробуйте другой запрос.',
+            action: widget.onClearSearch == null
+                ? null
+                : TextButton(
+                    onPressed: widget.onClearSearch,
+                    child: const Text('Очистить поиск'),
+                  ),
           ),
         ],
       );

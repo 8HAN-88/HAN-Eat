@@ -664,11 +664,20 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
                 margin: EdgeInsets.zero,
                 child: Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Text(
-                    _checkoutAvailable
-                        ? 'Пока нет оплат. После оплаты по СБП записи появятся здесь.'
-                        : 'История оплат появится после подключения оплаты по СБП.',
-                    style: Theme.of(context).textTheme.bodySmall,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _checkoutAvailable
+                            ? 'Пока нет оплат. После оплаты по СБП записи появятся здесь.'
+                            : 'История оплат появится после подключения оплаты по СБП.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      TextButton(
+                        onPressed: _loadPaymentHistory,
+                        child: const Text('Обновить'),
+                      ),
+                    ],
                   ),
                 ),
               )

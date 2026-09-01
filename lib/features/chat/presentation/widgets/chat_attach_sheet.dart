@@ -2701,9 +2701,19 @@ class _StickerPanel extends StatelessWidget {
                 ),
               ],
               if (stickerView == 'favorites' && favoriteStickers.isEmpty)
-                _emptyHint(theme, 'Избранных стикеров пока нет'),
+                _emptyHint(
+                  theme,
+                  'Избранных стикеров пока нет',
+                  actionLabel: 'К пакам',
+                  onAction: () => onSelectView('packs'),
+                ),
               if (stickerView == 'recent' && recentStickers.isEmpty)
-                _emptyHint(theme, 'Недавних стикеров пока нет'),
+                _emptyHint(
+                  theme,
+                  'Недавних стикеров пока нет',
+                  actionLabel: 'К пакам',
+                  onAction: () => onSelectView('packs'),
+                ),
             ],
           ),
         ),
@@ -2719,14 +2729,28 @@ class _StickerPanel extends StatelessWidget {
     );
   }
 
-  Widget _emptyHint(ThemeData theme, String text) => Padding(
+  Widget _emptyHint(
+    ThemeData theme,
+    String text, {
+    String? actionLabel,
+    VoidCallback? onAction,
+  }) =>
+      Padding(
         padding: const EdgeInsets.symmetric(vertical: 22),
-        child: Text(
-          text,
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
+        child: Column(
+          children: [
+            Text(
+              text,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(height: 8),
+              TextButton(onPressed: onAction, child: Text(actionLabel)),
+            ],
+          ],
         ),
       );
 
