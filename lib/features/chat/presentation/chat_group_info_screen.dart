@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
+import '../../../app/app_router.dart';
 import '../../../core/share/system_share.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/auth_service.dart';
@@ -17,10 +19,12 @@ import '../../../utils/api_error_parser.dart';
 import '../../../utils/presence_format.dart';
 import '../../../widgets/app_avatar.dart';
 import '../application/chat_inbox_optimistic.dart';
+import '../application/chats_hub_refresh_provider.dart';
 import '../application/join_requests_bulk.dart';
 import 'chat_group_moderation_log_screen.dart';
 import 'chat_media_gallery_screen.dart';
 import 'widgets/chat_mute_duration_sheet.dart';
+import 'widgets/chats_hub_contacts_tab.dart';
 
 class ChatGroupInfoScreen extends StatefulWidget {
   const ChatGroupInfoScreen({
@@ -608,9 +612,29 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
         .toList();
     if (candidates.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Нет контактов для добавления')),
+      final openContacts = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Нет контактов'),
+          content: const Text(
+            'Добавьте людей в контакты, чтобы пригласить их в группу.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Закрыть'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('К контактам'),
+            ),
+          ],
+        ),
       );
+      if (openContacts == true && mounted) {
+        requestChatsHubTab(ChatsHubContactsTab.contactsTabIndex);
+        context.go(ChatsRoute.path);
+      }
       return;
     }
     final picked = await showModalBottomSheet<List<int>>(

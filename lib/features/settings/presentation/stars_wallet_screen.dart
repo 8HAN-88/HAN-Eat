@@ -112,9 +112,23 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
             if (!snapshot.hasData) {
               if (snapshot.hasError) {
                 return Center(
-                  child: Text(
-                    'Не удалось загрузить кошелёк',
-                    style: TextStyle(color: scheme.onSurfaceVariant),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Не удалось загрузить кошелёк',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: scheme.onSurfaceVariant),
+                        ),
+                        const SizedBox(height: 12),
+                        FilledButton(
+                          onPressed: _refresh,
+                          child: const Text('Повторить'),
+                        ),
+                      ],
+                    ),
                   ),
                 );
               }

@@ -1808,6 +1808,10 @@ class _SelectChatDialogState extends State<_SelectChatDialog> {
     _future = _loadConversations();
   }
 
+  void _reload() {
+    setState(() => _future = _loadConversations());
+  }
+
   Future<List<_DialogConversation>> _loadConversations() async {
     final items = await ChatService.listConversations();
     return items
@@ -1838,11 +1842,40 @@ class _SelectChatDialogState extends State<_SelectChatDialog> {
               );
             }
             if (snapshot.hasError) {
-              return const Text('Не удалось загрузить список чатов');
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Не удалось загрузить список чатов',
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: _reload,
+                    child: const Text('Повторить'),
+                  ),
+                ],
+              );
             }
             final chats = snapshot.data ?? const [];
             if (chats.isEmpty) {
-              return const Text('Нет доступных чатов');
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Нет доступных чатов',
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      context.go(ChatsRoute.path);
+                    },
+                    child: const Text('К чатам'),
+                  ),
+                ],
+              );
             }
             return ConstrainedBox(
               constraints: const BoxConstraints(maxHeight: 320),

@@ -210,16 +210,18 @@ class _ChatTargetPickerSheetState extends State<_ChatTargetPickerSheet> {
                             style: textTheme.bodyMedium
                                 ?.copyWith(color: scheme.onSurfaceVariant),
                           ),
-                          if (q.isNotEmpty) ...[
-                            const SizedBox(height: 12),
-                            TextButton(
-                              onPressed: () {
-                                _searchCtrl.clear();
-                                setState(() {});
-                              },
-                              child: const Text('Очистить поиск'),
+                          const SizedBox(height: 12),
+                          TextButton(
+                            onPressed: q.isNotEmpty
+                                ? () {
+                                    _searchCtrl.clear();
+                                    setState(() {});
+                                  }
+                                : () => Navigator.of(context).maybePop(),
+                            child: Text(
+                              q.isNotEmpty ? 'Очистить поиск' : 'Закрыть',
                             ),
-                          ],
+                          ),
                         ],
                       ),
                     )

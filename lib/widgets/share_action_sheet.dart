@@ -2,13 +2,16 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 
+import '../app/app_router.dart';
 import '../core/theme/app_tokens.dart';
 import '../core/share/system_share.dart';
 import '../features/chat/application/chat_open_direct.dart';
 import '../features/chat/application/chat_ready_outgoing.dart';
 import '../features/chat/application/chat_thread_prefetch.dart';
+import '../features/chat/presentation/chat_people_search_screen.dart';
 import '../models/chat_models.dart';
 import '../models/post_model.dart';
 import '../services/auth_service.dart';
@@ -135,13 +138,29 @@ class _PostShareSheetState extends State<_PostShareSheet> {
       if (!mounted) return;
       if (channels.isEmpty) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(this.context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Нет каналов для публикации. Создайте канал или станьте администратором.',
+        if (!this.context.mounted) return;
+        final create = await showDialog<bool>(
+          context: this.context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Нет каналов'),
+            content: const Text(
+              'Создайте канал или станьте администратором, чтобы публиковать репосты.',
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Закрыть'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Создать канал'),
+              ),
+            ],
           ),
         );
+        if (create == true && this.context.mounted) {
+          await this.context.push(CreateChannelRoute.path);
+        }
         return;
       }
 
@@ -223,9 +242,33 @@ class _PostShareSheetState extends State<_PostShareSheet> {
       if (!mounted) return;
       if (chats.isEmpty) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(this.context).showSnackBar(
-          const SnackBar(content: Text('Нет чатов для отправки')),
+        if (!this.context.mounted) return;
+        final findPeople = await showDialog<bool>(
+          context: this.context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Нет чатов'),
+            content: const Text(
+              'Найдите человека или начните диалог, чтобы отправить пост.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Закрыть'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Найти людей'),
+              ),
+            ],
+          ),
         );
+        if (findPeople == true && this.context.mounted) {
+          await Navigator.of(this.context).push<void>(
+            MaterialPageRoute(
+              builder: (_) => const ChatPeopleSearchScreen(),
+            ),
+          );
+        }
         return;
       }
       final picked = await showChatTargetPicker(
