@@ -161,10 +161,14 @@ class _AdminRefundQueueScreenState extends State<AdminRefundQueueScreen> {
     }
 
     if (_items.isEmpty) {
-      return const AppEmptyState(
+      return AppEmptyState(
         icon: Icons.inbox_outlined,
         title: 'Очередь пуста',
         subtitle: 'Нет ожидающих запросов на возврат',
+        action: FilledButton(
+          onPressed: _load,
+          child: const Text('Обновить'),
+        ),
       );
     }
 

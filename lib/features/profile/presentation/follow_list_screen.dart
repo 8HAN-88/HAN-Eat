@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
+import '../../../core/share/system_share.dart';
 import '../../../services/auth_service.dart';
+import '../../../services/share_link_service.dart';
 import '../../../services/user_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_avatar.dart';
@@ -158,7 +160,28 @@ class _FollowListScreenState extends State<FollowListScreen> {
                                     icon: const Icon(Icons.search),
                                     label: const Text('Найти людей'),
                                   )
-                                : null,
+                                : (AuthService.instance.currentUser?.id ==
+                                        widget.userId
+                                    ? FilledButton.icon(
+                                        onPressed: () {
+                                          final me =
+                                              AuthService.instance.currentUser;
+                                          SystemShare.shareText(
+                                            context,
+                                            text: ShareLinkService
+                                                .profileShareText(
+                                              userId: widget.userId,
+                                              displayName: me?.name,
+                                              username: me?.username,
+                                            ),
+                                          );
+                                        },
+                                        icon: const Icon(
+                                          Icons.ios_share_outlined,
+                                        ),
+                                        label: const Text('Поделиться'),
+                                      )
+                                    : null),
                           ),
                         ],
                       )

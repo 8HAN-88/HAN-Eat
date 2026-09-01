@@ -376,8 +376,25 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
                         )
                   : _filter == _MediaFilter.links
                       ? links.isEmpty
-                          ? const Center(
-                              child: Text('Пока нет ссылок в этом чате'),
+                          ? Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(24),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Text(
+                                      'Пока нет ссылок в этом чате',
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: 12),
+                                    TextButton(
+                                      onPressed: () =>
+                                          _onFilterChanged(_MediaFilter.all),
+                                      child: const Text('Все медиа'),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             )
                           : ListView.separated(
                               padding: const EdgeInsets.all(8),
@@ -414,10 +431,27 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
                             )
                       : items.isEmpty
                           ? Center(
-                              child: Text(
-                                _filter == _MediaFilter.all
-                                    ? 'Пока нет медиа в этом чате'
-                                    : 'Ничего не найдено',
+                              child: Padding(
+                                padding: const EdgeInsets.all(24),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      _filter == _MediaFilter.all
+                                          ? 'Пока нет медиа в этом чате'
+                                          : 'Ничего не найдено',
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    if (_filter != _MediaFilter.all) ...[
+                                      const SizedBox(height: 12),
+                                      TextButton(
+                                        onPressed: () =>
+                                            _onFilterChanged(_MediaFilter.all),
+                                        child: const Text('Все медиа'),
+                                      ),
+                                    ],
+                                  ],
+                                ),
                               ),
                             )
                           : (_filter == _MediaFilter.files ||

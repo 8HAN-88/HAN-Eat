@@ -117,7 +117,32 @@ class _ChatGroupModerationLogScreenState
                 )
               : _items.isEmpty
                   ? Center(
-                      child: Text('Для "$title" пока нет записей'),
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Для "$title" пока нет записей',
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 12),
+                            if (_selectedFilter != 'all')
+                              FilledButton(
+                                onPressed: () {
+                                  setState(() => _selectedFilter = 'all');
+                                  _load();
+                                },
+                                child: const Text('Все события'),
+                              )
+                            else
+                              FilledButton(
+                                onPressed: _load,
+                                child: const Text('Обновить'),
+                              ),
+                          ],
+                        ),
+                      ),
                     )
                   : RefreshIndicator(
                       onRefresh: _load,

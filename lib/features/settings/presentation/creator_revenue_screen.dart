@@ -586,9 +586,19 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
                     return TelegramGroupedSurface(
                       child: Padding(
                         padding: const EdgeInsets.all(18),
-                        child: Text(
-                          'Запросов на выплату пока нет',
-                          style: TextStyle(color: scheme.onSurfaceVariant),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Запросов на выплату пока нет',
+                              style: TextStyle(color: scheme.onSurfaceVariant),
+                            ),
+                            const SizedBox(height: 12),
+                            FilledButton.tonal(
+                              onPressed: _requestPayout,
+                              child: const Text('Запросить выплату'),
+                            ),
+                          ],
                         ),
                       ),
                     );
@@ -623,9 +633,19 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
                 TelegramGroupedSurface(
                   child: Padding(
                     padding: const EdgeInsets.all(18),
-                    child: Text(
-                      'Доходных операций за период нет',
-                      style: TextStyle(color: scheme.onSurfaceVariant),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Доходных операций за период нет',
+                          style: TextStyle(color: scheme.onSurfaceVariant),
+                        ),
+                        const SizedBox(height: 12),
+                        TextButton(
+                          onPressed: _resetFilters,
+                          child: const Text('Сбросить фильтры'),
+                        ),
+                      ],
                     ),
                   ),
                 )

@@ -506,7 +506,19 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen> {
                       ),
                       const SizedBox(height: 8),
                       if (_data!.recentActions.isEmpty)
-                        const Text('Пока нет записей в журнале')
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Пока нет записей в журнале'),
+                              TextButton(
+                                onPressed: _load,
+                                child: const Text('Обновить'),
+                              ),
+                            ],
+                          ),
+                        )
                       else
                         ..._data!.recentActions.map(
                           (a) => ListTile(

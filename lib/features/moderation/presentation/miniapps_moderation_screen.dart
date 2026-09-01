@@ -138,10 +138,22 @@ class _MiniAppsModerationScreenState extends State<MiniAppsModerationScreen> {
                   ),
                 )
               : _items.isEmpty
-                  ? const AppEmptyState(
+                  ? AppEmptyState(
                       icon: Icons.check_circle_outline,
                       title: 'Очередь mini apps пуста',
                       subtitle: 'Нет приложений для модерации',
+                      action: _statusFilter != null
+                          ? FilledButton(
+                              onPressed: () {
+                                setState(() => _statusFilter = null);
+                                _load();
+                              },
+                              child: const Text('Сбросить фильтр'),
+                            )
+                          : FilledButton(
+                              onPressed: _load,
+                              child: const Text('Обновить'),
+                            ),
                     )
                   : RefreshIndicator(
                       onRefresh: _load,

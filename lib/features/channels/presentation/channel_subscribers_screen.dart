@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
+import '../../../core/share/system_share.dart';
 import '../../../services/channel_service.dart';
+import '../../../services/share_link_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_empty_state.dart';
@@ -136,13 +138,28 @@ class _ChannelSubscribersScreenState extends State<ChannelSubscribersScreen> {
                   )
                 : _subscribers.isEmpty
                     ? ListView(
-                        children: const [
-                          SizedBox(height: 120),
+                        children: [
+                          const SizedBox(height: 120),
                           AppEmptyState(
                             icon: Icons.people_outline_rounded,
                             title: 'Подписчиков пока нет',
                             subtitle:
                                 'Когда пользователи подпишутся на канал, они появятся здесь.',
+                            action: FilledButton.icon(
+                              onPressed: () {
+                                final name = widget.channelName ?? 'Канал';
+                                SystemShare.shareText(
+                                  context,
+                                  text: ShareLinkService.channelShareText(
+                                    widget.channelId,
+                                    name,
+                                  ),
+                                  subject: name,
+                                );
+                              },
+                              icon: const Icon(Icons.ios_share_outlined),
+                              label: const Text('Пригласить'),
+                            ),
                           ),
                         ],
                       )

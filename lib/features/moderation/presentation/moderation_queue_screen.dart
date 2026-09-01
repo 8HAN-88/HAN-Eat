@@ -655,10 +655,14 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
                               child: const Text('Повторить'),
                             ),
                           )
-                        : const AppEmptyState(
+                        : AppEmptyState(
                             icon: Icons.check_circle_outline,
                             title: 'Очередь пуста',
                             subtitle: 'Нет элементов на модерации',
+                            action: FilledButton(
+                              onPressed: () => _loadItems(refresh: true),
+                              child: const Text('Обновить'),
+                            ),
                           ),
                   ),
                 ],

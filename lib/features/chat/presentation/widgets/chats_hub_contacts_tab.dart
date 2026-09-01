@@ -570,11 +570,21 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
           if (_phoneSyncError != null && _phoneBook.isEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: Text(
-                'Пока не удалось загрузить контакты. Подключение восстановится автоматически.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Пока не удалось загрузить контакты. Подключение восстановится автоматически.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                  TextButton(
+                    onPressed: _loadAll,
+                    child: const Text('Повторить'),
+                  ),
+                ],
               ),
             ),
           if (phoneBook.isNotEmpty) ...[
