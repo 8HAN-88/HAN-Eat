@@ -284,6 +284,10 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
               userVisibleError(e, fallback: 'Не удалось создать платёж'),
             ),
             backgroundColor: scheme.error,
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_purchaseSelected()),
+            ),
           ),
         );
       }

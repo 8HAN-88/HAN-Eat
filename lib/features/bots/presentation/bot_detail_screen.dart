@@ -62,6 +62,8 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
   List<BotCommandCreate> _commands = [];
   List<MiniAppItem> _miniApps = [];
   bool _miniAppsLoading = false;
+  String? _commandsError;
+  String? _miniAppsError;
   final _webhookController = TextEditingController();
   final _webhookSecretController = TextEditingController();
 
@@ -145,8 +147,17 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
   Future<void> _loadCommands() async {
     try {
       final cmds = await ApiService.getBotCommands(widget.botId);
-      if (mounted) setState(() => _commands = cmds);
-    } catch (_) {}
+      if (mounted) {
+        setState(() {
+          _commands = cmds;
+          _commandsError = null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _commandsError = userVisibleError(e));
+      }
+    }
   }
 
   Future<void> _loadMiniApps() async {
@@ -154,9 +165,19 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
     setState(() => _miniAppsLoading = true);
     try {
       final apps = await MiniAppsService.fetchByBot(widget.botId);
-      if (mounted) setState(() => _miniApps = apps);
-    } catch (_) {
-      if (mounted) setState(() => _miniApps = []);
+      if (mounted) {
+        setState(() {
+          _miniApps = apps;
+          _miniAppsError = null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _miniApps = [];
+          _miniAppsError = userVisibleError(e);
+        });
+      }
     } finally {
       if (mounted) setState(() => _miniAppsLoading = false);
     }
@@ -881,20 +902,28 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
                                   _BotFatherTile(
                                     icon: Icons.code_rounded,
                                     title: 'Edit Commands',
-                                    subtitle: _commands.isEmpty
-                                        ? 'Команд пока нет'
-                                        : '${_commands.length} команд(ы)',
-                                    onTap: _manageCommands,
+                                    subtitle: _commandsError != null
+                                        ? 'Не удалось загрузить'
+                                        : _commands.isEmpty
+                                            ? 'Команд пока нет'
+                                            : '${_commands.length} команд(ы)',
+                                    onTap: _commandsError != null
+                                        ? () => unawaited(_loadCommands())
+                                        : () => unawaited(_manageCommands()),
                                   ),
                                   _BotFatherTile(
                                     icon: Icons.apps_rounded,
                                     title: 'Mini Apps',
                                     subtitle: _miniAppsLoading
                                         ? 'Загрузка…'
-                                        : _miniApps.isEmpty
-                                            ? 'New App · Edit App · Delete App'
-                                            : '${_miniApps.length} · ${_miniApps.where((a) => a.isApproved).length} в каталоге',
-                                    onTap: _manageMiniApps,
+                                        : _miniAppsError != null
+                                            ? 'Не удалось загрузить'
+                                            : _miniApps.isEmpty
+                                                ? 'New App · Edit App · Delete App'
+                                                : '${_miniApps.length} · ${_miniApps.where((a) => a.isApproved).length} в каталоге',
+                                    onTap: _miniAppsError != null
+                                        ? () => unawaited(_loadMiniApps())
+                                        : () => unawaited(_manageMiniApps()),
                                   ),
                                 ],
                               ),
@@ -1161,6 +1190,7 @@ class _BotMiniAppsScreen extends StatefulWidget {
 class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
   bool _loading = true;
   List<MiniAppItem> _apps = const [];
+  String? _error;
   bool _didAutoNewApp = false;
 
   @override
@@ -1176,13 +1206,24 @@ class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
   }
 
   Future<void> _reload() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final apps = await MiniAppsService.fetchByBot(widget.botId);
       if (!mounted) return;
-      setState(() => _apps = apps);
-    } catch (_) {
-      if (mounted) setState(() => _apps = []);
+      setState(() {
+        _apps = apps;
+        _error = null;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _apps = [];
+          _error = userVisibleError(e);
+        });
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -1413,10 +1454,29 @@ class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
                   ? const Center(child: CircularProgressIndicator())
                   : _apps.isEmpty
                       ? Center(
-                          child: FilledButton.icon(
-                            onPressed: _newApp,
-                            icon: const Icon(Icons.add_rounded),
-                            label: const Text('New Mini App'),
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (_error != null) ...[
+                                  Text(
+                                    _error!,
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  FilledButton(
+                                    onPressed: _reload,
+                                    child: const Text('Повторить'),
+                                  ),
+                                ] else
+                                  FilledButton.icon(
+                                    onPressed: _newApp,
+                                    icon: const Icon(Icons.add_rounded),
+                                    label: const Text('New Mini App'),
+                                  ),
+                              ],
+                            ),
                           ),
                         )
                       : RefreshIndicator(
@@ -1658,18 +1718,30 @@ class _BotCommandsScreen extends StatefulWidget {
 
 class _BotCommandsScreenState extends State<_BotCommandsScreen> {
   late List<BotCommandCreate> _commands;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
     _commands = List.of(widget.initialCommands);
+    if (_commands.isEmpty) {
+      unawaited(_reload());
+    }
   }
 
   Future<void> _reload() async {
-    final cmds = await ApiService.getBotCommands(widget.botId);
-    if (!mounted) return;
-    setState(() => _commands = cmds);
-    await widget.onChanged();
+    try {
+      final cmds = await ApiService.getBotCommands(widget.botId);
+      if (!mounted) return;
+      setState(() {
+        _commands = cmds;
+        _error = null;
+      });
+      await widget.onChanged();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = userVisibleError(e));
+    }
   }
 
   Future<void> _add() async {
@@ -1779,10 +1851,29 @@ class _BotCommandsScreenState extends State<_BotCommandsScreen> {
             Expanded(
               child: _commands.isEmpty
                   ? Center(
-                      child: FilledButton.icon(
-                        onPressed: _add,
-                        icon: const Icon(Icons.add_rounded),
-                        label: const Text('Добавить /start'),
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_error != null) ...[
+                              Text(
+                                _error!,
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 12),
+                              FilledButton(
+                                onPressed: _reload,
+                                child: const Text('Повторить'),
+                              ),
+                            ] else
+                              FilledButton.icon(
+                                onPressed: _add,
+                                icon: const Icon(Icons.add_rounded),
+                                label: const Text('Добавить /start'),
+                              ),
+                          ],
+                        ),
                       ),
                     )
                   : ListView.separated(

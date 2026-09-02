@@ -1325,7 +1325,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_openSavedChat()),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _openingSaved = false);
@@ -1339,22 +1345,31 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     setState(() {
       _joinRequestsInbox.removeWhere((e) => e.id == item.id);
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(approve ? 'Заявка принята' : 'Заявка отклонена'),
-      ),
-    );
     try {
       await ChatService.reviewGroupJoinRequest(
         conversationId: item.conversation.id,
         requestId: item.id,
         approve: approve,
       );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(approve ? 'Заявка принята' : 'Заявка отклонена'),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _joinRequestsInbox.add(item));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(
+              _reviewJoinInboxItem(item, approve: approve),
+            ),
+          ),
+        ),
       );
     }
   }

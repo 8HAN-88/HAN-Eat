@@ -5,6 +5,7 @@ import '../../../app/app_router.dart';
 import '../../../core/config/stars_checkout_urls.dart';
 import '../../../services/paid_features_service.dart';
 import '../../../services/payment_service.dart';
+import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/telegram_ui.dart';
 import 'widgets/stars_wallet_widgets.dart';
@@ -94,7 +95,15 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
       _awaitingCheckoutReturn = false;
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось начать оплату'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => _buyPackage(package),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _checkoutLoading = false);

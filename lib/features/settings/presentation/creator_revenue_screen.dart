@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -239,6 +240,12 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
     noteController.dispose();
     tonController.dispose();
     if (payload == null) return;
+    await _submitPayoutRequest(payload);
+  }
+
+  Future<void> _submitPayoutRequest(
+    ({int amount, String? note, String method, String? ton}) payload,
+  ) async {
     try {
       if (payload.method == 'ton' && payload.ton != null) {
         await PaidFeaturesService.setTonAddress(payload.ton);
@@ -261,7 +268,13 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_submitPayoutRequest(payload)),
+          ),
+        ),
       );
     }
   }

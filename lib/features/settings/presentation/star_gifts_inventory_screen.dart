@@ -123,7 +123,13 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
       if (!mounted) return;
       setState(() => _busy.remove(gift.id));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_convert(gift)),
+          ),
+        ),
       );
     }
   }
@@ -144,7 +150,13 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
       if (!mounted) return;
       setState(() => _busy.remove(gift.id));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_keep(gift)),
+          ),
+        ),
       );
     }
   }
@@ -168,7 +180,13 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
       if (!mounted) return;
       setState(() => _busy.remove(gift.id));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_toggleDisplay(gift)),
+          ),
+        ),
       );
     }
   }
@@ -314,7 +332,13 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
       if (!mounted) return;
       setState(() => _busy.remove(gift.id));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_sell(gift)),
+          ),
+        ),
       );
     }
   }
@@ -335,7 +359,13 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
       if (!mounted) return;
       setState(() => _busy.remove(gift.id));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_unlist(gift)),
+          ),
+        ),
       );
     }
   }

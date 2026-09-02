@@ -132,7 +132,13 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
         });
         if (_comments.isNotEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(message)),
+            SnackBar(
+              content: Text(message),
+              action: SnackBarAction(
+                label: 'Повторить',
+                onPressed: () => _loadComments(),
+              ),
+            ),
           );
         }
       }
