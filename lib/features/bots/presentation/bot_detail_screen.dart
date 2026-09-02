@@ -259,7 +259,15 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось сохранить: $e')),
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось сохранить'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_editBotProfile()),
+          ),
+        ),
       );
     }
   }
@@ -298,7 +306,15 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось обновить токен: $e')),
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось обновить токен'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_revokeToken()),
+          ),
+        ),
       );
     }
   }
@@ -333,7 +349,13 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось удалить: $e')),
+        SnackBar(
+          content: Text(userVisibleError(e, fallback: 'Не удалось удалить')),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_deleteBot()),
+          ),
+        ),
       );
     }
   }

@@ -106,11 +106,26 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
               ),
             )
           else if (_sessions.isEmpty)
-            const Card(
-              child: ListTile(
-                title: Text('Нет активных сеансов'),
-                subtitle: Text(
-                  'После следующего входа здесь появятся устройства.',
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Нет активных сеансов',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'После следующего входа здесь появятся устройства.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    TextButton(
+                      onPressed: _load,
+                      child: const Text('Обновить'),
+                    ),
+                  ],
                 ),
               ),
             )

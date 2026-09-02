@@ -300,13 +300,28 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
                                         unawaited(_search(_controller.text)),
                                     child: const Text('Повторить'),
                                   ),
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.of(context).maybePop(),
+                                    child: const Text('Закрыть'),
+                                  ),
                                 ],
                               ),
                             ),
                           )
                         : _results.isEmpty
-                            ? const Center(
-                                child: Text('Начните вводить имя'),
+                            ? Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Text('Начните вводить имя'),
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(context).maybePop(),
+                                      child: const Text('Закрыть'),
+                                    ),
+                                  ],
+                                ),
                               )
                             : ListView.builder(
                                 itemCount: _results.length,

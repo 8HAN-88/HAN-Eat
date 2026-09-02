@@ -55,6 +55,7 @@ class ChatReelPreview extends StatefulWidget {
 class _ChatReelPreviewState extends State<ChatReelPreview> {
   PostModel? _post;
   bool _loading = true;
+  bool _loadFailed = false;
   bool _saved = false;
   bool _saving = false;
 
@@ -75,21 +76,31 @@ class _ChatReelPreviewState extends State<ChatReelPreview> {
   Future<void> _load() async {
     setState(() {
       _loading = true;
+      _loadFailed = false;
       _post = _ReelPostCache.posts[widget.postId];
     });
-    final post = await _ReelPostCache.fetch(widget.postId);
-    var saved = post?.isSaved ?? false;
-    if (post != null) {
-      try {
-        saved = await SavedPostsService.isPostSaved(post.id);
-      } catch (_) {}
+    try {
+      final post = await _ReelPostCache.fetch(widget.postId);
+      var saved = post?.isSaved ?? false;
+      if (post != null) {
+        try {
+          saved = await SavedPostsService.isPostSaved(post.id);
+        } catch (_) {}
+      }
+      if (!mounted || widget.postId != (post?.id ?? widget.postId)) return;
+      setState(() {
+        _post = post;
+        _saved = saved;
+        _loading = false;
+        _loadFailed = post == null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _loadFailed = _post == null;
+      });
     }
-    if (!mounted || widget.postId != (post?.id ?? widget.postId)) return;
-    setState(() {
-      _post = post;
-      _saved = saved;
-      _loading = false;
-    });
   }
 
   Future<void> _open() async {
@@ -292,6 +303,16 @@ class _ChatReelPreviewState extends State<ChatReelPreview> {
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
                       color: Colors.white70,
+                    ),
+                  ),
+                )
+              else if (_loadFailed)
+                Center(
+                  child: TextButton(
+                    onPressed: () => unawaited(_load()),
+                    child: const Text(
+                      'Повторить',
+                      style: TextStyle(color: Colors.white),
                     ),
                   ),
                 )

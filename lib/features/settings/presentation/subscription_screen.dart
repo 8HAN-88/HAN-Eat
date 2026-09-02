@@ -594,6 +594,16 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
                 ),
               ),
               const SizedBox(height: 12),
+              FilledButton(
+                onPressed: () => context.push(FlexSubscriptionRoute.path),
+                child: const Text('Подписка Flex'),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => context.push(SupportContactRoute.path),
+                child: const Text('Написать в поддержку'),
+              ),
+              const SizedBox(height: 12),
             ],
             if (_canStartTrial(status)) ...[
               OutlinedButton(

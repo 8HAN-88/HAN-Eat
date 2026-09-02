@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../services/auth_service.dart';
@@ -91,14 +93,26 @@ Future<bool> showChangePasswordDialog(BuildContext context) async {
   } on AuthException catch (e) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
+        SnackBar(
+          content: Text(e.message),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(showChangePasswordDialog(context)),
+          ),
+        ),
       );
     }
     return false;
   } catch (e) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(showChangePasswordDialog(context)),
+          ),
+        ),
       );
     }
     return false;
