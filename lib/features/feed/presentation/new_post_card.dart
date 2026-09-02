@@ -2,6 +2,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../models/post_model.dart';
@@ -331,7 +332,15 @@ class _NewPostCardState extends State<NewPostCard>
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Не удалось открыть ссылку')),
+        SnackBar(
+          content: const Text('Не удалось открыть ссылку'),
+          action: SnackBarAction(
+            label: 'Скопировать',
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: url));
+            },
+          ),
+        ),
       );
     }
   }

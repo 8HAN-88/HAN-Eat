@@ -119,7 +119,15 @@ class _ChannelPostCardState extends State<ChannelPostCard>
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Не удалось открыть ссылку')),
+        SnackBar(
+          content: const Text('Не удалось открыть ссылку'),
+          action: SnackBarAction(
+            label: 'Скопировать',
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: url));
+            },
+          ),
+        ),
       );
     }
   }

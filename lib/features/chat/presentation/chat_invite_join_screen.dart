@@ -21,6 +21,7 @@ class ChatInviteJoinScreen extends StatefulWidget {
 
 class _ChatInviteJoinScreenState extends State<ChatInviteJoinScreen> {
   bool _loading = true;
+  bool _requested = false;
   String? _error;
   int? _paidConversationId;
   int _paidPriceStars = 0;
@@ -40,6 +41,7 @@ class _ChatInviteJoinScreenState extends State<ChatInviteJoinScreen> {
     setState(() {
       _loading = true;
       _error = null;
+      _requested = false;
       _paidConversationId = null;
     });
     try {
@@ -48,8 +50,7 @@ class _ChatInviteJoinScreenState extends State<ChatInviteJoinScreen> {
       if (result.status == 'requested') {
         setState(() {
           _loading = false;
-          _error =
-              'Заявка отправлена. Дождитесь одобрения администратора группы.';
+          _requested = true;
         });
         return;
       }
@@ -143,14 +144,18 @@ class _ChatInviteJoinScreenState extends State<ChatInviteJoinScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      paidId != null
-                          ? Icons.workspace_premium_outlined
-                          : Icons.link_off_outlined,
+                      _requested
+                          ? Icons.mark_email_read_outlined
+                          : paidId != null
+                              ? Icons.workspace_premium_outlined
+                              : Icons.link_off_outlined,
                       size: 42,
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      _error ?? 'Не удалось обработать приглашение',
+                      _requested
+                          ? 'Заявка отправлена. Дождитесь одобрения администратора группы.'
+                          : (_error ?? 'Не удалось обработать приглашение'),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 14),
@@ -165,10 +170,27 @@ class _ChatInviteJoinScreenState extends State<ChatInviteJoinScreen> {
                       ),
                       const SizedBox(height: 8),
                     ],
-                    FilledButton.tonal(
-                      onPressed: _join,
-                      child: const Text('Повторить'),
-                    ),
+                    if (_requested) ...[
+                      FilledButton(
+                        onPressed: () => context.go('/chats'),
+                        child: const Text('К чатам'),
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: _join,
+                        child: const Text('Проверить статус'),
+                      ),
+                    ] else ...[
+                      FilledButton.tonal(
+                        onPressed: _join,
+                        child: const Text('Повторить'),
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: () => context.go('/chats'),
+                        child: const Text('К чатам'),
+                      ),
+                    ],
                   ],
                 ),
         ),

@@ -1163,6 +1163,7 @@ class ChannelMediaListState extends State<ChannelMediaList> {
   List<_MediaItem> _mediaItems =
       []; // Список всех медиа-элементов из всех постов
   bool _isLoading = false;
+  bool _loadFailed = false;
   bool _hasMore = true;
   int _offset = 0;
   final ScrollController _scrollController = ScrollController();
@@ -1200,7 +1201,8 @@ class ChannelMediaListState extends State<ChannelMediaList> {
     if (_isLoading && !refresh) return;
 
     setState(() {
-      _isLoading = refresh;
+      _isLoading = true;
+      _loadFailed = false;
       if (refresh) {
         _posts = [];
         _mediaItems = [];
@@ -1282,8 +1284,9 @@ class ChannelMediaListState extends State<ChannelMediaList> {
       if (mounted) {
         setState(() {
           _hasMore = false;
+          _loadFailed = _mediaItems.isEmpty;
         });
-        if (refresh) {
+        if (refresh && _mediaItems.isNotEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
@@ -1320,6 +1323,18 @@ class ChannelMediaListState extends State<ChannelMediaList> {
           child: const Center(
             child: CircularProgressIndicator(),
           ),
+        ),
+      );
+    }
+
+    if (_mediaItems.isEmpty && _loadFailed) {
+      return ChannelTabEmptyPlaceholder(
+        icon: Icons.wifi_off_outlined,
+        title: 'Не удалось загрузить медиа',
+        subtitle: 'Проверьте сеть и попробуйте ещё раз.',
+        action: FilledButton(
+          onPressed: () => _loadMedia(refresh: true),
+          child: const Text('Повторить'),
         ),
       );
     }

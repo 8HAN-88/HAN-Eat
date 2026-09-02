@@ -188,20 +188,57 @@ class _PostPollSectionState extends State<PostPollSection> {
         },
       );
     } on ApiClientException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleAuthError(e, fallback: 'Не удалось выполнить действие'))),
-        );
-      }
+      if (!mounted) return;
+      setState(() => _loadingVoters = false);
+      await _showVotersError(
+        userVisibleAuthError(e, fallback: 'Не удалось загрузить голоса'),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось загрузить голоса'))),
-        );
-      }
+      if (!mounted) return;
+      setState(() => _loadingVoters = false);
+      await _showVotersError(
+        userVisibleError(e, fallback: 'Не удалось загрузить голоса'),
+      );
     } finally {
-      if (mounted) setState(() => _loadingVoters = false);
+      if (mounted && _loadingVoters) {
+        setState(() => _loadingVoters = false);
+      }
     }
+  }
+
+  Future<void> _showVotersError(String message) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    _showVoters();
+                  },
+                  child: const Text('Повторить'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('Закрыть'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override

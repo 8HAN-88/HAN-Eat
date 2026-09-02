@@ -309,6 +309,18 @@ class _CommunityUploadScreenState
               onPick: _pickThumbnail,
             ),
             const SizedBox(height: 24),
+            if (uploadState.error != null && !uploadState.uploading) ...[
+              Text(
+                uploadState.error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: _canSubmit ? _submit : null,
+                child: const Text('Повторить отправку'),
+              ),
+              const SizedBox(height: 8),
+            ],
             FilledButton.icon(
               onPressed: _canSubmit && !uploadState.uploading ? _submit : null,
               icon: uploadState.uploading

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../services/auth_service.dart';
@@ -289,6 +290,11 @@ class _StarInvoicePayScreenState extends State<StarInvoicePayScreen> {
                             color: scheme.primary,
                             fontWeight: FontWeight.w700,
                           ),
+                        ),
+                        const SizedBox(height: 16),
+                        OutlinedButton(
+                          onPressed: () => context.go('/paid/wallet'),
+                          child: const Text('К кошельку Stars'),
                         ),
                         if (invoice.status == 'paid' &&
                             AuthService.instance.currentUser?.id ==

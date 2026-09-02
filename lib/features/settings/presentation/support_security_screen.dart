@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -17,7 +18,15 @@ class SupportSecurityScreen extends StatelessWidget {
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Не удалось открыть: $url')),
+          SnackBar(
+            content: Text('Не удалось открыть: $url'),
+            action: SnackBarAction(
+              label: 'Скопировать',
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: url));
+              },
+            ),
+          ),
         );
       }
     }
