@@ -2637,7 +2637,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _senderNames = {for (final m in members) m.id: m.displayName};
       });
       _scheduleBotAutocomplete();
-    } catch (_) {}
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось загрузить участников'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_ensureGroupMembersForMentions()),
+          ),
+        ),
+      );
+    }
   }
 
   bool get _hasBotCommands => _botCommands.isNotEmpty;
@@ -7040,7 +7053,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e))),
+          SnackBar(
+            content: Text(userVisibleError(e)),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_openMembersSheet()),
+            ),
+          ),
         );
         return;
       }

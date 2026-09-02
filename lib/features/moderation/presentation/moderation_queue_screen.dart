@@ -1,4 +1,6 @@
 // Экран очереди модерации для админов
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../../utils/api_error_parser.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -166,7 +168,13 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e))),
+          SnackBar(
+            content: Text(userVisibleError(e)),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_approveItem(item)),
+            ),
+          ),
         );
       }
     }
@@ -197,7 +205,13 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e))),
+          SnackBar(
+            content: Text(userVisibleError(e)),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_warnAuthor(item)),
+            ),
+          ),
         );
       }
     }
@@ -238,7 +252,13 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e))),
+          SnackBar(
+            content: Text(userVisibleError(e)),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_banAuthor(item)),
+            ),
+          ),
         );
       }
     }
@@ -293,7 +313,13 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e))),
+          SnackBar(
+            content: Text(userVisibleError(e)),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_rejectItem(item)),
+            ),
+          ),
         );
       }
     }

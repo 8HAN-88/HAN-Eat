@@ -1,4 +1,6 @@
 // Экран сохраненных постов
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../../utils/api_error_parser.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -98,7 +100,13 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
       _loadPosts(refresh: true);
     } else if (result.message != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message!)),
+        SnackBar(
+          content: Text(result.message!),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_syncWithServer()),
+          ),
+        ),
       );
     }
   }

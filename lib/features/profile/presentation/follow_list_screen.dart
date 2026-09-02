@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -111,6 +113,10 @@ class _FollowListScreenState extends State<FollowListScreen> {
         SnackBar(
           content: Text(
             userVisibleError(e, fallback: 'Не удалось выполнить действие'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_toggleFollow(index)),
           ),
         ),
       );

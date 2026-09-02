@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../models/sticker_models.dart';
@@ -60,7 +62,13 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
       if (!mounted) return;
       setState(() => _busy = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_install()),
+          ),
+        ),
       );
     }
   }

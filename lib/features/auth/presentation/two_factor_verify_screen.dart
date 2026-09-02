@@ -74,12 +74,24 @@ class _TwoFactorVerifyScreenState extends State<TwoFactorVerifyScreen> {
     } on AuthException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
+        SnackBar(
+          content: Text(e.message),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_submit()),
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_submit()),
+          ),
+        ),
       );
     } finally {
       if (mounted && AuthService.instance.currentUser == null) {

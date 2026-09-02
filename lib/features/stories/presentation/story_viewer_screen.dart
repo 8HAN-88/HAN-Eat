@@ -15,6 +15,7 @@ import '../../../services/subscription_status_cache.dart';
 import '../../subscription/application/flex_entitlements.dart';
 import '../../../services/server_config.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../utils/session_snackbar.dart';
 import '../../../utils/video_player_helper.dart';
 import '../../chat/application/chat_open_direct.dart';
 import '../../chat/application/chat_ready_outgoing.dart';
@@ -273,8 +274,11 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось отправить реакцию')),
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось отправить реакцию',
+        onRetry: () => unawaited(_react(emoji)),
       );
     } finally {
       if (mounted) {
@@ -359,13 +363,12 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
         );
       }
 
-      if (opened.id > 0) {
-        await persistTo(opened.id);
+      var conversation = opened;
+      if (conversation.id > 0) {
+        await persistTo(conversation.id);
       } else {
-        unawaited(() async {
-          final real = await ChatOpenDirect.resolve(_currentStory.authorId);
-          await persistTo(real.id);
-        }());
+        conversation = await ChatOpenDirect.resolve(_currentStory.authorId);
+        await persistTo(conversation.id);
       }
       if (!mounted) return;
       _replyController.clear();
@@ -375,15 +378,14 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
       );
       Navigator.of(context).pop();
       if (!mounted) return;
-      context.push(ChatThreadRoute.pathFor(opened), extra: opened);
+      context.push(ChatThreadRoute.pathFor(conversation), extra: conversation);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            userVisibleError(e, fallback: 'Не удалось отправить ответ'),
-          ),
-        ),
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось отправить ответ',
+        onRetry: () => unawaited(_sendStoryReply()),
       );
       _resume();
     } finally {

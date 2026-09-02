@@ -211,7 +211,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
     widget.onConversationChanged?.call(next);
   }
 
-  Future<void> _commitConversation({
+  Future<bool> _commitConversation({
     required ChatConversation optimistic,
     required Future<ChatConversation> Function() request,
   }) async {
@@ -219,14 +219,24 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
     _applyConversation(optimistic);
     try {
       final conv = await request();
-      if (!mounted) return;
+      if (!mounted) return false;
       _applyConversation(conv);
+      return true;
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) return false;
       _applyConversation(previous);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(
+              _commitConversation(optimistic: optimistic, request: request),
+            ),
+          ),
+        ),
       );
+      return false;
     }
   }
 
@@ -239,10 +249,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
     );
     if (choice == null || !mounted) return;
     final muted = !choice.unmute;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(choice.snackLabel)),
-    );
-    await _commitConversation(
+    final ok = await _commitConversation(
       optimistic: ChatInboxOptimistic.applyMute(
         _conversation,
         muted: muted,
@@ -261,6 +268,11 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
             notifyMode: choice.notifyMode,
           )),
     );
+    if (ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(choice.snackLabel)),
+      );
+    }
   }
 
   Future<void> _editGroupPaid() async {
@@ -720,6 +732,10 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       },
     );
     if (picked == null || picked.isEmpty || !mounted) return;
+    await _addPickedMembers(picked);
+  }
+
+  Future<void> _addPickedMembers(List<int> picked) async {
     setState(() => _busy = true);
     try {
       await ChatService.addGroupMembers(
@@ -737,7 +753,13 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       if (!mounted) return;
       setState(() => _busy = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_addPickedMembers(picked)),
+          ),
+        ),
       );
     }
   }
@@ -1062,7 +1084,13 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       if (!mounted) return;
       setState(() => _busy = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_editMemberSendRestriction(member)),
+          ),
+        ),
       );
     }
   }
@@ -1174,10 +1202,44 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       if (!mounted) return;
       setState(() => _busy = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_banMember(member)),
+          ),
+        ),
       );
     } finally {
       reasonController.dispose();
+    }
+  }
+
+  Future<void> _unbanMember(
+    ChatGroupBanEntry row,
+    void Function(void Function()) setModalState,
+  ) async {
+    try {
+      await ChatService.unbanGroupMember(
+        conversationId: _conversation.id,
+        userId: row.user.id,
+      );
+      setModalState(() {});
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Пользователь разбанен')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_unbanMember(row, setModalState)),
+          ),
+        ),
+      );
     }
   }
 
@@ -1269,32 +1331,9 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                                   ].join(' • '),
                                 ),
                                 trailing: TextButton(
-                                  onPressed: () async {
-                                    try {
-                                      await ChatService.unbanGroupMember(
-                                        conversationId: _conversation.id,
-                                        userId: row.user.id,
-                                      );
-                                      setModalState(() {});
-                                      if (mounted) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          const SnackBar(
-                                              content: Text(
-                                                  'Пользователь разбанен')),
-                                        );
-                                      }
-                                    } catch (e) {
-                                      if (mounted) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          SnackBar(
-                                            content: Text(userVisibleError(e)),
-                                          ),
-                                        );
-                                      }
-                                    }
-                                  },
+                                  onPressed: () => unawaited(
+                                    _unbanMember(row, setModalState),
+                                  ),
                                   child: const Text('Разбанить'),
                                 ),
                               );
@@ -2247,7 +2286,15 @@ class _GroupJoinRequestsSheetState extends State<_GroupJoinRequestsSheet> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(
+              _reviewOne(row, approve: approve),
+            ),
+          ),
+        ),
       );
     }
   }

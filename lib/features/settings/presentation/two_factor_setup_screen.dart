@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -99,7 +101,13 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_enable()),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -128,7 +136,13 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_disable()),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _busy = false);
