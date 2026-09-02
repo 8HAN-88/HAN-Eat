@@ -70,31 +70,44 @@ Future<bool> runSubscriptionCancelFlow(BuildContext context) async {
   );
   if (confirmed != true || !context.mounted) return false;
 
-  try {
-    final response = await SubscriptionService.requestCancelSubscription(
-      cancellationReason: survey.reasonLine,
-      improvementFeedback: survey.improvementFeedback,
-    );
-    if (!context.mounted) return false;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(response.message),
-        backgroundColor: Colors.green,
-        duration: const Duration(seconds: 5),
-      ),
-    );
-    return true;
-  } catch (e) {
-    if (context.mounted) {
+  while (context.mounted) {
+    try {
+      final response = await SubscriptionService.requestCancelSubscription(
+        cancellationReason: survey.reasonLine,
+        improvementFeedback: survey.improvementFeedback,
+      );
+      if (!context.mounted) return false;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(userVisibleError(e)),
-          backgroundColor: Colors.red,
+          content: Text(response.message),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 5),
         ),
       );
+      return true;
+    } catch (e) {
+      if (!context.mounted) return false;
+      final retry = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Не удалось отправить запрос'),
+          content: Text(userVisibleError(e)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Закрыть'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Повторить'),
+            ),
+          ],
+        ),
+      );
+      if (retry != true) return false;
     }
-    return false;
   }
+  return false;
 }
 
 /// Опрос: причина отмены и что доработать.

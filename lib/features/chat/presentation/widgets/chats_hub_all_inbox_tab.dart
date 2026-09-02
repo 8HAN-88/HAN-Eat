@@ -167,6 +167,78 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     }
   }
 
+  Future<void> _applyFolderMembership({
+    required ChatFolder folder,
+    int? conversationId,
+    int? channelId,
+    required bool remove,
+  }) async {
+    try {
+      if (remove) {
+        await ChatFolderStore.removeFromFolder(
+          folderId: folder.id,
+          conversationId: conversationId,
+          channelId: channelId,
+        );
+      } else {
+        await ChatFolderStore.addToFolder(
+          folderId: folder.id,
+          conversationId: conversationId,
+          channelId: channelId,
+        );
+      }
+      if (!mounted) return;
+      await _loadFolders();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            remove
+                ? 'Убрано из «${folder.name}»'
+                : 'Добавлено в «${folder.name}»',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(
+              _applyFolderMembership(
+                folder: folder,
+                conversationId: conversationId,
+                channelId: channelId,
+                remove: remove,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteFolder(ChatFolder folder) async {
+    try {
+      await ChatFolderStore.deleteFolder(folder.id);
+      if (!mounted) return;
+      if (_selectedFolderId == folder.id) _selectFolder(null);
+      await _loadFolders();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(userVisibleError(e, fallback: 'Не удалось удалить папку')),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_deleteFolder(folder)),
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _showAddToFolderSheet({
     int? conversationId,
     int? channelId,
@@ -213,37 +285,12 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                     : null,
                 onTap: () async {
                   Navigator.pop(ctx);
-                  try {
-                    if (inFolder) {
-                      await ChatFolderStore.removeFromFolder(
-                        folderId: folder.id,
-                        conversationId: conversationId,
-                        channelId: channelId,
-                      );
-                    } else {
-                      await ChatFolderStore.addToFolder(
-                        folderId: folder.id,
-                        conversationId: conversationId,
-                        channelId: channelId,
-                      );
-                    }
-                    if (!mounted) return;
-                    await _loadFolders();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          inFolder
-                              ? 'Убрано из «${folder.name}»'
-                              : 'Добавлено в «${folder.name}»',
-                        ),
-                      ),
-                    );
-                  } catch (e) {
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(userVisibleError(e))),
-                    );
-                  }
+                  await _applyFolderMembership(
+                    folder: folder,
+                    conversationId: conversationId,
+                    channelId: channelId,
+                    remove: inFolder,
+                  );
                 },
               );
             }),
@@ -1351,6 +1398,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         content: Text(
           joinRequestsBulkSnackMessage(approve: approve, result: result),
         ),
+        action: result.failed > 0
+            ? SnackBarAction(
+                label: 'Повторить',
+                onPressed: () =>
+                    unawaited(_reviewAllJoinInbox(approve: approve)),
+              )
+            : null,
       ),
     );
   }
@@ -1377,6 +1431,11 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                           'Заявки в модерацию (${_joinRequestsInbox.length})',
                           style: Theme.of(ctx).textTheme.titleMedium,
                         ),
+                      ),
+                      IconButton(
+                        tooltip: 'Закрыть',
+                        onPressed: () => Navigator.pop(ctx),
+                        icon: const Icon(Icons.close),
                       ),
                       if (_joinRequestsInbox.length > 1) ...[
                         TextButton(
@@ -2161,6 +2220,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                       ),
                 ),
               ),
+              TextButton(
+                onPressed: () => unawaited(_load()),
+                child: Text(
+                  'Обновить',
+                  style: TextStyle(color: scheme.onSecondaryContainer),
+                ),
+              ),
             ],
           ),
         ),
@@ -2182,12 +2248,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
           icon: Icons.delete_outline,
           title: 'Удалить папку',
           destructive: true,
-          onTap: () async {
-            await ChatFolderStore.deleteFolder(folder.id);
-            if (!mounted) return;
-            if (_selectedFolderId == folder.id) _selectFolder(null);
-            await _loadFolders();
-          },
+          onTap: () => unawaited(_deleteFolder(folder)),
         ),
       ],
     );
