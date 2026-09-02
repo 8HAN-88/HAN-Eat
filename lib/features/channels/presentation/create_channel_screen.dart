@@ -46,18 +46,18 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
 
   // Популярные категории
   static const List<String> _categories = [
-    'Итальянская',
-    'Азиатская',
-    'Веган',
-    'Быстрое',
-    'ЗОЖ',
-    'Выпечка',
-    'Десерты',
-    'Супы',
-    'Салаты',
-    'Мясо',
-    'Рыба',
-    'Вегетарианская',
+    'Новости',
+    'Музыка',
+    'Технологии',
+    'Спорт',
+    'Игры',
+    'Кино',
+    'Образование',
+    'Бизнес',
+    'Путешествия',
+    'Юмор',
+    'Искусство',
+    'Локальное',
   ];
 
   @override
@@ -345,7 +345,7 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
                           labelText: 'Категория (опционально)',
                           hintText: 'Выберите или введите категорию',
                           prefixIcon: Icon(Icons.category),
-                          helperText: 'Например: Итальянская, Веган, Быстрое',
+                          helperText: 'Например: Новости, Музыка, Спорт',
                         ),
                       );
                     },

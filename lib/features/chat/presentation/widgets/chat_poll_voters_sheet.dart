@@ -102,8 +102,18 @@ class _ChatPollVotersSheetState extends State<_ChatPollVotersSheet> {
             return ListView(
               controller: controller,
               padding: const EdgeInsets.all(24),
-              children: const [
-                Text('Пока никто не проголосовал', textAlign: TextAlign.center),
+              children: [
+                const Text(
+                  'Пока никто не проголосовал',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Center(
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    child: const Text('Закрыть'),
+                  ),
+                ),
               ],
             );
           }

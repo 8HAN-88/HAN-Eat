@@ -140,13 +140,21 @@ class _ChatMessageReadersSheetState extends State<_ChatMessageReadersSheet> {
                         : _readers.isEmpty
                             ? ListView(
                                 controller: scrollController,
-                                children: const [
-                                  SizedBox(height: 48),
-                                  Icon(Icons.done_all, size: 40),
-                                  SizedBox(height: 12),
-                                  Text(
+                                children: [
+                                  const SizedBox(height: 48),
+                                  const Icon(Icons.done_all, size: 40),
+                                  const SizedBox(height: 12),
+                                  const Text(
                                     'Ещё никто не отметил сообщение как прочитанное',
                                     textAlign: TextAlign.center,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Center(
+                                    child: TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(context).maybePop(),
+                                      child: const Text('Закрыть'),
+                                    ),
                                   ),
                                 ],
                               )

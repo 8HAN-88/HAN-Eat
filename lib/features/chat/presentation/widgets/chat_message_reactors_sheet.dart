@@ -212,13 +212,24 @@ class _ChatMessageReactorsSheetState extends State<_ChatMessageReactorsSheet> {
                         : visible.isEmpty
                             ? ListView(
                                 controller: scrollController,
-                                children: const [
-                                  SizedBox(height: 48),
-                                  Icon(Icons.emoji_emotions_outlined, size: 40),
-                                  SizedBox(height: 12),
-                                  Text(
+                                children: [
+                                  const SizedBox(height: 48),
+                                  const Icon(
+                                    Icons.emoji_emotions_outlined,
+                                    size: 40,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  const Text(
                                     'Реакций пока нет',
                                     textAlign: TextAlign.center,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Center(
+                                    child: TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(context).maybePop(),
+                                      child: const Text('Закрыть'),
+                                    ),
                                   ),
                                 ],
                               )

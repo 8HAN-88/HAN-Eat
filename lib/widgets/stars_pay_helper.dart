@@ -166,6 +166,14 @@ Future<int?> pickPaidMessageStars(
                     ),
                 ],
               ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Отмена'),
+                ),
+              ),
             ],
           ),
         ),

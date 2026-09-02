@@ -600,9 +600,34 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       contacts = await ChatService.listContacts();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+      final retry = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Не удалось загрузить контакты'),
+          content: Text(userVisibleError(e)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'close'),
+              child: const Text('Закрыть'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'contacts'),
+              child: const Text('К контактам'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, 'retry'),
+              child: const Text('Повторить'),
+            ),
+          ],
+        ),
       );
+      if (!mounted) return;
+      if (retry == 'retry') {
+        await _addMembers();
+      } else if (retry == 'contacts') {
+        requestChatsHubTab(ChatsHubContactsTab.contactsTabIndex);
+        context.go(ChatsRoute.path);
+      }
       return;
     }
     final memberIds = _members.map((m) => m.id).toSet();

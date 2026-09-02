@@ -84,13 +84,13 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
 
     final mic = await Permission.microphone.request();
     if (!mic.isGranted) {
-      await _fail('Нужен доступ к микрофону');
+      await _failPermission('Нужен доступ к микрофону');
       return;
     }
     if (_isVideo) {
       final cam = await Permission.camera.request();
       if (!cam.isGranted) {
-        await _fail('Нужен доступ к камере');
+        await _failPermission('Нужен доступ к камере');
         return;
       }
     }
@@ -347,6 +347,35 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     final ctx = hanEatRootNavigatorKey.currentContext ?? context;
     if (ctx.mounted) {
       ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(msg)));
+    }
+    await _leaveUi(notifyServer: true);
+  }
+
+  Future<void> _failPermission(String message) async {
+    final ctx = hanEatRootNavigatorKey.currentContext ?? context;
+    if (ctx.mounted) {
+      final openSettings = await showDialog<bool>(
+        context: ctx,
+        builder: (dialogCtx) => AlertDialog(
+          title: const Text('Нет доступа'),
+          content: Text(
+            '$message. Разрешите доступ в настройках и повторите звонок.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(false),
+              child: const Text('Закрыть'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(true),
+              child: const Text('Настройки'),
+            ),
+          ],
+        ),
+      );
+      if (openSettings == true) {
+        await openAppSettings();
+      }
     }
     await _leaveUi(notifyServer: true);
   }
