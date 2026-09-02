@@ -15,6 +15,7 @@ import '../../../services/notification_service.dart';
 import '../../../services/user_realtime_service.dart';
 import '../../../services/user_service.dart' as user_service;
 import '../../../utils/api_error_parser.dart';
+import '../../../utils/session_snackbar.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../comments/presentation/show_post_comments_sheet.dart';
@@ -173,8 +174,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         );
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(userVisibleError(e))),
+          showErrorSnackBar(
+            context,
+            e,
+            onRetry: () => unawaited(_markGroupAsRead(group)),
           );
         }
         return;
@@ -218,8 +221,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       AppHaptics.medium();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e))),
+        showErrorSnackBar(
+          context,
+          e,
+          onRetry: () => unawaited(_markAllAsRead()),
         );
       }
     }
@@ -243,8 +248,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e))),
+        showErrorSnackBar(
+          context,
+          e,
+          onRetry: () => unawaited(_toggleFollow(group)),
         );
       }
     } finally {
@@ -271,8 +278,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       context.push(ChatThreadRoute.pathFor(conv), extra: conv);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+      showErrorSnackBar(
+        context,
+        e,
+        onRetry: () => unawaited(_openMessage(group)),
       );
     }
   }

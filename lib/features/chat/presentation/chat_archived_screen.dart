@@ -319,7 +319,13 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
       if (!mounted) return;
       setState(() => _chats.add(chat));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_unarchiveChat(chat)),
+          ),
+        ),
       );
     }
   }
@@ -332,7 +338,13 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
       if (!mounted) return;
       setState(() => _channels.add(channel));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_unarchiveChannel(channel)),
+          ),
+        ),
       );
     }
   }

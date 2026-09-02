@@ -69,7 +69,13 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_saveOrder()),
+          ),
+        ),
       );
     }
   }

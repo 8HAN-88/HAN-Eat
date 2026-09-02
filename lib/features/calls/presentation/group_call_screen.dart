@@ -590,6 +590,10 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       },
     );
     if (picked == null || !mounted) return;
+    await _invitePicked(picked);
+  }
+
+  Future<void> _invitePicked(ChatUserBrief picked) async {
     try {
       _call = await CallService.invite(_call.id, picked.id);
       if (!mounted) return;
@@ -604,7 +608,15 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось пригласить'))),
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось пригласить'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_invitePicked(picked)),
+          ),
+        ),
       );
     }
   }

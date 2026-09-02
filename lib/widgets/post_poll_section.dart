@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/post.dart';
 import '../services/post_service.dart';
 import '../utils/api_error_parser.dart';
+import '../utils/session_snackbar.dart';
 import 'app_avatar.dart';
 
 /// Опрос в посте ленты / канала с возможностью голосования.
@@ -63,13 +64,24 @@ class _PostPollSectionState extends State<PostPollSection> {
     } on ApiClientException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleAuthError(e, fallback: 'Не удалось выполнить действие'))),
+          SnackBar(
+            content: Text(
+              userVisibleAuthError(e, fallback: 'Не удалось выполнить действие'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => _vote(optionIndex),
+            ),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось проголосовать'))),
+        showErrorSnackBar(
+          context,
+          e,
+          fallback: 'Не удалось проголосовать',
+          onRetry: () => _vote(optionIndex),
         );
       }
     } finally {
@@ -89,13 +101,24 @@ class _PostPollSectionState extends State<PostPollSection> {
     } on ApiClientException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleAuthError(e, fallback: 'Не удалось выполнить действие'))),
+          SnackBar(
+            content: Text(
+              userVisibleAuthError(e, fallback: 'Не удалось выполнить действие'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: _closePoll,
+            ),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось закрыть опрос'))),
+        showErrorSnackBar(
+          context,
+          e,
+          fallback: 'Не удалось закрыть опрос',
+          onRetry: _closePoll,
         );
       }
     } finally {

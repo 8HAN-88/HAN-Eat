@@ -100,7 +100,13 @@ class _ChatCreateGroupScreenState extends State<ChatCreateGroupScreen> {
       if (!mounted) return;
       setState(() => _creating = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_create()),
+          ),
+        ),
       );
     }
   }

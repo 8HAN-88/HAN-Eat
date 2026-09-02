@@ -80,7 +80,13 @@ class _ChatPeopleSearchScreenState extends State<ChatPeopleSearchScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_openChat(user)),
+          ),
+        ),
       );
     }
   }
@@ -121,7 +127,13 @@ class _ChatPeopleSearchScreenState extends State<ChatPeopleSearchScreen> {
         ];
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_toggleContact(user)),
+          ),
+        ),
       );
     }
   }
@@ -193,6 +205,18 @@ class _ChatPeopleSearchScreenState extends State<ChatPeopleSearchScreen> {
                         subtitle: _query.text.trim().length < 2
                             ? 'Введите имя или @username'
                             : 'Попробуйте другой запрос',
+                        action: _query.text.trim().length >= 2
+                            ? TextButton(
+                                onPressed: () {
+                                  _query.clear();
+                                  setState(() {
+                                    _results = [];
+                                    _error = null;
+                                  });
+                                },
+                                child: const Text('Очистить поиск'),
+                              )
+                            : null,
                       )
                     : ListView.separated(
               itemCount: _results.length,

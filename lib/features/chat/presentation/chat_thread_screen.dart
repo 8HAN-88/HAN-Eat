@@ -13466,6 +13466,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   ? 'Не удалось получить геолокацию. Разрешите доступ в браузере.'
                   : 'Не удалось получить геолокацию. Включите GPS и разрешите доступ к местоположению.',
             ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(
+                _sendCurrentLocation(
+                  latitude: latitude,
+                  longitude: longitude,
+                  livePeriodSeconds: livePeriodSeconds,
+                ),
+              ),
+            ),
           ),
         );
         return;
@@ -13584,7 +13594,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         if (_isMessagePinned(previous.id)) _replacePinnedMessage(previous);
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_stopLiveLocation(previous)),
+          ),
+        ),
       );
     }
   }

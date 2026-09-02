@@ -1,6 +1,7 @@
 // Экран профиля пользователя
 import 'dart:async';
 import '../../../utils/api_error_parser.dart';
+import '../../../utils/session_snackbar.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -339,10 +340,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content:
-                Text(userVisibleError(e, fallback: 'Не удалось открыть чат'))),
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось открыть чат',
+        onRetry: () => unawaited(_openChat(user)),
       );
     } finally {
       if (mounted) setState(() => _isOpeningChat = false);
@@ -561,8 +563,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e))),
+        showErrorSnackBar(
+          context,
+          e,
+          onRetry: () => unawaited(_toggleFollow()),
         );
       }
     } finally {
