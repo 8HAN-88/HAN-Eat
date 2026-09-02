@@ -13240,14 +13240,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           maxDuration: const Duration(seconds: 60),
         );
       }
-      if (file == null || !mounted) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Видео не выбрано')),
-          );
-        }
-        return;
-      }
+      if (file == null || !mounted) return;
 
       _setUploadProgress(0.05, status: 'Загрузка…');
       final prepared = await _normalizeVideoFileForUpload(file);

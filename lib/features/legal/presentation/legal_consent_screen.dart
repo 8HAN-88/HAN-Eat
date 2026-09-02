@@ -139,6 +139,13 @@ class _LegalConsentScreenState extends State<LegalConsentScreen> {
                           color: theme.colorScheme.error,
                         ),
                       ),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton(
+                          onPressed: _loading ? null : _load,
+                          child: const Text('Повторить'),
+                        ),
+                      ),
                     ],
                     if (_status != null) ...[
                       const SizedBox(height: 8),
