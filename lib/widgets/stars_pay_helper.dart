@@ -534,8 +534,18 @@ Future<bool> showChannelManageSubscriptionSheet(
                     ),
                   ),
                   const SizedBox(height: 14),
-                  if (loadError != null)
-                    Text(userVisibleError(loadError!))
+                  if (loadError != null) ...[
+                    Text(userVisibleError(loadError!)),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      onPressed: () => reload(setLocal),
+                      child: const Text('Повторить'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).maybePop(),
+                      child: const Text('Закрыть'),
+                    ),
+                  ]
                   else if (sub == null)
                     const Center(
                       child: Padding(
@@ -589,6 +599,37 @@ Future<bool> showChannelManageSubscriptionSheet(
                                     ScaffoldMessenger.of(ctx).showSnackBar(
                                       SnackBar(
                                         content: Text(userVisibleError(e)),
+                                        action: SnackBarAction(
+                                          label: 'Повторить',
+                                          onPressed: () async {
+                                            setLocal(() => busy = true);
+                                            try {
+                                              final next =
+                                                  await PaidFeaturesService
+                                                      .updateChannelSubscription(
+                                                channelId,
+                                                autoRenew: v,
+                                              );
+                                              changed = true;
+                                              setLocal(() {
+                                                info = next;
+                                                busy = false;
+                                              });
+                                            } catch (err) {
+                                              setLocal(() => busy = false);
+                                              if (ctx.mounted) {
+                                                ScaffoldMessenger.of(ctx)
+                                                    .showSnackBar(
+                                                  SnackBar(
+                                                    content: Text(
+                                                      userVisibleError(err),
+                                                    ),
+                                                  ),
+                                                );
+                                              }
+                                            }
+                                          },
+                                        ),
                                       ),
                                     );
                                   }
@@ -676,6 +717,36 @@ Future<bool> showChannelManageSubscriptionSheet(
                                       ScaffoldMessenger.of(ctx).showSnackBar(
                                         SnackBar(
                                           content: Text(userVisibleError(e)),
+                                          action: SnackBarAction(
+                                            label: 'Повторить',
+                                            onPressed: () async {
+                                              setLocal(() => busy = true);
+                                              try {
+                                                final next =
+                                                    await PaidFeaturesService
+                                                        .cancelChannelSubscription(
+                                                  channelId,
+                                                );
+                                                changed = true;
+                                                setLocal(() {
+                                                  info = next;
+                                                  busy = false;
+                                                });
+                                              } catch (err) {
+                                                setLocal(() => busy = false);
+                                                if (ctx.mounted) {
+                                                  ScaffoldMessenger.of(ctx)
+                                                      .showSnackBar(
+                                                    SnackBar(
+                                                      content: Text(
+                                                        userVisibleError(err),
+                                                      ),
+                                                    ),
+                                                  );
+                                                }
+                                              }
+                                            },
+                                          ),
                                         ),
                                       );
                                     }

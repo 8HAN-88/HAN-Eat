@@ -205,6 +205,11 @@ class _ChatMessageReactorsSheetState extends State<_ChatMessageReactorsSheet> {
                                     onPressed: _load,
                                     child: const Text('Повторить'),
                                   ),
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.of(context).maybePop(),
+                                    child: const Text('Закрыть'),
+                                  ),
                                 ],
                               ),
                             ),

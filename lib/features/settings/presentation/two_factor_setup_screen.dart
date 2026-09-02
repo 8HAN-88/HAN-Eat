@@ -18,6 +18,7 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
   bool _enabled = false;
   String? _error;
   TotpSetupInfo? _setup;
+  String? _setupError;
   final _codeController = TextEditingController();
   final _passwordController = TextEditingController();
   final _disableCodeController = TextEditingController();
@@ -59,19 +60,21 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
   }
 
   Future<void> _startSetup() async {
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _setupError = null;
+    });
     try {
       final info = await TotpAuthService.setup();
       if (!mounted) return;
       setState(() {
         _setup = info;
+        _setupError = null;
         _codeController.clear();
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
+      setState(() => _setupError = userVisibleError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -178,12 +181,26 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    if (!_enabled && _setup == null)
+                    if (!_enabled && _setup == null) ...[
                       FilledButton.icon(
                         onPressed: _busy ? null : _startSetup,
                         icon: const Icon(Icons.add_moderator_outlined),
                         label: const Text('Настроить'),
                       ),
+                      if (_setupError != null) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          _setupError!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: _busy ? null : _startSetup,
+                          child: const Text('Повторить'),
+                        ),
+                      ],
+                    ],
                     if (!_enabled && _setup != null) ...[
                       Text(
                         'Добавьте аккаунт вручную в приложении-аутентификаторе '

@@ -42,6 +42,7 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
   int? _replyToCommentId;
   String? _replyToAuthor;
   bool _isLoading = false;
+  String? _loadError;
   bool _isPosting = false;
   bool _hasMore = true;
   int _offset = 0;
@@ -94,6 +95,7 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
 
     setState(() {
       _isLoading = true;
+      _loadError = null;
       if (refresh) {
         _comments = [];
         _offset = 0;
@@ -121,11 +123,18 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
       _emitCount();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(userVisibleError(e,
-                  fallback: 'Не удалось загрузить комментарии'))),
+        final message = userVisibleError(
+          e,
+          fallback: 'Не удалось загрузить комментарии',
         );
+        setState(() {
+          if (_comments.isEmpty) _loadError = message;
+        });
+        if (_comments.isNotEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(message)),
+          );
+        }
       }
     } finally {
       if (mounted) {
@@ -329,6 +338,29 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
         Expanded(
           child: _comments.isEmpty && _isLoading
               ? const Center(child: CircularProgressIndicator())
+              : _loadError != null && _comments.isEmpty
+                  ? AppEmptyState(
+                      icon: Icons.wifi_off_outlined,
+                      title: 'Не удалось загрузить комментарии',
+                      subtitle: _loadError,
+                      action: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          FilledButton(
+                            onPressed: () => _loadComments(refresh: true),
+                            child: const Text('Повторить'),
+                          ),
+                          if (widget.asSheet) ...[
+                            const SizedBox(height: 8),
+                            TextButton(
+                              onPressed: () =>
+                                  Navigator.of(context).maybePop(),
+                              child: const Text('Закрыть'),
+                            ),
+                          ],
+                        ],
+                      ),
+                    )
               : _comments.isEmpty
                   ? AppEmptyState(
                       icon: Icons.comment_outlined,

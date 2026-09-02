@@ -499,6 +499,14 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
                 label: const Text('Создать розыгрыш'),
               ),
             ),
+          ] else ...[
+            const SizedBox(height: 16),
+            Center(
+              child: FilledButton.tonal(
+                onPressed: _load,
+                child: const Text('Обновить'),
+              ),
+            ),
           ],
         ],
       );

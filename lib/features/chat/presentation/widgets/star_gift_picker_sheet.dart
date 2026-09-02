@@ -164,6 +164,10 @@ class _StarGiftPickerSheetState extends State<_StarGiftPickerSheet> {
                           onPressed: _reload,
                           child: const Text('Повторить'),
                         ),
+                        TextButton(
+                          onPressed: () => Navigator.of(context).maybePop(),
+                          child: const Text('Закрыть'),
+                        ),
                       ],
                     ),
                   );

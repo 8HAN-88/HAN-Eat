@@ -133,6 +133,11 @@ class _ChatMessageReadersSheetState extends State<_ChatMessageReadersSheet> {
                                     onPressed: _load,
                                     child: const Text('Повторить'),
                                   ),
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.of(context).maybePop(),
+                                    child: const Text('Закрыть'),
+                                  ),
                                 ],
                               ),
                             ),
