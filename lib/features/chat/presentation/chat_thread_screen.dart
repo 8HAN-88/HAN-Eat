@@ -12576,10 +12576,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                     padding: const EdgeInsets.all(24),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(Icons.schedule_outlined, size: 30),
-                        SizedBox(height: 12),
-                        Text('Нет отложенных сообщений'),
+                      children: [
+                        const Icon(Icons.schedule_outlined, size: 30),
+                        const SizedBox(height: 12),
+                        const Text('Нет отложенных сообщений'),
+                        const SizedBox(height: 16),
+                        TextButton(
+                          onPressed: () => Navigator.of(ctx).pop(),
+                          child: const Text('Закрыть'),
+                        ),
                       ],
                     ),
                   ),
@@ -12841,10 +12846,40 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       unawaited(_refreshScheduledPendingCount());
     } catch (e) {
       if (!mounted) return;
-      showErrorSnackBar(
-        context,
-        e,
-        fallback: 'Не удалось загрузить отложенные сообщения',
+      await showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        builder: (ctx) {
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    userVisibleError(
+                      e,
+                      fallback: 'Не удалось загрузить отложенные сообщения',
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: () {
+                      Navigator.of(ctx).pop();
+                      unawaited(_openScheduledMessagesManager());
+                    },
+                    child: const Text('Повторить'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('Закрыть'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       );
     }
   }

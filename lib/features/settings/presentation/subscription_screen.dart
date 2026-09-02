@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../../utils/api_error_parser.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -95,9 +97,14 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content:
-                Text('Чек ещё формируется. Попробуйте через несколько минут.'),
+          SnackBar(
+            content: const Text(
+              'Чек ещё формируется. Попробуйте через несколько минут.',
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_openReceipt(payment)),
+            ),
           ),
         );
       }
@@ -107,6 +114,10 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
           SnackBar(
             content: Text(userVisibleError(e)),
             backgroundColor: scheme.error,
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_openReceipt(payment)),
+            ),
           ),
         );
       }

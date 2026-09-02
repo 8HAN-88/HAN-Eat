@@ -99,6 +99,7 @@ class _ChannelManagementScreenState
   bool _loadingMembers = false;
   List<ChannelJoinRequest> _joinRequests = [];
   bool _loadingJoinRequests = false;
+  String? _joinRequestsError;
 
   @override
   void initState() {
@@ -157,7 +158,10 @@ class _ChannelManagementScreenState
   }
 
   Future<void> _loadJoinRequests() async {
-    setState(() => _loadingJoinRequests = true);
+    setState(() {
+      _loadingJoinRequests = true;
+      _joinRequestsError = null;
+    });
     try {
       if (_channel != null && !_channel!.canManageJoinRequests) {
         if (mounted) {
@@ -169,13 +173,19 @@ class _ChannelManagementScreenState
         widget.channelId,
       );
       if (mounted) {
-        setState(() => _joinRequests = response.items);
+        setState(() {
+          _joinRequests = response.items;
+          _joinRequestsError = null;
+        });
       }
     } catch (e) {
-      if (mounted && _channel != null) {
-        if (_channel!.canManageJoinRequests) {
-          debugPrint('Join requests load: $e');
-        }
+      if (mounted) {
+        setState(() {
+          _joinRequestsError = userVisibleError(
+            e,
+            fallback: 'Не удалось загрузить заявки',
+          );
+        });
       }
     } finally {
       if (mounted) setState(() => _loadingJoinRequests = false);
@@ -917,6 +927,33 @@ class _ChannelManagementScreenState
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        if (canManageJoinRequests && _joinRequestsError != null) ...[
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Не удалось загрузить заявки',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _joinRequestsError!,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: _loadingJoinRequests ? null : _loadJoinRequests,
+                    child: const Text('Повторить'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const Divider(height: 32),
+        ],
         if (canManageJoinRequests && _joinRequests.isNotEmpty) ...[
           Row(
             children: [

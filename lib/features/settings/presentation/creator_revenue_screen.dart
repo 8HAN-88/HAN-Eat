@@ -562,9 +562,19 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
                     return TelegramGroupedSurface(
                       child: Padding(
                         padding: const EdgeInsets.all(18),
-                        child: Text(
-                          'Не удалось загрузить выплаты',
-                          style: TextStyle(color: scheme.onSurfaceVariant),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Не удалось загрузить выплаты',
+                              style: TextStyle(color: scheme.onSurfaceVariant),
+                            ),
+                            const SizedBox(height: 12),
+                            FilledButton(
+                              onPressed: _refresh,
+                              child: const Text('Повторить'),
+                            ),
+                          ],
                         ),
                       ),
                     );

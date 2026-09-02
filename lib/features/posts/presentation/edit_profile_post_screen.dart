@@ -37,6 +37,7 @@ class _EditProfilePostScreenState extends ConsumerState<EditProfilePostScreen> {
   bool _isLoading = true;
   bool _isSaving = false;
   String? _loadError;
+  int? _channelPostId;
   PostModel? _post;
   Timer? _linkPreviewDebounce;
   bool _isLoadingLinkPreview = false;
@@ -95,6 +96,7 @@ class _EditProfilePostScreenState extends ConsumerState<EditProfilePostScreen> {
     setState(() {
       _isLoading = true;
       _loadError = null;
+      _channelPostId = null;
     });
     try {
       final post = await ApiService.getPostById(widget.postId);
@@ -108,7 +110,8 @@ class _EditProfilePostScreenState extends ConsumerState<EditProfilePostScreen> {
       }
       if (post.communityId != null) {
         setState(() {
-          _loadError = 'Редактируйте пост в настройках канала';
+          _loadError = 'Этот пост относится к каналу — откройте его там.';
+          _channelPostId = post.communityId;
           _isLoading = false;
         });
         return;
@@ -321,13 +324,36 @@ class _EditProfilePostScreenState extends ConsumerState<EditProfilePostScreen> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_loadError != null) {
+      final channelId = _channelPostId;
       return AppEmptyState(
-        icon: Icons.cloud_off_rounded,
-        title: 'Не удалось открыть пост',
+        icon: channelId != null
+            ? Icons.campaign_outlined
+            : Icons.cloud_off_rounded,
+        title: channelId != null
+            ? 'Это пост канала'
+            : 'Не удалось открыть пост',
         subtitle: _loadError,
-        action: FilledButton(
-          onPressed: _loadPost,
-          child: const Text('Повторить'),
+        action: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (channelId != null)
+              FilledButton(
+                onPressed: () => context.push(
+                  '/channel/$channelId/post/${widget.postId}/edit',
+                ),
+                child: const Text('Редактировать в канале'),
+              )
+            else
+              FilledButton(
+                onPressed: _loadPost,
+                child: const Text('Повторить'),
+              ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => context.pop(),
+              child: const Text('Назад'),
+            ),
+          ],
         ),
       );
     }

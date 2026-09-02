@@ -1597,16 +1597,20 @@ class _GifPickPanelState extends State<_GifPickPanel> {
                         color: scheme.onSurfaceVariant,
                       ),
                 ),
-                if (searching) ...[
-                  const SizedBox(height: 8),
+                const SizedBox(height: 8),
+                if (searching)
                   TextButton(
                     onPressed: () {
                       _searchController.clear();
                       unawaited(_loadCatalog(query: ''));
                     },
                     child: const Text('Очистить поиск'),
+                  )
+                else
+                  TextButton(
+                    onPressed: () => unawaited(_loadCatalog(query: '')),
+                    child: const Text('Обновить'),
                   ),
-                ],
               ],
             ),
           )
@@ -1657,6 +1661,11 @@ class _GifPickPanelState extends State<_GifPickPanel> {
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: scheme.onSurfaceVariant,
                         ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: widget.onPickDevice,
+                    child: const Text('Выбрать GIF с устройства'),
                   ),
                 ],
               ),
