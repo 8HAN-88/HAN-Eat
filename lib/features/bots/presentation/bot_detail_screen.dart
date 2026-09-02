@@ -1319,7 +1319,13 @@ class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось открыть: $e')),
+        SnackBar(
+          content: Text(userVisibleError(e, fallback: 'Не удалось открыть')),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => _openApp(app),
+          ),
+        ),
       );
     }
   }

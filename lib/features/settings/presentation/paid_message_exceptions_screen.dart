@@ -61,7 +61,13 @@ class _PaidMessageExceptionsScreenState
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_remove(user)),
+          ),
+        ),
       );
     }
   }
@@ -74,6 +80,10 @@ class _PaidMessageExceptionsScreenState
       builder: (ctx) => const _UserSearchSheet(),
     );
     if (picked == null || !mounted) return;
+    await _addPicked(picked);
+  }
+
+  Future<void> _addPicked(ChatUserSearchItem picked) async {
     if (_items.any((u) => u.id == picked.id)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Уже в списке исключений')),
@@ -87,7 +97,13 @@ class _PaidMessageExceptionsScreenState
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_addPicked(picked)),
+          ),
+        ),
       );
     }
   }

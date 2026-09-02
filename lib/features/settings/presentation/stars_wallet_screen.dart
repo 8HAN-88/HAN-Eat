@@ -23,6 +23,7 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
   bool _awaitingCheckoutReturn = false;
   WalletFilter _filter = WalletFilter.all;
   WalletStatsPeriod _statsPeriod = WalletStatsPeriod.days30;
+  final _packagesKey = GlobalKey();
 
   @override
   void initState() {
@@ -66,6 +67,16 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
     final next = _load();
     setState(() => _future = next);
     await next;
+  }
+
+  void _scrollToPackages() {
+    final target = _packagesKey.currentContext;
+    if (target == null) return;
+    Scrollable.ensureVisible(
+      target,
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOut,
+    );
   }
 
   Future<void> _buyPackage(StarPackage package) async {
@@ -186,9 +197,10 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
                     ),
                   ),
                   const SizedBox(height: 18),
-                  const TelegramSectionHeader(
+                  TelegramSectionHeader(
+                    key: _packagesKey,
                     title: 'Купить звёзды',
-                    padding: EdgeInsets.fromLTRB(2, 6, 2, 8),
+                    padding: const EdgeInsets.fromLTRB(2, 6, 2, 8),
                   ),
                   for (final package in data.packages)
                     TelegramGroupedSurface(
@@ -245,6 +257,12 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
                                 onPressed: () =>
                                     setState(() => _filter = WalletFilter.all),
                                 child: const Text('Все операции'),
+                              ),
+                            ] else ...[
+                              const SizedBox(height: 12),
+                              TextButton(
+                                onPressed: _scrollToPackages,
+                                child: const Text('Купить ★'),
                               ),
                             ],
                           ],

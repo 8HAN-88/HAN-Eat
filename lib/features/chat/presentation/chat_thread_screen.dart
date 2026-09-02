@@ -2991,7 +2991,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось открыть mini app: $e')),
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось открыть mini app'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_openMiniAppFromInline(result)),
+          ),
+        ),
       );
     }
   }
@@ -6944,7 +6952,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
     if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Не удалось открыть файл')),
+        SnackBar(
+          content: const Text('Не удалось открыть файл'),
+          action: SnackBarAction(
+            label: 'Скопировать ссылку',
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: resolved));
+            },
+          ),
+        ),
       );
     }
   }
@@ -13820,7 +13836,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         );
       } catch (e) {
         if (mounted) {
-          showErrorSnackBar(context, e, fallback: 'Не удалось открыть Mini App');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                userVisibleError(e, fallback: 'Не удалось открыть Mini App'),
+              ),
+              action: SnackBarAction(
+                label: 'Повторить',
+                onPressed: () => unawaited(_tapInlineButton(msg, button)),
+              ),
+            ),
+          );
         }
       }
       return;
@@ -13839,7 +13865,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final ok = await openAppOrExternalLink(context, url);
       if (!ok && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Не удалось открыть ссылку')),
+          SnackBar(
+            content: const Text('Не удалось открыть ссылку'),
+            action: SnackBarAction(
+              label: 'Скопировать',
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: url));
+              },
+            ),
+          ),
         );
       }
       return;

@@ -495,6 +495,65 @@ Future<bool> showChannelManageSubscriptionSheet(
     }
   }
 
+  Future<void> applyAutoRenew(
+    BuildContext ctx,
+    void Function(void Function()) setLocal,
+    bool autoRenew,
+  ) async {
+    setLocal(() => busy = true);
+    try {
+      final next = await PaidFeaturesService.updateChannelSubscription(
+        channelId,
+        autoRenew: autoRenew,
+      );
+      changed = true;
+      setLocal(() {
+        info = next;
+        busy = false;
+      });
+    } catch (e) {
+      setLocal(() => busy = false);
+      if (!ctx.mounted) return;
+      ScaffoldMessenger.of(ctx).showSnackBar(
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => applyAutoRenew(ctx, setLocal, autoRenew),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> applyCancel(
+    BuildContext ctx,
+    void Function(void Function()) setLocal,
+  ) async {
+    setLocal(() => busy = true);
+    try {
+      final next =
+          await PaidFeaturesService.cancelChannelSubscription(channelId);
+      changed = true;
+      setLocal(() {
+        info = next;
+        busy = false;
+      });
+    } catch (e) {
+      setLocal(() => busy = false);
+      if (!ctx.mounted) return;
+      ScaffoldMessenger.of(ctx).showSnackBar(
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => applyCancel(ctx, setLocal),
+          ),
+        ),
+      );
+    }
+  }
+
   await showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
@@ -547,11 +606,19 @@ Future<bool> showChannelManageSubscriptionSheet(
                     ),
                   ]
                   else if (sub == null)
-                    const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(24),
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
+                    Column(
+                      children: [
+                        const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(24),
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.of(ctx).maybePop(),
+                          child: const Text('Закрыть'),
+                        ),
+                      ],
                     )
                   else ...[
                     ListTile(
@@ -580,61 +647,7 @@ Future<bool> showChannelManageSubscriptionSheet(
                         value: sub.autoRenew,
                         onChanged: busy
                             ? null
-                            : (v) async {
-                                setLocal(() => busy = true);
-                                try {
-                                  final next = await PaidFeaturesService
-                                      .updateChannelSubscription(
-                                    channelId,
-                                    autoRenew: v,
-                                  );
-                                  changed = true;
-                                  setLocal(() {
-                                    info = next;
-                                    busy = false;
-                                  });
-                                } catch (e) {
-                                  setLocal(() => busy = false);
-                                  if (ctx.mounted) {
-                                    ScaffoldMessenger.of(ctx).showSnackBar(
-                                      SnackBar(
-                                        content: Text(userVisibleError(e)),
-                                        action: SnackBarAction(
-                                          label: 'Повторить',
-                                          onPressed: () async {
-                                            setLocal(() => busy = true);
-                                            try {
-                                              final next =
-                                                  await PaidFeaturesService
-                                                      .updateChannelSubscription(
-                                                channelId,
-                                                autoRenew: v,
-                                              );
-                                              changed = true;
-                                              setLocal(() {
-                                                info = next;
-                                                busy = false;
-                                              });
-                                            } catch (err) {
-                                              setLocal(() => busy = false);
-                                              if (ctx.mounted) {
-                                                ScaffoldMessenger.of(ctx)
-                                                    .showSnackBar(
-                                                  SnackBar(
-                                                    content: Text(
-                                                      userVisibleError(err),
-                                                    ),
-                                                  ),
-                                                );
-                                              }
-                                            }
-                                          },
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                }
-                              },
+                            : (v) => applyAutoRenew(ctx, setLocal, v),
                       ),
                       const SizedBox(height: 8),
                       SizedBox(
@@ -702,55 +715,7 @@ Future<bool> showChannelManageSubscriptionSheet(
                                     ),
                                   );
                                   if (ok != true || !ctx.mounted) return;
-                                  setLocal(() => busy = true);
-                                  try {
-                                    final next = await PaidFeaturesService
-                                        .cancelChannelSubscription(channelId);
-                                    changed = true;
-                                    setLocal(() {
-                                      info = next;
-                                      busy = false;
-                                    });
-                                  } catch (e) {
-                                    setLocal(() => busy = false);
-                                    if (ctx.mounted) {
-                                      ScaffoldMessenger.of(ctx).showSnackBar(
-                                        SnackBar(
-                                          content: Text(userVisibleError(e)),
-                                          action: SnackBarAction(
-                                            label: 'Повторить',
-                                            onPressed: () async {
-                                              setLocal(() => busy = true);
-                                              try {
-                                                final next =
-                                                    await PaidFeaturesService
-                                                        .cancelChannelSubscription(
-                                                  channelId,
-                                                );
-                                                changed = true;
-                                                setLocal(() {
-                                                  info = next;
-                                                  busy = false;
-                                                });
-                                              } catch (err) {
-                                                setLocal(() => busy = false);
-                                                if (ctx.mounted) {
-                                                  ScaffoldMessenger.of(ctx)
-                                                      .showSnackBar(
-                                                    SnackBar(
-                                                      content: Text(
-                                                        userVisibleError(err),
-                                                      ),
-                                                    ),
-                                                  );
-                                                }
-                                              }
-                                            },
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                  }
+                                  await applyCancel(ctx, setLocal);
                                 },
                           child: const Text('Отменить автопродление'),
                         ),

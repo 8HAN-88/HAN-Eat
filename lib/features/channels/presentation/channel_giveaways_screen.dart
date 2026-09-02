@@ -259,7 +259,13 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
       if (!mounted) return;
       setState(() => _busy.remove(g.id));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_join(g)),
+          ),
+        ),
       );
     }
   }
@@ -295,7 +301,13 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
       if (!mounted) return;
       setState(() => _busy.remove(g.id));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_cancel(g)),
+          ),
+        ),
       );
     }
   }
@@ -313,7 +325,13 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
       if (!mounted) return;
       setState(() => _busy.remove(g.id));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_finalize(g)),
+          ),
+        ),
       );
     }
   }
@@ -417,7 +435,13 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
       if (!mounted) return;
       setState(() => _busy.remove(g.id));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_showWinners(g)),
+          ),
+        ),
       );
     }
   }

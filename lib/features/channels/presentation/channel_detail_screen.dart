@@ -1019,10 +1019,14 @@ class ChannelPostsListState extends State<ChannelPostsList> {
           ),
         );
       case ChannelPostsPhase.empty:
-        return const ChannelTabEmptyPlaceholder(
+        return ChannelTabEmptyPlaceholder(
           icon: Icons.inbox_outlined,
           title: 'Здесь пока нет постов',
           subtitle: 'Как только автор что-то опубликует — вы увидите это здесь.',
+          action: FilledButton(
+            onPressed: () => _loadPosts(refresh: true),
+            child: const Text('Обновить'),
+          ),
         );
       case ChannelPostsPhase.list:
         break;
@@ -1340,10 +1344,14 @@ class ChannelMediaListState extends State<ChannelMediaList> {
     }
 
     if (_mediaItems.isEmpty) {
-      return const ChannelTabEmptyPlaceholder(
+      return ChannelTabEmptyPlaceholder(
         icon: Icons.photo_library_outlined,
         title: 'Здесь пока нет медиа',
         subtitle: 'Медиа из постов канала будут отображаться здесь.',
+        action: FilledButton(
+          onPressed: () => _loadMedia(refresh: true),
+          child: const Text('Обновить'),
+        ),
       );
     }
 

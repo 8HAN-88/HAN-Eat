@@ -442,14 +442,19 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
                                           : 'Ничего не найдено',
                                       textAlign: TextAlign.center,
                                     ),
-                                    if (_filter != _MediaFilter.all) ...[
-                                      const SizedBox(height: 12),
+                                    const SizedBox(height: 12),
+                                    if (_filter != _MediaFilter.all)
                                       TextButton(
                                         onPressed: () =>
                                             _onFilterChanged(_MediaFilter.all),
                                         child: const Text('Все медиа'),
+                                      )
+                                    else
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.of(context).maybePop(),
+                                        child: const Text('Назад в чат'),
                                       ),
-                                    ],
                                   ],
                                 ),
                               ),
