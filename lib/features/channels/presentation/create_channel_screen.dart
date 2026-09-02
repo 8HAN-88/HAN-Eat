@@ -1,4 +1,5 @@
 // Экран создания канала
+import 'dart:async';
 import 'dart:io';
 import '../../../utils/api_error_parser.dart';
 import 'dart:typed_data';
@@ -126,8 +127,14 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                  content: Text(userVisibleError(e,
-                      fallback: 'Не удалось загрузить аватар'))),
+                content: Text(
+                  userVisibleError(e, fallback: 'Не удалось загрузить аватар'),
+                ),
+                action: SnackBarAction(
+                  label: 'Повторить',
+                  onPressed: () => unawaited(_pickAvatar()),
+                ),
+              ),
             );
           }
         }
@@ -183,8 +190,14 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(
-                  userVisibleError(e, fallback: 'Не удалось создать канал'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось создать канал'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_handleCreate()),
+            ),
+          ),
         );
       }
     } finally {

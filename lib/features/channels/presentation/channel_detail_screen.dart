@@ -247,7 +247,13 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e))),
+          SnackBar(
+            content: Text(userVisibleError(e)),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_toggleSubscribe()),
+            ),
+          ),
         );
       }
     } finally {

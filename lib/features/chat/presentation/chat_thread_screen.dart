@@ -13777,7 +13777,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           final i = _messages.indexWhere((m) => m.id == previous.id);
           if (i >= 0) _messages[i] = previous;
         });
-        showErrorSnackBar(context, e, fallback: 'Не удалось проголосовать');
+        showErrorSnackBar(
+          context,
+          e,
+          fallback: 'Не удалось проголосовать',
+          onRetry: () => unawaited(_votePoll(previous, optionIndex)),
+        );
       }
     } finally {
       if (mounted) setState(() => _votingPollIds.remove(msg.id));
@@ -13835,7 +13840,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           if (i >= 0) _messages[i] = previous;
           if (_isMessagePinned(previous.id)) _replacePinnedMessage(previous);
         });
-        showErrorSnackBar(context, e, fallback: 'Не удалось закрыть опрос');
+        showErrorSnackBar(
+          context,
+          e,
+          fallback: 'Не удалось закрыть опрос',
+          onRetry: () => unawaited(_closePoll(previous)),
+        );
       }
     } finally {
       if (mounted) setState(() => _closingPollIds.remove(msg.id));
@@ -13905,7 +13915,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           if (i >= 0) _messages[i] = previous;
           if (_isMessagePinned(previous.id)) _replacePinnedMessage(previous);
         });
-        showErrorSnackBar(context, e, fallback: 'Не удалось добавить вариант');
+        showErrorSnackBar(
+          context,
+          e,
+          fallback: 'Не удалось добавить вариант',
+          onRetry: () => unawaited(_addPollOption(previous)),
+        );
       }
     }
   }

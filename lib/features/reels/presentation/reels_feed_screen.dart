@@ -1012,8 +1012,10 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
           );
         });
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+      showErrorSnackBar(
+        context,
+        e,
+        onRetry: () => unawaited(_toggleLike(postId)),
       );
     } finally {
       _likeBusy.remove(postId);
@@ -1036,8 +1038,10 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e))),
+        showErrorSnackBar(
+          context,
+          e,
+          onRetry: () => unawaited(_toggleSave(reel)),
         );
       }
     }

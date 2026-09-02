@@ -1,7 +1,6 @@
 // Fullscreen Reels при тапе на видео в ленте — вертикальный свайп, возврат на то же место
 import 'dart:async';
 import 'dart:math' as math;
-import '../../../utils/api_error_parser.dart';
 import '../../../utils/session_snackbar.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -538,8 +537,11 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
           likesCount: r.likesCount + (wasLiked ? 1 : -1),
         ),
       );
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(userVisibleError(e))));
+      showErrorSnackBar(
+        context,
+        e,
+        onRetry: () => unawaited(_toggleLike(postId)),
+      );
     } finally {
       _likeBusy.remove(postId);
     }
@@ -556,8 +558,11 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
       _updateReelAt(reel.id, (r) => _copyReelWith(r, isSaved: !isSaved));
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(userVisibleError(e))));
+        showErrorSnackBar(
+          context,
+          e,
+          onRetry: () => unawaited(_toggleSave(reel)),
+        );
       }
     }
   }

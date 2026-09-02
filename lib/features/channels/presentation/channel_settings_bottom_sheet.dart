@@ -339,21 +339,44 @@ class _ChannelSettingsBottomSheetState
                   style: TextStyle(color: scheme.error),
                 ),
                 onTap: () async {
-                  Navigator.of(context).pop();
                   try {
                     await ChannelService.leaveChannel(widget.channelId);
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text('Вы отписались от канала')),
-                      );
-                    }
+                    if (!mounted) return;
+                    Navigator.of(context).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Вы отписались от канала'),
+                      ),
+                    );
                   } catch (e) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(userVisibleError(e))),
-                      );
-                    }
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(userVisibleError(e)),
+                        action: SnackBarAction(
+                          label: 'Повторить',
+                          onPressed: () async {
+                            try {
+                              await ChannelService.leaveChannel(
+                                widget.channelId,
+                              );
+                              if (!mounted) return;
+                              Navigator.of(context).pop();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Вы отписались от канала'),
+                                ),
+                              );
+                            } catch (err) {
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(userVisibleError(err))),
+                              );
+                            }
+                          },
+                        ),
+                      ),
+                    );
                   }
                 },
               ),

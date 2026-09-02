@@ -722,7 +722,13 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
+        SnackBar(
+          content: Text(userVisibleError(e, fallback: 'Не удалось сохранить')),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_saveWebhook()),
+          ),
+        ),
       );
     }
   }
@@ -733,6 +739,10 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
       builder: (_) => const _SelectChatDialog(),
     );
     if (convId == null) return;
+    await _addBotToChat(convId);
+  }
+
+  Future<void> _addBotToChat(int convId) async {
     try {
       await ApiService.addBotToChat(
         botId: widget.botId,
@@ -745,7 +755,13 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
+        SnackBar(
+          content: Text(userVisibleError(e, fallback: 'Не удалось добавить')),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_addBotToChat(convId)),
+          ),
+        ),
       );
     }
   }

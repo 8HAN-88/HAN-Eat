@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -219,7 +221,13 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_revokeOne(session)),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -238,7 +246,13 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_revokeOthers()),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _busy = false);

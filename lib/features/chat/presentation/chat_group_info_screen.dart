@@ -1688,18 +1688,23 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       ),
     );
     if (ok != true || !mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    Navigator.of(context).pop();
-    widget.onLeftGroup?.call();
-    unawaited(() async {
-      try {
-        await ChatService.leaveGroup(conversationId: _conversation.id);
-      } catch (e) {
-        messenger.showSnackBar(
-          SnackBar(content: Text(userVisibleError(e))),
-        );
-      }
-    }());
+    try {
+      await ChatService.leaveGroup(conversationId: _conversation.id);
+      if (!mounted) return;
+      widget.onLeftGroup?.call();
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_leaveGroup()),
+          ),
+        ),
+      );
+    }
   }
 
   @override

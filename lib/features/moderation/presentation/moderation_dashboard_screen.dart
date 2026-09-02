@@ -160,10 +160,21 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen> {
         }
         _webhookOpsHasMore = page.hasMore;
       });
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       if (reset && _webhookOps.isEmpty) {
         setState(() => _webhookOpsHasMore = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось загрузить операции'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => _loadMoreWebhookOps(reset: true),
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _webhookOpsLoading = false);
