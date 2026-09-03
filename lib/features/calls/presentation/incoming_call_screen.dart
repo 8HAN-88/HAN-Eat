@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../services/call_service.dart';
+import '../../../utils/session_snackbar.dart';
+import '../call_local_media.dart';
+import '../call_webrtc.dart';
 
 /// Fullscreen incoming ring UI (accept / reject + haptic pulse).
 class IncomingCallScreen extends StatefulWidget {
@@ -28,11 +31,14 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   @override
   void initState() {
     super.initState();
-    _pulse = Timer.periodic(const Duration(seconds: 2), (_) {
-      HapticFeedback.heavyImpact();
-      SystemSound.play(SystemSoundType.alert);
-    });
-    HapticFeedback.heavyImpact();
+    void pulse() {
+      try {
+        HapticFeedback.heavyImpact();
+        SystemSound.play(SystemSoundType.alert);
+      } catch (_) {}
+    }
+    _pulse = Timer.periodic(const Duration(seconds: 2), (_) => pulse());
+    pulse();
     _timeout = Timer(widget.timeout, () {
       if (_decided || !mounted) return;
       _decided = true;
@@ -47,11 +53,26 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     super.dispose();
   }
 
-  void _decide(bool accept) {
+  Future<void> _decide(bool accept) async {
     if (_decided) return;
+    if (accept) {
+      try {
+        await CallLocalMedia.acquire(video: widget.call.isVideo);
+      } catch (e) {
+        if (!mounted) return;
+        showErrorSnackBar(
+          context,
+          e,
+          fallback: CallWebrtc.humanError(e, video: widget.call.isVideo),
+          onRetry: () => unawaited(_decide(true)),
+        );
+        return;
+      }
+    }
     _decided = true;
     _pulse?.cancel();
     _timeout?.cancel();
+    if (!mounted) return;
     Navigator.of(context).pop<bool>(accept);
   }
 
