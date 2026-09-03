@@ -1219,7 +1219,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         setUrl: false,
         applyToAll: applyToAll,
       );
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() {
         _wallpaperStyle = previousStyle;
@@ -1227,6 +1227,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _wallpaperImage = previousImage;
         _conversation = previousConversation;
       });
+      showErrorSnackBar(
+        context,
+        e,
+        onRetry: () => unawaited(
+          _applyWallpaperStyle(style, applyToAll: applyToAll),
+        ),
+      );
     }
   }
 
@@ -1306,8 +1313,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _wallpaperImage = previousImage;
         _conversation = previousConversation;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+      showErrorSnackBar(
+        context,
+        e,
+        onRetry: () => unawaited(
+          _pickCustomWallpaper(applyToAll: applyToAll),
+        ),
       );
     }
   }
@@ -1419,8 +1430,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           );
         } catch (e) {
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(userVisibleError(e))),
+          showErrorSnackBar(
+            context,
+            e,
+            onRetry: () => unawaited(_showWallpaperPicker()),
           );
           return;
         }
@@ -3407,8 +3420,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             if (t.id != temp.id) t,
         ];
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+      showErrorSnackBar(
+        context,
+        e,
+        onRetry: () => unawaited(_createForumTopicDialog()),
       );
     }
   }
@@ -3468,8 +3483,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             if (t.id == topic.id) topic else t,
         ];
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+      showErrorSnackBar(
+        context,
+        e,
+        onRetry: () => unawaited(_renameForumTopicDialog(topic)),
       );
     }
   }
@@ -3520,8 +3537,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             if (t.id == topic.id) topic else t,
         ];
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+      showErrorSnackBar(
+        context,
+        e,
+        onRetry: () => unawaited(_setForumTopicClosed(topic, closed)),
       );
     }
   }
@@ -6527,8 +6546,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+      showErrorSnackBar(
+        context,
+        e,
+        onRetry: () => unawaited(_showCommonGroups(peer)),
       );
     }
   }
@@ -6834,8 +6855,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             unawaited(ChatThreadPrefetch.warm(chat.id));
           } catch (e) {
             if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(userVisibleError(e))),
+            showErrorSnackBar(
+              context,
+              e,
+              onRetry: () => unawaited(
+                _sendForwardTo(chat, msg, asCopy: picked.asCopy),
+              ),
             );
           }
         }());
@@ -6849,8 +6874,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+      showErrorSnackBar(
+        context,
+        e,
+        onRetry: () => unawaited(_forwardMessage(msg)),
       );
     }
   }
@@ -6894,28 +6921,32 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         );
         return;
       }
-      unawaited(() async {
-        try {
-          await ChatService.forwardMessage(
-            targetConversationId: saved.id,
-            sourceConversationId: widget.conversationId,
-            messageId: msg.id,
-          );
-          unawaited(ChatThreadPrefetch.warm(saved.id));
-        } catch (e) {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(userVisibleError(e))),
-          );
-        }
-      }());
+      try {
+        await ChatService.forwardMessage(
+          targetConversationId: saved.id,
+          sourceConversationId: widget.conversationId,
+          messageId: msg.id,
+        );
+        unawaited(ChatThreadPrefetch.warm(saved.id));
+      } catch (e) {
+        if (!mounted) return;
+        showErrorSnackBar(
+          context,
+          e,
+          onRetry: () => unawaited(_saveMessageToFavorites(msg)),
+        );
+        return;
+      }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Добавлено в избранное')),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+      showErrorSnackBar(
+        context,
+        e,
+        onRetry: () => unawaited(_saveMessageToFavorites(msg)),
       );
     }
   }
@@ -6982,7 +7013,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         );
       } catch (e) {
         messenger.showSnackBar(
-          SnackBar(content: Text(userVisibleError(e))),
+          SnackBar(
+            content: Text(userVisibleError(e)),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(
+                ChatService.deleteConversation(
+                  conversationId: widget.conversationId,
+                  alsoForPeer: isDirect && alsoForPeer,
+                ),
+              ),
+            ),
+          ),
         );
       }
     }());
@@ -7046,7 +7088,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         );
       } catch (e) {
         messenger.showSnackBar(
-          SnackBar(content: Text(userVisibleError(e))),
+          SnackBar(
+            content: Text(userVisibleError(e)),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(
+                ChatService.setArchived(
+                  conversationId: widget.conversationId,
+                  archived: true,
+                ),
+              ),
+            ),
+          ),
         );
       }
     }());
@@ -7903,8 +7956,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             ChatInboxOptimistic.applyPin(_conversation, pinned: !next);
       });
       _bumpChatsHub();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+      showErrorSnackBar(
+        context,
+        e,
+        onRetry: () => unawaited(_togglePin()),
       );
     }
   }
@@ -8046,8 +8101,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+      showErrorSnackBar(
+        context,
+        e,
+        onRetry: () => unawaited(_saveContactToPhone(contact)),
       );
     }
   }
@@ -8255,17 +8312,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (ok != true || !mounted) return;
     setState(() => _giftActionMessageIds.add(msg.id));
     _patchLocalGiftStatus(msg, 'refunded');
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('+$stars ★ возвращены')),
-    );
     try {
       await PaidFeaturesService.refundGift(giftId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('+$stars ★ возвращены')),
+      );
     } catch (e) {
       if (!mounted) return;
       final idx = _messages.indexWhere((m) => m.id == msg.id);
       if (idx >= 0) setState(() => _messages[idx] = msg);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+      showErrorSnackBar(
+        context,
+        e,
+        onRetry: () => unawaited(_refundSentGift(msg)),
       );
     } finally {
       if (mounted) {
@@ -8310,8 +8370,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+      showErrorSnackBar(
+        context,
+        e,
+        onRetry: () => unawaited(_refundPaidMedia(msg)),
       );
     }
   }
@@ -8321,17 +8383,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (giftId == null || _giftActionMessageIds.contains(msg.id)) return;
     setState(() => _giftActionMessageIds.add(msg.id));
     _patchLocalGiftStatus(msg, 'kept');
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Подарок сохранён в профиле')),
-    );
     try {
       await PaidFeaturesService.keepGift(giftId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Подарок сохранён в профиле')),
+      );
     } catch (e) {
       if (!mounted) return;
       final idx = _messages.indexWhere((m) => m.id == msg.id);
       if (idx >= 0) setState(() => _messages[idx] = msg);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+      showErrorSnackBar(
+        context,
+        e,
+        onRetry: () => unawaited(_keepReceivedGift(msg)),
       );
     } finally {
       if (mounted) {
@@ -8555,7 +8620,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         }
       } catch (e) {
         messenger.showSnackBar(
-          SnackBar(content: Text(userVisibleError(e))),
+          SnackBar(
+            content: Text(userVisibleError(e)),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_blockPeer()),
+            ),
+          ),
         );
       }
     }());
@@ -8570,11 +8641,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         blocked: false,
       );
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${peer.displayName} разблокирован')),
-    );
     try {
       await ChatService.unblockUser(peer.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${peer.displayName} разблокирован')),
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -8583,8 +8655,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           blocked: true,
         );
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+      showErrorSnackBar(
+        context,
+        e,
+        onRetry: () => unawaited(_unblockPeer()),
       );
     }
   }
@@ -8648,7 +8722,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         await ChatService.leaveGroup(conversationId: widget.conversationId);
       } catch (e) {
         messenger.showSnackBar(
-          SnackBar(content: Text(userVisibleError(e))),
+          SnackBar(
+            content: Text(userVisibleError(e)),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(
+                ChatService.leaveGroup(conversationId: widget.conversationId),
+              ),
+            ),
+          ),
         );
       }
     }());
@@ -8837,8 +8919,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+      showErrorSnackBar(
+        context,
+        e,
+        onRetry: () => unawaited(_startRecording()),
       );
       return;
     }
@@ -9276,8 +9360,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     } catch (e) {
       if (!mounted) return;
       _applyAutoDeleteSeconds(previousSeconds);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+      showErrorSnackBar(
+        context,
+        e,
+        onRetry: () => unawaited(_configureAutoDelete()),
       );
     }
   }
@@ -9450,8 +9536,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               unawaited(ChatThreadPrefetch.warm(chat.id));
             } catch (e) {
               if (!mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(userVisibleError(e))),
+              showErrorSnackBar(
+                context,
+                e,
+                onRetry: () => unawaited(
+                  _sendForwardTo(chat, msg, asCopy: picked.asCopy),
+                ),
               );
             }
           }());
@@ -9469,8 +9559,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+      showErrorSnackBar(
+        context,
+        e,
+        onRetry: () => unawaited(_forwardSelectedMessages()),
       );
     }
   }
@@ -9506,8 +9598,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+      showErrorSnackBar(
+        context,
+        e,
+        onRetry: () => unawaited(_saveSelectedMessagesToFavorites()),
       );
     }
   }
@@ -9867,8 +9961,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+      showErrorSnackBar(
+        context,
+        e,
+        onRetry: () => unawaited(_showMessageEditHistory(msg)),
       );
     }
   }
@@ -13475,8 +13571,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+      showErrorSnackBar(
+        context,
+        e,
+        onRetry: () => unawaited(_recordAndSendVideoNote()),
       );
     } finally {
       if (mounted) {
@@ -13602,8 +13700,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+      showErrorSnackBar(
+        context,
+        e,
+        onRetry: () => unawaited(
+          _sendCurrentLocation(
+            latitude: latitude,
+            longitude: longitude,
+            livePeriodSeconds: livePeriodSeconds,
+          ),
+        ),
       );
     }
   }

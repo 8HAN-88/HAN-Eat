@@ -185,6 +185,10 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           content: Text(
             userVisibleError(e, fallback: 'Не удалось сделать фото'),
           ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_pickCameraImage()),
+          ),
         ),
       );
     }
@@ -231,8 +235,17 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text(userVisibleError(e,
-                    fallback: 'Не удалось выбрать изображение'))),
+              content: Text(
+                userVisibleError(
+                  e2,
+                  fallback: 'Не удалось выбрать изображение',
+                ),
+              ),
+              action: SnackBarAction(
+                label: 'Повторить',
+                onPressed: () => unawaited(_pickImage()),
+              ),
+            ),
           );
         }
       }
@@ -257,8 +270,14 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(
-                  userVisibleError(e, fallback: 'Не удалось выбрать видео'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось выбрать видео'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_pickVideo()),
+            ),
+          ),
         );
       }
     }
@@ -354,8 +373,14 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         setState(() => _isUploading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(
-                  userVisibleError(e, fallback: 'Не удалось загрузить медиа'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось загрузить медиа'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_uploadMedia()),
+            ),
+          ),
         );
       }
     }
@@ -643,15 +668,29 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                 ? e.message
                 : 'Ошибка публикации: ${e.message}';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(text)),
+          SnackBar(
+            content: Text(text),
+            action: e.isContentBlocked
+                ? null
+                : SnackBarAction(
+                    label: 'Повторить',
+                    onPressed: () => unawaited(_handlePublish()),
+                  ),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(
-                  userVisibleError(e, fallback: 'Не удалось опубликовать'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось опубликовать'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_handlePublish()),
+            ),
+          ),
         );
       }
     } finally {

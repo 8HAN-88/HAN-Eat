@@ -470,7 +470,15 @@ class _CallScreenState extends State<CallScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось сменить камеру'))),
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось сменить камеру'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_switchCamera()),
+          ),
+        ),
       );
     }
   }
@@ -484,7 +492,15 @@ class _CallScreenState extends State<CallScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось переключить звук'))),
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось переключить звук'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_toggleSpeaker()),
+          ),
+        ),
       );
     }
   }
