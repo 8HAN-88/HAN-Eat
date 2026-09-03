@@ -209,6 +209,31 @@
         new Image().src = '/boot-ping?b=__HAN_BUILD_ID__&gate=1&t=' + Date.now();
       } catch (e) {}
 
+      // iOS Safari: inline playback for WebRTC / reels <video> elements.
+      try {
+        function hanMarkVideo(v) {
+          if (!v || v.tagName !== 'VIDEO') return;
+          v.setAttribute('playsinline', '');
+          v.setAttribute('webkit-playsinline', '');
+        }
+        function hanScanVideos(root) {
+          if (!root) return;
+          if (root.tagName === 'VIDEO') hanMarkVideo(root);
+          if (root.querySelectorAll) {
+            root.querySelectorAll('video').forEach(hanMarkVideo);
+          }
+        }
+        hanScanVideos(document);
+        if (window.MutationObserver) {
+          new MutationObserver(function (muts) {
+            for (var i = 0; i < muts.length; i++) {
+              var nodes = muts[i].addedNodes;
+              for (var j = 0; j < nodes.length; j++) hanScanVideos(nodes[j]);
+            }
+          }).observe(document.documentElement, { childList: true, subtree: true });
+        }
+      } catch (e) {}
+
       try {
         if ('serviceWorker' in navigator) {
           navigator.serviceWorker.register = function () {

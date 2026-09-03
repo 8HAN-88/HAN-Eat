@@ -208,4 +208,6 @@ def test_expire_stale_rings_marks_missed(db_session):
 def test_ice_servers_include_stun(db_session):
     servers = CallService.ice_servers()
     assert isinstance(servers, list)
-    assert any("stun" in str(s.get("urls", "")).lower() for s in servers)
+    urls = " ".join(str(s.get("urls", "")).lower() for s in servers)
+    assert "stun" in urls
+    assert "stun.l.google.com" in urls or "cloudflare" in urls

@@ -216,6 +216,19 @@ String userVisibleError(Object e, {String fallback = 'Произошла оши�
       lower.contains('connection closed')) {
     return 'Соединение с сервером оборвалось. Попробуйте ещё раз.';
   }
+  if (lower.contains('missingpluginexception') &&
+      (lower.contains('webrtc') || lower.contains('flutterwebrtc'))) {
+    return 'Не удалось запустить звонок в браузере. Обновите страницу и нажмите «Повторить».';
+  }
+  if (lower.contains('notallowederror') ||
+      lower.contains('permission denied') ||
+      lower.contains('notallowed')) {
+    return 'Разрешите доступ к микрофону и камере, затем повторите звонок.';
+  }
+  if (lower.contains('notfounderror') ||
+      lower.contains('requested device not found')) {
+    return 'Микрофон или камера не найдены. Проверьте, что они не заняты.';
+  }
   final statusMatch = RegExp(r'\((\d{3})\)\s*$').firstMatch(raw);
   if (statusMatch != null) {
     final code = int.tryParse(statusMatch.group(1)!);

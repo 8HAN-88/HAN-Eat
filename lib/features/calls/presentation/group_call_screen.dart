@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -12,8 +13,11 @@ import '../../../services/call_service.dart';
 import '../../../services/chat_service.dart';
 import '../../../services/user_realtime_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../utils/session_snackbar.dart';
 import '../call_kit_bridge.dart';
+import '../call_local_media.dart';
 import '../call_media_controls.dart';
+import '../call_webrtc.dart';
 import 'call_coordinator.dart';
 
 /// Small-group mesh call (up to 4 peers) using 1:1 PCs between members.
@@ -43,6 +47,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   bool _speakerOn = true;
   bool _ending = false;
   bool _initializing = true;
+  bool _needsMediaGesture = false;
   bool _weakLink = false;
   String _status = 'Подключение...';
   DateTime? _callStartedAt;
@@ -71,47 +76,105 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     CallCoordinator.instance.attachActiveCall(_call.id);
     CallCoordinator.instance.bindHostedEndHandler(_boundEnd);
     _sub = UserRealtimeService.instance.events.listen(_onRealtime);
-    unawaited(WakelockPlus.enable());
+    unawaited(_enableWakeLock());
     unawaited(_bootstrap());
   }
 
-  Future<void> _bootstrap() async {
-    await _localRenderer.initialize();
+  Future<void> _enableWakeLock() async {
     try {
-      final ice = await CallService.fetchIceConfig();
-      _iceServers = {'iceServers': ice.iceServers};
+      await WakelockPlus.enable();
     } catch (_) {}
+  }
 
-    final mic = await Permission.microphone.request();
-    if (!mic.isGranted) {
-      await _failPermission('Нужен доступ к микрофону');
+  Future<void> _bootstrap() async {
+    try {
+      await CallWebrtc.initializeRenderer(_localRenderer);
+    } catch (e) {
+      await _fail(CallWebrtc.humanError(e, video: _isVideo), error: e);
       return;
     }
-    if (_isVideo) {
-      final cam = await Permission.camera.request();
-      if (!cam.isGranted) {
-        await _failPermission('Нужен доступ к камере');
+    try {
+      final ice = await CallService.fetchIceConfig();
+      _iceServers = CallWebrtc.peerConfiguration(ice.iceServers);
+    } catch (_) {
+      _iceServers = CallWebrtc.peerConfiguration(const []);
+    }
+
+    final prepared = CallLocalMedia.take();
+    if (prepared != null) {
+      _localStream = prepared;
+    } else {
+      final allowed = await CallWebrtc.ensureNativePermissions(video: _isVideo);
+      if (!allowed) {
+        await _fail(
+          _isVideo ? 'Нужен доступ к микрофону и камере' : 'Нужен доступ к микрофону',
+        );
+        return;
+      }
+      try {
+        _localStream = await CallWebrtc.getUserMediaSafe(video: _isVideo);
+      } catch (e) {
+        if (kIsWeb &&
+            (CallWebrtc.isMediaPermissionError(e) ||
+                CallWebrtc.isPluginMissing(e))) {
+          if (!mounted) return;
+          setState(() {
+            _initializing = false;
+            _needsMediaGesture = true;
+            _status = _isVideo
+                ? 'Разрешите микрофон и камеру'
+                : 'Разрешите микрофон';
+          });
+          return;
+        }
+        await _fail(CallWebrtc.humanError(e, video: _isVideo), error: e);
         return;
       }
     }
 
+    await _continueAfterMedia();
+  }
+
+  Future<void> _requestMediaFromGesture() async {
+    if (_ending) return;
+    setState(() {
+      _needsMediaGesture = false;
+      _initializing = true;
+      _status = 'Подключение...';
+    });
     try {
-      _localStream = await navigator.mediaDevices.getUserMedia({
-        'audio': {
-          'echoCancellation': true,
-          'noiseSuppression': true,
-          'autoGainControl': true,
-        },
-        'video': _isVideo
-            ? {
-                'facingMode': 'user',
-                'width': {'ideal': 640},
-                'height': {'ideal': 480},
-              }
-            : false,
+      _localStream = await CallWebrtc.getUserMediaSafe(video: _isVideo);
+      if (!mounted || _ending) return;
+      await _continueAfterMedia();
+    } catch (e) {
+      if (!mounted || _ending) return;
+      setState(() {
+        _initializing = false;
+        _needsMediaGesture = true;
+        _status = _isVideo
+            ? 'Разрешите микрофон и камеру'
+            : 'Разрешите микрофон';
       });
+      final ctx = hanEatRootNavigatorKey.currentContext ?? context;
+      if (ctx.mounted) {
+        showErrorSnackBar(
+          ctx,
+          e,
+          fallback: CallWebrtc.humanError(e, video: _isVideo),
+          onRetry: () => unawaited(_requestMediaFromGesture()),
+        );
+      }
+    }
+  }
+
+  Future<void> _continueAfterMedia() async {
+    if (_ending || _localStream == null) return;
+    try {
+      if (_isVideo && _localStream!.getVideoTracks().isEmpty) {
+        _cameraOff = true;
+      }
       _localRenderer.srcObject = _localStream;
-      await Helper.setSpeakerphoneOn(_speakerOn);
+      await CallWebrtc.setSpeakerphone(_speakerOn);
 
       // Host is already joined; invitees answer via CallCoordinator before open.
       if (!_call.isCaller && _call.status != 'active') {
@@ -153,7 +216,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
         _status = 'Групповой звонок';
       });
     } catch (e) {
-      await _fail(userVisibleError(e, fallback: 'Не удалось начать звонок'));
+      await _fail(CallWebrtc.humanError(e, video: _isVideo), error: e);
     }
   }
 
@@ -162,7 +225,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     if (existing != null) return existing;
 
     final renderer = RTCVideoRenderer();
-    await renderer.initialize();
+    await CallWebrtc.initializeRenderer(renderer);
     _remotes[peerId] = renderer;
 
     final pc = await createPeerConnection(_iceServers);
@@ -304,7 +367,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
         final ice = RTCIceCandidate(
           candidate,
           payload['sdpMid'] as String?,
-          payload['sdpMLineIndex'] as int?,
+          CallWebrtc.iceLineIndex(payload['sdpMLineIndex']),
         );
         final remote = await pc.getRemoteDescription();
         if (remote == null) {
@@ -343,10 +406,10 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     if (mounted) setState(() {});
   }
 
-  Future<void> _fail(String msg) async {
+  Future<void> _fail(String msg, {Object? error}) async {
     final ctx = hanEatRootNavigatorKey.currentContext ?? context;
     if (ctx.mounted) {
-      ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(msg)));
+      showErrorSnackBar(ctx, error ?? msg, fallback: msg);
     }
     await _leaveUi(notifyServer: true);
   }
@@ -445,16 +508,18 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   Future<void> _toggleSpeaker() async {
     final next = !_speakerOn;
     try {
-      await Helper.setSpeakerphoneOn(next);
+      await CallWebrtc.setSpeakerphone(next);
       if (mounted) setState(() => _speakerOn = next);
-    } catch (_) {}
+    } catch (_) {
+      if (mounted) setState(() => _speakerOn = next);
+    }
   }
 
   Future<void> _switchCamera() async {
     final tracks = _localStream?.getVideoTracks() ?? const [];
     if (tracks.isEmpty) return;
     try {
-      await Helper.switchCamera(tracks.first);
+      await CallWebrtc.switchCamera(tracks.first);
     } catch (_) {}
   }
 
@@ -699,7 +764,41 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
                 ),
               ),
               Expanded(
-                child: _initializing
+                child: _needsMediaGesture
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 28),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _isVideo
+                                    ? 'Safari разрешает камеру и микрофон только после нажатия'
+                                    : 'Safari разрешает микрофон только после нажатия',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 15,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              FilledButton.icon(
+                                onPressed: () =>
+                                    unawaited(_requestMediaFromGesture()),
+                                icon: Icon(
+                                  _isVideo ? Icons.videocam : Icons.mic,
+                                ),
+                                label: Text(
+                                  _isVideo
+                                      ? 'Разрешить микрофон и камеру'
+                                      : 'Разрешить микрофон',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : _initializing
                     ? const Center(child: CircularProgressIndicator())
                     : GridView.count(
                         crossAxisCount: tiles.length <= 1 ? 1 : 2,

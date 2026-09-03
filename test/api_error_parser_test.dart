@@ -52,6 +52,17 @@ void main() {
     );
   });
 
+  test('userVisibleError maps FlutterWebRTC MissingPluginException', () {
+    expect(
+      userVisibleError(
+        Exception(
+          'MissingPluginException(No implementation found for method initialize on channel FlutterWebRTC.Method)',
+        ),
+      ),
+      contains('браузере'),
+    );
+  });
+
   test('userVisibleAuthError prefers auth message for 401', () {
     expect(
       userVisibleAuthError(

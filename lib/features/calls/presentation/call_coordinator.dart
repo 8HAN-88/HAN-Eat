@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_callkit_incoming/entities/call_event.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
@@ -11,6 +12,7 @@ import '../../../services/user_realtime_service.dart';
 import '../../../services/user_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../call_kit_bridge.dart';
+import '../call_local_media.dart';
 import 'call_screen.dart';
 import 'group_call_screen.dart';
 import 'incoming_call_screen.dart';
@@ -233,10 +235,20 @@ class CallCoordinator {
       }
       return;
     }
-    final call = await CallService.createCall(
-      conversationId: conversationId,
-      media: media,
-    );
+    // Safari PWA: getUserMedia must follow the tap, before the HTTP round-trip.
+    if (kIsWeb) {
+      await CallLocalMedia.acquire(video: media == 'video');
+    }
+    late final CallSessionInfo call;
+    try {
+      call = await CallService.createCall(
+        conversationId: conversationId,
+        media: media,
+      );
+    } catch (e) {
+      await CallLocalMedia.disposeHeld();
+      rethrow;
+    }
     if (CallKitBridge.isSupported) {
       await CallKitBridge.startOutgoing(
         callId: call.id,
@@ -369,6 +381,7 @@ class CallCoordinator {
               ),
       );
     } catch (e) {
+      await CallLocalMedia.disposeHeld();
       await CallKitBridge.end(callId);
       final navCtx = hanEatRootNavigatorKey.currentContext;
       if (navCtx != null && navCtx.mounted) {

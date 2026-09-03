@@ -287,7 +287,9 @@ class Settings(BaseSettings):
     # WebRTC ICE (1:1 calls). TURN optional — without it strict NAT may fail.
     # Comma-separated URLs, e.g. "stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302"
     WEBRTC_STUN_URLS: str = (
-        "stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302"
+        "stun:stun.l.google.com:19302,"
+        "stun:stun1.l.google.com:19302,"
+        "stun:stun.cloudflare.com:3478"
     )
     # e.g. "turn:turn.example.com:3478,turns:turn.example.com:5349"
     WEBRTC_TURN_URLS: str = ""
