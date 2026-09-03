@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../../services/api_service.dart';
 import '../../../widgets/stars_pay_helper.dart';
@@ -65,7 +67,12 @@ class _DonationScreenState extends State<DonationScreen> {
       );
     } catch (e) {
       if (mounted) {
-        await showStarsRequiredSnack(context, e, fallback: 'Не удалось отправить донат');
+        await showStarsRequiredSnack(
+          context,
+          e,
+          fallback: 'Не удалось отправить донат',
+          onRetry: () => unawaited(_sendDonation()),
+        );
       }
     } finally {
       if (mounted) setState(() => _isSending = false);

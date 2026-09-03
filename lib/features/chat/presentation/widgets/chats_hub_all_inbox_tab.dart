@@ -167,6 +167,78 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     }
   }
 
+  Future<void> _applyFolderMembership({
+    required ChatFolder folder,
+    int? conversationId,
+    int? channelId,
+    required bool remove,
+  }) async {
+    try {
+      if (remove) {
+        await ChatFolderStore.removeFromFolder(
+          folderId: folder.id,
+          conversationId: conversationId,
+          channelId: channelId,
+        );
+      } else {
+        await ChatFolderStore.addToFolder(
+          folderId: folder.id,
+          conversationId: conversationId,
+          channelId: channelId,
+        );
+      }
+      if (!mounted) return;
+      await _loadFolders();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            remove
+                ? 'Убрано из «${folder.name}»'
+                : 'Добавлено в «${folder.name}»',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(
+              _applyFolderMembership(
+                folder: folder,
+                conversationId: conversationId,
+                channelId: channelId,
+                remove: remove,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteFolder(ChatFolder folder) async {
+    try {
+      await ChatFolderStore.deleteFolder(folder.id);
+      if (!mounted) return;
+      if (_selectedFolderId == folder.id) _selectFolder(null);
+      await _loadFolders();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(userVisibleError(e, fallback: 'Не удалось удалить папку')),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_deleteFolder(folder)),
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _showAddToFolderSheet({
     int? conversationId,
     int? channelId,
@@ -213,37 +285,12 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                     : null,
                 onTap: () async {
                   Navigator.pop(ctx);
-                  try {
-                    if (inFolder) {
-                      await ChatFolderStore.removeFromFolder(
-                        folderId: folder.id,
-                        conversationId: conversationId,
-                        channelId: channelId,
-                      );
-                    } else {
-                      await ChatFolderStore.addToFolder(
-                        folderId: folder.id,
-                        conversationId: conversationId,
-                        channelId: channelId,
-                      );
-                    }
-                    if (!mounted) return;
-                    await _loadFolders();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          inFolder
-                              ? 'Убрано из «${folder.name}»'
-                              : 'Добавлено в «${folder.name}»',
-                        ),
-                      ),
-                    );
-                  } catch (e) {
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(userVisibleError(e))),
-                    );
-                  }
+                  await _applyFolderMembership(
+                    folder: folder,
+                    conversationId: conversationId,
+                    channelId: channelId,
+                    remove: inFolder,
+                  );
                 },
               );
             }),
@@ -1278,7 +1325,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_openSavedChat()),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _openingSaved = false);
@@ -1292,22 +1345,31 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     setState(() {
       _joinRequestsInbox.removeWhere((e) => e.id == item.id);
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(approve ? 'Заявка принята' : 'Заявка отклонена'),
-      ),
-    );
     try {
       await ChatService.reviewGroupJoinRequest(
         conversationId: item.conversation.id,
         requestId: item.id,
         approve: approve,
       );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(approve ? 'Заявка принята' : 'Заявка отклонена'),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _joinRequestsInbox.add(item));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(
+              _reviewJoinInboxItem(item, approve: approve),
+            ),
+          ),
+        ),
       );
     }
   }
@@ -1351,6 +1413,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         content: Text(
           joinRequestsBulkSnackMessage(approve: approve, result: result),
         ),
+        action: result.failed > 0
+            ? SnackBarAction(
+                label: 'Повторить',
+                onPressed: () =>
+                    unawaited(_reviewAllJoinInbox(approve: approve)),
+              )
+            : null,
       ),
     );
   }
@@ -1377,6 +1446,11 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                           'Заявки в модерацию (${_joinRequestsInbox.length})',
                           style: Theme.of(ctx).textTheme.titleMedium,
                         ),
+                      ),
+                      IconButton(
+                        tooltip: 'Закрыть',
+                        onPressed: () => Navigator.pop(ctx),
+                        icon: const Icon(Icons.close),
                       ),
                       if (_joinRequestsInbox.length > 1) ...[
                         TextButton(
@@ -1499,12 +1573,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       }
     }
     setState(() => _removeChannelEntry(channel.id));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('«${channel.name}» в архиве')),
-    );
     try {
       await ChannelSheetPrefs.setArchived(channel.id, true);
-      if (mounted) unawaited(_load(silent: true));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('«${channel.name}» в архиве')),
+      );
+      unawaited(_load(silent: true));
     } catch (e) {
       if (!mounted) return;
       if (previous != null) {
@@ -1514,7 +1589,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         });
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_archiveChannelFromHub(channel)),
+          ),
+        ),
       );
     }
   }
@@ -1537,18 +1618,19 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         ),
       );
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          enabled
-              ? '«${channel.name}» без звука'
-              : 'Уведомления «${channel.name}» включены',
-        ),
-      ),
-    );
     try {
       await ChannelSheetPrefs.setNotificationsEnabled(channel.id, !enabled);
-      if (mounted) unawaited(_load(silent: true));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            enabled
+                ? '«${channel.name}» без звука'
+                : 'Уведомления «${channel.name}» включены',
+          ),
+        ),
+      );
+      unawaited(_load(silent: true));
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -1562,7 +1644,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         );
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_toggleChannelMuteFromHub(channel)),
+          ),
+        ),
       );
     }
   }
@@ -1585,18 +1673,19 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         ),
       );
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          isFav
-              ? '«${channel.name}» убран из избранного'
-              : '«${channel.name}» в избранном',
-        ),
-      ),
-    );
     try {
       await ChannelSheetPrefs.setFavorite(channel.id, !isFav);
-      if (mounted) unawaited(_load(silent: true));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isFav
+                ? '«${channel.name}» убран из избранного'
+                : '«${channel.name}» в избранном',
+          ),
+        ),
+      );
+      unawaited(_load(silent: true));
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -1610,7 +1699,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         );
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_toggleChannelFavoriteFromHub(channel)),
+          ),
+        ),
       );
     }
   }
@@ -1708,15 +1803,14 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       }
     }
     setState(() => _removeChannelEntry(channel.id));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Вы вышли из «${channel.name}»')),
-    );
     try {
       await ChannelService.leaveChannel(channel.id);
-      if (mounted) {
-        ref.read(shellChatBadgeRefreshProvider.notifier).state++;
-        unawaited(_load(silent: true));
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Вы вышли из «${channel.name}»')),
+      );
+      ref.read(shellChatBadgeRefreshProvider.notifier).state++;
+      unawaited(_load(silent: true));
     } catch (e) {
       if (!mounted) return;
       if (previous != null) {
@@ -1726,7 +1820,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         });
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_leaveChannelFromHub(channel)),
+          ),
+        ),
       );
     }
   }
@@ -1739,14 +1839,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       _rememberArchived(chat);
     });
     unawaited(ChatCacheService.upsertConversation(archived));
-    if (mounted) {
+    try {
+      await ChatService.setArchived(conversationId: chat.id, archived: true);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('«${chat.displayTitle}» в архиве')),
       );
-    }
-    try {
-      await ChatService.setArchived(conversationId: chat.id, archived: true);
-      if (mounted) unawaited(_load(silent: true));
+      unawaited(_load(silent: true));
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -1755,7 +1854,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       });
       unawaited(ChatCacheService.upsertConversation(chat));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_archiveChatFromHub(chat)),
+          ),
+        ),
       );
     } finally {
       _endHubAction(chat.id);
@@ -1775,7 +1880,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       setState(() => _replaceInboxChat(chat));
       unawaited(ChatCacheService.upsertConversation(chat));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_togglePinFromHub(chat)),
+          ),
+        ),
       );
     } finally {
       _endHubAction(chat.id);
@@ -1824,9 +1935,6 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     setState(() => _replaceInboxChat(next));
     unawaited(ChatCacheService.upsertConversation(next));
     unawaited(ChatThreadUiPrefs.setMuteUntil(chat.id, next.mutedUntil));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(choice.snackLabel)),
-    );
     try {
       if (choice.unmute) {
         await ChatService.setMuted(
@@ -1842,14 +1950,24 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
           notifyMode: choice.notifyMode,
         );
       }
-      if (mounted) unawaited(_load(silent: true));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(choice.snackLabel)),
+      );
+      unawaited(_load(silent: true));
     } catch (e) {
       if (!mounted) return;
       setState(() => _replaceInboxChat(chat));
       unawaited(ChatCacheService.upsertConversation(chat));
       unawaited(ChatThreadUiPrefs.setMuteUntil(chat.id, chat.mutedUntil));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_toggleMuteFromHub(chat)),
+          ),
+        ),
       );
     } finally {
       _endHubAction(chat.id);
@@ -1911,29 +2029,36 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     unawaited(ChatCacheService.dropConversation(chat.id));
     unawaited(ChatCacheService.clearDraft(chat.id));
     unawaited(ChatCacheService.saveThread(chat.id, const []));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          chat.isGroup
-              ? 'Вы вышли из «${chat.displayTitle}»'
-              : (alsoForPeer
-                  ? '«${chat.displayTitle}» удалён у обоих'
-                  : '«${chat.displayTitle}» удалён'),
-        ),
-      ),
-    );
     try {
       await ChatService.deleteConversation(
         conversationId: chat.id,
         alsoForPeer: isDirect && alsoForPeer,
       );
-      if (mounted) unawaited(_load(silent: true));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            chat.isGroup
+                ? 'Вы вышли из «${chat.displayTitle}»'
+                : (alsoForPeer
+                    ? '«${chat.displayTitle}» удалён у обоих'
+                    : '«${chat.displayTitle}» удалён'),
+          ),
+        ),
+      );
+      unawaited(_load(silent: true));
     } catch (e) {
       if (!mounted) return;
       setState(() => _insertInboxChat(chat));
       unawaited(ChatCacheService.upsertConversation(chat));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_deleteChatFromHub(chat)),
+          ),
+        ),
       );
     } finally {
       _endHubAction(chat.id);
@@ -1945,21 +2070,26 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     final next = ChatInboxOptimistic.applyUnread(chat);
     setState(() => _replaceInboxChat(next));
     unawaited(ChatCacheService.upsertConversation(next));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Чат помечен непрочитанным')),
-    );
     try {
       await ChatService.markUnread(conversationId: chat.id);
-      if (mounted) {
-        ref.read(shellChatBadgeRefreshProvider.notifier).state++;
-        unawaited(_load(silent: true));
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Чат помечен непрочитанным')),
+      );
+      ref.read(shellChatBadgeRefreshProvider.notifier).state++;
+      unawaited(_load(silent: true));
     } catch (e) {
       if (!mounted) return;
       setState(() => _replaceInboxChat(chat));
       unawaited(ChatCacheService.upsertConversation(chat));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_markUnreadFromHub(chat)),
+          ),
+        ),
       );
     } finally {
       _endHubAction(chat.id);
@@ -2088,17 +2218,6 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       setState(() => _replaceInboxChat(next));
       unawaited(ChatCacheService.upsertConversation(next));
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          chat.peerBlockedByMe
-              ? '${peer.displayName} разблокирован'
-              : (deleteHistory
-                  ? '${peer.displayName} заблокирован, история удалена'
-                  : '${peer.displayName} заблокирован'),
-        ),
-      ),
-    );
     try {
       if (chat.peerBlockedByMe) {
         await ChatService.unblockUser(peer.id);
@@ -2109,13 +2228,31 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
           await ChatService.deleteConversation(conversationId: chat.id);
         }
       }
-      if (mounted) unawaited(_load(silent: true));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            chat.peerBlockedByMe
+                ? '${peer.displayName} разблокирован'
+                : (deleteHistory
+                    ? '${peer.displayName} заблокирован, история удалена'
+                    : '${peer.displayName} заблокирован'),
+          ),
+        ),
+      );
+      unawaited(_load(silent: true));
     } catch (e) {
       if (!mounted) return;
       setState(() => _insertInboxChat(chat));
       unawaited(ChatCacheService.upsertConversation(chat));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_toggleBlockFromHub(chat)),
+          ),
+        ),
       );
     } finally {
       _endHubAction(chat.id);
@@ -2161,6 +2298,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                       ),
                 ),
               ),
+              TextButton(
+                onPressed: () => unawaited(_load()),
+                child: Text(
+                  'Обновить',
+                  style: TextStyle(color: scheme.onSecondaryContainer),
+                ),
+              ),
             ],
           ),
         ),
@@ -2182,12 +2326,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
           icon: Icons.delete_outline,
           title: 'Удалить папку',
           destructive: true,
-          onTap: () async {
-            await ChatFolderStore.deleteFolder(folder.id);
-            if (!mounted) return;
-            if (_selectedFolderId == folder.id) _selectFolder(null);
-            await _loadFolders();
-          },
+          onTap: () => unawaited(_deleteFolder(folder)),
         ),
       ],
     );

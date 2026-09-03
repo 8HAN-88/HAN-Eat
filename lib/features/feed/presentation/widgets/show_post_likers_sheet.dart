@@ -157,13 +157,32 @@ class _PostLikersSheetState extends State<_PostLikersSheet> {
                               child: const Text('Повторить'),
                             ),
                           ),
+                          Center(
+                            child: TextButton(
+                              onPressed: () =>
+                                  Navigator.of(context).maybePop(),
+                              child: const Text('Закрыть'),
+                            ),
+                          ),
                         ],
                       )
                     : _items.isEmpty
                         ? Center(
-                            child: Text(
-                              'Пока никто не отметил',
-                              style: TextStyle(color: scheme.onSurfaceVariant),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Пока никто не отметил',
+                                  style: TextStyle(
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.of(context).maybePop(),
+                                  child: const Text('Закрыть'),
+                                ),
+                              ],
                             ),
                           )
                         : ListView.builder(

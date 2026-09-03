@@ -5,6 +5,7 @@ import '../../../app/app_router.dart';
 import '../../../core/config/stars_checkout_urls.dart';
 import '../../../services/paid_features_service.dart';
 import '../../../services/payment_service.dart';
+import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/telegram_ui.dart';
 import 'widgets/stars_wallet_widgets.dart';
@@ -23,6 +24,7 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
   bool _awaitingCheckoutReturn = false;
   WalletFilter _filter = WalletFilter.all;
   WalletStatsPeriod _statsPeriod = WalletStatsPeriod.days30;
+  final _packagesKey = GlobalKey();
 
   @override
   void initState() {
@@ -68,6 +70,16 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
     await next;
   }
 
+  void _scrollToPackages() {
+    final target = _packagesKey.currentContext;
+    if (target == null) return;
+    Scrollable.ensureVisible(
+      target,
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOut,
+    );
+  }
+
   Future<void> _buyPackage(StarPackage package) async {
     if (_checkoutLoading) return;
     setState(() => _checkoutLoading = true);
@@ -83,7 +95,15 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
       _awaitingCheckoutReturn = false;
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось начать оплату'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => _buyPackage(package),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _checkoutLoading = false);
@@ -112,9 +132,23 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
             if (!snapshot.hasData) {
               if (snapshot.hasError) {
                 return Center(
-                  child: Text(
-                    'Не удалось загрузить кошелёк',
-                    style: TextStyle(color: scheme.onSurfaceVariant),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Не удалось загрузить кошелёк',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: scheme.onSurfaceVariant),
+                        ),
+                        const SizedBox(height: 12),
+                        FilledButton(
+                          onPressed: _refresh,
+                          child: const Text('Повторить'),
+                        ),
+                      ],
+                    ),
                   ),
                 );
               }
@@ -172,9 +206,10 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
                     ),
                   ),
                   const SizedBox(height: 18),
-                  const TelegramSectionHeader(
+                  TelegramSectionHeader(
+                    key: _packagesKey,
                     title: 'Купить звёзды',
-                    padding: EdgeInsets.fromLTRB(2, 6, 2, 8),
+                    padding: const EdgeInsets.fromLTRB(2, 6, 2, 8),
                   ),
                   for (final package in data.packages)
                     TelegramGroupedSurface(
@@ -218,9 +253,28 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
                       margin: EdgeInsets.zero,
                       child: Padding(
                         padding: const EdgeInsets.all(18),
-                        child: Text(
-                          'Операций пока нет',
-                          style: TextStyle(color: scheme.onSurfaceVariant),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Операций пока нет',
+                              style: TextStyle(color: scheme.onSurfaceVariant),
+                            ),
+                            if (_filter != WalletFilter.all) ...[
+                              const SizedBox(height: 12),
+                              TextButton(
+                                onPressed: () =>
+                                    setState(() => _filter = WalletFilter.all),
+                                child: const Text('Все операции'),
+                              ),
+                            ] else ...[
+                              const SizedBox(height: 12),
+                              TextButton(
+                                onPressed: _scrollToPackages,
+                                child: const Text('Купить ★'),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                     )

@@ -26,6 +26,7 @@ class FeedStoriesStrip extends StatefulWidget {
 
 class _FeedStoriesStripState extends State<FeedStoriesStrip> {
   bool _loading = true;
+  bool _loadFailed = false;
   List<StoryGroup> _groups = const [];
   final Set<int> _seenAuthorIds = <int>{};
 
@@ -44,16 +45,27 @@ class _FeedStoriesStripState extends State<FeedStoriesStrip> {
   }
 
   Future<void> _load() async {
+    if (!mounted) return;
+    if (!_loading || _loadFailed) {
+      setState(() {
+        _loading = true;
+        _loadFailed = false;
+      });
+    }
     try {
       final stories = await StoryService.fetchActiveStories(limit: 80);
       if (!mounted) return;
       setState(() {
         _groups = StoryService.groupByAuthor(stories);
         _loading = false;
+        _loadFailed = false;
       });
     } catch (_) {
       if (!mounted) return;
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _loadFailed = true;
+      });
     }
   }
 
@@ -117,7 +129,11 @@ class _FeedStoriesStripState extends State<FeedStoriesStrip> {
       }
     }
 
-    if (!_loading && others.isEmpty && myGroup == null && me == null) {
+    if (!_loading &&
+        !_loadFailed &&
+        others.isEmpty &&
+        myGroup == null &&
+        me == null) {
       return const SizedBox.shrink();
     }
 
@@ -171,6 +187,8 @@ class _FeedStoriesStripState extends State<FeedStoriesStrip> {
                   ],
                 ),
               )
+          else if (_loadFailed)
+            _StoriesRetryChip(onTap: () => unawaited(_load()))
           else
             for (final group in others)
               _StoryRing(
@@ -185,6 +203,54 @@ class _FeedStoriesStripState extends State<FeedStoriesStrip> {
                 onTap: () => unawaited(_openGroup(group)),
               ),
         ],
+      ),
+    );
+  }
+}
+
+class _StoriesRetryChip extends StatelessWidget {
+  const _StoriesRetryChip({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(right: 12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(40),
+        child: SizedBox(
+          width: 76,
+          child: Column(
+            children: [
+              Container(
+                width: 68,
+                height: 68,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: scheme.surfaceContainerHighest,
+                ),
+                child: Icon(
+                  Icons.refresh,
+                  color: scheme.primary,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Обновить',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: scheme.onSurface,
+                    ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

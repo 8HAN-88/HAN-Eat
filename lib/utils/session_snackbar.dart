@@ -10,6 +10,7 @@ void showErrorSnackBar(
   BuildContext context,
   Object error, {
   String? fallback,
+  VoidCallback? onRetry,
 }) {
   if (FeedLoadHelper.isSessionError(error)) {
     unawaited(FeedLoadHelper.clearSessionIfExpired(error));
@@ -18,6 +19,9 @@ void showErrorSnackBar(
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
       content: Text(userVisibleError(error, fallback: fallback ?? 'Ошибка')),
+      action: onRetry == null
+          ? null
+          : SnackBarAction(label: 'Повторить', onPressed: onRetry),
     ),
   );
 }

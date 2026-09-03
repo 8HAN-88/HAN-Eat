@@ -129,7 +129,7 @@ class _SubscriptionSuccessScreenState
                 const SizedBox(height: 32),
                 FilledButton(
                   onPressed: () {
-                    context.go(SubscriptionRoute.path);
+                    context.go(FlexSubscriptionRoute.path);
                   },
                   child: const Text('Вернуться к подписке'),
                 ),
@@ -160,7 +160,7 @@ class _SubscriptionSuccessScreenState
                 const SizedBox(height: 16),
                 TextButton(
                   onPressed: () {
-                    context.go(SubscriptionRoute.path);
+                    context.go(FlexSubscriptionRoute.path);
                   },
                   child: const Text('Вернуться к подписке'),
                 ),

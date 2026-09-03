@@ -206,18 +206,46 @@ class _ChatInlineStickerPanelState extends State<ChatInlineStickerPanel> {
                     )
                   : _error != null
                       ? Center(
-                          child: TextButton(
-                            onPressed: _load,
-                            child: Text(_error!),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  _error!,
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 8),
+                                FilledButton(
+                                  onPressed: _load,
+                                  child: const Text('Повторить'),
+                                ),
+                              ],
+                            ),
                           ),
                         )
                       : _items.isEmpty
                           ? Center(
-                              child: Text(
-                                _emptyLabel,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: scheme.onSurfaceVariant,
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      _emptyLabel,
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: scheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                    if (widget.onOpenFull != null) ...[
+                                      const SizedBox(height: 8),
+                                      TextButton(
+                                        onPressed: widget.onOpenFull,
+                                        child: const Text('Все стикеры'),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               ),
                             )

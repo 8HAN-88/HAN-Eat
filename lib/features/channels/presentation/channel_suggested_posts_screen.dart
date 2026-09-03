@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../core/layout/floating_bottom_padding.dart';
+import '../../../core/share/system_share.dart';
 import '../../../services/paid_features_service.dart';
+import '../../../services/share_link_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/stars_pay_helper.dart';
@@ -171,7 +173,11 @@ class _ChannelSuggestedPostsScreenState
       );
     } catch (e) {
       if (!mounted) return;
-      await showStarsRequiredSnack(context, e);
+      await showStarsRequiredSnack(
+        context,
+        e,
+        onRetry: () => unawaited(_suggest()),
+      );
     }
   }
 
@@ -217,7 +223,13 @@ class _ChannelSuggestedPostsScreenState
       if (!mounted) return;
       setState(() => _busy.remove(post.id));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_review(post, approve: approve)),
+          ),
+        ),
       );
     }
   }
@@ -303,6 +315,35 @@ class _ChannelSuggestedPostsScreenState
                 : 'Предложите пост в канал за ★ — админ примет или вернёт оплату.',
             textAlign: TextAlign.center,
           ),
+          if (_canSuggest) ...[
+            const SizedBox(height: 16),
+            Center(
+              child: FilledButton.icon(
+                onPressed: _suggest,
+                icon: const Icon(Icons.outgoing_mail),
+                label: const Text('Предложить пост'),
+              ),
+            ),
+          ] else if (widget.canManage || widget.isOwner) ...[
+            const SizedBox(height: 16),
+            Center(
+              child: FilledButton.tonal(
+                onPressed: () {
+                  unawaited(
+                    SystemShare.shareText(
+                      context,
+                      text: ShareLinkService.channelShareText(
+                        widget.channelId,
+                        widget.channelName,
+                      ),
+                      subject: widget.channelName,
+                    ),
+                  );
+                },
+                child: const Text('Поделиться каналом'),
+              ),
+            ),
+          ],
         ],
       );
     }

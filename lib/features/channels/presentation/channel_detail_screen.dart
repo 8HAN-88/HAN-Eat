@@ -1,6 +1,7 @@
 // Экран детального просмотра канала с лентой постов (согласно UI-прототипу)
 import 'dart:async';
 import '../../../utils/api_error_parser.dart';
+import '../../../utils/session_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -180,7 +181,11 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      await showStarsRequiredSnack(context, e);
+      await showStarsRequiredSnack(
+        context,
+        e,
+        onRetry: () => unawaited(_subscribePaidChannelFromAppBar()),
+      );
     } finally {
       if (mounted) setState(() => _subscribingPaid = false);
     }
@@ -247,7 +252,13 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e))),
+          SnackBar(
+            content: Text(userVisibleError(e)),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_toggleSubscribe()),
+            ),
+          ),
         );
       }
     } finally {
@@ -286,10 +297,20 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
       }
       return Scaffold(
         appBar: AppBar(title: const Text('Канал')),
-        body: const AppEmptyState(
+        body: AppEmptyState(
           icon: Icons.group_off_outlined,
           title: 'Канал не найден',
           subtitle: 'Возможно, он удалён или у вас нет доступа',
+          action: FilledButton(
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(ChatsRoute.path);
+              }
+            },
+            child: const Text('Назад'),
+          ),
         ),
       );
     }
@@ -420,6 +441,7 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
             : _PrivateChannelPostsLocked(
                 channel: c,
                 onUnlocked: () => _loadChannel(forceRefresh: true),
+                onOpenInfo: _openChannelInfoPage,
               ),
       ),
       floatingActionButton: c.canCreatePosts
@@ -535,10 +557,12 @@ class _PrivateChannelPostsLocked extends StatefulWidget {
   const _PrivateChannelPostsLocked({
     required this.channel,
     required this.onUnlocked,
+    required this.onOpenInfo,
   });
 
   final ChannelDetail channel;
   final VoidCallback onUnlocked;
+  final VoidCallback onOpenInfo;
 
   @override
   State<_PrivateChannelPostsLocked> createState() =>
@@ -572,7 +596,11 @@ class _PrivateChannelPostsLockedState
       widget.onUnlocked();
     } catch (e) {
       if (!mounted) return;
-      await showStarsRequiredSnack(context, e);
+      await showStarsRequiredSnack(
+        context,
+        e,
+        onRetry: () => unawaited(_subscribe()),
+      );
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -619,6 +647,14 @@ class _PrivateChannelPostsLockedState
                   style:
                       TextStyle(color: scheme.onSurfaceVariant, height: 1.35),
                 ),
+                if (!paidLocked && !channel.isPending) ...[
+                  const SizedBox(height: 18),
+                  FilledButton.icon(
+                    onPressed: widget.onOpenInfo,
+                    icon: const Icon(Icons.info_outline),
+                    label: const Text('Информация о канале'),
+                  ),
+                ],
                 if (paidLocked) ...[
                   const SizedBox(height: 16),
                   _PaidChannelBenefitRow(
@@ -998,10 +1034,14 @@ class ChannelPostsListState extends State<ChannelPostsList> {
           ),
         );
       case ChannelPostsPhase.empty:
-        return const ChannelTabEmptyPlaceholder(
+        return ChannelTabEmptyPlaceholder(
           icon: Icons.inbox_outlined,
           title: 'Здесь пока нет постов',
           subtitle: 'Как только автор что-то опубликует — вы увидите это здесь.',
+          action: FilledButton(
+            onPressed: () => _loadPosts(refresh: true),
+            child: const Text('Обновить'),
+          ),
         );
       case ChannelPostsPhase.list:
         break;
@@ -1142,6 +1182,7 @@ class ChannelMediaListState extends State<ChannelMediaList> {
   List<_MediaItem> _mediaItems =
       []; // Список всех медиа-элементов из всех постов
   bool _isLoading = false;
+  bool _loadFailed = false;
   bool _hasMore = true;
   int _offset = 0;
   final ScrollController _scrollController = ScrollController();
@@ -1179,7 +1220,8 @@ class ChannelMediaListState extends State<ChannelMediaList> {
     if (_isLoading && !refresh) return;
 
     setState(() {
-      _isLoading = refresh;
+      _isLoading = true;
+      _loadFailed = false;
       if (refresh) {
         _posts = [];
         _mediaItems = [];
@@ -1261,14 +1303,14 @@ class ChannelMediaListState extends State<ChannelMediaList> {
       if (mounted) {
         setState(() {
           _hasMore = false;
+          _loadFailed = _mediaItems.isEmpty;
         });
-        if (refresh) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                  userVisibleError(e, fallback: 'Не удалось загрузить медиа')),
-              duration: const Duration(seconds: 3),
-            ),
+        if (refresh && _mediaItems.isNotEmpty) {
+          showErrorSnackBar(
+            context,
+            e,
+            fallback: 'Не удалось загрузить медиа',
+            onRetry: () => unawaited(_loadMedia(refresh: true)),
           );
         }
       }
@@ -1303,11 +1345,27 @@ class ChannelMediaListState extends State<ChannelMediaList> {
       );
     }
 
+    if (_mediaItems.isEmpty && _loadFailed) {
+      return ChannelTabEmptyPlaceholder(
+        icon: Icons.wifi_off_outlined,
+        title: 'Не удалось загрузить медиа',
+        subtitle: 'Проверьте сеть и попробуйте ещё раз.',
+        action: FilledButton(
+          onPressed: () => _loadMedia(refresh: true),
+          child: const Text('Повторить'),
+        ),
+      );
+    }
+
     if (_mediaItems.isEmpty) {
-      return const ChannelTabEmptyPlaceholder(
+      return ChannelTabEmptyPlaceholder(
         icon: Icons.photo_library_outlined,
         title: 'Здесь пока нет медиа',
         subtitle: 'Медиа из постов канала будут отображаться здесь.',
+        action: FilledButton(
+          onPressed: () => _loadMedia(refresh: true),
+          child: const Text('Обновить'),
+        ),
       );
     }
 

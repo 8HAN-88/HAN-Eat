@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../utils/api_error_parser.dart';
 import '../../services/notification_preferences_service.dart';
@@ -47,6 +49,12 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                 ? 'Push-уведомления подключены'
                 : (_pushInfo?.message ?? 'Не удалось подключить push'),
           ),
+          action: ok
+              ? null
+              : SnackBarAction(
+                  label: 'Повторить',
+                  onPressed: () => unawaited(_retryPushRegistration()),
+                ),
         ),
       );
     } finally {
@@ -65,7 +73,15 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось загрузить настройки'))),
+          SnackBar(
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось загрузить настройки'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_loadPreferences()),
+            ),
+          ),
         );
         setState(() => _isLoading = false);
       }
@@ -99,7 +115,15 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось сохранить'))),
+          SnackBar(
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось сохранить'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_savePreferences()),
+            ),
+          ),
         );
         setState(() => _isSaving = false);
       }

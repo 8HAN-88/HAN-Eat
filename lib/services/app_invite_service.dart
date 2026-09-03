@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -132,8 +134,16 @@ class AppInviteService {
       if (!context.mounted) return;
       if (!ok) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Не удалось открыть SMS. Попробуйте «Поделиться».'),
+          SnackBar(
+            content: const Text(
+              'Не удалось открыть SMS. Попробуйте «Поделиться».',
+            ),
+            action: SnackBarAction(
+              label: 'Поделиться',
+              onPressed: () {
+                unawaited(shareInvite(context, contactName: displayName));
+              },
+            ),
           ),
         );
       }

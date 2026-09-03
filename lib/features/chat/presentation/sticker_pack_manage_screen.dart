@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +11,7 @@ import '../../../services/media_upload_service.dart';
 import '../../../services/server_config.dart';
 import '../../../services/sticker_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/app_empty_state.dart';
 
 class StickerPackManageScreen extends StatefulWidget {
   const StickerPackManageScreen({
@@ -47,7 +50,13 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
       if (!mounted) return;
       setState(() => _loading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_load()),
+          ),
+        ),
       );
     }
   }
@@ -108,7 +117,13 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
       if (!mounted) return;
       setState(() => _saving = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_editPack()),
+          ),
+        ),
       );
     }
   }
@@ -144,7 +159,13 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_deleteSticker(item)),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -179,7 +200,13 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_addStaticSticker()),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -192,6 +219,7 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowMultiple: false,
+      withData: kIsWeb,
       allowedExtensions: const [
         'gif',
         'webp',
@@ -240,7 +268,13 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_addAnimatedSticker()),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -308,7 +342,13 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_onReorder(oldIndex, newIndex)),
+          ),
+        ),
       );
       await _load();
     }
@@ -345,7 +385,24 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : (pack == null
-              ? const Center(child: Text('Стикерпак не найден'))
+              ? AppEmptyState(
+                  icon: Icons.sticky_note_2_outlined,
+                  title: 'Стикерпак не найден',
+                  subtitle: 'Не удалось открыть этот пак',
+                  action: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      FilledButton(
+                        onPressed: _load,
+                        child: const Text('Повторить'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.of(context).maybePop(),
+                        child: const Text('Назад'),
+                      ),
+                    ],
+                  ),
+                )
               : Column(
                   children: [
                     if (_saving) const LinearProgressIndicator(minHeight: 2),

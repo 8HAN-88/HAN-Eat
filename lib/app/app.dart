@@ -29,6 +29,7 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
     with WidgetsBindingObserver {
   StreamSubscription<Uri>? _deepLinkSubscription;
   late final void Function(User?) _onAccountSessionChanged;
+  int _bootAttempt = 0;
 
   @override
   void initState() {
@@ -98,6 +99,7 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
       final effectiveThemeMode = kIsWeb ? ThemeMode.dark : themeMode;
 
       return MaterialApp.router(
+        key: ValueKey<int>(_bootAttempt),
         title: AppVariant.current.appTitle,
         theme: AppTheme.light(),
         darkTheme: AppTheme.dark(),
@@ -181,7 +183,12 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
-                ElevatedButton(
+                FilledButton(
+                  onPressed: () => setState(() => _bootAttempt++),
+                  child: const Text('Повторить'),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
                   onPressed: () => SystemNavigator.pop(),
                   child: const Text('Закрыть приложение'),
                 ),

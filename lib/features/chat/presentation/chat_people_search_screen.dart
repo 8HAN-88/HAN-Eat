@@ -10,6 +10,7 @@ import '../../../services/chat_service.dart';
 import '../application/chat_open_direct.dart';
 import '../../../services/server_config.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/app_empty_state.dart';
 
 class ChatPeopleSearchScreen extends StatefulWidget {
   const ChatPeopleSearchScreen({super.key});
@@ -79,7 +80,13 @@ class _ChatPeopleSearchScreenState extends State<ChatPeopleSearchScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_openChat(user)),
+          ),
+        ),
       );
     }
   }
@@ -120,7 +127,13 @@ class _ChatPeopleSearchScreenState extends State<ChatPeopleSearchScreen> {
         ];
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_toggleContact(user)),
+          ),
+        ),
       );
     }
   }
@@ -139,13 +152,19 @@ class _ChatPeopleSearchScreenState extends State<ChatPeopleSearchScreen> {
               decoration: InputDecoration(
                 hintText: 'Имя или @username',
                 prefixIcon: const Icon(Icons.search),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: () {
-                    _query.clear();
-                    setState(() => _results = []);
-                  },
-                ),
+                suffixIcon: _query.text.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'Очистить',
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _query.clear();
+                          setState(() {
+                            _results = [];
+                            _error = null;
+                          });
+                        },
+                      ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
@@ -166,13 +185,40 @@ class _ChatPeopleSearchScreenState extends State<ChatPeopleSearchScreen> {
             ),
           ),
           if (_loading) const LinearProgressIndicator(minHeight: 2),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            ),
           Expanded(
-            child: ListView.separated(
+            child: _error != null
+                ? AppEmptyState(
+                    icon: Icons.cloud_off_outlined,
+                    title: 'Не удалось найти',
+                    subtitle: _error,
+                    action: FilledButton(
+                      onPressed: _search,
+                      child: const Text('Повторить'),
+                    ),
+                  )
+                : !_loading && _results.isEmpty
+                    ? AppEmptyState(
+                        icon: Icons.person_search_outlined,
+                        title: _query.text.trim().length < 2
+                            ? 'Найти людей'
+                            : 'Никого не нашли',
+                        subtitle: _query.text.trim().length < 2
+                            ? 'Введите имя или @username'
+                            : 'Попробуйте другой запрос',
+                        action: _query.text.trim().length >= 2
+                            ? TextButton(
+                                onPressed: () {
+                                  _query.clear();
+                                  setState(() {
+                                    _results = [];
+                                    _error = null;
+                                  });
+                                },
+                                child: const Text('Очистить поиск'),
+                              )
+                            : null,
+                      )
+                    : ListView.separated(
               itemCount: _results.length,
               separatorBuilder: (_, __) => const Divider(height: 1, indent: 72),
               itemBuilder: (context, index) {

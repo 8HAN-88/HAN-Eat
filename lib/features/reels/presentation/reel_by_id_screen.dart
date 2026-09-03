@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/invalid_link_screen.dart';
 import '../../../core/network/feed_load_helper.dart';
@@ -42,6 +43,14 @@ class _ReelByIdScreenState extends State<ReelByIdScreen> {
     });
   }
 
+  void _leave() {
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    } else {
+      context.go('/feed');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<PostModel?>(
@@ -49,9 +58,17 @@ class _ReelByIdScreenState extends State<ReelByIdScreen> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting &&
             !snapshot.hasData) {
-          return const Scaffold(
+          return Scaffold(
             backgroundColor: Colors.black,
-            body: Center(
+            appBar: AppBar(
+              backgroundColor: Colors.transparent,
+              foregroundColor: Colors.white,
+              leading: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: _leave,
+              ),
+            ),
+            body: const Center(
               child: CircularProgressIndicator(color: Colors.white),
             ),
           );
@@ -66,6 +83,10 @@ class _ReelByIdScreenState extends State<ReelByIdScreen> {
             appBar: AppBar(
               backgroundColor: Colors.transparent,
               foregroundColor: Colors.white,
+              leading: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: _leave,
+              ),
             ),
             body: AppEmptyState(
               icon: Icons.cloud_off_rounded,

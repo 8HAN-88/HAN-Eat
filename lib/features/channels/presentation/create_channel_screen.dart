@@ -1,4 +1,5 @@
 // Экран создания канала
+import 'dart:async';
 import 'dart:io';
 import '../../../utils/api_error_parser.dart';
 import 'dart:typed_data';
@@ -46,18 +47,18 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
 
   // Популярные категории
   static const List<String> _categories = [
-    'Итальянская',
-    'Азиатская',
-    'Веган',
-    'Быстрое',
-    'ЗОЖ',
-    'Выпечка',
-    'Десерты',
-    'Супы',
-    'Салаты',
-    'Мясо',
-    'Рыба',
-    'Вегетарианская',
+    'Новости',
+    'Музыка',
+    'Технологии',
+    'Спорт',
+    'Игры',
+    'Кино',
+    'Образование',
+    'Бизнес',
+    'Путешествия',
+    'Юмор',
+    'Искусство',
+    'Локальное',
   ];
 
   @override
@@ -126,8 +127,14 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                  content: Text(userVisibleError(e,
-                      fallback: 'Не удалось загрузить аватар'))),
+                content: Text(
+                  userVisibleError(e, fallback: 'Не удалось загрузить аватар'),
+                ),
+                action: SnackBarAction(
+                  label: 'Повторить',
+                  onPressed: () => unawaited(_pickAvatar()),
+                ),
+              ),
             );
           }
         }
@@ -136,8 +143,14 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(userVisibleError(e,
-                  fallback: 'Не удалось выбрать изображение'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось выбрать изображение'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_pickAvatar()),
+            ),
+          ),
         );
       }
     }
@@ -183,8 +196,14 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(
-                  userVisibleError(e, fallback: 'Не удалось создать канал'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось создать канал'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_handleCreate()),
+            ),
+          ),
         );
       }
     } finally {
@@ -345,7 +364,7 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
                           labelText: 'Категория (опционально)',
                           hintText: 'Выберите или введите категорию',
                           prefixIcon: Icon(Icons.category),
-                          helperText: 'Например: Итальянская, Веган, Быстрое',
+                          helperText: 'Например: Новости, Музыка, Спорт',
                         ),
                       );
                     },

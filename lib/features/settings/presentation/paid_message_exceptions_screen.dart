@@ -61,7 +61,13 @@ class _PaidMessageExceptionsScreenState
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_remove(user)),
+          ),
+        ),
       );
     }
   }
@@ -74,6 +80,10 @@ class _PaidMessageExceptionsScreenState
       builder: (ctx) => const _UserSearchSheet(),
     );
     if (picked == null || !mounted) return;
+    await _addPicked(picked);
+  }
+
+  Future<void> _addPicked(ChatUserSearchItem picked) async {
     if (_items.any((u) => u.id == picked.id)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Уже в списке исключений')),
@@ -87,7 +97,13 @@ class _PaidMessageExceptionsScreenState
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_addPicked(picked)),
+          ),
+        ),
       );
     }
   }
@@ -150,12 +166,20 @@ class _PaidMessageExceptionsScreenState
           24,
           24 + floatingBottomPadding(context),
         ),
-        children: const [
-          Icon(Icons.star_border_rounded, size: 48),
-          SizedBox(height: 12),
-          Text(
+        children: [
+          const Icon(Icons.star_border_rounded, size: 48),
+          const SizedBox(height: 12),
+          const Text(
             'Никого нет в исключениях.\nДобавьте друзей — они смогут писать вам без Stars.',
             textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: FilledButton.icon(
+              onPressed: _addUser,
+              icon: const Icon(Icons.person_add_alt_1_outlined),
+              label: const Text('Добавить'),
+            ),
           ),
         ],
       );
@@ -279,10 +303,41 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
                 child: _loading
                     ? const Center(child: CircularProgressIndicator())
                     : _error != null
-                        ? Center(child: Text(_error!))
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(_error!, textAlign: TextAlign.center),
+                                  const SizedBox(height: 12),
+                                  FilledButton(
+                                    onPressed: () =>
+                                        unawaited(_search(_controller.text)),
+                                    child: const Text('Повторить'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.of(context).maybePop(),
+                                    child: const Text('Закрыть'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
                         : _results.isEmpty
-                            ? const Center(
-                                child: Text('Начните вводить имя'),
+                            ? Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Text('Начните вводить имя'),
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(context).maybePop(),
+                                      child: const Text('Закрыть'),
+                                    ),
+                                  ],
+                                ),
                               )
                             : ListView.builder(
                                 itemCount: _results.length,

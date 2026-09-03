@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -94,6 +96,17 @@ class MediaDownloadHelper {
           content: Text(
             userVisibleError(e, fallback: 'Не удалось поделиться'),
           ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(
+              shareMedia(
+                context,
+                rawUrl: rawUrl,
+                subject: subject,
+                caption: caption,
+              ),
+            ),
+          ),
         ),
       );
     }
@@ -138,6 +151,12 @@ class MediaDownloadHelper {
         SnackBar(
           content: Text(
             userVisibleError(e, fallback: 'Не удалось сохранить'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(
+              saveMedia(context, rawUrl: rawUrl, caption: caption),
+            ),
           ),
         ),
       );

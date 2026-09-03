@@ -48,7 +48,17 @@ class SystemShare {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось поделиться'))),
+          SnackBar(
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось поделиться'),
+            ),
+            action: SnackBarAction(
+              label: 'Скопировать',
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: text));
+              },
+            ),
+          ),
         );
       }
     }

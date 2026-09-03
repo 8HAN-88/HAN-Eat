@@ -17,11 +17,13 @@ class CloseFriendsScreen extends StatefulWidget {
 
 class _CloseFriendsScreenState extends State<CloseFriendsScreen> {
   final _searchController = TextEditingController();
+  final _searchFocus = FocusNode();
   bool _loading = true;
   bool _busy = false;
   String? _error;
   List<CloseFriendUser> _friends = const [];
   List<ChatUserSearchItem> _searchResults = const [];
+  String? _searchError;
   Timer? _debounce;
 
   @override
@@ -34,6 +36,7 @@ class _CloseFriendsScreenState extends State<CloseFriendsScreen> {
   void dispose() {
     _debounce?.cancel();
     _searchController.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
@@ -60,24 +63,39 @@ class _CloseFriendsScreenState extends State<CloseFriendsScreen> {
 
   void _onSearchChanged(String value) {
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 350), () async {
-      final q = value.trim();
-      if (q.length < 2) {
-        if (mounted) setState(() => _searchResults = const []);
-        return;
-      }
-      try {
-        final results = await ChatService.searchUsers(q);
-        if (!mounted) return;
-        final friendIds = _friends.map((f) => f.id).toSet();
-        setState(() {
-          _searchResults =
-              results.where((u) => !friendIds.contains(u.id)).toList();
-        });
-      } catch (_) {
-        if (mounted) setState(() => _searchResults = const []);
-      }
+    _debounce = Timer(const Duration(milliseconds: 350), () {
+      unawaited(_runSearch(value));
     });
+  }
+
+  Future<void> _runSearch(String value) async {
+    final q = value.trim();
+    if (q.length < 2) {
+      if (mounted) {
+        setState(() {
+          _searchResults = const [];
+          _searchError = null;
+        });
+      }
+      return;
+    }
+    try {
+      final results = await ChatService.searchUsers(q);
+      if (!mounted) return;
+      final friendIds = _friends.map((f) => f.id).toSet();
+      setState(() {
+        _searchResults =
+            results.where((u) => !friendIds.contains(u.id)).toList();
+        _searchError = null;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _searchResults = const [];
+          _searchError = userVisibleError(e);
+        });
+      }
+    }
   }
 
   Future<void> _add(ChatUserSearchItem user) async {
@@ -96,7 +114,13 @@ class _CloseFriendsScreenState extends State<CloseFriendsScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_add(user)),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -111,7 +135,13 @@ class _CloseFriendsScreenState extends State<CloseFriendsScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_remove(user)),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -151,6 +181,7 @@ class _CloseFriendsScreenState extends State<CloseFriendsScreen> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: _searchController,
+                      focusNode: _searchFocus,
                       enabled: !_busy,
                       decoration: const InputDecoration(
                         labelText: 'Найти пользователя',
@@ -160,6 +191,26 @@ class _CloseFriendsScreenState extends State<CloseFriendsScreen> {
                       ),
                       onChanged: _onSearchChanged,
                     ),
+                    if (_searchError != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        _searchError!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton(
+                          onPressed: _busy
+                              ? null
+                              : () => unawaited(
+                                    _runSearch(_searchController.text),
+                                  ),
+                          child: const Text('Повторить поиск'),
+                        ),
+                      ),
+                    ],
                     if (_searchResults.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       ..._searchResults.map(
@@ -190,10 +241,18 @@ class _CloseFriendsScreenState extends State<CloseFriendsScreen> {
                     ),
                     const SizedBox(height: 8),
                     if (_friends.isEmpty)
-                      const ListTile(
+                      ListTile(
                         contentPadding: EdgeInsets.zero,
-                        title: Text('Пока пусто'),
-                        subtitle: Text('Добавьте людей через поиск выше'),
+                        title: const Text('Пока пусто'),
+                        subtitle: const Text(
+                          'Добавьте людей через поиск выше',
+                        ),
+                        trailing: TextButton(
+                          onPressed: _busy
+                              ? null
+                              : () => _searchFocus.requestFocus(),
+                          child: const Text('Найти'),
+                        ),
                       )
                     else
                       ..._friends.map(

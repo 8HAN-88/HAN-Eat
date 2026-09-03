@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 
@@ -217,7 +218,13 @@ class _CommunityUploadScreenState
       context.pop(true);
     } else if (state.error != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(state.error!)),
+        SnackBar(
+          content: Text(state.error!),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_submit()),
+          ),
+        ),
       );
     }
   }
@@ -309,6 +316,18 @@ class _CommunityUploadScreenState
               onPick: _pickThumbnail,
             ),
             const SizedBox(height: 24),
+            if (uploadState.error != null && !uploadState.uploading) ...[
+              Text(
+                uploadState.error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: _canSubmit ? _submit : null,
+                child: const Text('Повторить отправку'),
+              ),
+              const SizedBox(height: 8),
+            ],
             FilledButton.icon(
               onPressed: _canSubmit && !uploadState.uploading ? _submit : null,
               icon: uploadState.uploading

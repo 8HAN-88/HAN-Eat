@@ -596,7 +596,13 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
           );
           _startReelExposure(_currentIndex);
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(FeedLoadHelper.cacheSnackMessage(e))),
+            SnackBar(
+              content: Text(FeedLoadHelper.cacheSnackMessage(e)),
+              action: SnackBarAction(
+                label: 'Повторить',
+                onPressed: () => unawaited(_loadReels(refresh: true)),
+              ),
+            ),
           );
         } else {
           final short = e is TimeoutException
@@ -604,7 +610,13 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
               : userVisibleError(e, fallback: 'Не удалось загрузить рилсы');
           setState(() => _lastLoadError = short);
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(short)),
+            SnackBar(
+              content: Text(short),
+              action: SnackBarAction(
+                label: 'Повторить',
+                onPressed: () => unawaited(_loadReels(refresh: true)),
+              ),
+            ),
           );
         }
       }
@@ -757,7 +769,11 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
                       icon: const Icon(Icons.refresh),
                       label: const Text('Повторить'),
                     )
-                  : null,
+                  : FilledButton.icon(
+                      onPressed: () => context.push(CreateReelRoute.path),
+                      icon: const Icon(Icons.videocam_outlined),
+                      label: const Text('Снять рилс'),
+                    ),
             ),
           ),
         ],
@@ -1008,8 +1024,10 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
           );
         });
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+      showErrorSnackBar(
+        context,
+        e,
+        onRetry: () => unawaited(_toggleLike(postId)),
       );
     } finally {
       _likeBusy.remove(postId);
@@ -1032,8 +1050,10 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e))),
+        showErrorSnackBar(
+          context,
+          e,
+          onRetry: () => unawaited(_toggleSave(reel)),
         );
       }
     }
@@ -1066,7 +1086,12 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
             const SnackBar(content: Text('Нельзя репостнуть свой пост')),
           );
         } else {
-          showErrorSnackBar(context, e, fallback: 'Не удалось сделать репост');
+          showErrorSnackBar(
+            context,
+            e,
+            fallback: 'Не удалось сделать репост',
+            onRetry: () => unawaited(_toggleRepost(reel)),
+          );
         }
       }
     }

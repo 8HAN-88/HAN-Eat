@@ -9,8 +9,11 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
+import 'package:go_router/go_router.dart';
+
 import '../../../miniapps/presentation/miniapps_catalog_screen.dart';
 
+import '../../../../app/app_router.dart';
 import '../../../../core/haptics/app_haptics.dart';
 import '../../../../core/platform/device_location.dart';
 import '../../../../core/theme/color_schemes.dart';
@@ -28,12 +31,14 @@ import '../../application/chat_recent_files_store.dart';
 import '../../application/chat_recent_gifs_store.dart';
 import '../../application/chat_sticker_pinned_packs_store.dart';
 import '../../application/chat_recent_stickers_store.dart';
+import '../../application/chats_hub_refresh_provider.dart';
 import '../../../../widgets/chat_sticker_tile.dart';
 import '../../../../services/auth_service.dart';
 import '../sticker_pack_manage_screen.dart';
 import '../sticker_pack_preview_screen.dart';
 import 'chat_location_bubble.dart';
 import 'chat_poll_form_panel.dart';
+import 'chats_hub_contacts_tab.dart';
 import 'chats_hub_tiles.dart';
 import 'create_chat_poll_sheet.dart';
 
@@ -497,6 +502,13 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
 
   void _close([ChatAttachSelection? result]) => Navigator.pop(context, result);
 
+  void _openContactsHub() {
+    requestChatsHubTab(ChatsHubContactsTab.contactsTabIndex);
+    final router = GoRouter.of(context);
+    Navigator.of(context).pop();
+    router.go(ChatsRoute.path);
+  }
+
   void _setTab(ChatAttachTab tab) {
     if (_tab == tab) return;
     AppHaptics.selection();
@@ -567,7 +579,9 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
       case ChatAttachTab.location:
         return 'Отправьте текущее местоположение';
       case ChatAttachTab.videoNote:
-        return 'Короткое круглое видеосообщение (до 60 сек)';
+        return kIsWeb
+            ? 'Короткое круглое видео из галереи (до 60 сек)'
+            : 'Короткое круглое видеосообщение (до 60 сек)';
       case ChatAttachTab.sticker:
         return 'Паки, избранные и недавние';
     }
@@ -641,36 +655,54 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
       }
       return;
     }
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const [
-        'pdf',
-        'txt',
-        'doc',
-        'docx',
-        'zip',
-        'jpg',
-        'jpeg',
-        'png',
-        'heic',
-      ],
-      allowMultiple: false,
-    );
-    if (result == null || result.files.isEmpty || !mounted) return;
-    final picked = result.files.single;
-    final XFile file;
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+        allowMultiple: false,
+        withData: kIsWeb,
+      );
+      if (result == null || result.files.isEmpty || !mounted) return;
+      final picked = result.files.single;
+      final file = _xFileFromPicked(picked);
+      if (file == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Не удалось прочитать файл'),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_pickDocument()),
+            ),
+          ),
+        );
+        return;
+      }
+      _close(
+        ChatAttachSelection.pickedFile(file: file, name: picked.name),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Не удалось выбрать файл'),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_pickDocument()),
+          ),
+        ),
+      );
+    }
+  }
+
+  XFile? _xFileFromPicked(PlatformFile picked) {
     if (kIsWeb) {
       final bytes = picked.bytes;
-      if (bytes == null || bytes.isEmpty) return;
-      file = XFile.fromData(bytes, name: picked.name);
-    } else {
-      final path = picked.path;
-      if (path == null || path.isEmpty) return;
-      file = XFile(path);
+      if (bytes == null || bytes.isEmpty) return null;
+      return XFile.fromData(bytes, name: picked.name);
     }
-    _close(
-      ChatAttachSelection.pickedFile(file: file, name: picked.name),
-    );
+    final path = picked.path;
+    if (path == null || path.isEmpty) return null;
+    return XFile(path, name: picked.name);
   }
 
   void _sendPoll() {
@@ -713,7 +745,13 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Не удалось создать стикерпак')),
+        SnackBar(
+          content: const Text('Не удалось создать стикерпак'),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_createStickerPack()),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _stickerBusy = false);
@@ -765,6 +803,15 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
                 ? 'Не удалось удалить стикерпак'
                 : 'Не удалось установить стикерпак',
           ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(
+              _toggleInstallStickerPack(
+                packId: packId,
+                isInstalled: isInstalled,
+              ),
+            ),
+          ),
         ),
       );
     } finally {
@@ -798,7 +845,13 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Не удалось добавить стикер')),
+        SnackBar(
+          content: const Text('Не удалось добавить стикер'),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_addStickerToPack(packId)),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _stickerBusy = false);
@@ -809,6 +862,7 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowMultiple: false,
+      withData: kIsWeb,
       allowedExtensions: const [
         'gif',
         'webp',
@@ -857,8 +911,13 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Не удалось добавить анимированный стикер')),
+        SnackBar(
+          content: const Text('Не удалось добавить анимированный стикер'),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_addAnimatedStickerToPack(packId)),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _stickerBusy = false);
@@ -1245,6 +1304,7 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
           error: _contactsError,
           onRetry: _loadContacts,
           onSelect: (c) => _close(c.toSelection()),
+          onOpenContactsHub: _openContactsHub,
           isDark: isDark,
         );
       case ChatAttachTab.sticker:
@@ -1497,9 +1557,12 @@ class _GifPickPanelState extends State<_GifPickPanel> {
       children: [
         TextField(
           controller: _searchController,
+          enabled: _catalogConfigured,
           textInputAction: TextInputAction.search,
           decoration: InputDecoration(
-            hintText: 'Поиск GIF',
+            hintText: _catalogConfigured
+                ? 'Поиск GIF'
+                : 'Каталог GIF недоступен',
             prefixIcon: const Icon(Icons.search),
             suffixIcon: _searchController.text.isEmpty
                 ? null
@@ -1568,14 +1631,32 @@ class _GifPickPanelState extends State<_GifPickPanel> {
         else if (_catalogItems.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Text(
-              searching
-                  ? 'Ничего не найдено. Попробуйте другой запрос.'
-                  : 'Пока нет популярных GIF.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: scheme.onSurfaceVariant,
+            child: Column(
+              children: [
+                Text(
+                  searching
+                      ? 'Ничего не найдено. Попробуйте другой запрос.'
+                      : 'Пока нет популярных GIF.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                if (searching)
+                  TextButton(
+                    onPressed: () {
+                      _searchController.clear();
+                      unawaited(_loadCatalog(query: ''));
+                    },
+                    child: const Text('Очистить поиск'),
+                  )
+                else
+                  TextButton(
+                    onPressed: () => unawaited(_loadCatalog(query: '')),
+                    child: const Text('Обновить'),
                   ),
+              ],
             ),
           )
         else ...[
@@ -1625,6 +1706,11 @@ class _GifPickPanelState extends State<_GifPickPanel> {
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: scheme.onSurfaceVariant,
                         ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: widget.onPickDevice,
+                    child: const Text('Выбрать GIF с устройства'),
                   ),
                 ],
               ),
@@ -1891,7 +1977,9 @@ class _VideoNotePickPanel extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          'Запишите короткое видео — оно отправится кружком, как в Telegram.',
+          kIsWeb
+              ? 'Выберите короткое видео из галереи — оно отправится кружком, как в Telegram.'
+              : 'Запишите короткое видео — оно отправится кружком, как в Telegram.',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: scheme.onSurfaceVariant,
@@ -1900,8 +1988,10 @@ class _VideoNotePickPanel extends StatelessWidget {
         const SizedBox(height: 28),
         FilledButton.icon(
           onPressed: onRecord,
-          icon: const Icon(Icons.fiber_manual_record),
-          label: const Text('Записать кружок'),
+          icon: Icon(
+            kIsWeb ? Icons.video_library_outlined : Icons.fiber_manual_record,
+          ),
+          label: Text(kIsWeb ? 'Выбрать видео' : 'Записать кружок'),
         ),
       ],
     );
@@ -2384,18 +2474,37 @@ class _GalleryThumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        if (kIsWeb)
-          Container(color: const Color(0xFF3A3A3C))
-        else
-          Image.file(File(file.path), fit: BoxFit.cover),
-        Positioned(
-          top: 6,
-          right: 6,
-          child: GestureDetector(
-            onTap: onTap,
+    final name = file.name.trim();
+    return GestureDetector(
+      onTap: onTap,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (kIsWeb)
+            ColoredBox(
+              color: isDark ? const Color(0xFF3A3A3C) : const Color(0xFFD1D1D6),
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 28),
+                  child: Text(
+                    name.isEmpty ? 'Файл' : name,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            )
+          else
+            Image.file(File(file.path), fit: BoxFit.cover),
+          Positioned(
+            top: 6,
+            right: 6,
             child: Container(
               width: 22,
               height: 22,
@@ -2407,8 +2516,8 @@ class _GalleryThumb extends StatelessWidget {
               child: const Icon(Icons.check, size: 14, color: Colors.white),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -2559,12 +2668,26 @@ class _StickerPanel extends StatelessWidget {
               if (stickerView == 'packs' && packs.isEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 24),
-                  child: Text(
-                    'У вас пока нет установленных стикерпаков',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
+                  child: Column(
+                    children: [
+                      Text(
+                        'У вас пока нет установленных стикерпаков',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      FilledButton.icon(
+                        onPressed: onCreatePack,
+                        icon: const Icon(Icons.add_rounded),
+                        label: const Text('Создать пак'),
+                      ),
+                      TextButton(
+                        onPressed: onImportByLink,
+                        child: const Text('Импорт по ссылке'),
+                      ),
+                    ],
                   ),
                 ),
               if (stickerView == 'packs')
@@ -2638,9 +2761,19 @@ class _StickerPanel extends StatelessWidget {
                 ),
               ],
               if (stickerView == 'favorites' && favoriteStickers.isEmpty)
-                _emptyHint(theme, 'Избранных стикеров пока нет'),
+                _emptyHint(
+                  theme,
+                  'Избранных стикеров пока нет',
+                  actionLabel: 'К пакам',
+                  onAction: () => onSelectView('packs'),
+                ),
               if (stickerView == 'recent' && recentStickers.isEmpty)
-                _emptyHint(theme, 'Недавних стикеров пока нет'),
+                _emptyHint(
+                  theme,
+                  'Недавних стикеров пока нет',
+                  actionLabel: 'К пакам',
+                  onAction: () => onSelectView('packs'),
+                ),
             ],
           ),
         ),
@@ -2656,14 +2789,28 @@ class _StickerPanel extends StatelessWidget {
     );
   }
 
-  Widget _emptyHint(ThemeData theme, String text) => Padding(
+  Widget _emptyHint(
+    ThemeData theme,
+    String text, {
+    String? actionLabel,
+    VoidCallback? onAction,
+  }) =>
+      Padding(
         padding: const EdgeInsets.symmetric(vertical: 22),
-        child: Text(
-          text,
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
+        child: Column(
+          children: [
+            Text(
+              text,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(height: 8),
+              TextButton(onPressed: onAction, child: Text(actionLabel)),
+            ],
+          ],
         ),
       );
 
@@ -3305,7 +3452,7 @@ class _StickerSectionGrid extends StatelessWidget {
   }
 }
 
-class _ContactsPanel extends StatelessWidget {
+class _ContactsPanel extends StatefulWidget {
   const _ContactsPanel({
     required this.scrollController,
     required this.contacts,
@@ -3313,6 +3460,7 @@ class _ContactsPanel extends StatelessWidget {
     required this.error,
     required this.onRetry,
     required this.onSelect,
+    required this.onOpenContactsHub,
     required this.isDark,
   });
 
@@ -3322,90 +3470,130 @@ class _ContactsPanel extends StatelessWidget {
   final String? error;
   final VoidCallback onRetry;
   final ValueChanged<_AttachSheetContact> onSelect;
+  final VoidCallback onOpenContactsHub;
   final bool isDark;
 
   @override
+  State<_ContactsPanel> createState() => _ContactsPanelState();
+}
+
+class _ContactsPanelState extends State<_ContactsPanel> {
+  final Map<String, GlobalKey> _letterKeys = {};
+
+  GlobalKey _keyFor(String letter) =>
+      _letterKeys.putIfAbsent(letter, GlobalKey.new);
+
+  void _jumpTo(String letter) {
+    final ctx = _keyFor(letter).currentContext;
+    if (ctx == null) return;
+    AppHaptics.selection();
+    Scrollable.ensureVisible(
+      ctx,
+      alignment: 0,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (loading) {
+    if (widget.loading) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (error != null) {
+    if (widget.error != null) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(error!),
+            Text(widget.error!),
             const SizedBox(height: 12),
-            TextButton(onPressed: onRetry, child: const Text('Повторить')),
+            TextButton(
+              onPressed: widget.onRetry,
+              child: const Text('Повторить'),
+            ),
           ],
         ),
       );
     }
-    if (contacts.isEmpty) {
-      return const Center(
+    if (widget.contacts.isEmpty) {
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text(
-            'Нет контактов.\nДобавьте людей в разделе «Контакты» '
-            'или импортируйте телефонную книгу.',
-            textAlign: TextAlign.center,
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Нет контактов.\nДобавьте людей в разделе «Контакты» '
+                'или импортируйте телефонную книгу.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: widget.onOpenContactsHub,
+                icon: const Icon(Icons.contacts_outlined),
+                label: const Text('Открыть контакты'),
+              ),
+            ],
           ),
         ),
       );
     }
 
-    final grouped = _groupContacts(contacts);
+    final grouped = _groupContacts(widget.contacts);
     final letters = grouped.keys.toList()..sort(_letterSort);
 
     return Stack(
       children: [
         ListView.builder(
-          controller: scrollController,
+          controller: widget.scrollController,
           padding: const EdgeInsets.fromLTRB(12, 0, 28, 8),
           itemCount: letters.length,
           itemBuilder: (context, sectionIndex) {
             final letter = letters[sectionIndex];
             final sectionContacts = grouped[letter]!;
-            final groupBg = isDark
+            final groupBg = widget.isDark
                 ? _ChatAttachSheetState._groupBgDark
                 : Theme.of(context).colorScheme.surfaceContainerHighest;
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 10, 8, 6),
-                  child: Text(
-                    letter,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurfaceVariant
-                              .withValues(alpha: 0.8),
-                          fontWeight: FontWeight.w700,
-                        ),
+            return KeyedSubtree(
+              key: _keyFor(letter),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 10, 8, 6),
+                    child: Text(
+                      letter,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant
+                                .withValues(alpha: 0.8),
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
                   ),
-                ),
-                _GroupedSurface(
-                  color: groupBg,
-                  children: [
-                    for (var i = 0; i < sectionContacts.length; i++) ...[
-                      if (i > 0)
-                        Divider(
-                          height: 1,
-                          indent: 68,
-                          color: Theme.of(context)
-                              .dividerColor
-                              .withValues(alpha: 0.2),
+                  _GroupedSurface(
+                    color: groupBg,
+                    children: [
+                      for (var i = 0; i < sectionContacts.length; i++) ...[
+                        if (i > 0)
+                          Divider(
+                            height: 1,
+                            indent: 68,
+                            color: Theme.of(context)
+                                .dividerColor
+                                .withValues(alpha: 0.2),
+                          ),
+                        _ContactTile(
+                          contact: sectionContacts[i],
+                          onTap: () => widget.onSelect(sectionContacts[i]),
                         ),
-                      _ContactTile(
-                        contact: sectionContacts[i],
-                        onTap: () => onSelect(sectionContacts[i]),
-                      ),
+                      ],
                     ],
-                  ],
-                ),
-              ],
+                  ),
+                ],
+              ),
             );
           },
         ),
@@ -3413,7 +3601,10 @@ class _ContactsPanel extends StatelessWidget {
           right: 4,
           top: 8,
           bottom: 8,
-          child: _AlphabetRail(letters: letters),
+          child: _AlphabetRail(
+            letters: letters,
+            onLetter: _jumpTo,
+          ),
         ),
       ],
     );
@@ -3484,29 +3675,63 @@ class _ContactTile extends StatelessWidget {
   }
 }
 
-class _AlphabetRail extends StatelessWidget {
-  const _AlphabetRail({required this.letters});
+class _AlphabetRail extends StatefulWidget {
+  const _AlphabetRail({
+    required this.letters,
+    required this.onLetter,
+  });
 
   final List<String> letters;
+  final ValueChanged<String> onLetter;
+
+  @override
+  State<_AlphabetRail> createState() => _AlphabetRailState();
+}
+
+class _AlphabetRailState extends State<_AlphabetRail> {
+  String? _lastLetter;
+
+  void _pickAt(double dy, double height) {
+    if (widget.letters.isEmpty || height <= 0) return;
+    final index = (dy / height * widget.letters.length)
+        .floor()
+        .clamp(0, widget.letters.length - 1);
+    final letter = widget.letters[index];
+    if (letter == _lastLetter) return;
+    _lastLetter = letter;
+    widget.onLetter(letter);
+  }
+
+  void _clearLast() => _lastLetter = null;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        for (final letter in letters)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 1),
-            child: Text(
-              letter,
-              style: const TextStyle(
-                color: _ChatAttachSheetState._telegramBlue,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (details) =>
+          _pickAt(details.localPosition.dy, context.size?.height ?? 0),
+      onTapUp: (_) => _clearLast(),
+      onTapCancel: _clearLast,
+      onVerticalDragUpdate: (details) =>
+          _pickAt(details.localPosition.dy, context.size?.height ?? 0),
+      onVerticalDragEnd: (_) => _clearLast(),
+      child: Column(
+        children: [
+          for (final letter in widget.letters)
+            Expanded(
+              child: Center(
+                child: Text(
+                  letter,
+                  style: const TextStyle(
+                    color: _ChatAttachSheetState._telegramBlue,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }

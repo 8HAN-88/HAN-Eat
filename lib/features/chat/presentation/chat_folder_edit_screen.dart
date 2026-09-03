@@ -247,7 +247,13 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_save()),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -277,9 +283,22 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
       ),
     );
     if (ok != true || !mounted) return;
-    await ChatFolderStore.deleteFolder(folder.id);
-    if (!mounted) return;
-    Navigator.pop(context, 'deleted');
+    try {
+      await ChatFolderStore.deleteFolder(folder.id);
+      if (!mounted) return;
+      Navigator.pop(context, 'deleted');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_deleteFolder()),
+          ),
+        ),
+      );
+    }
   }
 
   Widget _buildLoadBanner() {
@@ -525,12 +544,30 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
                 else if (visible.isEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 24),
-                    child: Text(
-                      _searchQuery.isNotEmpty
-                          ? 'Ничего не найдено'
-                          : 'Нет чатов для добавления. Используйте фильтры выше.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: scheme.onSurfaceVariant),
+                    child: Column(
+                      children: [
+                        Text(
+                          _searchQuery.isNotEmpty
+                              ? 'Ничего не найдено'
+                              : 'Нет чатов для добавления. Используйте фильтры выше.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: scheme.onSurfaceVariant),
+                        ),
+                        if (_searchQuery.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          TextButton(
+                            onPressed: () => _searchController.clear(),
+                            child: const Text('Очистить поиск'),
+                          ),
+                        ] else if (_tab != _FolderPickTab.all) ...[
+                          const SizedBox(height: 8),
+                          TextButton(
+                            onPressed: () =>
+                                setState(() => _tab = _FolderPickTab.all),
+                            child: const Text('Все чаты'),
+                          ),
+                        ],
+                      ],
                     ),
                   )
                 else

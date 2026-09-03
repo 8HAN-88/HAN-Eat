@@ -241,7 +241,11 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      await showStarsRequiredSnack(context, e);
+      await showStarsRequiredSnack(
+        context,
+        e,
+        onRetry: () => unawaited(_create()),
+      );
     }
   }
 
@@ -259,7 +263,13 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
       if (!mounted) return;
       setState(() => _busy.remove(g.id));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_join(g)),
+          ),
+        ),
       );
     }
   }
@@ -295,7 +305,13 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
       if (!mounted) return;
       setState(() => _busy.remove(g.id));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_cancel(g)),
+          ),
+        ),
       );
     }
   }
@@ -313,7 +329,13 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
       if (!mounted) return;
       setState(() => _busy.remove(g.id));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_finalize(g)),
+          ),
+        ),
       );
     }
   }
@@ -417,7 +439,13 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
       if (!mounted) return;
       setState(() => _busy.remove(g.id));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_showWinners(g)),
+          ),
+        ),
       );
     }
   }
@@ -490,6 +518,24 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
                 : 'Активных розыгрышей нет.',
             textAlign: TextAlign.center,
           ),
+          if (widget.canManage) ...[
+            const SizedBox(height: 16),
+            Center(
+              child: FilledButton.icon(
+                onPressed: _create,
+                icon: const Icon(Icons.celebration_outlined),
+                label: const Text('Создать розыгрыш'),
+              ),
+            ),
+          ] else ...[
+            const SizedBox(height: 16),
+            Center(
+              child: FilledButton.tonal(
+                onPressed: _load,
+                child: const Text('Обновить'),
+              ),
+            ),
+          ],
         ],
       );
     }

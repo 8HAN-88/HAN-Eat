@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../../utils/api_error_parser.dart';
 import 'package:go_router/go_router.dart';
@@ -69,7 +71,14 @@ class _PromotedPostsScreenState extends State<PromotedPostsScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e)), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          backgroundColor: Colors.red,
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_unpromote(post)),
+          ),
+        ),
       );
     }
   }
@@ -131,11 +140,15 @@ class _PromotedPostsScreenState extends State<PromotedPostsScreen> {
     }
 
     if (_posts.isEmpty) {
-      return const AppEmptyState(
+      return AppEmptyState(
         icon: Icons.trending_up_rounded,
         title: 'Нет активных продвижений',
         subtitle:
             'Откройте пост в канале → «⋯» → «Продвинуть в ленте»',
+        action: FilledButton(
+          onPressed: () => context.push(ChannelsManagementRoute.path),
+          child: const Text('К каналам'),
+        ),
       );
     }
 

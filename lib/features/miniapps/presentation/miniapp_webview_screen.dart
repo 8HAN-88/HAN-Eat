@@ -248,7 +248,25 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
               },
             )
           else
-            const Center(child: Text('Нет контента для отображения')),
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Нет контента для отображения',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      child: const Text('Закрыть'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           if (_isLoading)
             ColoredBox(
               color: colorScheme.surface.withValues(alpha: 0.72),
@@ -363,7 +381,13 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
       if (!mounted) return;
       setState(() => _sendingData = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось отправить данные: $e')),
+        SnackBar(
+          content: Text('Не удалось отправить данные: $e'),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_handleSendData(raw)),
+          ),
+        ),
       );
     }
   }

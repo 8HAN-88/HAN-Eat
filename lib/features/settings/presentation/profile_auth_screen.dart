@@ -95,8 +95,14 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(userVisibleError(e,
-                  fallback: 'Не удалось загрузить аватар'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось загрузить аватар'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_pickAndUploadAvatar()),
+            ),
+          ),
         );
       }
     } finally {
@@ -143,8 +149,14 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content:
-                  Text(userVisibleError(e, fallback: 'Не удалось обновить'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось обновить'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_saveProfile()),
+            ),
+          ),
         );
       }
     } finally {
@@ -322,6 +334,7 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
               leading: const Icon(Icons.analytics_outlined),
               title: const Text('Аналитика'),
               subtitle: const Text('Статистика постов и активности'),
+              trailing: const Icon(Icons.chevron_right),
               onTap: () => context.push(AppAnalyticsRoute.path),
             ),
           ),
@@ -331,6 +344,7 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
               leading: const Icon(Icons.auto_awesome_outlined),
               title: const Text('Инструменты автора'),
               subtitle: const Text('Продвижение, расписание, аналитика'),
+              trailing: const Icon(Icons.chevron_right),
               onTap: () => context.push(CreatorToolsRoute.path),
             ),
           ),

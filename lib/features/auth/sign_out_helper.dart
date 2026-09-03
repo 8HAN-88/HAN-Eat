@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -72,6 +74,10 @@ class _SignOutDialogState extends State<_SignOutDialog> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(userVisibleError(e, fallback: 'Не удалось выйти')),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_signOut()),
+          ),
         ),
       );
     }

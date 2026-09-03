@@ -206,11 +206,6 @@ class _CreateChatPollSheetState extends State<CreateChatPollSheet> {
                             hint: _settings.quizMode
                                 ? 'Пояснение после ответа (необязательно)'
                                 : 'Описание (необязательно)',
-                            trailing: Icon(
-                              Icons.attach_file,
-                              size: 20,
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
                             onChanged: (_) => setState(() {}),
                           ),
                         ],

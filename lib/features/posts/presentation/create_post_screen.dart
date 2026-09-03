@@ -159,6 +159,10 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   }
 
   Future<void> _pickCameraImage() async {
+    if (kIsWeb) {
+      await _pickImage();
+      return;
+    }
     try {
       final image = await _imagePicker.pickImage(
         source: ImageSource.camera,
@@ -180,6 +184,10 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         SnackBar(
           content: Text(
             userVisibleError(e, fallback: 'Не удалось сделать фото'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_pickCameraImage()),
           ),
         ),
       );
@@ -227,8 +235,17 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text(userVisibleError(e,
-                    fallback: 'Не удалось выбрать изображение'))),
+              content: Text(
+                userVisibleError(
+                  e2,
+                  fallback: 'Не удалось выбрать изображение',
+                ),
+              ),
+              action: SnackBarAction(
+                label: 'Повторить',
+                onPressed: () => unawaited(_pickImage()),
+              ),
+            ),
           );
         }
       }
@@ -253,8 +270,14 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(
-                  userVisibleError(e, fallback: 'Не удалось выбрать видео'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось выбрать видео'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_pickVideo()),
+            ),
+          ),
         );
       }
     }
@@ -350,8 +373,14 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         setState(() => _isUploading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(
-                  userVisibleError(e, fallback: 'Не удалось загрузить медиа'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось загрузить медиа'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_uploadMedia()),
+            ),
+          ),
         );
       }
     }
@@ -639,15 +668,29 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                 ? e.message
                 : 'Ошибка публикации: ${e.message}';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(text)),
+          SnackBar(
+            content: Text(text),
+            action: e.isContentBlocked
+                ? null
+                : SnackBarAction(
+                    label: 'Повторить',
+                    onPressed: () => unawaited(_handlePublish()),
+                  ),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(
-                  userVisibleError(e, fallback: 'Не удалось опубликовать'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось опубликовать'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_handlePublish()),
+            ),
+          ),
         );
       }
     } finally {
@@ -1026,11 +1069,12 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
               tooltip: 'Фото',
               onTap: _isLoading ? null : _pickImage,
             ),
-            _ComposerToolButton(
-              icon: Icons.photo_camera_outlined,
-              tooltip: 'Камера',
-              onTap: _isLoading ? null : _pickCameraImage,
-            ),
+            if (!kIsWeb)
+              _ComposerToolButton(
+                icon: Icons.photo_camera_outlined,
+                tooltip: 'Камера',
+                onTap: _isLoading ? null : _pickCameraImage,
+              ),
             _ComposerToolButton(
               icon: Icons.video_library_outlined,
               tooltip: 'Видео в рилсы',

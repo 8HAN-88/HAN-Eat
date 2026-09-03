@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../../utils/api_error_parser.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -95,9 +97,14 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content:
-                Text('Чек ещё формируется. Попробуйте через несколько минут.'),
+          SnackBar(
+            content: const Text(
+              'Чек ещё формируется. Попробуйте через несколько минут.',
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_openReceipt(payment)),
+            ),
           ),
         );
       }
@@ -107,6 +114,10 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
           SnackBar(
             content: Text(userVisibleError(e)),
             backgroundColor: scheme.error,
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_openReceipt(payment)),
+            ),
           ),
         );
       }
@@ -273,6 +284,10 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
               userVisibleError(e, fallback: 'Не удалось создать платёж'),
             ),
             backgroundColor: scheme.error,
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_purchaseSelected()),
+            ),
           ),
         );
       }
@@ -583,6 +598,16 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
                 ),
               ),
               const SizedBox(height: 12),
+              FilledButton(
+                onPressed: () => context.push(FlexSubscriptionRoute.path),
+                child: const Text('Подписка Flex'),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => context.push(SupportContactRoute.path),
+                child: const Text('Написать в поддержку'),
+              ),
+              const SizedBox(height: 12),
             ],
             if (_canStartTrial(status)) ...[
               OutlinedButton(
@@ -664,11 +689,20 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
                 margin: EdgeInsets.zero,
                 child: Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Text(
-                    _checkoutAvailable
-                        ? 'Пока нет оплат. После оплаты по СБП записи появятся здесь.'
-                        : 'История оплат появится после подключения оплаты по СБП.',
-                    style: Theme.of(context).textTheme.bodySmall,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _checkoutAvailable
+                            ? 'Пока нет оплат. После оплаты по СБП записи появятся здесь.'
+                            : 'История оплат появится после подключения оплаты по СБП.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      TextButton(
+                        onPressed: _loadPaymentHistory,
+                        child: const Text('Обновить'),
+                      ),
+                    ],
                   ),
                 ),
               )

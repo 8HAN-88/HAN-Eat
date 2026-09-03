@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../../utils/api_error_parser.dart';
 import 'package:intl/intl.dart';
@@ -83,7 +85,14 @@ class _AdminRefundQueueScreenState extends State<AdminRefundQueueScreen> {
       if (!mounted) return;
       setState(() => _loading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e)), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          backgroundColor: Colors.red,
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_approve(item)),
+          ),
+        ),
       );
     }
   }
@@ -122,7 +131,14 @@ class _AdminRefundQueueScreenState extends State<AdminRefundQueueScreen> {
       if (!mounted) return;
       setState(() => _loading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e)), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          backgroundColor: Colors.red,
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_reject(item)),
+          ),
+        ),
       );
     }
   }
@@ -161,10 +177,14 @@ class _AdminRefundQueueScreenState extends State<AdminRefundQueueScreen> {
     }
 
     if (_items.isEmpty) {
-      return const AppEmptyState(
+      return AppEmptyState(
         icon: Icons.inbox_outlined,
         title: 'Очередь пуста',
         subtitle: 'Нет ожидающих запросов на возврат',
+        action: FilledButton(
+          onPressed: _load,
+          child: const Text('Обновить'),
+        ),
       );
     }
 

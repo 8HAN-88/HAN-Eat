@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/app_router.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/paid_features_service.dart';
@@ -85,7 +87,11 @@ class _StarGiftsMarketplaceScreenState extends State<StarGiftsMarketplaceScreen>
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy.remove(gift.id));
-      await showStarsRequiredSnack(context, e);
+      await showStarsRequiredSnack(
+        context,
+        e,
+        onRetry: () => unawaited(_buy(gift)),
+      );
     }
   }
 
@@ -138,12 +144,20 @@ class _StarGiftsMarketplaceScreenState extends State<StarGiftsMarketplaceScreen>
           24,
           24 + floatingBottomPadding(context),
         ),
-        children: const [
-          Icon(Icons.storefront_outlined, size: 48),
-          SizedBox(height: 12),
-          Text(
+        children: [
+          const Icon(Icons.storefront_outlined, size: 48),
+          const SizedBox(height: 12),
+          const Text(
             'Пока никто не выставил коллекционный подарок.\nВыставите свой из «Мои подарки».',
             textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: FilledButton.icon(
+              onPressed: () => context.push(StarGiftsInventoryRoute.path),
+              icon: const Icon(Icons.card_giftcard_outlined),
+              label: const Text('Мои подарки'),
+            ),
           ),
         ],
       );

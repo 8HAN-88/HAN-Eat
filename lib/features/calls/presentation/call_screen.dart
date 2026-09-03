@@ -100,13 +100,13 @@ class _CallScreenState extends State<CallScreen> {
 
     final mic = await Permission.microphone.request();
     if (!mic.isGranted) {
-      await _failAndClose('Нужен доступ к микрофону');
+      await _failPermission('Нужен доступ к микрофону');
       return;
     }
     if (_isVideo) {
       final camera = await Permission.camera.request();
       if (!camera.isGranted) {
-        await _failAndClose('Нужен доступ к камере');
+        await _failPermission('Нужен доступ к камере');
         return;
       }
     }
@@ -279,6 +279,35 @@ class _CallScreenState extends State<CallScreen> {
     await _leaveUi(notifyServer: true);
   }
 
+  Future<void> _failPermission(String message) async {
+    final ctx = hanEatRootNavigatorKey.currentContext ?? context;
+    if (ctx.mounted) {
+      final openSettings = await showDialog<bool>(
+        context: ctx,
+        builder: (dialogCtx) => AlertDialog(
+          title: const Text('Нет доступа'),
+          content: Text(
+            '$message. Разрешите доступ в настройках и повторите звонок.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(false),
+              child: const Text('Закрыть'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(true),
+              child: const Text('Настройки'),
+            ),
+          ],
+        ),
+      );
+      if (openSettings == true) {
+        await openAppSettings();
+      }
+    }
+    await _leaveUi(notifyServer: true);
+  }
+
   Future<void> _leaveUi({required bool notifyServer}) async {
     await _cleanup(notifyServer: notifyServer);
     if (CallCoordinator.instance.hasHostedCallUi) {
@@ -441,7 +470,15 @@ class _CallScreenState extends State<CallScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось сменить камеру'))),
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось сменить камеру'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_switchCamera()),
+          ),
+        ),
       );
     }
   }
@@ -455,7 +492,15 @@ class _CallScreenState extends State<CallScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось переключить звук'))),
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось переключить звук'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_toggleSpeaker()),
+          ),
+        ),
       );
     }
   }

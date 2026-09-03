@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
 import '../../../services/api_service.dart';
+import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/telegram_ui.dart';
@@ -105,7 +108,15 @@ class _MyBotsScreenState extends State<MyBotsScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось создать бота: $e')),
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось создать бота'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_createBot()),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);

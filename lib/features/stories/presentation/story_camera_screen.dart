@@ -1,7 +1,8 @@
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../utils/api_error_parser.dart';
 import '../data/story_service.dart';
 
 /// Экран камеры для создания сторис (фото + видео).
@@ -18,6 +19,7 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
   XFile? _selectedFile;
   bool _isVideo = false;
   bool _isPublishing = false;
+  String? _publishError;
   String _visibility = 'public';
   final _captionController = TextEditingController();
 
@@ -28,9 +30,9 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
     ('private', 'Только я', Icons.lock_outline),
   ];
 
-  Future<void> _takePhoto() async {
+  Future<void> _pickImage(ImageSource source) async {
     final XFile? photo = await _picker.pickImage(
-      source: ImageSource.camera,
+      source: source,
       maxWidth: 1920,
       imageQuality: 92,
     );
@@ -42,9 +44,9 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
     });
   }
 
-  Future<void> _recordVideo() async {
+  Future<void> _pickVideo(ImageSource source) async {
     final XFile? video = await _picker.pickVideo(
-      source: ImageSource.camera,
+      source: source,
       maxDuration: const Duration(seconds: 30),
     );
     if (video == null) return;
@@ -58,7 +60,10 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
 
   Future<void> _publish() async {
     if (_selectedFile == null) return;
-    setState(() => _isPublishing = true);
+    setState(() {
+      _isPublishing = true;
+      _publishError = null;
+    });
     try {
       await StoryService.uploadAndCreateStory(
         file: _selectedFile!,
@@ -72,9 +77,12 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось опубликовать сторис: $e')),
-      );
+      setState(() {
+        _publishError = userVisibleError(
+          e,
+          fallback: 'Не удалось опубликовать сторис',
+        );
+      });
     } finally {
       if (mounted) setState(() => _isPublishing = false);
     }
@@ -211,7 +219,11 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
                                 height: 18,
                                 child: CircularProgressIndicator(strokeWidth: 2),
                               )
-                            : const Text('Опубликовать'),
+                            : Text(
+                                _publishError == null
+                                    ? 'Опубликовать'
+                                    : 'Повторить',
+                              ),
                       ),
                     ),
                   ],
@@ -221,6 +233,18 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
                   const Text(
                     'Загружаем сторис...',
                     style: TextStyle(color: Colors.white70),
+                  ),
+                ],
+                if (_publishError != null && !_isPublishing) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _publishError!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Color(0xFFFF8A80)),
+                  ),
+                  TextButton(
+                    onPressed: _publish,
+                    child: const Text('Повторить'),
                   ),
                 ],
               ],
@@ -244,16 +268,30 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
           children: [
             const Icon(Icons.camera_alt, size: 80, color: Colors.white54),
             const SizedBox(height: 24),
+            if (!kIsWeb) ...[
+              FilledButton.icon(
+                onPressed: () => _pickImage(ImageSource.camera),
+                icon: const Icon(Icons.photo_camera),
+                label: const Text('Сделать фото'),
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: () => _pickVideo(ImageSource.camera),
+                icon: const Icon(Icons.videocam),
+                label: const Text('Записать видео (до 30 сек)'),
+              ),
+              const SizedBox(height: 12),
+            ],
             FilledButton.icon(
-              onPressed: _takePhoto,
-              icon: const Icon(Icons.photo_camera),
-              label: const Text('Сделать фото'),
+              onPressed: () => _pickImage(ImageSource.gallery),
+              icon: const Icon(Icons.photo_library_outlined),
+              label: const Text('Фото из галереи'),
             ),
             const SizedBox(height: 12),
             FilledButton.icon(
-              onPressed: _recordVideo,
-              icon: const Icon(Icons.videocam),
-              label: const Text('Записать видео (до 30 сек)'),
+              onPressed: () => _pickVideo(ImageSource.gallery),
+              icon: const Icon(Icons.video_library_outlined),
+              label: const Text('Видео из галереи (до 30 сек)'),
             ),
           ],
         ),

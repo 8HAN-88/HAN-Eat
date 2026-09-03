@@ -181,10 +181,14 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
       );
     }
     if (_postAnalytics == null) {
-      return const AppEmptyState(
+      return AppEmptyState(
         icon: Icons.analytics_outlined,
         title: 'Нет данных',
         subtitle: 'За выбранный период статистика пока пуста',
+        action: FilledButton(
+          onPressed: _loadAnalytics,
+          child: const Text('Обновить'),
+        ),
       );
     }
     
@@ -282,10 +286,14 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
       );
     }
     if (_profileAnalytics == null) {
-      return const AppEmptyState(
+      return AppEmptyState(
         icon: Icons.analytics_outlined,
         title: 'Нет данных',
         subtitle: 'За выбранный период статистика пока пуста',
+        action: FilledButton(
+          onPressed: _loadAnalytics,
+          child: const Text('Обновить'),
+        ),
       );
     }
     

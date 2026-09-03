@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../models/chat_models.dart';
 import '../../../services/chat_folder_store.dart';
+import '../../../utils/api_error_parser.dart';
 
 /// Перетаскивание папок для изменения порядка вкладок.
 class ChatFoldersManageSheet extends StatefulWidget {
@@ -33,6 +36,19 @@ class _ChatFoldersManageSheetState extends State<ChatFoldersManageSheet> {
       final updated = await ChatFolderStore.reorderFolders(ids);
       if (!mounted) return;
       Navigator.pop(context, updated);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось сохранить порядок'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_saveOrder()),
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }

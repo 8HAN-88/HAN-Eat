@@ -126,7 +126,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           return;
         }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
+          SnackBar(
+            content: Text(e.message),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_handleLogin()),
+            ),
+          ),
         );
       }
     } catch (e) {
@@ -136,6 +142,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             content: Text(
               userVisibleError(e,
                   fallback: 'Не удалось войти. Проверьте email и пароль.'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_handleLogin()),
             ),
           ),
         );
