@@ -6439,13 +6439,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            userVisibleError(e).contains('403') ||
-                    userVisibleError(e).toLowerCase().contains('access')
-                ? 'Нет доступа к исходному чату'
-                : userVisibleError(e),
+      final visible = userVisibleError(e);
+      final noAccess = visible.contains('403') ||
+          visible.toLowerCase().contains('access');
+      if (noAccess) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Нет доступа к исходному чату')),
+        );
+        return;
+      }
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось открыть исходный чат',
+        onRetry: () => unawaited(
+          _openForwardedOriginal(
+            conversationId: conversationId,
+            messageId: messageId,
           ),
         ),
       );

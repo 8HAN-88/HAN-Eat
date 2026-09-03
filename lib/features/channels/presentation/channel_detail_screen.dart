@@ -1,6 +1,7 @@
 // Экран детального просмотра канала с лентой постов (согласно UI-прототипу)
 import 'dart:async';
 import '../../../utils/api_error_parser.dart';
+import '../../../utils/session_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -1305,12 +1306,11 @@ class ChannelMediaListState extends State<ChannelMediaList> {
           _loadFailed = _mediaItems.isEmpty;
         });
         if (refresh && _mediaItems.isNotEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                  userVisibleError(e, fallback: 'Не удалось загрузить медиа')),
-              duration: const Duration(seconds: 3),
-            ),
+          showErrorSnackBar(
+            context,
+            e,
+            fallback: 'Не удалось загрузить медиа',
+            onRetry: () => unawaited(_loadMedia(refresh: true)),
           );
         }
       }

@@ -8,6 +8,7 @@ import '../../../services/api_service.dart';
 import '../../../services/feed_cache_service.dart';
 import '../../../services/post_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../utils/session_snackbar.dart';
 import '../../../utils/url_validator.dart';
 import '../../../widgets/create_poll_form_section.dart';
 import '../../../widgets/app_empty_state.dart';
@@ -285,11 +286,11 @@ class _EditProfilePostScreenState extends ConsumerState<EditProfilePostScreen> {
       context.pop(true);
     } catch (e) {
       if (!mounted) return;
-      final msg = e is ApiClientException
-          ? e.message
-          : e.toString().replaceAll('Exception: ', '');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg)),
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось сохранить пост',
+        onRetry: () => unawaited(_save()),
       );
     } finally {
       if (mounted) setState(() => _isSaving = false);
