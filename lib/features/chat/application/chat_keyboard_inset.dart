@@ -1,10 +1,16 @@
 /// Flutter web / iOS PWA reports visual-viewport chrome (toolbar, rubber-band)
 /// as tiny [viewInsets]. Animating the whole thread on that noise shakes the
 /// chat when the user reaches the bottom.
+///
+/// [viewportResizesContent] is true when the HTML viewport uses
+/// `interactive-widget=resizes-content` — the layout viewport already shrinks
+/// with the keyboard, so manual padding must stay zero to avoid a gap.
 double effectiveChatKeyboardInset({
   required double rawInset,
   required bool composerFocused,
+  bool viewportResizesContent = false,
 }) {
+  if (viewportResizesContent) return 0;
   // While typing, follow the keyboard frame-by-frame (Safari animates ~250ms).
   // Thresholds below are only for unfocused rubber-band noise.
   if (composerFocused) return rawInset < 0 ? 0 : rawInset;

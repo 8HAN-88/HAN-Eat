@@ -4816,13 +4816,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _hideBotAutocompleteOverlay();
       _keyboardFollowTimer?.cancel();
       _keyboardFollowTimer = null;
-    } else {
+    } else if (_isNearBottom()) {
       _scheduleKeyboardScrollFollow(finalSnapDelayMs: 280);
     }
   }
 
   void _scheduleKeyboardScrollFollow({int finalSnapDelayMs = 0}) {
     if (!_scroll.hasClients) return;
+    if (!_isNearBottom()) return;
     if (!_keyboardScrollScheduled) {
       _keyboardScrollScheduled = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -4845,7 +4846,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     super.didChangeMetrics();
     // Only follow a real keyboard. Visual-viewport chrome on iOS PWA fires
     // metrics while rubber-banding the thread and must not jump the list.
-    if (!_inputFocusNode.hasFocus) return;
+    if (!_inputFocusNode.hasFocus || !_isNearBottom()) return;
     _scheduleKeyboardScrollFollow();
   }
 
@@ -6191,6 +6192,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _pendingMediaAutoRetryTimer?.cancel();
     _manualReadyRetryTimer?.cancel();
     _muteUnmuteTimer?.cancel();
+    _keyboardFollowTimer?.cancel();
     for (final t in _failedTextAutoRetryTimers.values) {
       t.cancel();
     }
@@ -15662,8 +15664,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                                           },
                                                                         );
                                                                         if (shouldReply) {
-                                                                          _inputFocusNode
-                                                                              .requestFocus();
+                                                                          _scrollToBottom();
+                                                                          WidgetsBinding.instance
+                                                                              .addPostFrameCallback((_) {
+                                                                            if (mounted) {
+                                                                              _inputFocusNode
+                                                                                  .requestFocus();
+                                                                            }
+                                                                          });
                                                                         }
                                                                       },
                                                             onHorizontalDragCancel:
@@ -16075,13 +16083,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               else
                 KeyedSubtree(
                   key: _composerPanelKey,
-                  child: AnimatedSize(
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeOutCubic,
-                    alignment: Alignment.topCenter,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                         if (_replyKeyboard != null &&
                             !_replyKeyboard!.isEmpty)
                           _buildReplyKeyboardStrip(scheme),
@@ -16818,7 +16822,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                       ],
                     ),
                   ),
-                ),
             ],
           ),
           ),
