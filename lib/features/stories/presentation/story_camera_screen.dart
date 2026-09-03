@@ -219,7 +219,11 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
                                 height: 18,
                                 child: CircularProgressIndicator(strokeWidth: 2),
                               )
-                            : const Text('Опубликовать'),
+                            : Text(
+                                _publishError == null
+                                    ? 'Опубликовать'
+                                    : 'Повторить',
+                              ),
                       ),
                     ),
                   ],

@@ -596,7 +596,13 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
           );
           _startReelExposure(_currentIndex);
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(FeedLoadHelper.cacheSnackMessage(e))),
+            SnackBar(
+              content: Text(FeedLoadHelper.cacheSnackMessage(e)),
+              action: SnackBarAction(
+                label: 'Повторить',
+                onPressed: () => unawaited(_loadReels(refresh: true)),
+              ),
+            ),
           );
         } else {
           final short = e is TimeoutException
@@ -604,7 +610,13 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
               : userVisibleError(e, fallback: 'Не удалось загрузить рилсы');
           setState(() => _lastLoadError = short);
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(short)),
+            SnackBar(
+              content: Text(short),
+              action: SnackBarAction(
+                label: 'Повторить',
+                onPressed: () => unawaited(_loadReels(refresh: true)),
+              ),
+            ),
           );
         }
       }

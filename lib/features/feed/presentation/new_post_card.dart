@@ -424,6 +424,7 @@ class _NewPostCardState extends State<NewPostCard>
           context,
           e,
           fallback: 'Не удалось поставить лайк',
+          onRetry: () => unawaited(_toggleLike()),
         );
       }
     } finally {
@@ -449,6 +450,7 @@ class _NewPostCardState extends State<NewPostCard>
           context,
           e,
           fallback: 'Не удалось поставить реакцию',
+          onRetry: () => unawaited(_togglePostReaction(emoji)),
         );
       }
     } finally {
@@ -479,10 +481,11 @@ class _NewPostCardState extends State<NewPostCard>
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content:
-                  Text(userVisibleError(e, fallback: 'Не удалось сохранить'))),
+        showErrorSnackBar(
+          context,
+          e,
+          fallback: 'Не удалось сохранить',
+          onRetry: () => unawaited(_toggleSave()),
         );
       }
     } finally {
@@ -517,6 +520,7 @@ class _NewPostCardState extends State<NewPostCard>
             context,
             e,
             fallback: 'Не удалось убрать репост',
+            onRetry: () => unawaited(_toggleRepost()),
           );
         }
       } finally {
@@ -560,6 +564,7 @@ class _NewPostCardState extends State<NewPostCard>
           context,
           e,
           fallback: 'Не удалось сделать репост',
+          onRetry: () => unawaited(_toggleRepost()),
         );
       }
     } finally {
@@ -686,7 +691,13 @@ class _NewPostCardState extends State<NewPostCard>
         await showStarsRequiredSnack(context, e, fallback: 'Не удалось отправить донат');
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+          SnackBar(
+            content: Text(e.toString().replaceFirst('Exception: ', '')),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_showDonateDialog()),
+            ),
+          ),
         );
       }
     } finally {
@@ -778,7 +789,13 @@ class _NewPostCardState extends State<NewPostCard>
         await showStarsRequiredSnack(context, e, fallback: 'Не удалось запустить буст');
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+          SnackBar(
+            content: Text(e.toString().replaceFirst('Exception: ', '')),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_showBoostDialog()),
+            ),
+          ),
         );
       }
     } finally {
@@ -824,12 +841,11 @@ class _NewPostCardState extends State<NewPostCard>
       widget.onPostDeleted?.call();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            userVisibleError(e, fallback: 'Не удалось удалить пост'),
-          ),
-        ),
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось удалить пост',
+        onRetry: () => unawaited(_confirmAndDeletePost()),
       );
     }
   }

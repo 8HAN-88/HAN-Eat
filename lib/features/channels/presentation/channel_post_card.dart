@@ -314,7 +314,12 @@ class _ChannelPostCardState extends State<ChannelPostCard>
           _likesCount = originalLikesCount;
         });
 
-        showErrorSnackBar(context, e, fallback: 'Не удалось поставить лайк');
+        showErrorSnackBar(
+          context,
+          e,
+          fallback: 'Не удалось поставить лайк',
+          onRetry: () => unawaited(_toggleLike()),
+        );
       }
     }
   }
@@ -464,12 +469,11 @@ class _ChannelPostCardState extends State<ChannelPostCard>
         _isSaved = !_isSaved;
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              userVisibleError(e, fallback: 'Не удалось сохранить'),
-            ),
-          ),
+        showErrorSnackBar(
+          context,
+          e,
+          fallback: 'Не удалось сохранить',
+          onRetry: () => unawaited(_toggleSave()),
         );
       }
     } finally {
@@ -681,12 +685,11 @@ class _ChannelPostCardState extends State<ChannelPostCard>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              userVisibleError(e, fallback: 'Не удалось удалить пост'),
-            ),
-          ),
+        showErrorSnackBar(
+          context,
+          e,
+          fallback: 'Не удалось удалить пост',
+          onRetry: () => unawaited(_confirmAndDeletePost()),
         );
       }
     }
