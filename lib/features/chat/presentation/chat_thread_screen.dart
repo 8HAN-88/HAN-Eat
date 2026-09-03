@@ -13996,6 +13996,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     required String mediaUrl,
   }) async {
     if (_recording) return;
+    if (kIsWeb) {
+      await Future<void>.delayed(const Duration(milliseconds: 240));
+      if (!mounted) return;
+    }
     final mode = await _askSendOrSchedule();
     if (mode == null || !mounted) return;
     final resolved = ServerConfig.resolveMediaUrl(mediaUrl);
@@ -14468,20 +14472,30 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (_recording) return;
     try {
       final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['pdf', 'txt', 'doc', 'docx', 'zip'],
+        type: FileType.any,
+        allowMultiple: false,
+        withData: kIsWeb,
       );
       if (result == null || result.files.isEmpty) return;
       final picked = result.files.single;
-      final XFile file;
+      final XFile? file;
       if (kIsWeb) {
         final bytes = picked.bytes;
-        if (bytes == null || bytes.isEmpty) return;
+        if (bytes == null || bytes.isEmpty) {
+          if (!mounted) return;
+          showErrorSnackBar(
+            context,
+            Exception('Не удалось прочитать файл'),
+            fallback: 'Не удалось прочитать файл',
+            onRetry: () => unawaited(_pickFile()),
+          );
+          return;
+        }
         file = XFile.fromData(bytes, name: picked.name);
       } else {
         final path = picked.path;
         if (path == null || path.isEmpty) return;
-        file = XFile(path);
+        file = XFile(path, name: picked.name);
       }
       await _sendPickedFile(file, fileName: picked.name);
     } catch (e) {
@@ -14501,6 +14515,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     int? replyToId,
     String? clientMessageId,
   }) async {
+    // iPhone Safari: второй sheet сразу после attach/picker часто не открывается.
+    if (kIsWeb) {
+      await Future<void>.delayed(const Duration(milliseconds: 240));
+      if (!mounted) return;
+    }
     final mode = await _askSendOrSchedule();
     if (mode == null || !mounted) return;
     if (_isScheduleMode(mode)) {

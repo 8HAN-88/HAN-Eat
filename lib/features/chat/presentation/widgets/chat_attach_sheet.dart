@@ -655,36 +655,54 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
       }
       return;
     }
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const [
-        'pdf',
-        'txt',
-        'doc',
-        'docx',
-        'zip',
-        'jpg',
-        'jpeg',
-        'png',
-        'heic',
-      ],
-      allowMultiple: false,
-    );
-    if (result == null || result.files.isEmpty || !mounted) return;
-    final picked = result.files.single;
-    final XFile file;
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+        allowMultiple: false,
+        withData: kIsWeb,
+      );
+      if (result == null || result.files.isEmpty || !mounted) return;
+      final picked = result.files.single;
+      final file = _xFileFromPicked(picked);
+      if (file == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Не удалось прочитать файл'),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_pickDocument()),
+            ),
+          ),
+        );
+        return;
+      }
+      _close(
+        ChatAttachSelection.pickedFile(file: file, name: picked.name),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Не удалось выбрать файл'),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_pickDocument()),
+          ),
+        ),
+      );
+    }
+  }
+
+  XFile? _xFileFromPicked(PlatformFile picked) {
     if (kIsWeb) {
       final bytes = picked.bytes;
-      if (bytes == null || bytes.isEmpty) return;
-      file = XFile.fromData(bytes, name: picked.name);
-    } else {
-      final path = picked.path;
-      if (path == null || path.isEmpty) return;
-      file = XFile(path);
+      if (bytes == null || bytes.isEmpty) return null;
+      return XFile.fromData(bytes, name: picked.name);
     }
-    _close(
-      ChatAttachSelection.pickedFile(file: file, name: picked.name),
-    );
+    final path = picked.path;
+    if (path == null || path.isEmpty) return null;
+    return XFile(path, name: picked.name);
   }
 
   void _sendPoll() {
@@ -844,6 +862,7 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowMultiple: false,
+      withData: kIsWeb,
       allowedExtensions: const [
         'gif',
         'webp',

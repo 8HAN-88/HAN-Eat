@@ -219,6 +219,7 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowMultiple: false,
+      withData: kIsWeb,
       allowedExtensions: const [
         'gif',
         'webp',
