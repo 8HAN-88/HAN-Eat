@@ -162,6 +162,13 @@ Future<void> showPhoneManageSheet(
   );
   if (confirmed != true || !context.mounted) return;
 
+  await _unlinkPhone(context, onChanged: onChanged);
+}
+
+Future<void> _unlinkPhone(
+  BuildContext context, {
+  required VoidCallback onChanged,
+}) async {
   try {
     await AuthService.unlinkPhone();
     if (!context.mounted) return;
@@ -172,7 +179,15 @@ Future<void> showPhoneManageSheet(
   } catch (e) {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(userVisibleError(e))),
+      SnackBar(
+        content: Text(userVisibleError(e)),
+        action: SnackBarAction(
+          label: 'Повторить',
+          onPressed: () => unawaited(
+            _unlinkPhone(context, onChanged: onChanged),
+          ),
+        ),
+      ),
     );
   }
 }

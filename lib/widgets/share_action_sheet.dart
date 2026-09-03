@@ -316,14 +316,25 @@ class _PostShareSheetState extends State<_PostShareSheet> {
       if (!mounted) return;
       ScaffoldMessenger.of(this.context).showSnackBar(
         SnackBar(
-            content: Text(
-          userVisibleAuthError(e, fallback: 'Не удалось отправить в чат'),
-        )),
+          content: Text(
+            userVisibleAuthError(e, fallback: 'Не удалось отправить в чат'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_sendToChat(this.context)),
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(this.context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_sendToChat(this.context)),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _sendingToChat = false);

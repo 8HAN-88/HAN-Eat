@@ -185,6 +185,13 @@ Future<void> showEmailManageSheet(
     return;
   }
 
+  await _resendEmailVerification(context, onChanged: onChanged);
+}
+
+Future<void> _resendEmailVerification(
+  BuildContext context, {
+  required VoidCallback onChanged,
+}) async {
   try {
     final result = await AuthService.resendVerification();
     if (!context.mounted) return;
@@ -195,7 +202,15 @@ Future<void> showEmailManageSheet(
   } catch (e) {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(userVisibleError(e))),
+      SnackBar(
+        content: Text(userVisibleError(e)),
+        action: SnackBarAction(
+          label: 'Повторить',
+          onPressed: () => unawaited(
+            _resendEmailVerification(context, onChanged: onChanged),
+          ),
+        ),
+      ),
     );
   }
 }

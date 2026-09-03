@@ -276,7 +276,13 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e))),
+          SnackBar(
+            content: Text(userVisibleError(e)),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_hideFromRecommendations(item)),
+            ),
+          ),
         );
       }
     }

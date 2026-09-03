@@ -432,7 +432,13 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
       if (!mounted) return;
       setState(() => _busy.remove(gift.id));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_wear(gift)),
+          ),
+        ),
       );
     }
   }

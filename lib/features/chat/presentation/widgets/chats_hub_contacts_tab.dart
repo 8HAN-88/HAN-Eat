@@ -369,7 +369,13 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_addPhoneContact()),
+          ),
+        ),
       );
     } finally {
       nameController.dispose();
@@ -419,7 +425,13 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_addHanEatContact(userId)),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _contactActionUserId = null);
@@ -457,7 +469,13 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_removeHanEatContact(userId, name)),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _contactActionUserId = null);

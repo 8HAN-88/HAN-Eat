@@ -696,8 +696,11 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось создать счёт',
+        onRetry: () => unawaited(_createStarsInvoice()),
       );
     }
   }

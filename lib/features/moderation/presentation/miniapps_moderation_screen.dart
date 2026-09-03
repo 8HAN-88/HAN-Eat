@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../features/miniapps/data/miniapp_models.dart';
@@ -79,7 +81,13 @@ class _MiniAppsModerationScreenState extends State<MiniAppsModerationScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_moderate(app, status)),
+          ),
+        ),
       );
     }
   }

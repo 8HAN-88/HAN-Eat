@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../services/product_analytics.dart';
@@ -114,7 +116,15 @@ class _ReportContentDialogState extends State<_ReportContentDialog> {
     } on ApiClientException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось отправить жалобу'))),
+          SnackBar(
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось отправить жалобу'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_submit()),
+            ),
+          ),
         );
       }
     } catch (e) {
@@ -123,6 +133,10 @@ class _ReportContentDialogState extends State<_ReportContentDialog> {
           SnackBar(
             content: Text(
               userVisibleError(e, fallback: 'Не удалось отправить жалобу'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_submit()),
             ),
           ),
         );

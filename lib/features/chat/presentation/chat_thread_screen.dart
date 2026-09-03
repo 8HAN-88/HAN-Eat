@@ -1121,8 +1121,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     } catch (e) {
       if (!mounted) return;
       setState(() => _bubbleAccent = previous);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+      showErrorSnackBar(
+        context,
+        e,
+        onRetry: () => unawaited(
+          _applyBubbleAccent(accent, applyToAll: applyToAll),
+        ),
       );
     }
   }
@@ -5523,8 +5527,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     } catch (e) {
       if (!mounted) return;
       _applyReactions(msg.id, previous);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+      showErrorSnackBar(
+        context,
+        e,
+        onRetry: () => unawaited(_toggleReaction(msg, emoji)),
       );
     }
   }

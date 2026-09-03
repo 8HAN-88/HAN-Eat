@@ -67,7 +67,15 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось загрузить настройки'))),
+          SnackBar(
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось загрузить настройки'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_loadPreferences()),
+            ),
+          ),
         );
         setState(() => _isLoading = false);
       }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../services/flex_subscription_service.dart';
@@ -173,7 +175,13 @@ class _AdminFlexFeaturesScreenState extends State<AdminFlexFeaturesScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_edit(feature)),
+          ),
+        ),
       );
     }
   }
