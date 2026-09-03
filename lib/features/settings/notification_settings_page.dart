@@ -49,6 +49,12 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                 ? 'Push-уведомления подключены'
                 : (_pushInfo?.message ?? 'Не удалось подключить push'),
           ),
+          action: ok
+              ? null
+              : SnackBarAction(
+                  label: 'Повторить',
+                  onPressed: () => unawaited(_retryPushRegistration()),
+                ),
         ),
       );
     } finally {

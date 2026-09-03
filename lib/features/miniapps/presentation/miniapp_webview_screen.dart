@@ -381,7 +381,13 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
       if (!mounted) return;
       setState(() => _sendingData = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось отправить данные: $e')),
+        SnackBar(
+          content: Text('Не удалось отправить данные: $e'),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_handleSendData(raw)),
+          ),
+        ),
       );
     }
   }

@@ -1,4 +1,6 @@
 // Экран настроек канала
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../../utils/api_error_parser.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -133,8 +135,14 @@ class _ChannelSettingsScreenState extends ConsumerState<ChannelSettingsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content:
-                  Text(userVisibleError(e, fallback: 'Не удалось сохранить'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось сохранить'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_handleSave()),
+            ),
+          ),
         );
       }
     } finally {
@@ -159,8 +167,14 @@ class _ChannelSettingsScreenState extends ConsumerState<ChannelSettingsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(
-                  userVisibleError(e, fallback: 'Не удалось удалить канал'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось удалить канал'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_confirmDeleteChannel()),
+            ),
+          ),
         );
       }
     } finally {

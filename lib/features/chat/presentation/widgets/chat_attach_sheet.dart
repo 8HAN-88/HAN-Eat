@@ -727,7 +727,13 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Не удалось создать стикерпак')),
+        SnackBar(
+          content: const Text('Не удалось создать стикерпак'),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_createStickerPack()),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _stickerBusy = false);
@@ -779,6 +785,15 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
                 ? 'Не удалось удалить стикерпак'
                 : 'Не удалось установить стикерпак',
           ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(
+              _toggleInstallStickerPack(
+                packId: packId,
+                isInstalled: isInstalled,
+              ),
+            ),
+          ),
         ),
       );
     } finally {
@@ -812,7 +827,13 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Не удалось добавить стикер')),
+        SnackBar(
+          content: const Text('Не удалось добавить стикер'),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_addStickerToPack(packId)),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _stickerBusy = false);
@@ -871,8 +892,13 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Не удалось добавить анимированный стикер')),
+        SnackBar(
+          content: const Text('Не удалось добавить анимированный стикер'),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_addAnimatedStickerToPack(packId)),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _stickerBusy = false);

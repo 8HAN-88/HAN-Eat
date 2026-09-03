@@ -325,8 +325,14 @@ class _ChannelManagementScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(userVisibleError(e,
-                  fallback: 'Не удалось загрузить подписчиков'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось загрузить подписчиков'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_loadMembers()),
+            ),
+          ),
         );
       }
     } finally {
@@ -370,8 +376,14 @@ class _ChannelManagementScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(
-                  userVisibleError(e, fallback: 'Не удалось выбрать аватар'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось выбрать аватар'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_pickAvatar()),
+            ),
+          ),
         );
       }
     }
@@ -402,8 +414,14 @@ class _ChannelManagementScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(
-                  userVisibleError(e, fallback: 'Не удалось выбрать обложку'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось выбрать обложку'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_pickCover()),
+            ),
+          ),
         );
       }
     }
@@ -457,8 +475,14 @@ class _ChannelManagementScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content:
-                  Text(userVisibleError(e, fallback: 'Не удалось сохранить'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось сохранить'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_save()),
+            ),
+          ),
         );
       }
     } finally {
@@ -528,8 +552,14 @@ class _ChannelManagementScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content:
-                  Text(userVisibleError(e, fallback: 'Не удалось удалить'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось удалить'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_deleteChannel()),
+            ),
+          ),
         );
       }
     }
@@ -1183,8 +1213,14 @@ class _ChannelManagementScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(
-                  userVisibleError(e, fallback: 'Не удалось обновить роль'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось обновить роль'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_updateMemberRole(userId, role)),
+            ),
+          ),
         );
       }
     }
@@ -1231,8 +1267,14 @@ class _ChannelManagementScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content:
-                  Text(userVisibleError(e, fallback: 'Не удалось удалить'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось удалить'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_removeMember(userId)),
+            ),
+          ),
         );
       }
     }
