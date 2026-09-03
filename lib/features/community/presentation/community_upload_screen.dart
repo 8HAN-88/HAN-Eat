@@ -1,5 +1,6 @@
+import 'dart:async';
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show kIsWeb, debugPrint, unawaited;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 
 // Условный импорт: на веб используем заглушку, на других платформах - dart:io
 import 'dart:io' if (dart.library.html) 'dart:html' as io;
