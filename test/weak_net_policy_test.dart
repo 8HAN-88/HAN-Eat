@@ -36,4 +36,21 @@ void main() {
       Duration.zero,
     );
   });
+
+  test('transport errors include timeout and 502', () {
+    expect(
+      WeakNetPolicy.isRetryableTransportError(
+        Exception('TimeoutException: upload'),
+      ),
+      isTrue,
+    );
+    expect(
+      WeakNetPolicy.isRetryableTransportError(Exception('502 Bad Gateway')),
+      isTrue,
+    );
+    expect(
+      WeakNetPolicy.mediaUploadTimeout,
+      const Duration(seconds: 90),
+    );
+  });
 }

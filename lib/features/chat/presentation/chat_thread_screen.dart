@@ -103,6 +103,7 @@ import 'widgets/chat_contact_bubble.dart';
 import 'widgets/chat_location_bubble.dart';
 import 'widgets/chat_story_reply_bubble.dart';
 import '../application/live_location_session.dart';
+import '../application/media_send_policy.dart';
 import 'widgets/chat_message_readers_sheet.dart';
 import 'widgets/chat_message_reactors_sheet.dart';
 import 'widgets/chat_mute_duration_sheet.dart';
@@ -1019,10 +1020,25 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (_readyOutboundQueue.isNotEmpty) {
       _kickReadyOutbound();
     }
+    if (_pendingMediaRetry != null) {
+      final pending = _pendingMediaRetry!;
+      _clearPendingMediaAutoRetry();
+      pending.attempts = 0;
+      pending.lastRetryAfterSeconds = null;
+      pending.lastLimitedAt = null;
+      if (mounted) {
+        setState(() => _pendingMediaRetry = null);
+      } else {
+        _pendingMediaRetry = null;
+      }
+      if (!_mediaOutboundQueue
+          .any((p) => p.clientMessageId == pending.clientMessageId)) {
+        _mediaOutboundQueue.add(pending);
+      }
+      unawaited(_persistMediaOutbox(pending, failed: false));
+    }
     if (_mediaOutboundQueue.isNotEmpty) {
       unawaited(_drainMediaOutboundQueue());
-    } else if (_pendingMediaRetry != null && _autoRetryOnLimitsEnabled) {
-      unawaited(_retryPendingMedia());
     }
   }
 
@@ -1818,20 +1834,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   bool _isRetryableSendError(Object e) {
-    final s = e.toString().toLowerCase();
-    return s.contains('too many requests') ||
-        s.contains('rate_limit') ||
-        s.contains('429') ||
-        s.contains('503') ||
-        s.contains('504') ||
-        s.contains('timeout') ||
-        s.contains('network') ||
-        s.contains('connection') ||
-        s.contains('socket') ||
-        s.contains('offline');
+    return MediaSendPolicy.isRetryableNetworkError(e);
   }
-
-  static const Duration _voiceUploadTimeout = Duration(seconds: 75);
 
   String _mediaStatusLabel(_PendingMediaSend pending) {
     return switch (pending.kind) {
@@ -1933,6 +1937,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           if (!mounted) return;
           continue;
         }
+        if (!ApiReachabilityService.instance.isApiReachable.value) {
+          _setMediaComposerStatus('Ждём сеть…');
+          await Future<void>.delayed(MediaSendPolicy.unreachablePoll);
+          if (!mounted) return;
+          continue;
+        }
         final pending = _mediaOutboundQueue.first;
         _setMediaComposerStatus(_mediaStatusLabel(pending));
         try {
@@ -1954,23 +1964,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             _removeMediaFromQueue(pending.clientMessageId);
             if (_mediaOutboundQueue.isEmpty) {
               _clearMediaComposerProgress();
-            }
-            continue;
-          }
-          if (e is TimeoutException &&
-              pending.kind == _PendingMediaKind.voice) {
-            _removeMediaFromQueue(pending.clientMessageId);
-            _clearMediaComposerProgress();
-            pending.lastRetryAfterSeconds = null;
-            pending.lastLimitedAt = null;
-            _rememberFailedMedia(pending);
-            if (mounted) {
-              showErrorSnackBar(
-                context,
-                e,
-                fallback:
-                    'Загрузка голосового заняла слишком много времени. Проверьте сеть и нажмите «Повторить».',
-              );
             }
             continue;
           }
@@ -2018,17 +2011,25 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             }
             continue;
           }
-          pending.attempts++;
-          final maxAttempts = pending.kind == _PendingMediaKind.voice ? 3 : 8;
-          if (_isRetryableSendError(e) && pending.attempts < maxAttempts) {
-            final waitSec = pending.kind == _PendingMediaKind.voice
-                ? (pending.attempts * 2).clamp(2, 8)
-                : (2 * pending.attempts).clamp(2, 45);
+          final apiReachable =
+              ApiReachabilityService.instance.isApiReachable.value;
+          if (MediaSendPolicy.shouldKeepQueued(
+            error: e,
+            apiReachable: apiReachable,
+          )) {
+            pending.attempts++;
+            final waitSec = MediaSendPolicy.retryWaitSeconds(
+              attempts: pending.attempts,
+              apiReachable: apiReachable,
+            );
             if (mounted) {
               setState(() {
-                _sendingStatus = 'Повтор через $waitSec с…';
+                _sendingStatus = apiReachable
+                    ? 'Повтор через $waitSec с…'
+                    : 'Ждём сеть…';
               });
             }
+            unawaited(_persistMediaOutbox(pending, failed: false));
             await Future<void>.delayed(Duration(seconds: waitSec));
             continue;
           }
@@ -2095,9 +2096,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             );
           },
         );
-        final uploaded = pending.kind == _PendingMediaKind.voice
-            ? await uploadFuture.timeout(_voiceUploadTimeout)
-            : await uploadFuture;
+        final largeFile = pending.kind == _PendingMediaKind.video ||
+            pending.kind == _PendingMediaKind.file;
+        final uploaded = await uploadFuture.timeout(
+          MediaSendPolicy.uploadTimeout(largeFile: largeFile),
+        );
         if (_cancelledPendingMediaClientIds.contains(pending.clientMessageId)) {
           throw _CancelledPendingMediaException();
         }
@@ -4418,15 +4421,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Future<Uint8List?> _bytesForMediaOutbox(_PendingMediaSend pending) async {
     final cached = pending.payloadBytes ?? pending.previewBytes;
-    if (cached != null &&
-        cached.isNotEmpty &&
-        cached.length <= ChatMediaOutboxService.maxBytesPerItem) {
+    if (cached != null && ChatMediaOutboxService.acceptsBytes(cached.length)) {
       return cached;
     }
     try {
       final bytes = await pending.file.readAsBytes();
-      if (bytes.isEmpty ||
-          bytes.length > ChatMediaOutboxService.maxBytesPerItem) {
+      if (!ChatMediaOutboxService.acceptsBytes(bytes.length)) {
         return null;
       }
       pending.payloadBytes = bytes;
@@ -4472,7 +4472,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (rows.isEmpty || !mounted) return;
     final uid = AuthService.instance.currentUser?.id ?? 0;
     final restoredMessages = <ChatMessage>[];
-    _PendingMediaSend? firstFailed;
     for (final row in rows) {
       final clientMessageId = row['client_message_id'] as String? ?? '';
       final tempId = row['temp_id'] as int? ?? 0;
@@ -4518,13 +4517,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
       pending.payloadBytes = bytes;
       pending.uploadedMediaUrl = row['uploaded_media_url'] as String?;
-      pending.attempts = row['attempts'] as int? ?? 0;
+      pending.attempts = 0;
       pending.lastRetryAfterSeconds =
           (row['last_retry_after_seconds'] as int?)?.clamp(1, 3600);
       pending.lastLimitedAt = DateTime.tryParse(
         row['last_limited_at'] as String? ?? '',
       );
-      final failed = row['failed'] as bool? ?? true;
       _pendingMediaByTempId[tempId] = pending;
       _pendingMediaTempIdByClientId[clientMessageId] = tempId;
       if (!_messages.any((m) => m.id == tempId)) {
@@ -4554,23 +4552,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           ),
         );
       }
-      if (failed) {
-        firstFailed ??= pending;
-      } else {
-        _mediaOutboundQueue.add(pending);
-      }
+      _mediaOutboundQueue.add(pending);
     }
-    if (restoredMessages.isEmpty &&
-        firstFailed == null &&
-        _mediaOutboundQueue.isEmpty) {
+    if (restoredMessages.isEmpty && _mediaOutboundQueue.isEmpty) {
       return;
     }
     setState(() {
       _messages.addAll(restoredMessages);
       _messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-      if (firstFailed != null) {
-        _pendingMediaRetry = firstFailed;
-      }
     });
     if (_mediaOutboundQueue.isNotEmpty) {
       unawaited(_drainMediaOutboundQueue());
@@ -8778,12 +8767,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (!kIsWeb && (path == null || path.isEmpty)) return;
 
       final XFile file;
+      Uint8List? voiceBytes;
       if (kIsWeb) {
         if (path == null || path.isEmpty) {
           throw Exception('Не удалось сохранить запись');
         }
         final bytes = await XFile(path).readAsBytes();
         if (bytes.isEmpty) throw Exception('Пустая запись');
+        voiceBytes = bytes;
         file = XFile.fromData(
           bytes,
           name: 'voice_${DateTime.now().millisecondsSinceEpoch}.webm',
@@ -8808,7 +8799,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       try {
         totalBytes = await file.length();
       } catch (_) {
-        totalBytes = null;
+        totalBytes = voiceBytes?.length;
       }
       _enqueueMediaSend(_PendingMediaSend(
         tempId: _newLocalTempId(),
@@ -8817,7 +8808,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         clientMessageId: clientMessageId,
         voiceDurationSec: durationSec,
         replyToMessageId: _replyTo?.id,
-        totalBytes: totalBytes,
+        totalBytes: totalBytes ?? voiceBytes?.length,
+        payloadBytes: voiceBytes,
         silent: mode == 'silent',
         topicId: _activeTopicIdForSend,
         anonymous: _effectiveSendAnonymous,
@@ -13837,7 +13829,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     Uint8List? previewBytes;
     try {
       totalBytes = await file.length();
-      if (totalBytes <= 8 * 1024 * 1024) {
+      if (totalBytes <= ChatMediaOutboxService.maxBytesPerItem) {
         previewBytes = await file.readAsBytes();
       }
     } catch (_) {

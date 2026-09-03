@@ -3,6 +3,8 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 import '../core/storage/hive_bootstrap.dart';
 
+enum MediaOutboxWrite { saved, skippedEmpty, skippedTooLarge, unavailable }
+
 /// Persist pending/failed chat media so reload can retry like Telegram.
 ///
 /// Uses Hive (IndexedDB on web). Skips items larger than [maxBytesPerItem].
@@ -12,6 +14,9 @@ class ChatMediaOutboxService {
   static const boxName = 'chat_media_outbox_v1';
   static const maxBytesPerItem = 12 * 1024 * 1024; // 12 MB
   static const maxItemsPerConversation = 8;
+
+  static bool acceptsBytes(int length) =>
+      length > 0 && length <= maxBytesPerItem;
 
   static Box? _box;
 
@@ -34,7 +39,7 @@ class ChatMediaOutboxService {
   static String _key(int conversationId, String clientMessageId) =>
       '${conversationId}_$clientMessageId';
 
-  static Future<void> upsert({
+  static Future<MediaOutboxWrite> upsert({
     required int conversationId,
     required String clientMessageId,
     required int tempId,
@@ -50,9 +55,10 @@ class ChatMediaOutboxService {
     String? createdAtIso,
     bool failed = true,
   }) async {
-    if (bytes.isEmpty || bytes.length > maxBytesPerItem) return;
+    if (bytes.isEmpty) return MediaOutboxWrite.skippedEmpty;
+    if (bytes.length > maxBytesPerItem) return MediaOutboxWrite.skippedTooLarge;
     final box = await _ensureBox();
-    if (box == null) return;
+    if (box == null) return MediaOutboxWrite.unavailable;
     try {
       final key = _key(conversationId, clientMessageId);
       await box.put(key, {
@@ -72,8 +78,10 @@ class ChatMediaOutboxService {
         'bytes': bytes,
       });
       await _trimConversation(box, conversationId);
+      return MediaOutboxWrite.saved;
     } catch (e) {
       debugPrint('ChatMediaOutbox upsert failed: $e');
+      return MediaOutboxWrite.unavailable;
     }
   }
 

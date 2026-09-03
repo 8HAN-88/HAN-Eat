@@ -209,14 +209,7 @@ class MediaUploadService {
   }
 
   static bool _isRetryableUploadError(Object error) {
-    final text = error.toString().toLowerCase();
-    return text.contains('socketexception') ||
-        text.contains('failed host lookup') ||
-        text.contains('connection reset') ||
-        text.contains('connection refused') ||
-        text.contains('timed out') ||
-        text.contains('handshakeexception') ||
-        text.contains('clientexception');
+    return WeakNetPolicy.isRetryableTransportError(error);
   }
 
   static Future<http.Response> _putUploadWithRetries({
@@ -244,12 +237,18 @@ class MediaUploadService {
           workingHeaders['Authorization'] = 'Bearer $refreshedToken';
           continue;
         }
-        if ((response.statusCode == 502 ||
+        if ((response.statusCode == 429 ||
+                response.statusCode == 502 ||
                 response.statusCode == 503 ||
                 response.statusCode == 504) &&
             attempt < 3) {
-          await Future<void>.delayed(
-              Duration(milliseconds: 350 * (attempt + 1)));
+          if (response.statusCode == 429) {
+            _registerRateLimit(response);
+            await _waitForRateLimit();
+          } else {
+            await Future<void>.delayed(
+                Duration(milliseconds: 350 * (attempt + 1)));
+          }
           continue;
         }
         return response;
@@ -441,6 +440,10 @@ class MediaUploadService {
         if (isRateLimited && attempt < 5) {
           await _waitForRateLimit();
           await Future<void>.delayed(Duration(seconds: 2 * (attempt + 1)));
+          continue;
+        }
+        if (_isRetryableUploadError(e) && attempt < 2) {
+          await Future<void>.delayed(Duration(seconds: attempt + 1));
           continue;
         }
         rethrow;
