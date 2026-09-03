@@ -1,5 +1,5 @@
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint, unawaited;
 
 // Условный импорт: на веб используем заглушку, на других платформах - dart:io
 import 'dart:io' if (dart.library.html) 'dart:html' as io;
@@ -217,7 +217,13 @@ class _CommunityUploadScreenState
       context.pop(true);
     } else if (state.error != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(state.error!)),
+        SnackBar(
+          content: Text(state.error!),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_submit()),
+          ),
+        ),
       );
     }
   }

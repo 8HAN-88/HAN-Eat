@@ -100,6 +100,7 @@ Future<void> showStarsRequiredSnack(
   BuildContext context,
   Object error, {
   String? fallback,
+  VoidCallback? onRetry,
 }) async {
   final stars = isStarsRequiredError(error);
   final message = userVisibleError(
@@ -120,7 +121,9 @@ Future<void> showStarsRequiredSnack(
                 }
               },
             )
-          : null,
+          : onRetry == null
+              ? null
+              : SnackBarAction(label: 'Повторить', onPressed: onRetry),
     ),
   );
 }

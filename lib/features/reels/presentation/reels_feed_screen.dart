@@ -1086,7 +1086,12 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
             const SnackBar(content: Text('Нельзя репостнуть свой пост')),
           );
         } else {
-          showErrorSnackBar(context, e, fallback: 'Не удалось сделать репост');
+          showErrorSnackBar(
+            context,
+            e,
+            fallback: 'Не удалось сделать репост',
+            onRetry: () => unawaited(_toggleRepost(reel)),
+          );
         }
       }
     }

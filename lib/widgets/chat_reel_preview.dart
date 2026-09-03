@@ -131,7 +131,12 @@ class _ChatReelPreviewState extends State<ChatReelPreview> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      showErrorSnackBar(context, e, fallback: 'Не удалось сохранить');
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось сохранить',
+        onRetry: () => unawaited(_toggleSave()),
+      );
     }
   }
 

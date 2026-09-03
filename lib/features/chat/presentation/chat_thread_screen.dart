@@ -1989,6 +1989,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 e,
                 fallback:
                     'Загрузка голосового заняла слишком много времени. Проверьте сеть и нажмите «Повторить».',
+                onRetry: () => unawaited(_retryPendingMedia()),
               );
             }
             continue;
@@ -2066,7 +2067,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             if (isStarsRequiredError(e)) {
               await showStarsRequiredSnack(context, e, fallback: fallback);
             } else {
-              showErrorSnackBar(context, e, fallback: fallback);
+              showErrorSnackBar(
+                context,
+                e,
+                fallback: fallback,
+                onRetry: () => unawaited(_retryPendingMedia()),
+              );
             }
           }
         }
@@ -2548,7 +2554,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           unawaited(_persistReadySends());
           if (!mounted) return;
           setState(() {});
-          showErrorSnackBar(context, e);
+          showErrorSnackBar(
+            context,
+            e,
+            onRetry: () => unawaited(_retryFailedReady(pending.tempId)),
+          );
           return;
         }
       }
@@ -8491,7 +8501,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      showErrorSnackBar(context, e, fallback: 'Не удалось начать видеозвонок');
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось начать видеозвонок',
+        onRetry: () => unawaited(_startVideoCall()),
+      );
     }
   }
 
@@ -8518,7 +8533,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      showErrorSnackBar(context, e, fallback: 'Не удалось начать звонок');
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось начать звонок',
+        onRetry: () => unawaited(_startVoiceCall()),
+      );
     }
   }
 
@@ -9101,6 +9121,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         context,
         e,
         fallback: 'Не удалось запланировать голосовое',
+        onRetry: () => unawaited(
+          _scheduleVoiceFile(
+            file,
+            durationSec: durationSec,
+            clientMessageId: clientMessageId,
+            silent: silent,
+          ),
+        ),
       );
     } finally {
       if (mounted) {
@@ -11670,7 +11698,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         }
       });
       if (!refresh || _messages.isNotEmpty) {
-        showErrorSnackBar(context, e, fallback: message);
+        showErrorSnackBar(
+          context,
+          e,
+          fallback: message,
+          onRetry: () => unawaited(_load(refresh: refresh)),
+        );
       }
     }
   }
@@ -11920,7 +11953,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 ),
               );
             }
-            showErrorSnackBar(context, e);
+            showErrorSnackBar(
+              context,
+              e,
+              onRetry: () => unawaited(_retryFailedText(pending.tempId)),
+            );
             return;
           }
           if (err.contains('group_flood_limited')) {
@@ -11947,18 +11984,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             );
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Лимит сообщений в минуту достигнут.$wait'),
+                content: Text(
+                  _autoRetryOnLimitsEnabled
+                      ? 'Лимит сообщений в минуту достигнут.$wait'
+                      : 'Лимит сообщений в минуту достигнут.$wait Нажмите «Повторить».',
+                ),
+                action: SnackBarAction(
+                  label: 'Повторить',
+                  onPressed: () => unawaited(_retryFailedText(pending.tempId)),
+                ),
               ),
             );
-            if (!_autoRetryOnLimitsEnabled && mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    'Автоповтор отключен — нажмите «Повторить» вручную',
-                  ),
-                ),
-              );
-            }
             return;
           }
           pending.attempts++;
@@ -11979,7 +12015,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           if (isStarsRequiredError(e)) {
             await showStarsRequiredSnack(context, e);
           } else {
-            showErrorSnackBar(context, e);
+            showErrorSnackBar(
+              context,
+              e,
+              onRetry: () => unawaited(_retryFailedText(pending.tempId)),
+            );
           }
           return;
         }
@@ -12572,8 +12612,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       unawaited(_refreshScheduledPendingCount());
     } catch (e) {
       if (!mounted) return;
-      showErrorSnackBar(context, e,
-          fallback: 'Не удалось запланировать сообщение');
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось запланировать сообщение',
+        onRetry: () => unawaited(
+          _scheduleTextPayload(
+            text: text,
+            delivery: delivery,
+            silent: silent,
+            effectId: effectId,
+          ),
+        ),
+      );
     }
   }
 
@@ -12938,6 +12989,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                           e,
                                           fallback:
                                               'Не удалось отправить сейчас',
+                                          onRetry: () => unawaited(
+                                            _sendScheduledMessageNow(item),
+                                          ),
                                         );
                                       }
                                     },
@@ -12988,6 +13042,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                             e,
                                             fallback:
                                                 'Не удалось изменить сообщение',
+                                            onRetry: () => unawaited(
+                                              ChatService.rescheduleMessage(
+                                                conversationId:
+                                                    widget.conversationId,
+                                                scheduledMessageId: item.id,
+                                                content: next,
+                                              ),
+                                            ),
                                           );
                                         }
                                       },
@@ -13054,6 +13116,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                             e,
                                             fallback:
                                                 'Не удалось перенести сообщение',
+                                            onRetry: () => unawaited(
+                                              ChatService.rescheduleMessage(
+                                                conversationId:
+                                                    widget.conversationId,
+                                                scheduledMessageId: item.id,
+                                                sendAt: nextSendAt,
+                                              ),
+                                            ),
                                           );
                                         }
                                       },
@@ -13080,6 +13150,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                           e,
                                           fallback:
                                               'Не удалось отменить сообщение',
+                                          onRetry: () => unawaited(
+                                            ChatService.cancelScheduledMessage(
+                                              conversationId:
+                                                  widget.conversationId,
+                                              scheduledMessageId: item.id,
+                                            ),
+                                          ),
                                         );
                                       }
                                     },
@@ -13423,8 +13500,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       unawaited(_refreshScheduledPendingCount());
     } catch (e) {
       if (!mounted) return;
-      showErrorSnackBar(context, e,
-          fallback: 'Не удалось запланировать медиа');
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось запланировать медиа',
+        onRetry: () => unawaited(
+          _scheduleGallerySelection(
+            files,
+            caption: caption,
+            hasSpoiler: hasSpoiler,
+            silent: silent,
+          ),
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -13833,6 +13921,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           context,
           e,
           fallback: 'Не удалось запланировать опрос',
+          onRetry: () => unawaited(_sendPollDraft(draft)),
         );
       }
       return;
@@ -13893,6 +13982,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           context,
           e,
           fallback: 'Не удалось запланировать файл',
+          onRetry: () => unawaited(
+            _resendStoredFile(name: name, mediaUrl: mediaUrl),
+          ),
         );
       }
       return;
@@ -14178,8 +14270,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
       } catch (e) {
         if (mounted) {
-          showErrorSnackBar(context, e,
-              fallback: 'Не удалось выполнить действие');
+          showErrorSnackBar(
+            context,
+            e,
+            fallback: 'Не удалось выполнить действие',
+            onRetry: () => unawaited(_tapInlineButton(msg, button)),
+          );
         }
       } finally {
         if (mounted) {
@@ -14347,7 +14443,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       await _sendPickedFile(file, fileName: picked.name);
     } catch (e) {
       if (!mounted) return;
-      showErrorSnackBar(context, e, fallback: 'Не удалось выбрать файл');
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось выбрать файл',
+        onRetry: () => unawaited(_pickFile()),
+      );
     }
   }
 
@@ -14435,7 +14536,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      showErrorSnackBar(context, e, fallback: 'Не удалось запланировать файл');
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось запланировать файл',
+        onRetry: () => unawaited(
+          _schedulePickedFile(
+            file,
+            fileName: fileName,
+            replyToId: replyToId,
+            silent: silent,
+          ),
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() {

@@ -241,7 +241,11 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      await showStarsRequiredSnack(context, e);
+      await showStarsRequiredSnack(
+        context,
+        e,
+        onRetry: () => unawaited(_create()),
+      );
     }
   }
 

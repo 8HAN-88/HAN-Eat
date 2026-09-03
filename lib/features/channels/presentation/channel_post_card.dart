@@ -358,7 +358,12 @@ class _ChannelPostCardState extends State<ChannelPostCard>
         });
 
         if (mounted) {
-          showErrorSnackBar(context, e, fallback: 'Не удалось убрать репост');
+          showErrorSnackBar(
+            context,
+            e,
+            fallback: 'Не удалось убрать репост',
+            onRetry: () => unawaited(_toggleRepost()),
+          );
         }
       } finally {
         if (mounted) {
@@ -414,7 +419,12 @@ class _ChannelPostCardState extends State<ChannelPostCard>
       });
 
       if (mounted) {
-        showErrorSnackBar(context, e, fallback: 'Не удалось сделать репост');
+        showErrorSnackBar(
+          context,
+          e,
+          fallback: 'Не удалось сделать репост',
+          onRetry: () => unawaited(_toggleRepost()),
+        );
       }
     } finally {
       if (mounted) {

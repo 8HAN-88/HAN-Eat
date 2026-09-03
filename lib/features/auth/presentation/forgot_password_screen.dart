@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -61,10 +63,16 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           SnackBar(content: Text(result.message)),
         );
       }
-    } on AuthException catch (e) {
+    }     on AuthException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
+          SnackBar(
+            content: Text(e.message),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_submit()),
+            ),
+          ),
         );
       }
     } finally {
