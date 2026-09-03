@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -119,7 +121,11 @@ class _ChatInviteJoinScreenState extends State<ChatInviteJoinScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
-      await showStarsRequiredSnack(context, e);
+      await showStarsRequiredSnack(
+        context,
+        e,
+        onRetry: () => unawaited(_subscribeAndJoin()),
+      );
     }
   }
 

@@ -82,7 +82,11 @@ class _StarInvoicePayScreenState extends State<StarInvoicePayScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _paying = false);
-      await showStarsRequiredSnack(context, e);
+      await showStarsRequiredSnack(
+        context,
+        e,
+        onRetry: () => unawaited(_pay()),
+      );
     }
   }
 
@@ -184,7 +188,11 @@ class _StarInvoicePayScreenState extends State<StarInvoicePayScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _refunding = false);
-      await showStarsRequiredSnack(context, e);
+      await showStarsRequiredSnack(
+        context,
+        e,
+        onRetry: () => unawaited(_refund()),
+      );
     }
   }
 

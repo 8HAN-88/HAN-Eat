@@ -553,8 +553,14 @@ class _ChannelPostCardState extends State<ChannelPostCard>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(
-                  userVisibleError(e, fallback: 'Не удалось загрузить пост'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось загрузить пост'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_openEditPost()),
+            ),
+          ),
         );
       }
     }
@@ -606,6 +612,10 @@ class _ChannelPostCardState extends State<ChannelPostCard>
             content: Text(
               userVisibleError(e, fallback: 'Не удалось закрепить пост'),
             ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_pinPost()),
+            ),
           ),
         );
       }
@@ -626,6 +636,10 @@ class _ChannelPostCardState extends State<ChannelPostCard>
           SnackBar(
             content: Text(
               userVisibleError(e, fallback: 'Не удалось открепить пост'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_unpinPost()),
             ),
           ),
         );
@@ -651,8 +665,14 @@ class _ChannelPostCardState extends State<ChannelPostCard>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content:
-                  Text(userVisibleError(e, fallback: 'Не удалось продвинуть'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось продвинуть'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_promotePost()),
+            ),
+          ),
         );
       }
     }

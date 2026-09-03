@@ -180,7 +180,11 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      await showStarsRequiredSnack(context, e);
+      await showStarsRequiredSnack(
+        context,
+        e,
+        onRetry: () => unawaited(_subscribePaidChannelFromAppBar()),
+      );
     } finally {
       if (mounted) setState(() => _subscribingPaid = false);
     }
@@ -591,7 +595,11 @@ class _PrivateChannelPostsLockedState
       widget.onUnlocked();
     } catch (e) {
       if (!mounted) return;
-      await showStarsRequiredSnack(context, e);
+      await showStarsRequiredSnack(
+        context,
+        e,
+        onRetry: () => unawaited(_subscribe()),
+      );
     } finally {
       if (mounted) setState(() => _loading = false);
     }

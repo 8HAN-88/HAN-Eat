@@ -307,7 +307,11 @@ class _NewPostCardState extends State<NewPostCard>
       );
     } catch (e) {
       if (!mounted) return;
-      await showStarsRequiredSnack(context, e);
+      await showStarsRequiredSnack(
+        context,
+        e,
+        onRetry: () => unawaited(_purchasePaidContent()),
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -687,7 +691,12 @@ class _NewPostCardState extends State<NewPostCard>
     } catch (e) {
       if (!mounted) return;
       if (isStarsRequiredError(e)) {
-        await showStarsRequiredSnack(context, e, fallback: 'Не удалось отправить донат');
+        await showStarsRequiredSnack(
+          context,
+          e,
+          fallback: 'Не удалось отправить донат',
+          onRetry: () => unawaited(_showDonateDialog()),
+        );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -785,7 +794,12 @@ class _NewPostCardState extends State<NewPostCard>
     } catch (e) {
       if (!mounted) return;
       if (isStarsRequiredError(e)) {
-        await showStarsRequiredSnack(context, e, fallback: 'Не удалось запустить буст');
+        await showStarsRequiredSnack(
+          context,
+          e,
+          fallback: 'Не удалось запустить буст',
+          onRetry: () => unawaited(_showBoostDialog()),
+        );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

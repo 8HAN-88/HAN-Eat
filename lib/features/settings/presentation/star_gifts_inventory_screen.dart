@@ -230,7 +230,11 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy.remove(gift.id));
-      await showStarsRequiredSnack(context, e);
+      await showStarsRequiredSnack(
+        context,
+        e,
+        onRetry: () => unawaited(_upgrade(gift)),
+      );
     }
   }
 
@@ -273,7 +277,11 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy.remove(gift.id));
-      await showStarsRequiredSnack(context, e);
+      await showStarsRequiredSnack(
+        context,
+        e,
+        onRetry: () => unawaited(_transfer(gift)),
+      );
     }
   }
 

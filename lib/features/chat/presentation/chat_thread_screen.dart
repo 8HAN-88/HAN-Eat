@@ -2065,7 +2065,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               _PendingMediaKind.voice => 'Не удалось отправить голосовое',
             };
             if (isStarsRequiredError(e)) {
-              await showStarsRequiredSnack(context, e, fallback: fallback);
+              await showStarsRequiredSnack(
+                context,
+                e,
+                fallback: fallback,
+                onRetry: () => unawaited(_retryPendingMedia()),
+              );
             } else {
               showErrorSnackBar(
                 context,
@@ -5596,7 +5601,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     } catch (e) {
       if (!mounted) return;
       _applyReactions(msg.id, previous);
-      await showStarsRequiredSnack(context, e);
+      await showStarsRequiredSnack(
+        context,
+        e,
+        onRetry: () => unawaited(_sendPaidReaction(msg)),
+      );
     } finally {
       if (mounted) setState(() => _sendingPaidReaction = false);
     }
@@ -6317,6 +6326,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         SnackBar(
           content: Text(
             userVisibleError(e, fallback: 'Не удалось открыть чат'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(
+              _messageContactUser(userId, quoteFrom: quoteFrom),
+            ),
           ),
         ),
       );
@@ -8172,7 +8187,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
       unawaited(_pollNew());
     } catch (e) {
-      if (mounted) await showStarsRequiredSnack(context, e);
+      if (mounted) {
+        await showStarsRequiredSnack(
+          context,
+          e,
+          onRetry: () => unawaited(_sendStarGift()),
+        );
+      }
     } finally {
       if (mounted) setState(() => _sendingStarGift = false);
     }
@@ -8442,7 +8463,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (!mounted) return;
       final i = _messages.indexWhere((m) => m.id == previous.id);
       if (i >= 0) setState(() => _messages[i] = previous);
-      await showStarsRequiredSnack(context, e);
+      await showStarsRequiredSnack(
+        context,
+        e,
+        onRetry: () => unawaited(_unlockPaidMedia(msg)),
+      );
     } finally {
       if (mounted) {
         setState(() => _unlockingMessageIds.remove(msg.id));
@@ -8474,7 +8499,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       }
     } catch (e) {
       if (!mounted) return;
-      await showStarsRequiredSnack(context, e);
+      await showStarsRequiredSnack(
+        context,
+        e,
+        onRetry: () => unawaited(_tipPeerWithStars()),
+      );
     }
   }
 
@@ -12013,7 +12042,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           if (!mounted) return;
           setState(() {});
           if (isStarsRequiredError(e)) {
-            await showStarsRequiredSnack(context, e);
+            await showStarsRequiredSnack(
+              context,
+              e,
+              onRetry: () => unawaited(_retryFailedText(pending.tempId)),
+            );
           } else {
             showErrorSnackBar(
               context,

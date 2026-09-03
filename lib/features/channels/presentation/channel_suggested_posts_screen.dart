@@ -173,7 +173,11 @@ class _ChannelSuggestedPostsScreenState
       );
     } catch (e) {
       if (!mounted) return;
-      await showStarsRequiredSnack(context, e);
+      await showStarsRequiredSnack(
+        context,
+        e,
+        onRetry: () => unawaited(_suggest()),
+      );
     }
   }
 

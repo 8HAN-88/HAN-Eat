@@ -382,7 +382,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       context.push(ChatThreadRoute.pathFor(real), extra: real);
     } catch (e) {
       if (!mounted) return;
-      await showStarsRequiredSnack(context, e);
+      await showStarsRequiredSnack(
+        context,
+        e,
+        onRetry: () => unawaited(_sendGiftFromProfile(user)),
+      );
     } finally {
       if (mounted) setState(() => _isSendingGift = false);
     }
@@ -418,7 +422,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       }
     } catch (e) {
       if (!mounted) return;
-      await showStarsRequiredSnack(context, e);
+      await showStarsRequiredSnack(
+        context,
+        e,
+        onRetry: () => unawaited(_sendStarsFromProfile(user)),
+      );
     } finally {
       if (mounted) setState(() => _isSendingTip = false);
     }
@@ -446,7 +454,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       unawaited(_loadProfileGifts());
     } catch (e) {
       if (!mounted) return;
-      await showStarsRequiredSnack(context, e);
+      await showStarsRequiredSnack(
+        context,
+        e,
+        onRetry: () => unawaited(_buyProfileGift(gift)),
+      );
     }
   }
 
