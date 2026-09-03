@@ -5,8 +5,11 @@ double effectiveChatKeyboardInset({
   required double rawInset,
   required bool composerFocused,
 }) {
+  // While typing, follow the keyboard frame-by-frame (Safari animates ~250ms).
+  // Thresholds below are only for unfocused rubber-band noise.
+  if (composerFocused) return rawInset < 0 ? 0 : rawInset;
   if (rawInset < 80) return 0;
-  if (!composerFocused && rawInset < 140) return 0;
+  if (rawInset < 140) return 0;
   return rawInset;
 }
 
