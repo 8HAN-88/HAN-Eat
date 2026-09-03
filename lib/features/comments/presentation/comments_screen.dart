@@ -198,6 +198,9 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
           context,
           e,
           fallback: 'Не удалось отправить комментарий',
+          onRetry: () {
+            _postComment();
+          },
         );
       }
     } finally {
@@ -226,12 +229,13 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
       _emitCount();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              userVisibleError(e, fallback: 'Не удалось удалить комментарий'),
-            ),
-          ),
+        showErrorSnackBar(
+          context,
+          e,
+          fallback: 'Не удалось удалить комментарий',
+          onRetry: () {
+            _deleteComment(target);
+          },
         );
       }
     }

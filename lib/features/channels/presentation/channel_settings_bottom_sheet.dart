@@ -67,6 +67,81 @@ class _ChannelSettingsBottomSheetState
     } catch (_) {}
   }
 
+  Future<void> _setNotificationsEnabled(bool value) async {
+    try {
+      await ChannelSheetPrefs.setNotificationsEnabled(
+        widget.channelId,
+        value,
+      );
+      if (mounted) setState(() => _notificationsEnabled = value);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось сохранить'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_setNotificationsEnabled(value)),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _setShowInFeed(bool value) async {
+    try {
+      await ChannelSheetPrefs.setShowInFeed(widget.channelId, value);
+      if (mounted) setState(() => _showInFeed = value);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось сохранить'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_setShowInFeed(value)),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _toggleFavorite() async {
+    final next = !_isFavorite;
+    try {
+      await ChannelSheetPrefs.setFavorite(widget.channelId, next);
+      if (!mounted) return;
+      setState(() => _isFavorite = next);
+      ref.read(channelFavoritesRefreshProvider.notifier).state++;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            next
+                ? 'Канал в избранном — раздел «Каналы»'
+                : 'Убрано из избранного',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось сохранить'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_toggleFavorite()),
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _leaveChannel() async {
     try {
       await ChannelService.leaveChannel(widget.channelId);
@@ -242,29 +317,8 @@ class _ChannelSettingsBottomSheetState
               trailing: widget.channel.isMember
                   ? Switch(
                       value: _notificationsEnabled,
-                      onChanged: (value) async {
-                        try {
-                          await ChannelSheetPrefs.setNotificationsEnabled(
-                            widget.channelId,
-                            value,
-                          );
-                          if (mounted) {
-                            setState(() => _notificationsEnabled = value);
-                          }
-                        } catch (e) {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                  content: Text(
-                                userVisibleError(
-                                  e,
-                                  fallback: 'Не удалось сохранить',
-                                ),
-                              )),
-                            );
-                          }
-                        }
-                      },
+                      onChanged: (value) =>
+                          unawaited(_setNotificationsEnabled(value)),
                     )
                   : null,
             ),
@@ -273,21 +327,7 @@ class _ChannelSettingsBottomSheetState
               title: const Text('Показ в разделе'),
               trailing: Switch(
                 value: _showInFeed,
-                onChanged: (value) async {
-                  try {
-                    await ChannelSheetPrefs.setShowInFeed(
-                        widget.channelId, value);
-                    if (mounted) setState(() => _showInFeed = value);
-                  } catch (e) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                            content: Text(userVisibleError(e,
-                                fallback: 'Не удалось сохранить'))),
-                      );
-                    }
-                  }
-                },
+                onChanged: (value) => unawaited(_setShowInFeed(value)),
               ),
             ),
             ListTile(
@@ -297,32 +337,7 @@ class _ChannelSettingsBottomSheetState
                 _isFavorite ? Icons.star : Icons.star_border,
                 color: _isFavorite ? scheme.secondary : null,
               ),
-              onTap: () async {
-                final next = !_isFavorite;
-                try {
-                  await ChannelSheetPrefs.setFavorite(widget.channelId, next);
-                  if (!mounted) return;
-                  setState(() => _isFavorite = next);
-                  ref.read(channelFavoritesRefreshProvider.notifier).state++;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        next
-                            ? 'Канал в избранном — раздел «Каналы»'
-                            : 'Убрано из избранного',
-                      ),
-                    ),
-                  );
-                } catch (e) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                          content: Text(userVisibleError(e,
-                              fallback: 'Не удалось сохранить'))),
-                    );
-                  }
-                }
-              },
+              onTap: () => unawaited(_toggleFavorite()),
             ),
             const Divider(),
             ListTile(

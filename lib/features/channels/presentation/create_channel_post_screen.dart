@@ -455,8 +455,17 @@ class _CreateChannelPostScreenState
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text(userVisibleError(e,
-                    fallback: 'Не удалось выбрать изображение'))),
+              content: Text(
+                userVisibleError(
+                  e2,
+                  fallback: 'Не удалось выбрать изображение',
+                ),
+              ),
+              action: SnackBarAction(
+                label: 'Повторить',
+                onPressed: () => unawaited(_pickImage()),
+              ),
+            ),
           );
         }
       }
@@ -476,8 +485,14 @@ class _CreateChannelPostScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(
-                  userVisibleError(e, fallback: 'Не удалось выбрать видео'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось выбрать видео'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_pickVideo()),
+            ),
+          ),
         );
       }
     }
@@ -513,6 +528,10 @@ class _CreateChannelPostScreenState
           content: Text(
             userVisibleError(e, fallback: 'Не удалось открыть камеру'),
           ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_pickCameraImage()),
+          ),
         ),
       );
     }
@@ -536,8 +555,14 @@ class _CreateChannelPostScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(
-                  userVisibleError(e, fallback: 'Не удалось выбрать обложку'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось выбрать обложку'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_pickThumbnail()),
+            ),
+          ),
         );
       }
     }
@@ -729,8 +754,14 @@ class _CreateChannelPostScreenState
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(
-                  userVisibleError(e, fallback: 'Не удалось загрузить медиа'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось загрузить медиа'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_uploadMedia()),
+            ),
+          ),
         );
       }
     }
@@ -1069,7 +1100,15 @@ class _CreateChannelPostScreenState
               ? e.message
               : 'Ошибка ${widget.postId != null ? "обновления" : "создания"} поста: ${e.message}';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(text)),
+        SnackBar(
+          content: Text(text),
+          action: e.isContentBlocked
+              ? null
+              : SnackBarAction(
+                  label: 'Повторить',
+                  onPressed: () => unawaited(_submit()),
+                ),
+        ),
       );
     } catch (e) {
       if (mounted) {
@@ -1082,6 +1121,10 @@ class _CreateChannelPostScreenState
                     ? 'Не удалось обновить пост'
                     : 'Не удалось создать пост',
               ),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_submit()),
             ),
           ),
         );

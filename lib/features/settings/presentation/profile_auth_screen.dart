@@ -95,8 +95,14 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(userVisibleError(e,
-                  fallback: 'Не удалось загрузить аватар'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось загрузить аватар'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_pickAndUploadAvatar()),
+            ),
+          ),
         );
       }
     } finally {
@@ -143,8 +149,14 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content:
-                  Text(userVisibleError(e, fallback: 'Не удалось обновить'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось обновить'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_saveProfile()),
+            ),
+          ),
         );
       }
     } finally {

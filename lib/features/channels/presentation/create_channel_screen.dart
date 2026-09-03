@@ -143,8 +143,14 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(userVisibleError(e,
-                  fallback: 'Не удалось выбрать изображение'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось выбрать изображение'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_pickAvatar()),
+            ),
+          ),
         );
       }
     }
