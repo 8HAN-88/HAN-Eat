@@ -9,8 +9,19 @@ void main() {
         0,
       );
       expect(
-        effectiveChatKeyboardInset(rawInset: 79, composerFocused: true),
+        effectiveChatKeyboardInset(rawInset: 79, composerFocused: false),
         0,
+      );
+    });
+
+    test('follows inset frame-by-frame while composer is focused', () {
+      expect(
+        effectiveChatKeyboardInset(rawInset: 24, composerFocused: true),
+        24,
+      );
+      expect(
+        effectiveChatKeyboardInset(rawInset: 79, composerFocused: true),
+        79,
       );
     });
 

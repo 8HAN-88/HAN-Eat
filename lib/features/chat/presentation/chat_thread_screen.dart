@@ -593,6 +593,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Timer? _pendingMediaAutoRetryTimer;
   Timer? _manualReadyRetryTimer;
   Timer? _muteUnmuteTimer;
+  Timer? _keyboardFollowTimer;
+  bool _keyboardScrollScheduled = false;
   DateTime? _slowModeLockUntil;
   DateTime? _floodLockUntil;
   DateTime? _pendingMediaAutoRetryUntil;
@@ -4812,9 +4814,30 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   void _onComposerFocusChanged() {
     if (!_inputFocusNode.hasFocus) {
       _hideBotAutocompleteOverlay();
+      _keyboardFollowTimer?.cancel();
+      _keyboardFollowTimer = null;
     } else {
-      _scrollToBottomAfterKeyboard();
+      _scheduleKeyboardScrollFollow(finalSnapDelayMs: 280);
     }
+  }
+
+  void _scheduleKeyboardScrollFollow({int finalSnapDelayMs = 0}) {
+    if (!_scroll.hasClients) return;
+    if (!_keyboardScrollScheduled) {
+      _keyboardScrollScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _keyboardScrollScheduled = false;
+        if (!mounted || !_scroll.hasClients) return;
+        if (!_inputFocusNode.hasFocus && finalSnapDelayMs == 0) return;
+        _scrollToBottom(animated: false);
+      });
+    }
+    if (finalSnapDelayMs <= 0) return;
+    _keyboardFollowTimer?.cancel();
+    _keyboardFollowTimer = Timer(Duration(milliseconds: finalSnapDelayMs), () {
+      if (!mounted || !_scroll.hasClients) return;
+      _scrollToBottom(animated: false);
+    });
   }
 
   @override
@@ -4823,16 +4846,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     // Only follow a real keyboard. Visual-viewport chrome on iOS PWA fires
     // metrics while rubber-banding the thread and must not jump the list.
     if (!_inputFocusNode.hasFocus) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_inputFocusNode.hasFocus) return;
-      final keyboard = effectiveChatKeyboardInset(
-        rawInset: MediaQuery.viewInsetsOf(context).bottom,
-        composerFocused: true,
-      );
-      if (keyboard > 0) {
-        _scrollToBottomAfterKeyboard();
-      }
-    });
+    _scheduleKeyboardScrollFollow();
   }
 
   void _onScrollChanged() {
@@ -11268,6 +11282,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
+  /// Composer banners sit inside [AnimatedSize] — avoid nested slide/size fades.
+  Widget _composerStrip({
+    required bool visible,
+    required Widget child,
+  }) {
+    if (!visible) return const SizedBox.shrink();
+    return child;
+  }
+
   Widget _buildReplyKeyboardStrip(ColorScheme scheme) {
     final kb = _replyKeyboard;
     if (kb == null || kb.isEmpty) return const SizedBox.shrink();
@@ -11889,14 +11912,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   void _scrollToBottomAfterKeyboard() {
-    _scrollToBottom(animated: false);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _scrollToBottom(animated: false);
-    });
-    Future<void>.delayed(const Duration(milliseconds: 180), () {
-      if (mounted) _scrollToBottom(animated: false);
-    });
+    _scheduleKeyboardScrollFollow(finalSnapDelayMs: 280);
   }
 
   bool get _serializeTextSends =>
@@ -15244,9 +15260,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               ),
         body: Stack(
           children: [
-            AnimatedPadding(
-          duration: const Duration(milliseconds: 120),
-          curve: Curves.easeOutCubic,
+            Padding(
           padding: EdgeInsets.only(bottom: keyboardInset),
           child: ChatWallpaper(
             isDark: Theme.of(context).brightness == Brightness.dark,
@@ -16062,7 +16076,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 KeyedSubtree(
                   key: _composerPanelKey,
                   child: AnimatedSize(
-                    duration: _uiAnimDuration,
+                    duration: const Duration(milliseconds: 220),
                     curve: Curves.easeOutCubic,
                     alignment: Alignment.topCenter,
                     child: Column(
@@ -16119,13 +16133,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                             !_pendingMediaByTempId
                                 .containsKey(_pendingMediaRetry!.tempId))
                           _pendingMediaRetryBanner(scheme),
-                        _animatedVisibility(
+                        _composerStrip(
                           visible: _composerLinkPreviewUrl != null &&
                               _editingMessage == null,
-                          keyName: 'composer-link-preview',
-                          child: _composerLinkPreviewUrl == null
-                              ? const SizedBox.shrink()
-                              : Material(
+                          child: Material(
                                   color: Theme.of(context).brightness ==
                                           Brightness.dark
                                       ? const Color(0xFF1A2632)
@@ -16165,12 +16176,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                   ),
                                 ),
                         ),
-                        _animatedVisibility(
+                        _composerStrip(
                           visible: _editingMessage != null,
-                          keyName: 'edit-banner',
-                          child: _editingMessage == null
-                              ? const SizedBox.shrink()
-                              : _telegramReplyStrip(
+                          child: _telegramReplyStrip(
                                   author: _editingMessage!.type == 'text'
                                       ? 'Редактирование'
                                       : 'Подпись',
@@ -16184,12 +16192,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                   onClose: _cancelEdit,
                                 ),
                         ),
-                        _animatedVisibility(
+                        _composerStrip(
                           visible: _privateReply != null,
-                          keyName: 'private-reply-banner',
-                          child: _privateReply == null
-                              ? const SizedBox.shrink()
-                              : _telegramReplyStrip(
+                          child: _telegramReplyStrip(
                                   author: _privateReply!.stripAuthor,
                                   preview: _privateReply!.preview,
                                   onTap: () {
@@ -16207,12 +16212,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                   },
                                 ),
                         ),
-                        _animatedVisibility(
+                        _composerStrip(
                           visible: _replyTo != null && _privateReply == null,
-                          keyName: 'reply-banner',
-                          child: _replyTo == null
-                              ? const SizedBox.shrink()
-                              : _telegramReplyStrip(
+                          child: _telegramReplyStrip(
                                   author: _replyTo!.isMine
                                       ? 'Вы'
                                       : (_replyTo!.senderName ??
@@ -16225,9 +16227,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                   },
                                 ),
                         ),
-                        _animatedVisibility(
+                        _composerStrip(
                           visible: !canSendInGroup,
-                          keyName: 'group-readonly-banner',
                           child: _composerInfoBanner(
                             backgroundColor: scheme.secondaryContainer
                                 .withValues(alpha: 0.45),
@@ -16238,9 +16239,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                 : 'Только админы могут отправлять сообщения',
                           ),
                         ),
-                        _animatedVisibility(
+                        _composerStrip(
                           visible: peerBlockedByMe,
-                          keyName: 'peer-blocked-banner',
                           child: _composerInfoBanner(
                             backgroundColor: scheme.errorContainer
                                 .withValues(alpha: 0.55),
