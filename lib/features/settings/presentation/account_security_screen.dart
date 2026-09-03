@@ -273,7 +273,13 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_logoutEverywhere()),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _busy = false);

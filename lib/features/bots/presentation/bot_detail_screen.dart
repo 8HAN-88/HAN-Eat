@@ -9,6 +9,7 @@ import '../../../services/api_service.dart';
 import '../../../services/chat_service.dart';
 import '../../../services/paid_features_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../utils/session_snackbar.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/telegram_ui.dart';
@@ -134,8 +135,11 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
       return true;
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
+        showErrorSnackBar(
+          context,
+          e,
+          fallback: 'Не удалось загрузить бота',
+          onRetry: () => unawaited(_loadBot()),
         );
       }
       return false;
@@ -1272,8 +1276,11 @@ class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
       await _reload();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось создать мини-приложение',
+        onRetry: () => unawaited(_newApp()),
       );
     }
   }
@@ -1306,8 +1313,11 @@ class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
       await _reload();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось сохранить',
+        onRetry: () => unawaited(_editApp(app)),
       );
     }
   }
@@ -1321,8 +1331,11 @@ class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
       await _reload();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось обновить',
+        onRetry: () => unawaited(_toggleActive(app)),
       );
     }
   }
@@ -1351,8 +1364,11 @@ class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
       await _reload();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось удалить',
+        onRetry: () => unawaited(_deleteApp(app)),
       );
     }
   }
@@ -1782,8 +1798,11 @@ class _BotCommandsScreenState extends State<_BotCommandsScreen> {
       await _reload();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось добавить команду',
+        onRetry: () => unawaited(_add()),
       );
     }
   }
@@ -1811,8 +1830,11 @@ class _BotCommandsScreenState extends State<_BotCommandsScreen> {
       await _reload();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось сохранить команду',
+        onRetry: () => unawaited(_edit(command)),
       );
     }
   }
@@ -1823,8 +1845,11 @@ class _BotCommandsScreenState extends State<_BotCommandsScreen> {
       await _reload();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось удалить команду',
+        onRetry: () => unawaited(_delete(command)),
       );
     }
   }

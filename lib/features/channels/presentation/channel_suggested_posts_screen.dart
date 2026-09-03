@@ -219,7 +219,13 @@ class _ChannelSuggestedPostsScreenState
       if (!mounted) return;
       setState(() => _busy.remove(post.id));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_review(post, approve: approve)),
+          ),
+        ),
       );
     }
   }

@@ -283,9 +283,22 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
       ),
     );
     if (ok != true || !mounted) return;
-    await ChatFolderStore.deleteFolder(folder.id);
-    if (!mounted) return;
-    Navigator.pop(context, 'deleted');
+    try {
+      await ChatFolderStore.deleteFolder(folder.id);
+      if (!mounted) return;
+      Navigator.pop(context, 'deleted');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_deleteFolder()),
+          ),
+        ),
+      );
+    }
   }
 
   Widget _buildLoadBanner() {

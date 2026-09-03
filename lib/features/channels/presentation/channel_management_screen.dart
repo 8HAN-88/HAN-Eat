@@ -295,6 +295,13 @@ class _ChannelManagementScreenState
         content: Text(
           joinRequestsBulkSnackMessage(approve: approve, result: result),
         ),
+        action: result.failed > 0
+            ? SnackBarAction(
+                label: 'Повторить',
+                onPressed: () =>
+                    unawaited(_reviewAllJoinRequests(approve: approve)),
+              )
+            : null,
       ),
     );
   }

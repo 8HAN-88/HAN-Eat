@@ -214,11 +214,14 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
         chatItems = await ChatService.listConversations(archived: true);
       }
       final channels = <Channel>[];
+      var failedChannels = 0;
       for (final id in archivedIds) {
         try {
           final detail = await ChannelService.getChannel(id);
           channels.add(detail);
-        } catch (_) {}
+        } catch (_) {
+          failedChannels++;
+        }
       }
       channels.sort(
         (a, b) => (b.lastPostAt ?? b.createdAt)
@@ -236,6 +239,21 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
         _selectedKeys.removeWhere((k) => !valid.contains(k));
         if (_selectedKeys.isEmpty) _selectionMode = false;
       });
+      if (failedChannels > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              failedChannels == 1
+                  ? 'Не загрузился 1 канал'
+                  : 'Не загрузились $failedChannels каналов',
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_load()),
+            ),
+          ),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -351,13 +369,14 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
 
   Future<void> _unarchiveSelected() async {
     if (_selectedKeys.isEmpty || _bulkBusy) return;
+    final keys = Set<String>.from(_selectedKeys);
     setState(() => _bulkBusy = true);
     var ok = 0;
-    var fail = 0;
+    final failedKeys = <String>{};
     try {
-      for (final chat in _chats) {
+      for (final chat in List<ChatConversation>.from(_chats)) {
         final key = _chatKey(chat.id);
-        if (!_selectedKeys.contains(key)) continue;
+        if (!keys.contains(key)) continue;
         try {
           await ChatService.setArchived(
             conversationId: chat.id,
@@ -365,23 +384,24 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
           );
           ok += 1;
         } catch (_) {
-          fail += 1;
+          failedKeys.add(key);
         }
       }
-      for (final channel in _channels) {
+      for (final channel in List<Channel>.from(_channels)) {
         final key = _channelKey(channel.id);
-        if (!_selectedKeys.contains(key)) continue;
+        if (!keys.contains(key)) continue;
         try {
           await ChannelSheetPrefs.setArchived(channel.id, false);
           ok += 1;
         } catch (_) {
-          fail += 1;
+          failedKeys.add(key);
         }
       }
       if (!mounted) return;
       _exitSelection();
       await _load();
       if (!mounted) return;
+      final fail = failedKeys.length;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -389,6 +409,20 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
                 ? 'Разархивировано: $ok'
                 : 'Разархивировано: $ok, ошибок: $fail',
           ),
+          action: fail == 0
+              ? null
+              : SnackBarAction(
+                  label: 'Повторить',
+                  onPressed: () {
+                    setState(() {
+                      _selectionMode = true;
+                      _selectedKeys
+                        ..clear()
+                        ..addAll(failedKeys);
+                    });
+                    unawaited(_unarchiveSelected());
+                  },
+                ),
         ),
       );
     } finally {

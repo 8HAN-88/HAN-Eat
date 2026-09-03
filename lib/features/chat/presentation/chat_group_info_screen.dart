@@ -151,7 +151,13 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       if (!mounted) return;
       setState(() => _busy = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_changeGroupPhoto()),
+          ),
+        ),
       );
     }
   }
@@ -198,7 +204,13 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       if (!mounted) return;
       setState(() => _busy = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_renameGroup()),
+          ),
+        ),
       );
     }
   }
@@ -342,7 +354,13 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_editGroupPaid()),
+          ),
+        ),
       );
     }
   }
@@ -797,7 +815,13 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       if (!mounted) return;
       setState(() => _busy = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_removeMember(member)),
+          ),
+        ),
       );
     }
   }
@@ -828,7 +852,13 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       if (!mounted) return;
       setState(() => _busy = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_setMemberAdmin(member, isAdmin)),
+          ),
+        ),
       );
     }
   }
@@ -951,7 +981,13 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       if (!mounted) return;
       setState(() => _busy = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_editMemberPermissions(member)),
+          ),
+        ),
       );
     }
   }
@@ -2341,6 +2377,12 @@ class _GroupJoinRequestsSheetState extends State<_GroupJoinRequestsSheet> {
         content: Text(
           joinRequestsBulkSnackMessage(approve: approve, result: result),
         ),
+        action: result.failed > 0
+            ? SnackBarAction(
+                label: 'Повторить',
+                onPressed: () => unawaited(_reviewAll(approve: approve)),
+              )
+            : null,
       ),
     );
   }

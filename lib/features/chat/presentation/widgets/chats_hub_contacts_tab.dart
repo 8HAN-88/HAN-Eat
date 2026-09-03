@@ -237,7 +237,13 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
       if (!mounted) return;
       setState(() => _phoneSyncError = e);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_importFromPhoneBook()),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _syncingPhone = false);

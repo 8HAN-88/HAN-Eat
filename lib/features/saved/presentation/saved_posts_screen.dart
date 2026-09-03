@@ -234,7 +234,8 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
           if (notification.metrics.pixels >=
                   notification.metrics.maxScrollExtent * 0.8 &&
               !_isLoading &&
-              _hasMore) {
+              _hasMore &&
+              _loadError == null) {
             _loadMore();
           }
           return false;
@@ -244,6 +245,27 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
           itemCount: _posts.length + (_hasMore ? 1 : 0),
           itemBuilder: (context, index) {
             if (index == _posts.length) {
+              if (_loadError != null && !_isLoading) {
+                return Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        userVisibleError(
+                          _loadError!,
+                          fallback: 'Не удалось загрузить',
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      TextButton(
+                        onPressed: _loadMore,
+                        child: const Text('Повторить'),
+                      ),
+                    ],
+                  ),
+                );
+              }
               return const Center(
                 child: Padding(
                   padding: EdgeInsets.all(16),

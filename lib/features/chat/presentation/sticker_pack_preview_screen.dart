@@ -45,7 +45,13 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
       if (!mounted) return;
       setState(() => _loading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_load()),
+          ),
+        ),
       );
     }
   }

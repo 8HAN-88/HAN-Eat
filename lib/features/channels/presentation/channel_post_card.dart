@@ -1,4 +1,6 @@
 // Карточка поста в канале — тот же каркас, что и в ленте (шапка канала, мета, действия).
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -556,8 +558,14 @@ class _ChannelPostCardState extends State<ChannelPostCard>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(userVisibleError(e,
-                  fallback: 'Не удалось снять продвижение'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось снять продвижение'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_unpromotePost()),
+            ),
+          ),
         );
       }
     }

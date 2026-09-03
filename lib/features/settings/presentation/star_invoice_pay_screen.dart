@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -127,7 +129,13 @@ class _StarInvoicePayScreenState extends State<StarInvoicePayScreen> {
       if (!mounted) return;
       setState(() => _cancelling = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_cancel()),
+          ),
+        ),
       );
     }
   }

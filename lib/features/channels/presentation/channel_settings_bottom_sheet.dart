@@ -1,4 +1,6 @@
 // Bottom sheet с настройками канала
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../utils/api_error_parser.dart';
@@ -63,6 +65,28 @@ class _ChannelSettingsBottomSheetState
         });
       }
     } catch (_) {}
+  }
+
+  Future<void> _leaveChannel() async {
+    try {
+      await ChannelService.leaveChannel(widget.channelId);
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Вы отписались от канала')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_leaveChannel()),
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -338,47 +362,7 @@ class _ChannelSettingsBottomSheetState
                   'Отписаться',
                   style: TextStyle(color: scheme.error),
                 ),
-                onTap: () async {
-                  try {
-                    await ChannelService.leaveChannel(widget.channelId);
-                    if (!mounted) return;
-                    Navigator.of(context).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Вы отписались от канала'),
-                      ),
-                    );
-                  } catch (e) {
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(userVisibleError(e)),
-                        action: SnackBarAction(
-                          label: 'Повторить',
-                          onPressed: () async {
-                            try {
-                              await ChannelService.leaveChannel(
-                                widget.channelId,
-                              );
-                              if (!mounted) return;
-                              Navigator.of(context).pop();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Вы отписались от канала'),
-                                ),
-                              );
-                            } catch (err) {
-                              if (!mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(userVisibleError(err))),
-                              );
-                            }
-                          },
-                        ),
-                      ),
-                    );
-                  }
-                },
+                onTap: () => unawaited(_leaveChannel()),
               ),
             ],
             SizedBox(height: bottomInset > 0 ? bottomInset : 12),
