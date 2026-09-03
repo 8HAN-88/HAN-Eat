@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -116,6 +118,12 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen> {
           content: Text(
             userVisibleError(e, fallback: 'Не удалось выполнить действие'),
           ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(
+              _runWebhookAction(action, successMessage),
+            ),
+          ),
         ),
       );
     } finally {
@@ -212,6 +220,10 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen> {
           content: Text(
             userVisibleError(e, fallback: 'Не удалось экспортировать операции'),
           ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_exportWebhookOps()),
+          ),
         ),
       );
     }
@@ -246,6 +258,10 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen> {
         SnackBar(
           content: Text(
             userVisibleError(e, fallback: 'Не удалось экспортировать incident report'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_exportWebhookIncidentReport()),
           ),
         ),
       );

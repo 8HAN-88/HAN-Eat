@@ -217,8 +217,14 @@ class _PostShareSheetState extends State<_PostShareSheet> {
       if (!mounted) return;
       ScaffoldMessenger.of(this.context).showSnackBar(
         SnackBar(
-            content: Text(userVisibleAuthError(e,
-                fallback: 'Не удалось опубликовать репост'))),
+          content: Text(
+            userVisibleAuthError(e, fallback: 'Не удалось опубликовать репост'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_repostToChannel(this.context)),
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -226,6 +232,10 @@ class _PostShareSheetState extends State<_PostShareSheet> {
         SnackBar(
           content: Text(
             userVisibleAuthError(e, fallback: 'Не удалось опубликовать репост'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_repostToChannel(this.context)),
           ),
         ),
       );
