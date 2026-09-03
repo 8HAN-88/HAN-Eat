@@ -31,6 +31,17 @@ void main() {
         336,
       );
     });
+
+    test('ignores inset when the viewport already resizes for the keyboard', () {
+      expect(
+        effectiveChatKeyboardInset(
+          rawInset: 336,
+          composerFocused: true,
+          viewportResizesContent: true,
+        ),
+        0,
+      );
+    });
   });
 
   group('chatBottomFabPolicy', () {
