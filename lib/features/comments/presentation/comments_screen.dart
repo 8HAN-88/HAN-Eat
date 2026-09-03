@@ -10,6 +10,7 @@ import '../../../utils/api_error_parser.dart';
 import '../../../utils/session_snackbar.dart';
 import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../../widgets/post_reactions_bar.dart';
 import '../../../widgets/report_content_dialog.dart';
 
 class CommentsScreen extends ConsumerStatefulWidget {
@@ -302,6 +303,10 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
               ],
             ),
           ),
+        PostReactionsBar(
+          postId: widget.postId,
+          initialReactions: widget.post?.reactions ?? const [],
+        ),
         // Информация о посте (если есть) — hide in sheet to keep IG-like density
         if (widget.post != null && !widget.asSheet)
           Container(
