@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/post.dart';
 import '../services/post_service.dart';
 import '../utils/api_error_parser.dart';
+import '../utils/session_snackbar.dart';
 import 'app_avatar.dart';
 
 /// Опрос в посте ленты / канала с возможностью голосования.
@@ -63,13 +64,24 @@ class _PostPollSectionState extends State<PostPollSection> {
     } on ApiClientException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleAuthError(e, fallback: 'Не удалось выполнить действие'))),
+          SnackBar(
+            content: Text(
+              userVisibleAuthError(e, fallback: 'Не удалось выполнить действие'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => _vote(optionIndex),
+            ),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось проголосовать'))),
+        showErrorSnackBar(
+          context,
+          e,
+          fallback: 'Не удалось проголосовать',
+          onRetry: () => _vote(optionIndex),
         );
       }
     } finally {
@@ -89,13 +101,24 @@ class _PostPollSectionState extends State<PostPollSection> {
     } on ApiClientException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleAuthError(e, fallback: 'Не удалось выполнить действие'))),
+          SnackBar(
+            content: Text(
+              userVisibleAuthError(e, fallback: 'Не удалось выполнить действие'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: _closePoll,
+            ),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось закрыть опрос'))),
+        showErrorSnackBar(
+          context,
+          e,
+          fallback: 'Не удалось закрыть опрос',
+          onRetry: _closePoll,
         );
       }
     } finally {
@@ -121,11 +144,22 @@ class _PostPollSectionState extends State<PostPollSection> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                 children: [
-                  Text(
-                    'Кто проголосовал',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Кто проголосовал',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Закрыть',
+                        onPressed: () => Navigator.of(context).maybePop(),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -188,20 +222,57 @@ class _PostPollSectionState extends State<PostPollSection> {
         },
       );
     } on ApiClientException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleAuthError(e, fallback: 'Не удалось выполнить действие'))),
-        );
-      }
+      if (!mounted) return;
+      setState(() => _loadingVoters = false);
+      await _showVotersError(
+        userVisibleAuthError(e, fallback: 'Не удалось загрузить голоса'),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось загрузить голоса'))),
-        );
-      }
+      if (!mounted) return;
+      setState(() => _loadingVoters = false);
+      await _showVotersError(
+        userVisibleError(e, fallback: 'Не удалось загрузить голоса'),
+      );
     } finally {
-      if (mounted) setState(() => _loadingVoters = false);
+      if (mounted && _loadingVoters) {
+        setState(() => _loadingVoters = false);
+      }
     }
+  }
+
+  Future<void> _showVotersError(String message) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    _showVoters();
+                  },
+                  child: const Text('Повторить'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('Закрыть'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override

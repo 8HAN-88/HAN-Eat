@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -116,6 +118,12 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen> {
           content: Text(
             userVisibleError(e, fallback: 'Не удалось выполнить действие'),
           ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(
+              _runWebhookAction(action, successMessage),
+            ),
+          ),
         ),
       );
     } finally {
@@ -160,10 +168,21 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen> {
         }
         _webhookOpsHasMore = page.hasMore;
       });
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       if (reset && _webhookOps.isEmpty) {
         setState(() => _webhookOpsHasMore = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось загрузить операции'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => _loadMoreWebhookOps(reset: true),
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _webhookOpsLoading = false);
@@ -201,6 +220,10 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen> {
           content: Text(
             userVisibleError(e, fallback: 'Не удалось экспортировать операции'),
           ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_exportWebhookOps()),
+          ),
         ),
       );
     }
@@ -235,6 +258,10 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen> {
         SnackBar(
           content: Text(
             userVisibleError(e, fallback: 'Не удалось экспортировать incident report'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_exportWebhookIncidentReport()),
           ),
         ),
       );
@@ -506,7 +533,19 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen> {
                       ),
                       const SizedBox(height: 8),
                       if (_data!.recentActions.isEmpty)
-                        const Text('Пока нет записей в журнале')
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Пока нет записей в журнале'),
+                              TextButton(
+                                onPressed: _load,
+                                child: const Text('Обновить'),
+                              ),
+                            ],
+                          ),
+                        )
                       else
                         ..._data!.recentActions.map(
                           (a) => ListTile(

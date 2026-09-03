@@ -1,6 +1,7 @@
 // Экран профиля пользователя
 import 'dart:async';
 import '../../../utils/api_error_parser.dart';
+import '../../../utils/session_snackbar.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -339,10 +340,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content:
-                Text(userVisibleError(e, fallback: 'Не удалось открыть чат'))),
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось открыть чат',
+        onRetry: () => unawaited(_openChat(user)),
       );
     } finally {
       if (mounted) setState(() => _isOpeningChat = false);
@@ -359,25 +361,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       if (!mounted) return;
       final idem =
           'flutter:profile-gift:${user.id}:${draft.gift.id}:${const Uuid().v4()}';
-      final messenger = ScaffoldMessenger.of(context);
-      unawaited(() async {
-        try {
-          final real = conv.id > 0
-              ? conv
-              : await ChatOpenDirect.resolve(user.id);
-          await PaidFeaturesService.sendGift(
-            giftId: draft.gift.id,
-            conversationId: real.id,
-            message: draft.message,
-            hideName: draft.hideName,
-            idempotencyKey: idem,
-          );
-        } catch (e) {
-          if (!mounted) return;
-          await showStarsRequiredSnack(context, e);
-        }
-      }());
-      messenger.showSnackBar(
+      final real = conv.id > 0 ? conv : await ChatOpenDirect.resolve(user.id);
+      await PaidFeaturesService.sendGift(
+        giftId: draft.gift.id,
+        conversationId: real.id,
+        message: draft.message,
+        hideName: draft.hideName,
+        idempotencyKey: idem,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             draft.hideName
@@ -386,10 +379,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           ),
         ),
       );
-      context.push(ChatThreadRoute.pathFor(conv), extra: conv);
+      context.push(ChatThreadRoute.pathFor(real), extra: real);
     } catch (e) {
       if (!mounted) return;
-      await showStarsRequiredSnack(context, e);
+      await showStarsRequiredSnack(
+        context,
+        e,
+        onRetry: () => unawaited(_sendGiftFromProfile(user)),
+      );
     } finally {
       if (mounted) setState(() => _isSendingGift = false);
     }
@@ -425,7 +422,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       }
     } catch (e) {
       if (!mounted) return;
-      await showStarsRequiredSnack(context, e);
+      await showStarsRequiredSnack(
+        context,
+        e,
+        onRetry: () => unawaited(_sendStarsFromProfile(user)),
+      );
     } finally {
       if (mounted) setState(() => _isSendingTip = false);
     }
@@ -453,7 +454,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       unawaited(_loadProfileGifts());
     } catch (e) {
       if (!mounted) return;
-      await showStarsRequiredSnack(context, e);
+      await showStarsRequiredSnack(
+        context,
+        e,
+        onRetry: () => unawaited(_buyProfileGift(gift)),
+      );
     }
   }
 
@@ -570,8 +575,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e))),
+        showErrorSnackBar(
+          context,
+          e,
+          onRetry: () => unawaited(_toggleFollow()),
         );
       }
     } finally {
@@ -616,10 +623,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         }
         return Scaffold(
           appBar: AppBar(title: const Text('Профиль')),
-          body: const AppEmptyState(
+          body: AppEmptyState(
             icon: Icons.person_off_outlined,
             title: 'Пользователь не найден',
             subtitle: 'Возможно, профиль удалён или скрыт',
+            action: FilledButton(
+              onPressed: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go(FeedRoute.path);
+                }
+              },
+              child: const Text('Назад'),
+            ),
           ),
         );
       }
@@ -663,6 +680,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   icon: Icons.add,
                   tooltip: 'Создать пост или рилс',
                   onPressed: _openCreateContent,
+                ),
+                const SizedBox(width: 8),
+                NeoCircleAction(
+                  icon: Icons.edit_outlined,
+                  tooltip: 'Редактировать профиль',
+                  onPressed: () => context.push(ProfileAuthRoute.path),
                 ),
                 const SizedBox(width: 8),
                 NeoCircleAction(
@@ -800,10 +823,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                         const SizedBox(width: 6),
                         Tooltip(
                           message: 'Подписка HanWe',
-                          child: Icon(
-                            Icons.verified_rounded,
-                            color: scheme.primary,
-                            size: 22,
+                          child: InkWell(
+                            onTap: isOwnProfile
+                                ? () => context.push(FlexSubscriptionRoute.path)
+                                : null,
+                            customBorder: const CircleBorder(),
+                            child: Icon(
+                              Icons.verified_rounded,
+                              color: scheme.primary,
+                              size: 22,
+                            ),
                           ),
                         ),
                       ],
@@ -874,7 +903,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                       InkWell(
                         onTap: isOwnProfile
                             ? () => context.push(StarGiftsInventoryRoute.path)
-                            : null,
+                            : () => context.push(
+                                  StarGiftsMarketplaceRoute.path,
+                                ),
                         borderRadius: BorderRadius.circular(8),
                         child: Text(
                           isOwnProfile ? 'Подарки' : 'Подарки профиля',
@@ -950,6 +981,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 postsCount: stats.postsCount,
                 followersCount: stats.followersCount,
                 followingCount: stats.followingCount,
+                onPostsTap: () {
+                  if (_tabControllerReady) {
+                    _tabController.animateTo(0);
+                  }
+                },
                 onFollowersTap: () => context.push(
                   ProfileFollowersRoute.withUserId(_effectiveUserId),
                 ),
@@ -1032,6 +1068,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       ),
       userId: _effectiveUserId,
       postType: postType,
+      onCreate: _isOwnProfileView(profileUserId: _effectiveUserId)
+          ? () => unawaited(_openCreateContent())
+          : null,
     );
   }
 
@@ -1056,11 +1095,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
 class _PostsListWidget extends StatefulWidget {
   final int userId;
   final String? postType;
+  final VoidCallback? onCreate;
 
   const _PostsListWidget({
     super.key,
     required this.userId,
     this.postType,
+    this.onCreate,
   });
 
   @override
@@ -1226,17 +1267,32 @@ class _PostsListWidgetState extends State<_PostsListWidget> {
           ),
         );
       }
+      final isReel = widget.postType == 'reel';
+      final canCreate = widget.onCreate != null;
       return RefreshIndicator(
         onRefresh: () => _loadPosts(refresh: true),
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: EdgeInsets.only(bottom: floatingBottomPadding(context)),
-          children: const [
-            SizedBox(height: 80),
+          children: [
+            const SizedBox(height: 80),
             AppEmptyState(
-              icon: Icons.post_add_outlined,
-              title: 'Нет постов',
-              subtitle: 'Здесь появятся публикации пользователя',
+              icon: isReel
+                  ? Icons.video_library_outlined
+                  : Icons.post_add_outlined,
+              title: isReel ? 'Нет рилсов' : 'Нет постов',
+              subtitle: canCreate
+                  ? (isReel
+                      ? 'Снимите первый рилс'
+                      : 'Опубликуйте первый пост')
+                  : 'Здесь появятся публикации пользователя',
+              action: canCreate
+                  ? FilledButton.icon(
+                      onPressed: widget.onCreate,
+                      icon: const Icon(Icons.add_rounded),
+                      label: Text(isReel ? 'Снять рилс' : 'Создать пост'),
+                    )
+                  : null,
             ),
           ],
         ),
@@ -1294,6 +1350,7 @@ class _ProfileStatsRow extends StatelessWidget {
     required this.postsCount,
     required this.followersCount,
     required this.followingCount,
+    this.onPostsTap,
     this.onFollowersTap,
     this.onFollowingTap,
   });
@@ -1301,6 +1358,7 @@ class _ProfileStatsRow extends StatelessWidget {
   final int postsCount;
   final int followersCount;
   final int followingCount;
+  final VoidCallback? onPostsTap;
   final VoidCallback? onFollowersTap;
   final VoidCallback? onFollowingTap;
 
@@ -1327,6 +1385,7 @@ class _ProfileStatsRow extends StatelessWidget {
               child: _ProfileStatCell(
                 value: '$postsCount',
                 label: 'Посты',
+                onTap: onPostsTap,
               ),
             ),
             VerticalDivider(

@@ -104,6 +104,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           SnackBar(
             content: Text(e.message),
             backgroundColor: scheme.error,
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_handleRegister()),
+            ),
           ),
         );
       }
@@ -117,6 +121,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   fallback: 'Не удалось зарегистрироваться. Попробуйте позже.'),
             ),
             backgroundColor: scheme.error,
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_handleRegister()),
+            ),
           ),
         );
       }

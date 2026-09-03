@@ -1,4 +1,6 @@
 // Экран настроек канала
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../../utils/api_error_parser.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../services/channel_service.dart';
 import '../../../services/channel_cache_service.dart';
 import '../../../app/app_router.dart';
+import '../../../widgets/app_empty_state.dart';
 import '../application/channels_list_refresh_provider.dart';
 
 class ChannelSettingsScreen extends ConsumerStatefulWidget {
@@ -29,6 +32,8 @@ class _ChannelSettingsScreenState extends ConsumerState<ChannelSettingsScreen> {
   final _descriptionController = TextEditingController();
   final _categoryController = TextEditingController();
   bool _isLoading = false;
+  bool _isLoadingData = true;
+  bool _loadFailed = false;
   bool _isDeleting = false;
   bool _isPublic = true;
 
@@ -50,23 +55,30 @@ class _ChannelSettingsScreenState extends ConsumerState<ChannelSettingsScreen> {
   }
 
   Future<void> _loadChannelData() async {
+    if (!mounted) return;
+    if (!_isLoadingData || _loadFailed) {
+      setState(() {
+        _isLoadingData = true;
+        _loadFailed = false;
+      });
+    }
     try {
       final channel = await ChannelService.getChannel(widget.channelId);
+      if (!mounted) return;
       setState(() {
         _savedSlug = channel.slug;
         _nameController.text = channel.name;
         _descriptionController.text = channel.description ?? '';
         _categoryController.text = channel.category ?? '';
         _isPublic = channel.isPublic;
+        _isLoadingData = false;
       });
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(userVisibleError(e,
-                  fallback: 'Не удалось загрузить данные'))),
-        );
-      }
+      if (!mounted) return;
+      setState(() {
+        _isLoadingData = false;
+        _loadFailed = true;
+      });
     }
   }
 
@@ -84,9 +96,15 @@ class _ChannelSettingsScreenState extends ConsumerState<ChannelSettingsScreen> {
       if (slug.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
+            SnackBar(
+              content: const Text(
                 'Укажите в названии латинские буквы или цифры для адреса канала, либо откройте редактирование в управлении каналом.',
+              ),
+              action: SnackBarAction(
+                label: 'Управление',
+                onPressed: () {
+                  context.push('/channel/${widget.channelId}/management');
+                },
               ),
             ),
           );
@@ -117,8 +135,14 @@ class _ChannelSettingsScreenState extends ConsumerState<ChannelSettingsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content:
-                  Text(userVisibleError(e, fallback: 'Не удалось сохранить'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось сохранить'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_handleSave()),
+            ),
+          ),
         );
       }
     } finally {
@@ -143,8 +167,14 @@ class _ChannelSettingsScreenState extends ConsumerState<ChannelSettingsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(
-                  userVisibleError(e, fallback: 'Не удалось удалить канал'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось удалить канал'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_confirmDeleteChannel()),
+            ),
+          ),
         );
       }
     } finally {
@@ -189,14 +219,36 @@ class _ChannelSettingsScreenState extends ConsumerState<ChannelSettingsScreen> {
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
             )
-          else
+          else if (!_loadFailed && !_isLoadingData)
             TextButton(
               onPressed: _isDeleting ? null : _handleSave,
               child: const Text('Сохранить'),
             ),
         ],
       ),
-      body: Stack(
+      body: _isLoadingData
+          ? const Center(child: CircularProgressIndicator())
+          : _loadFailed
+              ? AppEmptyState(
+                  icon: Icons.wifi_off_outlined,
+                  title: 'Не удалось загрузить настройки',
+                  subtitle: 'Проверьте сеть и попробуйте ещё раз.',
+                  action: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      FilledButton(
+                        onPressed: _loadChannelData,
+                        child: const Text('Повторить'),
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: () => context.pop(),
+                        child: const Text('Назад'),
+                      ),
+                    ],
+                  ),
+                )
+              : Stack(
         children: [
           Form(
             key: _formKey,

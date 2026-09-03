@@ -1,4 +1,6 @@
 // Полноэкранная страница канала в духе Telegram: шапка, 4 кнопки, карточка ссылки/описания, вкладки (без ленты постов).
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../../utils/api_error_parser.dart';
 import 'package:flutter/services.dart';
@@ -139,8 +141,15 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
       if (mounted) setState(() => _channel = channel);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(userVisibleError(e))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(userVisibleError(e)),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_toggleSubscribe()),
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _isJoining = false);
@@ -205,8 +214,14 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content:
-                  Text(userVisibleError(e, fallback: 'Не удалось сохранить'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось сохранить'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_toggleSoundUi()),
+            ),
+          ),
         );
       }
     }
@@ -356,10 +371,20 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
       }
       return Scaffold(
         appBar: AppBar(title: const Text('Канал')),
-        body: const AppEmptyState(
+        body: AppEmptyState(
           icon: Icons.group_off_outlined,
           title: 'Канал не найден',
           subtitle: 'Возможно, он удалён или у вас нет доступа',
+          action: FilledButton(
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(ChatsRoute.path);
+              }
+            },
+            child: const Text('Назад'),
+          ),
         ),
       );
     }
@@ -531,7 +556,7 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
                             ),
                             IconButton(
                               tooltip: 'Скопировать',
-                              icon: const Icon(Icons.qr_code_2, size: 22),
+                              icon: const Icon(Icons.copy_rounded, size: 22),
                               onPressed: _copyChannelLink,
                               visualDensity: VisualDensity.compact,
                             ),

@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../services/auth_service.dart';
@@ -79,7 +82,11 @@ class _StarInvoicePayScreenState extends State<StarInvoicePayScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _paying = false);
-      await showStarsRequiredSnack(context, e);
+      await showStarsRequiredSnack(
+        context,
+        e,
+        onRetry: () => unawaited(_pay()),
+      );
     }
   }
 
@@ -126,7 +133,13 @@ class _StarInvoicePayScreenState extends State<StarInvoicePayScreen> {
       if (!mounted) return;
       setState(() => _cancelling = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_cancel()),
+          ),
+        ),
       );
     }
   }
@@ -175,7 +188,11 @@ class _StarInvoicePayScreenState extends State<StarInvoicePayScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _refunding = false);
-      await showStarsRequiredSnack(context, e);
+      await showStarsRequiredSnack(
+        context,
+        e,
+        onRetry: () => unawaited(_refund()),
+      );
     }
   }
 
@@ -289,6 +306,11 @@ class _StarInvoicePayScreenState extends State<StarInvoicePayScreen> {
                             color: scheme.primary,
                             fontWeight: FontWeight.w700,
                           ),
+                        ),
+                        const SizedBox(height: 16),
+                        OutlinedButton(
+                          onPressed: () => context.go('/paid/wallet'),
+                          child: const Text('К кошельку Stars'),
                         ),
                         if (invoice.status == 'paid' &&
                             AuthService.instance.currentUser?.id ==

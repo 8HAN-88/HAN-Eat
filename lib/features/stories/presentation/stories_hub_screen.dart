@@ -144,6 +144,13 @@ class _StoriesHubScreenState extends State<StoriesHubScreen> {
                   color: Theme.of(context).colorScheme.outline,
                 ),
           ),
+          const SizedBox(height: 16),
+          Center(
+            child: FilledButton(
+              onPressed: _loadStories,
+              child: const Text('Повторить'),
+            ),
+          ),
         ],
       );
     }
@@ -171,6 +178,14 @@ class _StoriesHubScreenState extends State<StoriesHubScreen> {
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Theme.of(context).colorScheme.outline,
                 ),
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: FilledButton.icon(
+              onPressed: _createStory,
+              icon: const Icon(Icons.add_a_photo_outlined),
+              label: const Text('Создать сторис'),
+            ),
           ),
         ],
       );

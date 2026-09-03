@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
+import '../../../core/share/system_share.dart';
 import '../../../services/auth_service.dart';
+import '../../../services/share_link_service.dart';
 import '../../../services/user_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_avatar.dart';
@@ -110,6 +114,10 @@ class _FollowListScreenState extends State<FollowListScreen> {
           content: Text(
             userVisibleError(e, fallback: 'Не удалось выполнить действие'),
           ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_toggleFollow(index)),
+          ),
         ),
       );
     }
@@ -151,6 +159,35 @@ class _FollowListScreenState extends State<FollowListScreen> {
                             title: widget.type == FollowListType.followers
                                 ? 'Подписчиков пока нет'
                                 : 'Подписок пока нет',
+                            action: widget.type == FollowListType.following
+                                ? FilledButton.icon(
+                                    onPressed: () =>
+                                        context.push(SearchRoute.path),
+                                    icon: const Icon(Icons.search),
+                                    label: const Text('Найти людей'),
+                                  )
+                                : (AuthService.instance.currentUser?.id ==
+                                        widget.userId
+                                    ? FilledButton.icon(
+                                        onPressed: () {
+                                          final me =
+                                              AuthService.instance.currentUser;
+                                          SystemShare.shareText(
+                                            context,
+                                            text: ShareLinkService
+                                                .profileShareText(
+                                              userId: widget.userId,
+                                              displayName: me?.name,
+                                              username: me?.username,
+                                            ),
+                                          );
+                                        },
+                                        icon: const Icon(
+                                          Icons.ios_share_outlined,
+                                        ),
+                                        label: const Text('Поделиться'),
+                                      )
+                                    : null),
                           ),
                         ],
                       )

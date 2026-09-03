@@ -10,6 +10,7 @@ import '../../../utils/api_error_parser.dart';
 import '../../../utils/session_snackbar.dart';
 import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../../widgets/post_reactions_bar.dart';
 import '../../../widgets/report_content_dialog.dart';
 
 class CommentsScreen extends ConsumerStatefulWidget {
@@ -42,6 +43,7 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
   int? _replyToCommentId;
   String? _replyToAuthor;
   bool _isLoading = false;
+  String? _loadError;
   bool _isPosting = false;
   bool _hasMore = true;
   int _offset = 0;
@@ -94,6 +96,7 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
 
     setState(() {
       _isLoading = true;
+      _loadError = null;
       if (refresh) {
         _comments = [];
         _offset = 0;
@@ -121,11 +124,24 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
       _emitCount();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(userVisibleError(e,
-                  fallback: 'Не удалось загрузить комментарии'))),
+        final message = userVisibleError(
+          e,
+          fallback: 'Не удалось загрузить комментарии',
         );
+        setState(() {
+          if (_comments.isEmpty) _loadError = message;
+        });
+        if (_comments.isNotEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(message),
+              action: SnackBarAction(
+                label: 'Повторить',
+                onPressed: () => _loadComments(),
+              ),
+            ),
+          );
+        }
       }
     } finally {
       if (mounted) {
@@ -183,6 +199,9 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
           context,
           e,
           fallback: 'Не удалось отправить комментарий',
+          onRetry: () {
+            _postComment();
+          },
         );
       }
     } finally {
@@ -211,12 +230,13 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
       _emitCount();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              userVisibleError(e, fallback: 'Не удалось удалить комментарий'),
-            ),
-          ),
+        showErrorSnackBar(
+          context,
+          e,
+          fallback: 'Не удалось удалить комментарий',
+          onRetry: () {
+            _deleteComment(target);
+          },
         );
       }
     }
@@ -283,6 +303,10 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
               ],
             ),
           ),
+        PostReactionsBar(
+          postId: widget.postId,
+          initialReactions: widget.post?.reactions ?? const [],
+        ),
         // Информация о посте (если есть) — hide in sheet to keep IG-like density
         if (widget.post != null && !widget.asSheet)
           Container(
@@ -329,11 +353,38 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
         Expanded(
           child: _comments.isEmpty && _isLoading
               ? const Center(child: CircularProgressIndicator())
+              : _loadError != null && _comments.isEmpty
+                  ? AppEmptyState(
+                      icon: Icons.wifi_off_outlined,
+                      title: 'Не удалось загрузить комментарии',
+                      subtitle: _loadError,
+                      action: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          FilledButton(
+                            onPressed: () => _loadComments(refresh: true),
+                            child: const Text('Повторить'),
+                          ),
+                          if (widget.asSheet) ...[
+                            const SizedBox(height: 8),
+                            TextButton(
+                              onPressed: () =>
+                                  Navigator.of(context).maybePop(),
+                              child: const Text('Закрыть'),
+                            ),
+                          ],
+                        ],
+                      ),
+                    )
               : _comments.isEmpty
-                  ? const AppEmptyState(
+                  ? AppEmptyState(
                       icon: Icons.comment_outlined,
                       title: 'Нет комментариев',
                       subtitle: 'Будьте первым!',
+                      action: FilledButton(
+                        onPressed: _focusCommentInput,
+                        child: const Text('Написать'),
+                      ),
                     )
                   : RefreshIndicator(
                       onRefresh: () => _loadComments(refresh: true),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -239,6 +240,12 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
     noteController.dispose();
     tonController.dispose();
     if (payload == null) return;
+    await _submitPayoutRequest(payload);
+  }
+
+  Future<void> _submitPayoutRequest(
+    ({int amount, String? note, String method, String? ton}) payload,
+  ) async {
     try {
       if (payload.method == 'ton' && payload.ton != null) {
         await PaidFeaturesService.setTonAddress(payload.ton);
@@ -261,7 +268,13 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_submitPayoutRequest(payload)),
+          ),
+        ),
       );
     }
   }
@@ -562,9 +575,19 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
                     return TelegramGroupedSurface(
                       child: Padding(
                         padding: const EdgeInsets.all(18),
-                        child: Text(
-                          'Не удалось загрузить выплаты',
-                          style: TextStyle(color: scheme.onSurfaceVariant),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Не удалось загрузить выплаты',
+                              style: TextStyle(color: scheme.onSurfaceVariant),
+                            ),
+                            const SizedBox(height: 12),
+                            FilledButton(
+                              onPressed: _refresh,
+                              child: const Text('Повторить'),
+                            ),
+                          ],
                         ),
                       ),
                     );
@@ -586,9 +609,19 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
                     return TelegramGroupedSurface(
                       child: Padding(
                         padding: const EdgeInsets.all(18),
-                        child: Text(
-                          'Запросов на выплату пока нет',
-                          style: TextStyle(color: scheme.onSurfaceVariant),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Запросов на выплату пока нет',
+                              style: TextStyle(color: scheme.onSurfaceVariant),
+                            ),
+                            const SizedBox(height: 12),
+                            FilledButton.tonal(
+                              onPressed: _requestPayout,
+                              child: const Text('Запросить выплату'),
+                            ),
+                          ],
                         ),
                       ),
                     );
@@ -623,9 +656,19 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
                 TelegramGroupedSurface(
                   child: Padding(
                     padding: const EdgeInsets.all(18),
-                    child: Text(
-                      'Доходных операций за период нет',
-                      style: TextStyle(color: scheme.onSurfaceVariant),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Доходных операций за период нет',
+                          style: TextStyle(color: scheme.onSurfaceVariant),
+                        ),
+                        const SizedBox(height: 12),
+                        TextButton(
+                          onPressed: _resetFilters,
+                          child: const Text('Сбросить фильтры'),
+                        ),
+                      ],
                     ),
                   ),
                 )

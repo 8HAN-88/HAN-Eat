@@ -97,9 +97,13 @@ class _PostByIdScreenState extends State<PostByIdScreen> {
                       icon: Icons.article_outlined,
                       title: 'Пост не найден',
                       subtitle: 'Возможно, он удалён или недоступен',
-                      action: TextButton(
+                      action: FilledButton(
                         onPressed: () {
-                          if (context.canPop()) context.pop();
+                          if (context.canPop()) {
+                            context.pop();
+                          } else {
+                            context.go('/feed');
+                          }
                         },
                         child: const Text('Назад'),
                       ),

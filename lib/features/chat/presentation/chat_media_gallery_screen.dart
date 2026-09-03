@@ -354,10 +354,47 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
               },
               child: _loading && count == 0
                   ? const Center(child: CircularProgressIndicator())
+                  : _error != null && count == 0
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  _error!,
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 12),
+                                FilledButton(
+                                  onPressed: _reload,
+                                  child: const Text('Повторить'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
                   : _filter == _MediaFilter.links
                       ? links.isEmpty
-                          ? const Center(
-                              child: Text('Пока нет ссылок в этом чате'),
+                          ? Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(24),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Text(
+                                      'Пока нет ссылок в этом чате',
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: 12),
+                                    TextButton(
+                                      onPressed: () =>
+                                          _onFilterChanged(_MediaFilter.all),
+                                      child: const Text('Все медиа'),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             )
                           : ListView.separated(
                               padding: const EdgeInsets.all(8),
@@ -394,10 +431,32 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
                             )
                       : items.isEmpty
                           ? Center(
-                              child: Text(
-                                _filter == _MediaFilter.all
-                                    ? 'Пока нет медиа в этом чате'
-                                    : 'Ничего не найдено',
+                              child: Padding(
+                                padding: const EdgeInsets.all(24),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      _filter == _MediaFilter.all
+                                          ? 'Пока нет медиа в этом чате'
+                                          : 'Ничего не найдено',
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: 12),
+                                    if (_filter != _MediaFilter.all)
+                                      TextButton(
+                                        onPressed: () =>
+                                            _onFilterChanged(_MediaFilter.all),
+                                        child: const Text('Все медиа'),
+                                      )
+                                    else
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.of(context).maybePop(),
+                                        child: const Text('Назад в чат'),
+                                      ),
+                                  ],
+                                ),
                               ),
                             )
                           : (_filter == _MediaFilter.files ||
@@ -489,7 +548,10 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
                                                 child: InlineVideoPlayer(
                                                   videoUrl: ServerConfig
                                                       .resolveMediaUrl(url),
-                                                  onTap: () {},
+                                                  onTap: () => _openExternal(
+                                                    ServerConfig
+                                                        .resolveMediaUrl(url),
+                                                  ),
                                                 ),
                                               ),
                                             ),

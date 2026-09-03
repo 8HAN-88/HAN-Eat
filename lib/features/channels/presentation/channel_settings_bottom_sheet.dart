@@ -1,4 +1,6 @@
 // Bottom sheet с настройками канала
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../utils/api_error_parser.dart';
@@ -63,6 +65,103 @@ class _ChannelSettingsBottomSheetState
         });
       }
     } catch (_) {}
+  }
+
+  Future<void> _setNotificationsEnabled(bool value) async {
+    try {
+      await ChannelSheetPrefs.setNotificationsEnabled(
+        widget.channelId,
+        value,
+      );
+      if (mounted) setState(() => _notificationsEnabled = value);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось сохранить'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_setNotificationsEnabled(value)),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _setShowInFeed(bool value) async {
+    try {
+      await ChannelSheetPrefs.setShowInFeed(widget.channelId, value);
+      if (mounted) setState(() => _showInFeed = value);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось сохранить'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_setShowInFeed(value)),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _toggleFavorite() async {
+    final next = !_isFavorite;
+    try {
+      await ChannelSheetPrefs.setFavorite(widget.channelId, next);
+      if (!mounted) return;
+      setState(() => _isFavorite = next);
+      ref.read(channelFavoritesRefreshProvider.notifier).state++;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            next
+                ? 'Канал в избранном — раздел «Каналы»'
+                : 'Убрано из избранного',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось сохранить'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_toggleFavorite()),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _leaveChannel() async {
+    try {
+      await ChannelService.leaveChannel(widget.channelId);
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Вы отписались от канала')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_leaveChannel()),
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -142,6 +241,7 @@ class _ChannelSettingsBottomSheetState
                 leading: const Icon(Icons.settings),
                 title: const Text('Управление каналом'),
                 onTap: () {
+                  Navigator.of(context).pop();
                   widget.onManage?.call();
                 },
               ),
@@ -150,6 +250,7 @@ class _ChannelSettingsBottomSheetState
                 leading: const Icon(Icons.analytics_outlined),
                 title: const Text('Аналитика'),
                 onTap: () {
+                  Navigator.of(context).pop();
                   widget.onAnalytics?.call();
                 },
               ),
@@ -208,55 +309,25 @@ class _ChannelSettingsBottomSheetState
             ListTile(
               leading: const Icon(Icons.notifications_outlined),
               title: const Text('Уведомления'),
-              trailing: Switch(
-                value: _notificationsEnabled,
-                onChanged: widget.channel.isMember
-                    ? (value) async {
-                        try {
-                          await ChannelSheetPrefs.setNotificationsEnabled(
-                            widget.channelId,
-                            value,
-                          );
-                          if (mounted) {
-                            setState(() => _notificationsEnabled = value);
-                          }
-                        } catch (e) {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                  content: Text(
-                                userVisibleError(
-                                  e,
-                                  fallback: 'Не удалось сохранить',
-                                ),
-                              )),
-                            );
-                          }
-                        }
-                      }
-                    : null,
-              ),
+              subtitle: widget.channel.isMember
+                  ? null
+                  : const Text(
+                      'Подпишитесь на канал, чтобы управлять уведомлениями',
+                    ),
+              trailing: widget.channel.isMember
+                  ? Switch(
+                      value: _notificationsEnabled,
+                      onChanged: (value) =>
+                          unawaited(_setNotificationsEnabled(value)),
+                    )
+                  : null,
             ),
             ListTile(
               leading: const Icon(Icons.feed_outlined),
               title: const Text('Показ в разделе'),
               trailing: Switch(
                 value: _showInFeed,
-                onChanged: (value) async {
-                  try {
-                    await ChannelSheetPrefs.setShowInFeed(
-                        widget.channelId, value);
-                    if (mounted) setState(() => _showInFeed = value);
-                  } catch (e) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                            content: Text(userVisibleError(e,
-                                fallback: 'Не удалось сохранить'))),
-                      );
-                    }
-                  }
-                },
+                onChanged: (value) => unawaited(_setShowInFeed(value)),
               ),
             ),
             ListTile(
@@ -266,32 +337,7 @@ class _ChannelSettingsBottomSheetState
                 _isFavorite ? Icons.star : Icons.star_border,
                 color: _isFavorite ? scheme.secondary : null,
               ),
-              onTap: () async {
-                final next = !_isFavorite;
-                try {
-                  await ChannelSheetPrefs.setFavorite(widget.channelId, next);
-                  if (!mounted) return;
-                  setState(() => _isFavorite = next);
-                  ref.read(channelFavoritesRefreshProvider.notifier).state++;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        next
-                            ? 'Канал в избранном — раздел «Каналы»'
-                            : 'Убрано из избранного',
-                      ),
-                    ),
-                  );
-                } catch (e) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                          content: Text(userVisibleError(e,
-                              fallback: 'Не удалось сохранить'))),
-                    );
-                  }
-                }
-              },
+              onTap: () => unawaited(_toggleFavorite()),
             ),
             const Divider(),
             ListTile(
@@ -331,24 +377,7 @@ class _ChannelSettingsBottomSheetState
                   'Отписаться',
                   style: TextStyle(color: scheme.error),
                 ),
-                onTap: () async {
-                  Navigator.of(context).pop();
-                  try {
-                    await ChannelService.leaveChannel(widget.channelId);
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text('Вы отписались от канала')),
-                      );
-                    }
-                  } catch (e) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(userVisibleError(e))),
-                      );
-                    }
-                  }
-                },
+                onTap: () => unawaited(_leaveChannel()),
               ),
             ],
             SizedBox(height: bottomInset > 0 ? bottomInset : 12),

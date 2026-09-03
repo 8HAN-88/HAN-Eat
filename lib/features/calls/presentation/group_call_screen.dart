@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../../app/router_keys.dart';
@@ -413,6 +414,35 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     await _leaveUi(notifyServer: true);
   }
 
+  Future<void> _failPermission(String message) async {
+    final ctx = hanEatRootNavigatorKey.currentContext ?? context;
+    if (ctx.mounted) {
+      final openSettings = await showDialog<bool>(
+        context: ctx,
+        builder: (dialogCtx) => AlertDialog(
+          title: const Text('Нет доступа'),
+          content: Text(
+            '$message. Разрешите доступ в настройках и повторите звонок.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(false),
+              child: const Text('Закрыть'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(true),
+              child: const Text('Настройки'),
+            ),
+          ],
+        ),
+      );
+      if (openSettings == true) {
+        await openAppSettings();
+      }
+    }
+    await _leaveUi(notifyServer: true);
+  }
+
   Future<void> _hangup() async {
     await _leaveUi(notifyServer: true);
   }
@@ -504,8 +534,18 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     if (!_canInviteMore) {
       final ctx = hanEatRootNavigatorKey.currentContext ?? context;
       if (ctx.mounted) {
-        ScaffoldMessenger.of(ctx).showSnackBar(
-          const SnackBar(content: Text('Звонок заполнен (макс. 4)')),
+        await showDialog<void>(
+          context: ctx,
+          builder: (dialogCtx) => AlertDialog(
+            title: const Text('Звонок заполнен'),
+            content: const Text('В групповом звонке может быть не больше 4 участников.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogCtx).pop(),
+                child: const Text('Закрыть'),
+              ),
+            ],
+          ),
         );
       }
       return;
@@ -515,8 +555,25 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       members = await ChatService.listMembers(_call.conversationId);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось загрузить участников'))),
+      await showDialog<void>(
+        context: context,
+        builder: (dialogCtx) => AlertDialog(
+          title: const Text('Не удалось загрузить участников'),
+          content: Text(userVisibleError(e, fallback: 'Не удалось загрузить участников')),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(),
+              child: const Text('Закрыть'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(dialogCtx).pop();
+                unawaited(_showInviteSheet());
+              },
+              child: const Text('Повторить'),
+            ),
+          ],
+        ),
       );
       return;
     }
@@ -530,8 +587,20 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
         .where((m) => !m.isBot && m.id != _me && !busyIds.contains(m.id))
         .toList();
     if (candidates.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Некого пригласить')),
+      await showDialog<void>(
+        context: context,
+        builder: (dialogCtx) => AlertDialog(
+          title: const Text('Некого пригласить'),
+          content: const Text(
+            'Все участники группы уже в звонке или им уже отправлено приглашение.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(),
+              child: const Text('Закрыть'),
+            ),
+          ],
+        ),
       );
       return;
     }
@@ -586,6 +655,10 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       },
     );
     if (picked == null || !mounted) return;
+    await _invitePicked(picked);
+  }
+
+  Future<void> _invitePicked(ChatUserBrief picked) async {
     try {
       _call = await CallService.invite(_call.id, picked.id);
       if (!mounted) return;
@@ -600,7 +673,15 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось пригласить'))),
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось пригласить'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_invitePicked(picked)),
+          ),
+        ),
       );
     }
   }

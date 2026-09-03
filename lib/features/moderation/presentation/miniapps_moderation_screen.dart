@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../features/miniapps/data/miniapp_models.dart';
@@ -79,7 +81,13 @@ class _MiniAppsModerationScreenState extends State<MiniAppsModerationScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_moderate(app, status)),
+          ),
+        ),
       );
     }
   }
@@ -138,10 +146,22 @@ class _MiniAppsModerationScreenState extends State<MiniAppsModerationScreen> {
                   ),
                 )
               : _items.isEmpty
-                  ? const AppEmptyState(
+                  ? AppEmptyState(
                       icon: Icons.check_circle_outline,
                       title: 'Очередь mini apps пуста',
                       subtitle: 'Нет приложений для модерации',
+                      action: _statusFilter != null
+                          ? FilledButton(
+                              onPressed: () {
+                                setState(() => _statusFilter = null);
+                                _load();
+                              },
+                              child: const Text('Сбросить фильтр'),
+                            )
+                          : FilledButton(
+                              onPressed: _load,
+                              child: const Text('Обновить'),
+                            ),
                     )
                   : RefreshIndicator(
                       onRefresh: _load,

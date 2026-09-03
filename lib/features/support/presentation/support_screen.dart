@@ -37,6 +37,7 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
   final _messageController = TextEditingController();
   String _selectedType = 'other';
   bool _isSubmitting = false;
+  String? _submitError;
   
   @override
   void initState() {
@@ -65,7 +66,10 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
   Future<void> _submitTicket() async {
     if (!_formKey.currentState!.validate()) return;
     
-    setState(() => _isSubmitting = true);
+    setState(() {
+      _isSubmitting = true;
+      _submitError = null;
+    });
     
     try {
       final response = await SupportService.createTicket(
@@ -85,16 +89,14 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
         // Очищаем форму
         _subjectController.clear();
         _messageController.clear();
-        setState(() => _selectedType = 'other');
+        setState(() {
+          _selectedType = 'other';
+          _submitError = null;
+        });
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(userVisibleError(e)),
-            backgroundColor: Colors.red,
-          ),
-        );
+        setState(() => _submitError = userVisibleError(e));
       }
     } finally {
       if (mounted) {
@@ -269,6 +271,13 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
                 },
               ),
               const SizedBox(height: 24),
+              if (_submitError != null) ...[
+                Text(
+                  _submitError!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+                const SizedBox(height: 12),
+              ],
               // Кнопка отправки
               FilledButton(
                 onPressed: _isSubmitting ? null : _submitTicket,
@@ -281,7 +290,11 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
                         width: 20,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Text('Отправить обращение'),
+                    : Text(
+                        _submitError != null
+                            ? 'Повторить отправку'
+                            : 'Отправить обращение',
+                      ),
               ),
             ],
           ),

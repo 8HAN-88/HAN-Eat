@@ -71,7 +71,9 @@ class _StarsCheckoutSuccessScreenState
               Text(
                 _loading
                     ? 'Проверяем оплату…'
-                    : 'Звёзды скоро появятся на балансе',
+                    : _balance != null
+                        ? 'Звёзды зачислены'
+                        : 'Проверяем зачисление звёзд',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.w800,

@@ -15,6 +15,8 @@ class BackupPage extends StatefulWidget {
 
 class _BackupPageState extends State<BackupPage> {
   bool _isImporting = false;
+  String? _importError;
+  bool _importClipboardEmpty = false;
 
   Future<Map<String, dynamic>> _buildExport() async {
     return {
@@ -58,15 +60,17 @@ class _BackupPageState extends State<BackupPage> {
   }
 
   Future<void> _importFromClipboard({required bool merge}) async {
-    setState(() => _isImporting = true);
+    setState(() {
+      _isImporting = true;
+      _importError = null;
+      _importClipboardEmpty = false;
+    });
     try {
       final data = await Clipboard.getData(Clipboard.kTextPlain);
       final jsonStr = data?.text?.trim() ?? '';
       if (jsonStr.isEmpty) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Буфер обмена пуст')),
-          );
+          setState(() => _importClipboardEmpty = true);
         }
         return;
       }
@@ -84,13 +88,12 @@ class _BackupPageState extends State<BackupPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              userVisibleError(e, fallback: 'Не удалось импортировать'),
-            ),
-          ),
-        );
+        setState(() {
+          _importError = userVisibleError(
+            e,
+            fallback: 'Не удалось импортировать',
+          );
+        });
       }
     } finally {
       if (mounted) setState(() => _isImporting = false);
@@ -131,6 +134,30 @@ class _BackupPageState extends State<BackupPage> {
               padding: EdgeInsets.all(24),
               child: Center(child: CircularProgressIndicator()),
             ),
+          if (_importClipboardEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Буфер обмена пуст. Сначала экспортируйте копию или скопируйте JSON.',
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+            TextButton(
+              onPressed: _showExportDialog,
+              child: const Text('Экспортировать'),
+            ),
+          ],
+          if (_importError != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              _importError!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+            FilledButton.tonal(
+              onPressed: _isImporting
+                  ? null
+                  : () => _importFromClipboard(merge: true),
+              child: const Text('Повторить импорт'),
+            ),
+          ],
         ],
       ),
     );

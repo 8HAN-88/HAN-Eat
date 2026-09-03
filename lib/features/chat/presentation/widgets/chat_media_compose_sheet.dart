@@ -350,16 +350,22 @@ class _ChatMediaComposeSheetState extends State<_ChatMediaComposeSheet> {
                       ),
                       const SizedBox(width: 4),
                       IconButton(
-                        tooltip: 'Отложить',
-                        onPressed: () {
-                          Navigator.pop(
-                            context,
-                            _result(schedule: true),
-                          );
-                        },
+                        tooltip: _isPaid
+                            ? 'Платное медиа нельзя отложить'
+                            : 'Отложить',
+                        onPressed: _isPaid
+                            ? null
+                            : () {
+                                Navigator.pop(
+                                  context,
+                                  _result(schedule: true),
+                                );
+                              },
                         icon: Icon(
                           Icons.schedule_outlined,
-                          color: scheme.onSurfaceVariant,
+                          color: _isPaid
+                              ? scheme.outline
+                              : scheme.onSurfaceVariant,
                         ),
                       ),
                       IconButton.filled(

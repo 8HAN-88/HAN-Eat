@@ -41,6 +41,7 @@ class _ChannelsManagementScreenState
   List<Channel> _ownedChannels = [];
   List<Channel> _catalogChannels = [];
   bool _isLoading = false;
+  String? _loadError;
   String _sortBy = 'popular';
   String? _selectedCategory;
   int? _minSubscribers;
@@ -79,7 +80,10 @@ class _ChannelsManagementScreenState
   Future<void> _loadChannels() async {
     if (_isLoading) return;
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
 
     try {
       final search = _searchController.text.trim();
@@ -112,11 +116,22 @@ class _ChannelsManagementScreenState
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(userVisibleError(e,
-                  fallback: 'Не удалось загрузить каналы'))),
+        final message = userVisibleError(
+          e,
+          fallback: 'Не удалось загрузить каналы',
         );
+        setState(() => _loadError = message);
+        if (_ownedChannels.isNotEmpty || _catalogChannels.isNotEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(message),
+              action: SnackBarAction(
+                label: 'Повторить',
+                onPressed: _loadChannels,
+              ),
+            ),
+          );
+        }
       }
     } finally {
       if (mounted) {
@@ -190,22 +205,39 @@ class _ChannelsManagementScreenState
           slivers: [
             SliverFillRemaining(
               hasScrollBody: false,
-              child: AppEmptyState(
-                icon: Icons.hub_outlined,
-                title: 'Каналы не найдены',
-                subtitle: _hasActiveFilters || _searchController.text.isNotEmpty
-                    ? 'Попробуйте изменить фильтры или запрос'
-                    : 'Создайте канал или зайдите позже',
-                action: (_hasActiveFilters || _searchController.text.isNotEmpty)
-                    ? TextButton(
-                        onPressed: () {
-                          _searchController.clear();
-                          _clearFilters();
-                        },
-                        child: const Text('Сбросить фильтры'),
-                      )
-                    : null,
-              ),
+              child: _loadError != null
+                  ? AppEmptyState(
+                      icon: Icons.cloud_off_rounded,
+                      title: 'Не удалось загрузить каналы',
+                      subtitle: _loadError,
+                      action: FilledButton(
+                        onPressed: _loadChannels,
+                        child: const Text('Повторить'),
+                      ),
+                    )
+                  : AppEmptyState(
+                      icon: Icons.hub_outlined,
+                      title: 'Каналы не найдены',
+                      subtitle:
+                          _hasActiveFilters || _searchController.text.isNotEmpty
+                              ? 'Попробуйте изменить фильтры или запрос'
+                              : 'Создайте канал или зайдите позже',
+                      action: (_hasActiveFilters ||
+                              _searchController.text.isNotEmpty)
+                          ? TextButton(
+                              onPressed: () {
+                                _searchController.clear();
+                                _clearFilters();
+                              },
+                              child: const Text('Сбросить фильтры'),
+                            )
+                          : FilledButton.icon(
+                              onPressed: () =>
+                                  context.push(CreateChannelRoute.path),
+                              icon: const Icon(Icons.add_rounded),
+                              label: const Text('Создать канал'),
+                            ),
+                    ),
             ),
           ],
         ),

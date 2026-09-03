@@ -26,12 +26,14 @@ class ChatsHubContactsTab extends StatefulWidget {
     super.key,
     required this.tabController,
     this.searchQuery = '',
+    this.onClearSearch,
   });
 
   static const contactsTabIndex = 1;
 
   final TabController tabController;
   final String searchQuery;
+  final VoidCallback? onClearSearch;
 
   @override
   State<ChatsHubContactsTab> createState() => _ChatsHubContactsTabState();
@@ -235,7 +237,13 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
       if (!mounted) return;
       setState(() => _phoneSyncError = e);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_importFromPhoneBook()),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _syncingPhone = false);
@@ -361,7 +369,13 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_addPhoneContact()),
+          ),
+        ),
       );
     } finally {
       nameController.dispose();
@@ -385,7 +399,13 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_openChatWithUser(userId)),
+          ),
+        ),
       );
     }
   }
@@ -405,7 +425,13 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_addHanEatContact(userId)),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _contactActionUserId = null);
@@ -443,7 +469,13 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_removeHanEatContact(userId, name)),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _contactActionUserId = null);
@@ -478,12 +510,18 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
         _error == null) {
       return ListView(
         padding: EdgeInsets.only(bottom: floatingBottomPadding(context)),
-        children: const [
-          SizedBox(height: 48),
+        children: [
+          const SizedBox(height: 48),
           AppEmptyState(
             icon: Icons.search_off,
             title: 'Ничего не найдено',
             subtitle: 'Попробуйте другой запрос.',
+            action: widget.onClearSearch == null
+                ? null
+                : TextButton(
+                    onPressed: widget.onClearSearch,
+                    child: const Text('Очистить поиск'),
+                  ),
           ),
         ],
       );
@@ -570,11 +608,21 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
           if (_phoneSyncError != null && _phoneBook.isEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: Text(
-                'Пока не удалось загрузить контакты. Подключение восстановится автоматически.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Пока не удалось загрузить контакты. Подключение восстановится автоматически.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                  TextButton(
+                    onPressed: _loadAll,
+                    child: const Text('Повторить'),
+                  ),
+                ],
               ),
             ),
           if (phoneBook.isNotEmpty) ...[
@@ -691,6 +739,11 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
                     kIsWeb
                         ? 'Импортируйте контакты с телефона или добавьте номера вручную.'
                         : 'В телефонной книге нет номеров с кодом страны или добавьте людей через поиск.',
+                action: FilledButton.icon(
+                  onPressed: _addPhoneContact,
+                  icon: const Icon(Icons.person_add_outlined),
+                  label: const Text('Добавить контакт'),
+                ),
               ),
             ),
         ],

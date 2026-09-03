@@ -384,9 +384,26 @@ class CallCoordinator {
       await CallLocalMedia.disposeHeld();
       await CallKitBridge.end(callId);
       final navCtx = hanEatRootNavigatorKey.currentContext;
-      if (navCtx != null) {
-        ScaffoldMessenger.of(navCtx).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e))),
+      if (navCtx != null && navCtx.mounted) {
+        await showDialog<void>(
+          context: navCtx,
+          builder: (dialogCtx) => AlertDialog(
+            title: const Text('Не удалось ответить'),
+            content: Text(userVisibleError(e, fallback: 'Не удалось ответить на звонок')),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogCtx).pop(),
+                child: const Text('Закрыть'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  Navigator.of(dialogCtx).pop();
+                  unawaited(_answerAndOpen(callId));
+                },
+                child: const Text('Повторить'),
+              ),
+            ],
+          ),
         );
       }
     }

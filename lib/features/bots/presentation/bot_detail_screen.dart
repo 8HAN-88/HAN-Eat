@@ -9,6 +9,8 @@ import '../../../services/api_service.dart';
 import '../../../services/chat_service.dart';
 import '../../../services/paid_features_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../utils/session_snackbar.dart';
+import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/telegram_ui.dart';
 import '../../miniapps/data/miniapp_models.dart';
@@ -61,6 +63,8 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
   List<BotCommandCreate> _commands = [];
   List<MiniAppItem> _miniApps = [];
   bool _miniAppsLoading = false;
+  String? _commandsError;
+  String? _miniAppsError;
   final _webhookController = TextEditingController();
   final _webhookSecretController = TextEditingController();
 
@@ -131,8 +135,11 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
       return true;
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
+        showErrorSnackBar(
+          context,
+          e,
+          fallback: 'Не удалось загрузить бота',
+          onRetry: () => unawaited(_loadBot()),
         );
       }
       return false;
@@ -144,8 +151,17 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
   Future<void> _loadCommands() async {
     try {
       final cmds = await ApiService.getBotCommands(widget.botId);
-      if (mounted) setState(() => _commands = cmds);
-    } catch (_) {}
+      if (mounted) {
+        setState(() {
+          _commands = cmds;
+          _commandsError = null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _commandsError = userVisibleError(e));
+      }
+    }
   }
 
   Future<void> _loadMiniApps() async {
@@ -153,9 +169,19 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
     setState(() => _miniAppsLoading = true);
     try {
       final apps = await MiniAppsService.fetchByBot(widget.botId);
-      if (mounted) setState(() => _miniApps = apps);
-    } catch (_) {
-      if (mounted) setState(() => _miniApps = []);
+      if (mounted) {
+        setState(() {
+          _miniApps = apps;
+          _miniAppsError = null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _miniApps = [];
+          _miniAppsError = userVisibleError(e);
+        });
+      }
     } finally {
       if (mounted) setState(() => _miniAppsLoading = false);
     }
@@ -258,7 +284,15 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось сохранить: $e')),
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось сохранить'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_editBotProfile()),
+          ),
+        ),
       );
     }
   }
@@ -297,7 +331,15 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось обновить токен: $e')),
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось обновить токен'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_revokeToken()),
+          ),
+        ),
       );
     }
   }
@@ -332,7 +374,13 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось удалить: $e')),
+        SnackBar(
+          content: Text(userVisibleError(e, fallback: 'Не удалось удалить')),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_deleteBot()),
+          ),
+        ),
       );
     }
   }
@@ -478,7 +526,33 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
                   const Divider(height: 1),
                   Expanded(
                     child: invoices.isEmpty
-                        ? const Center(child: Text('Пока нет счетов'))
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text(
+                                    'Пока нет счетов',
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  FilledButton.icon(
+                                    onPressed: () {
+                                      Navigator.pop(ctx);
+                                      unawaited(_createStarsInvoice());
+                                    },
+                                    icon: const Icon(Icons.add),
+                                    label: const Text('Создать счёт'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx),
+                                    child: const Text('Закрыть'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
                         : ListView.separated(
                             itemCount: invoices.length,
                             separatorBuilder: (_, __) =>
@@ -524,7 +598,13 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_listStarsInvoices()),
+          ),
+        ),
       );
     }
   }
@@ -616,8 +696,11 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось создать счёт',
+        onRetry: () => unawaited(_createStarsInvoice()),
       );
     }
   }
@@ -646,7 +729,13 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
+        SnackBar(
+          content: Text(userVisibleError(e, fallback: 'Не удалось сохранить')),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_saveWebhook()),
+          ),
+        ),
       );
     }
   }
@@ -657,6 +746,10 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
       builder: (_) => const _SelectChatDialog(),
     );
     if (convId == null) return;
+    await _addBotToChat(convId);
+  }
+
+  Future<void> _addBotToChat(int convId) async {
     try {
       await ApiService.addBotToChat(
         botId: widget.botId,
@@ -669,7 +762,13 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
+        SnackBar(
+          content: Text(userVisibleError(e, fallback: 'Не удалось добавить')),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_addBotToChat(convId)),
+          ),
+        ),
       );
     }
   }
@@ -742,7 +841,26 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
               child: _isLoading && bot == null
                   ? const Center(child: CircularProgressIndicator())
                   : bot == null
-                      ? const Center(child: Text('Бот не найден'))
+                      ? AppEmptyState(
+                          icon: Icons.smart_toy_outlined,
+                          title: 'Бот не найден',
+                          subtitle:
+                              'Не удалось загрузить @${widget.botUsername}',
+                          action: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              FilledButton(
+                                onPressed: _loadBot,
+                                child: const Text('Повторить'),
+                              ),
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.of(context).maybePop(),
+                                child: const Text('Назад'),
+                              ),
+                            ],
+                          ),
+                        )
                       : RefreshIndicator(
                           onRefresh: _loadBot,
                           child: ListView(
@@ -807,20 +925,28 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
                                   _BotFatherTile(
                                     icon: Icons.code_rounded,
                                     title: 'Edit Commands',
-                                    subtitle: _commands.isEmpty
-                                        ? 'Команд пока нет'
-                                        : '${_commands.length} команд(ы)',
-                                    onTap: _manageCommands,
+                                    subtitle: _commandsError != null
+                                        ? 'Не удалось загрузить'
+                                        : _commands.isEmpty
+                                            ? 'Команд пока нет'
+                                            : '${_commands.length} команд(ы)',
+                                    onTap: _commandsError != null
+                                        ? () => unawaited(_loadCommands())
+                                        : () => unawaited(_manageCommands()),
                                   ),
                                   _BotFatherTile(
                                     icon: Icons.apps_rounded,
                                     title: 'Mini Apps',
                                     subtitle: _miniAppsLoading
                                         ? 'Загрузка…'
-                                        : _miniApps.isEmpty
-                                            ? 'New App · Edit App · Delete App'
-                                            : '${_miniApps.length} · ${_miniApps.where((a) => a.isApproved).length} в каталоге',
-                                    onTap: _manageMiniApps,
+                                        : _miniAppsError != null
+                                            ? 'Не удалось загрузить'
+                                            : _miniApps.isEmpty
+                                                ? 'New App · Edit App · Delete App'
+                                                : '${_miniApps.length} · ${_miniApps.where((a) => a.isApproved).length} в каталоге',
+                                    onTap: _miniAppsError != null
+                                        ? () => unawaited(_loadMiniApps())
+                                        : () => unawaited(_manageMiniApps()),
                                   ),
                                 ],
                               ),
@@ -1087,6 +1213,7 @@ class _BotMiniAppsScreen extends StatefulWidget {
 class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
   bool _loading = true;
   List<MiniAppItem> _apps = const [];
+  String? _error;
   bool _didAutoNewApp = false;
 
   @override
@@ -1102,13 +1229,24 @@ class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
   }
 
   Future<void> _reload() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final apps = await MiniAppsService.fetchByBot(widget.botId);
       if (!mounted) return;
-      setState(() => _apps = apps);
-    } catch (_) {
-      if (mounted) setState(() => _apps = []);
+      setState(() {
+        _apps = apps;
+        _error = null;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _apps = [];
+          _error = userVisibleError(e);
+        });
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -1141,8 +1279,11 @@ class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
       await _reload();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось создать мини-приложение',
+        onRetry: () => unawaited(_newApp()),
       );
     }
   }
@@ -1175,8 +1316,11 @@ class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
       await _reload();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось сохранить',
+        onRetry: () => unawaited(_editApp(app)),
       );
     }
   }
@@ -1190,8 +1334,11 @@ class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
       await _reload();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось обновить',
+        onRetry: () => unawaited(_toggleActive(app)),
       );
     }
   }
@@ -1220,8 +1367,11 @@ class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
       await _reload();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось удалить',
+        onRetry: () => unawaited(_deleteApp(app)),
       );
     }
   }
@@ -1245,7 +1395,13 @@ class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось открыть: $e')),
+        SnackBar(
+          content: Text(userVisibleError(e, fallback: 'Не удалось открыть')),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => _openApp(app),
+          ),
+        ),
       );
     }
   }
@@ -1333,10 +1489,29 @@ class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
                   ? const Center(child: CircularProgressIndicator())
                   : _apps.isEmpty
                       ? Center(
-                          child: FilledButton.icon(
-                            onPressed: _newApp,
-                            icon: const Icon(Icons.add_rounded),
-                            label: const Text('New Mini App'),
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (_error != null) ...[
+                                  Text(
+                                    _error!,
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  FilledButton(
+                                    onPressed: _reload,
+                                    child: const Text('Повторить'),
+                                  ),
+                                ] else
+                                  FilledButton.icon(
+                                    onPressed: _newApp,
+                                    icon: const Icon(Icons.add_rounded),
+                                    label: const Text('New Mini App'),
+                                  ),
+                              ],
+                            ),
                           ),
                         )
                       : RefreshIndicator(
@@ -1578,18 +1753,30 @@ class _BotCommandsScreen extends StatefulWidget {
 
 class _BotCommandsScreenState extends State<_BotCommandsScreen> {
   late List<BotCommandCreate> _commands;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
     _commands = List.of(widget.initialCommands);
+    if (_commands.isEmpty) {
+      unawaited(_reload());
+    }
   }
 
   Future<void> _reload() async {
-    final cmds = await ApiService.getBotCommands(widget.botId);
-    if (!mounted) return;
-    setState(() => _commands = cmds);
-    await widget.onChanged();
+    try {
+      final cmds = await ApiService.getBotCommands(widget.botId);
+      if (!mounted) return;
+      setState(() {
+        _commands = cmds;
+        _error = null;
+      });
+      await widget.onChanged();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = userVisibleError(e));
+    }
   }
 
   Future<void> _add() async {
@@ -1614,8 +1801,11 @@ class _BotCommandsScreenState extends State<_BotCommandsScreen> {
       await _reload();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось добавить команду',
+        onRetry: () => unawaited(_add()),
       );
     }
   }
@@ -1643,8 +1833,11 @@ class _BotCommandsScreenState extends State<_BotCommandsScreen> {
       await _reload();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось сохранить команду',
+        onRetry: () => unawaited(_edit(command)),
       );
     }
   }
@@ -1655,8 +1848,11 @@ class _BotCommandsScreenState extends State<_BotCommandsScreen> {
       await _reload();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка: $e')),
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось удалить команду',
+        onRetry: () => unawaited(_delete(command)),
       );
     }
   }
@@ -1699,10 +1895,29 @@ class _BotCommandsScreenState extends State<_BotCommandsScreen> {
             Expanded(
               child: _commands.isEmpty
                   ? Center(
-                      child: FilledButton.icon(
-                        onPressed: _add,
-                        icon: const Icon(Icons.add_rounded),
-                        label: const Text('Добавить /start'),
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_error != null) ...[
+                              Text(
+                                _error!,
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 12),
+                              FilledButton(
+                                onPressed: _reload,
+                                child: const Text('Повторить'),
+                              ),
+                            ] else
+                              FilledButton.icon(
+                                onPressed: _add,
+                                icon: const Icon(Icons.add_rounded),
+                                label: const Text('Добавить /start'),
+                              ),
+                          ],
+                        ),
                       ),
                     )
                   : ListView.separated(
@@ -1756,6 +1971,10 @@ class _SelectChatDialogState extends State<_SelectChatDialog> {
     _future = _loadConversations();
   }
 
+  void _reload() {
+    setState(() => _future = _loadConversations());
+  }
+
   Future<List<_DialogConversation>> _loadConversations() async {
     final items = await ChatService.listConversations();
     return items
@@ -1786,11 +2005,40 @@ class _SelectChatDialogState extends State<_SelectChatDialog> {
               );
             }
             if (snapshot.hasError) {
-              return const Text('Не удалось загрузить список чатов');
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Не удалось загрузить список чатов',
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: _reload,
+                    child: const Text('Повторить'),
+                  ),
+                ],
+              );
             }
             final chats = snapshot.data ?? const [];
             if (chats.isEmpty) {
-              return const Text('Нет доступных чатов');
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Нет доступных чатов',
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      context.go(ChatsRoute.path);
+                    },
+                    child: const Text('К чатам'),
+                  ),
+                ],
+              );
             }
             return ConstrainedBox(
               constraints: const BoxConstraints(maxHeight: 320),

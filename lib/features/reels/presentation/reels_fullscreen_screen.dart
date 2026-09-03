@@ -1,7 +1,6 @@
 // Fullscreen Reels при тапе на видео в ленте — вертикальный свайп, возврат на то же место
 import 'dart:async';
 import 'dart:math' as math;
-import '../../../utils/api_error_parser.dart';
 import '../../../utils/session_snackbar.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -52,6 +51,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
   final Map<int, bool> _isPaused = {};
   List<PostModel> _reels = [];
   bool _isLoading = false;
+  bool _loadMoreFailed = false;
   bool _hasMore = true;
   String? _nextCursor;
   int _currentIndex = 0;
@@ -208,6 +208,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
         _nextCursor = response.nextCursor;
         _hasMore = response.hasMore;
         _isLoading = false;
+        _loadMoreFailed = false;
       });
 
       if (newReels.isNotEmpty) {
@@ -221,7 +222,10 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+          _loadMoreFailed = true;
+        });
       }
     }
   }
@@ -368,7 +372,10 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
       );
     }
 
-    if (index >= _reels.length - 3 && _hasMore && !_isLoading) {
+    if (index >= _reels.length - 3 &&
+        _hasMore &&
+        !_isLoading &&
+        !_loadMoreFailed) {
       _loadMoreReels();
     }
     if (_canPlayVideos && index + 1 < _reels.length) {
@@ -530,8 +537,11 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
           likesCount: r.likesCount + (wasLiked ? 1 : -1),
         ),
       );
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(userVisibleError(e))));
+      showErrorSnackBar(
+        context,
+        e,
+        onRetry: () => unawaited(_toggleLike(postId)),
+      );
     } finally {
       _likeBusy.remove(postId);
     }
@@ -548,8 +558,11 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
       _updateReelAt(reel.id, (r) => _copyReelWith(r, isSaved: !isSaved));
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(userVisibleError(e))));
+        showErrorSnackBar(
+          context,
+          e,
+          onRetry: () => unawaited(_toggleSave(reel)),
+        );
       }
     }
   }
@@ -584,7 +597,12 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
             const SnackBar(content: Text('Нельзя репостнуть свой пост')),
           );
         } else {
-          showErrorSnackBar(context, e, fallback: 'Не удалось сделать репост');
+          showErrorSnackBar(
+            context,
+            e,
+            fallback: 'Не удалось сделать репост',
+            onRetry: () => unawaited(_toggleRepost(reel)),
+          );
         }
       }
     }
@@ -658,6 +676,28 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
             onPageChanged: _onPageChanged,
             itemBuilder: (context, index) {
               if (index == _reels.length) {
+                if (_loadMoreFailed) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text(
+                            'Не удалось загрузить ещё рилсы',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.white),
+                          ),
+                          const SizedBox(height: 16),
+                          FilledButton(
+                            onPressed: () => unawaited(_loadMoreReels()),
+                            child: const Text('Повторить'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
                 return const Center(
                   child: CircularProgressIndicator(color: Colors.white),
                 );

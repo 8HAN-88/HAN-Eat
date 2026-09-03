@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import '../../../app/app_router.dart';
 import '../../../core/haptics/app_haptics.dart';
 import '../../../services/api_service.dart';
+import '../../../utils/api_error_parser.dart';
+import '../../../utils/session_snackbar.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/telegram_ui.dart';
@@ -155,7 +157,16 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
     List<BotListItem> bots = const [];
     try {
       bots = await ApiService.getMyBots();
-    } catch (_) {}
+    } catch (e) {
+      if (!mounted) return;
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось загрузить ботов',
+        onRetry: () => unawaited(_publishMiniApp()),
+      );
+      return;
+    }
     if (!mounted) return;
 
     if (bots.isEmpty) {
@@ -236,7 +247,15 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось открыть: $e')),
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось открыть мини-приложение'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_openMiniApp(app)),
+          ),
+        ),
       );
     }
   }
@@ -253,7 +272,15 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Операция не выполнена: $e')),
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Операция не выполнена'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_toggleInstall(app)),
+          ),
+        ),
       );
     }
   }

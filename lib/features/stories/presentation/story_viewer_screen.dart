@@ -15,6 +15,7 @@ import '../../../services/subscription_status_cache.dart';
 import '../../subscription/application/flex_entitlements.dart';
 import '../../../services/server_config.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../utils/session_snackbar.dart';
 import '../../../utils/video_player_helper.dart';
 import '../../chat/application/chat_open_direct.dart';
 import '../../chat/application/chat_ready_outgoing.dart';
@@ -273,8 +274,11 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось отправить реакцию')),
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось отправить реакцию',
+        onRetry: () => unawaited(_react(emoji)),
       );
     } finally {
       if (mounted) {
@@ -289,111 +293,21 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     final storyId = int.tryParse(_currentStory.id);
     if (storyId == null) return;
     _pause();
-    try {
-      final page = await StoryService.fetchViewers(storyId);
-      if (!mounted) return;
-      setState(() => _currentStory.viewsCount = page.viewsCount);
-      await showModalBottomSheet<void>(
-        context: context,
-        backgroundColor: Colors.grey.shade900,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        ),
-        builder: (context) {
-          return SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'Просмотры · ${page.viewsCount}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  if (page.items.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 24),
-                      child: Text(
-                        'Пока никто не посмотрел',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white70),
-                      ),
-                    )
-                  else
-                    ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxHeight: MediaQuery.of(context).size.height * 0.45,
-                      ),
-                      child: ListView.separated(
-                        shrinkWrap: true,
-                        itemCount: page.items.length,
-                        separatorBuilder: (_, __) =>
-                            const Divider(color: Colors.white12, height: 1),
-                        itemBuilder: (context, index) {
-                          final item = page.items[index];
-                          return ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: CircleAvatar(
-                              backgroundImage: item.user.avatarUrl == null
-                                  ? null
-                                  : CachedNetworkImageProvider(
-                                      ServerConfig.resolvePublisherAvatarUrl(
-                                        item.user.avatarUrl!,
-                                      ),
-                                    ),
-                              child: item.user.avatarUrl == null
-                                  ? Text(
-                                      item.user.name.isNotEmpty
-                                          ? item.user.name[0].toUpperCase()
-                                          : '?',
-                                    )
-                                  : null,
-                            ),
-                            title: Text(
-                              item.user.name,
-                              style: const TextStyle(color: Colors.white),
-                            ),
-                            subtitle: Text(
-                              _formatViewedAt(item.viewedAt),
-                              style: const TextStyle(color: Colors.white54),
-                            ),
-                            trailing: item.reaction == null
-                                ? null
-                                : Text(
-                                    item.reaction!,
-                                    style: const TextStyle(fontSize: 22),
-                                  ),
-                          );
-                        },
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          );
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.grey.shade900,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => _StoryViewersSheet(
+        storyId: storyId,
+        onCount: (count) {
+          if (!mounted) return;
+          setState(() => _currentStory.viewsCount = count);
         },
-      );
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Не удалось загрузить просмотры')),
-      );
-    } finally {
-      if (mounted) _resume();
-    }
-  }
-
-  String _formatViewedAt(DateTime at) {
-    final local = at.toLocal();
-    final hh = local.hour.toString().padLeft(2, '0');
-    final mm = local.minute.toString().padLeft(2, '0');
-    return '$hh:$mm';
+      ),
+    );
+    if (mounted) _resume();
   }
 
   Future<void> _sendStoryReply() async {
@@ -449,13 +363,12 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
         );
       }
 
-      if (opened.id > 0) {
-        await persistTo(opened.id);
+      var conversation = opened;
+      if (conversation.id > 0) {
+        await persistTo(conversation.id);
       } else {
-        unawaited(() async {
-          final real = await ChatOpenDirect.resolve(_currentStory.authorId);
-          await persistTo(real.id);
-        }());
+        conversation = await ChatOpenDirect.resolve(_currentStory.authorId);
+        await persistTo(conversation.id);
       }
       if (!mounted) return;
       _replyController.clear();
@@ -465,15 +378,14 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
       );
       Navigator.of(context).pop();
       if (!mounted) return;
-      context.push(ChatThreadRoute.pathFor(opened), extra: opened);
+      context.push(ChatThreadRoute.pathFor(conversation), extra: conversation);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            userVisibleError(e, fallback: 'Не удалось отправить ответ'),
-          ),
-        ),
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось отправить ответ',
+        onRetry: () => unawaited(_sendStoryReply()),
       );
       _resume();
     } finally {
@@ -500,10 +412,24 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
           backgroundColor: Colors.black,
           iconTheme: const IconThemeData(color: Colors.white),
         ),
-        body: const Center(
-          child: Text(
-            'Нет активных сторис',
-            style: TextStyle(color: Colors.white70),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Нет активных сторис',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white70),
+                ),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  child: const Text('Закрыть'),
+                ),
+              ],
+            ),
           ),
         ),
       );
@@ -762,5 +688,178 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
         ),
       );
     }
+  }
+}
+
+class _StoryViewersSheet extends StatefulWidget {
+  const _StoryViewersSheet({
+    required this.storyId,
+    required this.onCount,
+  });
+
+  final int storyId;
+  final ValueChanged<int> onCount;
+
+  @override
+  State<_StoryViewersSheet> createState() => _StoryViewersSheetState();
+}
+
+class _StoryViewersSheetState extends State<_StoryViewersSheet> {
+  bool _loading = true;
+  String? _error;
+  StoryViewersPage? _page;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final page = await StoryService.fetchViewers(widget.storyId);
+      if (!mounted) return;
+      widget.onCount(page.viewsCount);
+      setState(() {
+        _page = page;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = userVisibleError(e, fallback: 'Не удалось загрузить просмотры');
+      });
+    }
+  }
+
+  String _formatViewedAt(DateTime at) {
+    final local = at.toLocal();
+    final hh = local.hour.toString().padLeft(2, '0');
+    final mm = local.minute.toString().padLeft(2, '0');
+    return '$hh:$mm';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final page = _page;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              page == null ? 'Просмотры' : 'Просмотры · ${page.viewsCount}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 28),
+                child: Center(
+                  child: CircularProgressIndicator(color: Colors.white),
+                ),
+              )
+            else if (_error != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Column(
+                  children: [
+                    Text(
+                      _error!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      onPressed: _load,
+                      child: const Text('Повторить'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      child: const Text('Закрыть'),
+                    ),
+                  ],
+                ),
+              )
+            else if (page == null || page.items.isEmpty)
+              Column(
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Text(
+                      'Пока никто не посмотрел',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    child: const Text('Закрыть'),
+                  ),
+                ],
+              )
+            else
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.45,
+                ),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: page.items.length,
+                  separatorBuilder: (_, __) =>
+                      const Divider(color: Colors.white12, height: 1),
+                  itemBuilder: (context, index) {
+                    final item = page.items[index];
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: CircleAvatar(
+                        backgroundImage: item.user.avatarUrl == null
+                            ? null
+                            : CachedNetworkImageProvider(
+                                ServerConfig.resolvePublisherAvatarUrl(
+                                  item.user.avatarUrl!,
+                                ),
+                              ),
+                        child: item.user.avatarUrl == null
+                            ? Text(
+                                item.user.name.isNotEmpty
+                                    ? item.user.name[0].toUpperCase()
+                                    : '?',
+                              )
+                            : null,
+                      ),
+                      title: Text(
+                        item.user.name,
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                      subtitle: Text(
+                        _formatViewedAt(item.viewedAt),
+                        style: const TextStyle(color: Colors.white54),
+                      ),
+                      trailing: item.reaction == null
+                          ? null
+                          : Text(
+                              item.reaction!,
+                              style: const TextStyle(fontSize: 22),
+                            ),
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }

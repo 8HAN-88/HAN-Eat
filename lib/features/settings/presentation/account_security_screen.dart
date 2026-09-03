@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -78,6 +80,8 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
                     : '${user.email}\nАктивные сеансы на устройствах',
               ),
               isThreeLine: true,
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push(ProfileAuthRoute.path),
             ),
           ),
           const SizedBox(height: 12),
@@ -104,11 +108,26 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
               ),
             )
           else if (_sessions.isEmpty)
-            const Card(
-              child: ListTile(
-                title: Text('Нет активных сеансов'),
-                subtitle: Text(
-                  'После следующего входа здесь появятся устройства.',
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Нет активных сеансов',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'После следующего входа здесь появятся устройства.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    TextButton(
+                      onPressed: _load,
+                      child: const Text('Обновить'),
+                    ),
+                  ],
                 ),
               ),
             )
@@ -202,7 +221,13 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_revokeOne(session)),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -221,7 +246,13 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_revokeOthers()),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -242,7 +273,13 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_logoutEverywhere()),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _busy = false);

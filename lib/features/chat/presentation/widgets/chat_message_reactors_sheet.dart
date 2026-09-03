@@ -132,15 +132,25 @@ class _ChatMessageReactorsSheetState extends State<_ChatMessageReactorsSheet> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                padding: const EdgeInsets.fromLTRB(20, 4, 8, 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Кто поставил реакцию',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Кто поставил реакцию',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w700),
                           ),
+                        ),
+                        IconButton(
+                          tooltip: 'Закрыть',
+                          onPressed: () => Navigator.of(context).maybePop(),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -205,6 +215,11 @@ class _ChatMessageReactorsSheetState extends State<_ChatMessageReactorsSheet> {
                                     onPressed: _load,
                                     child: const Text('Повторить'),
                                   ),
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.of(context).maybePop(),
+                                    child: const Text('Закрыть'),
+                                  ),
                                 ],
                               ),
                             ),
@@ -212,13 +227,24 @@ class _ChatMessageReactorsSheetState extends State<_ChatMessageReactorsSheet> {
                         : visible.isEmpty
                             ? ListView(
                                 controller: scrollController,
-                                children: const [
-                                  SizedBox(height: 48),
-                                  Icon(Icons.emoji_emotions_outlined, size: 40),
-                                  SizedBox(height: 12),
-                                  Text(
+                                children: [
+                                  const SizedBox(height: 48),
+                                  const Icon(
+                                    Icons.emoji_emotions_outlined,
+                                    size: 40,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  const Text(
                                     'Реакций пока нет',
                                     textAlign: TextAlign.center,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Center(
+                                    child: TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(context).maybePop(),
+                                      child: const Text('Закрыть'),
+                                    ),
                                   ),
                                 ],
                               )

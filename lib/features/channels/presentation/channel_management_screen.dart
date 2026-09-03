@@ -1,4 +1,5 @@
 // Экран управления каналом (для владельца и админов)
+import 'dart:async';
 import 'dart:io';
 import '../../../utils/api_error_parser.dart';
 import 'dart:typed_data';
@@ -16,6 +17,8 @@ import '../../../core/layout/long_label_tab_bar.dart';
 import '../../../widgets/app_avatar.dart';
 import '../../chat/application/join_requests_bulk.dart';
 import '../../settings/application/subscription_status_provider.dart';
+import '../../../core/share/system_share.dart';
+import '../../../services/share_link_service.dart';
 import '../../../widgets/app_empty_state.dart';
 
 const _permissionLabels = <String, (String, String)>{
@@ -96,6 +99,7 @@ class _ChannelManagementScreenState
   bool _loadingMembers = false;
   List<ChannelJoinRequest> _joinRequests = [];
   bool _loadingJoinRequests = false;
+  String? _joinRequestsError;
 
   @override
   void initState() {
@@ -154,7 +158,10 @@ class _ChannelManagementScreenState
   }
 
   Future<void> _loadJoinRequests() async {
-    setState(() => _loadingJoinRequests = true);
+    setState(() {
+      _loadingJoinRequests = true;
+      _joinRequestsError = null;
+    });
     try {
       if (_channel != null && !_channel!.canManageJoinRequests) {
         if (mounted) {
@@ -166,13 +173,19 @@ class _ChannelManagementScreenState
         widget.channelId,
       );
       if (mounted) {
-        setState(() => _joinRequests = response.items);
+        setState(() {
+          _joinRequests = response.items;
+          _joinRequestsError = null;
+        });
       }
     } catch (e) {
-      if (mounted && _channel != null) {
-        if (_channel!.canManageJoinRequests) {
-          debugPrint('Join requests load: $e');
-        }
+      if (mounted) {
+        setState(() {
+          _joinRequestsError = userVisibleError(
+            e,
+            fallback: 'Не удалось загрузить заявки',
+          );
+        });
       }
     } finally {
       if (mounted) setState(() => _loadingJoinRequests = false);
@@ -196,7 +209,13 @@ class _ChannelManagementScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e))),
+          SnackBar(
+            content: Text(userVisibleError(e)),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_approveJoinRequest(request)),
+            ),
+          ),
         );
       }
     }
@@ -217,7 +236,13 @@ class _ChannelManagementScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e))),
+          SnackBar(
+            content: Text(userVisibleError(e)),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_rejectJoinRequest(request)),
+            ),
+          ),
         );
       }
     }
@@ -270,6 +295,13 @@ class _ChannelManagementScreenState
         content: Text(
           joinRequestsBulkSnackMessage(approve: approve, result: result),
         ),
+        action: result.failed > 0
+            ? SnackBarAction(
+                label: 'Повторить',
+                onPressed: () =>
+                    unawaited(_reviewAllJoinRequests(approve: approve)),
+              )
+            : null,
       ),
     );
   }
@@ -293,8 +325,14 @@ class _ChannelManagementScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(userVisibleError(e,
-                  fallback: 'Не удалось загрузить подписчиков'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось загрузить подписчиков'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_loadMembers()),
+            ),
+          ),
         );
       }
     } finally {
@@ -338,8 +376,14 @@ class _ChannelManagementScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(
-                  userVisibleError(e, fallback: 'Не удалось выбрать аватар'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось выбрать аватар'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_pickAvatar()),
+            ),
+          ),
         );
       }
     }
@@ -370,8 +414,14 @@ class _ChannelManagementScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(
-                  userVisibleError(e, fallback: 'Не удалось выбрать обложку'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось выбрать обложку'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_pickCover()),
+            ),
+          ),
         );
       }
     }
@@ -425,8 +475,14 @@ class _ChannelManagementScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content:
-                  Text(userVisibleError(e, fallback: 'Не удалось сохранить'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось сохранить'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_save()),
+            ),
+          ),
         );
       }
     } finally {
@@ -496,8 +552,14 @@ class _ChannelManagementScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content:
-                  Text(userVisibleError(e, fallback: 'Не удалось удалить'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось удалить'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_deleteChannel()),
+            ),
+          ),
         );
       }
     }
@@ -532,10 +594,20 @@ class _ChannelManagementScreenState
       }
       return Scaffold(
         appBar: AppBar(title: const Text('Управление каналом')),
-        body: const AppEmptyState(
+        body: AppEmptyState(
           icon: Icons.group_off_outlined,
           title: 'Канал не найден',
           subtitle: 'Возможно, он удалён или у вас нет доступа',
+          action: FilledButton(
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(ChatsRoute.path);
+              }
+            },
+            child: const Text('Назад'),
+          ),
         ),
       );
     }
@@ -546,8 +618,20 @@ class _ChannelManagementScreenState
     if (!canOpenManagement) {
       return Scaffold(
         appBar: AppBar(title: const Text('Управление каналом')),
-        body: const Center(
-          child: Text('У вас нет прав для управления этим каналом'),
+        body: AppEmptyState(
+          icon: Icons.lock_outline,
+          title: 'Нет доступа',
+          subtitle: 'У вас нет прав для управления этим каналом',
+          action: FilledButton(
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(ChatsRoute.path);
+              }
+            },
+            child: const Text('Назад'),
+          ),
         ),
       );
     }
@@ -892,6 +976,33 @@ class _ChannelManagementScreenState
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        if (canManageJoinRequests && _joinRequestsError != null) ...[
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Не удалось загрузить заявки',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _joinRequestsError!,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: _loadingJoinRequests ? null : _loadJoinRequests,
+                    child: const Text('Повторить'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const Divider(height: 32),
+        ],
         if (canManageJoinRequests && _joinRequests.isNotEmpty) ...[
           Row(
             children: [
@@ -958,10 +1069,27 @@ class _ChannelManagementScreenState
         ),
         const SizedBox(height: 16),
         if (_members.isEmpty)
-          const AppEmptyState(
+          AppEmptyState(
             icon: Icons.people_outline_rounded,
             title: 'Нет подписчиков',
             subtitle: 'Подписчики канала появятся здесь',
+            action: FilledButton.icon(
+              onPressed: () {
+                final name = _channel?.name ?? 'Канал';
+                unawaited(
+                  SystemShare.shareText(
+                    context,
+                    text: ShareLinkService.channelShareText(
+                      widget.channelId,
+                      name,
+                    ),
+                    subject: name,
+                  ),
+                );
+              },
+              icon: const Icon(Icons.ios_share_outlined),
+              label: const Text('Пригласить'),
+            ),
           )
         else
           ..._members.map((member) {
@@ -1085,8 +1213,14 @@ class _ChannelManagementScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(
-                  userVisibleError(e, fallback: 'Не удалось обновить роль'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось обновить роль'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_updateMemberRole(userId, role)),
+            ),
+          ),
         );
       }
     }
@@ -1133,8 +1267,14 @@ class _ChannelManagementScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content:
-                  Text(userVisibleError(e, fallback: 'Не удалось удалить'))),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось удалить'),
+            ),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_removeMember(userId)),
+            ),
+          ),
         );
       }
     }

@@ -200,10 +200,20 @@ class _ChannelSearchScreenState extends ConsumerState<ChannelSearchScreen> {
         }
 
         if (_posts.isEmpty) {
-          return const AppEmptyState(
+          return AppEmptyState(
             icon: Icons.search_off_rounded,
             title: 'Ничего не найдено',
             subtitle: 'Попробуйте изменить запрос',
+            action: TextButton(
+              onPressed: () {
+                _searchController.clear();
+                setState(() {
+                  _posts = [];
+                  _error = null;
+                });
+              },
+              child: const Text('Очистить запрос'),
+            ),
           );
         }
 

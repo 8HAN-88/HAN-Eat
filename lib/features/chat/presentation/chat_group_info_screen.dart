@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
+import '../../../app/app_router.dart';
 import '../../../core/share/system_share.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/auth_service.dart';
@@ -17,10 +19,12 @@ import '../../../utils/api_error_parser.dart';
 import '../../../utils/presence_format.dart';
 import '../../../widgets/app_avatar.dart';
 import '../application/chat_inbox_optimistic.dart';
+import '../application/chats_hub_refresh_provider.dart';
 import '../application/join_requests_bulk.dart';
 import 'chat_group_moderation_log_screen.dart';
 import 'chat_media_gallery_screen.dart';
 import 'widgets/chat_mute_duration_sheet.dart';
+import 'widgets/chats_hub_contacts_tab.dart';
 
 class ChatGroupInfoScreen extends StatefulWidget {
   const ChatGroupInfoScreen({
@@ -147,7 +151,13 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       if (!mounted) return;
       setState(() => _busy = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_changeGroupPhoto()),
+          ),
+        ),
       );
     }
   }
@@ -194,7 +204,13 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       if (!mounted) return;
       setState(() => _busy = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_renameGroup()),
+          ),
+        ),
       );
     }
   }
@@ -207,7 +223,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
     widget.onConversationChanged?.call(next);
   }
 
-  Future<void> _commitConversation({
+  Future<bool> _commitConversation({
     required ChatConversation optimistic,
     required Future<ChatConversation> Function() request,
   }) async {
@@ -215,14 +231,24 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
     _applyConversation(optimistic);
     try {
       final conv = await request();
-      if (!mounted) return;
+      if (!mounted) return false;
       _applyConversation(conv);
+      return true;
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) return false;
       _applyConversation(previous);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(
+              _commitConversation(optimistic: optimistic, request: request),
+            ),
+          ),
+        ),
       );
+      return false;
     }
   }
 
@@ -235,10 +261,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
     );
     if (choice == null || !mounted) return;
     final muted = !choice.unmute;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(choice.snackLabel)),
-    );
-    await _commitConversation(
+    final ok = await _commitConversation(
       optimistic: ChatInboxOptimistic.applyMute(
         _conversation,
         muted: muted,
@@ -257,6 +280,11 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
             notifyMode: choice.notifyMode,
           )),
     );
+    if (ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(choice.snackLabel)),
+      );
+    }
   }
 
   Future<void> _editGroupPaid() async {
@@ -326,7 +354,13 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_editGroupPaid()),
+          ),
+        ),
       );
     }
   }
@@ -351,7 +385,11 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      await showStarsRequiredSnack(context, e);
+      await showStarsRequiredSnack(
+        context,
+        e,
+        onRetry: () => unawaited(_subscribeGroup()),
+      );
     }
   }
 
@@ -596,9 +634,34 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       contacts = await ChatService.listContacts();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+      final retry = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Не удалось загрузить контакты'),
+          content: Text(userVisibleError(e)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'close'),
+              child: const Text('Закрыть'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'contacts'),
+              child: const Text('К контактам'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, 'retry'),
+              child: const Text('Повторить'),
+            ),
+          ],
+        ),
       );
+      if (!mounted) return;
+      if (retry == 'retry') {
+        await _addMembers();
+      } else if (retry == 'contacts') {
+        requestChatsHubTab(ChatsHubContactsTab.contactsTabIndex);
+        context.go(ChatsRoute.path);
+      }
       return;
     }
     final memberIds = _members.map((m) => m.id).toSet();
@@ -608,9 +671,29 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
         .toList();
     if (candidates.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Нет контактов для добавления')),
+      final openContacts = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Нет контактов'),
+          content: const Text(
+            'Добавьте людей в контакты, чтобы пригласить их в группу.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Закрыть'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('К контактам'),
+            ),
+          ],
+        ),
       );
+      if (openContacts == true && mounted) {
+        requestChatsHubTab(ChatsHubContactsTab.contactsTabIndex);
+        context.go(ChatsRoute.path);
+      }
       return;
     }
     final picked = await showModalBottomSheet<List<int>>(
@@ -671,6 +754,10 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       },
     );
     if (picked == null || picked.isEmpty || !mounted) return;
+    await _addPickedMembers(picked);
+  }
+
+  Future<void> _addPickedMembers(List<int> picked) async {
     setState(() => _busy = true);
     try {
       await ChatService.addGroupMembers(
@@ -688,7 +775,13 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       if (!mounted) return;
       setState(() => _busy = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_addPickedMembers(picked)),
+          ),
+        ),
       );
     }
   }
@@ -726,7 +819,13 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       if (!mounted) return;
       setState(() => _busy = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_removeMember(member)),
+          ),
+        ),
       );
     }
   }
@@ -757,7 +856,13 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       if (!mounted) return;
       setState(() => _busy = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_setMemberAdmin(member, isAdmin)),
+          ),
+        ),
       );
     }
   }
@@ -880,7 +985,13 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       if (!mounted) return;
       setState(() => _busy = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_editMemberPermissions(member)),
+          ),
+        ),
       );
     }
   }
@@ -1013,7 +1124,13 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       if (!mounted) return;
       setState(() => _busy = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_editMemberSendRestriction(member)),
+          ),
+        ),
       );
     }
   }
@@ -1125,10 +1242,44 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       if (!mounted) return;
       setState(() => _busy = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_banMember(member)),
+          ),
+        ),
       );
     } finally {
       reasonController.dispose();
+    }
+  }
+
+  Future<void> _unbanMember(
+    ChatGroupBanEntry row,
+    void Function(void Function()) setModalState,
+  ) async {
+    try {
+      await ChatService.unbanGroupMember(
+        conversationId: _conversation.id,
+        userId: row.user.id,
+      );
+      setModalState(() {});
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Пользователь разбанен')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_unbanMember(row, setModalState)),
+          ),
+        ),
+      );
     }
   }
 
@@ -1159,7 +1310,23 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                     child: SizedBox(
                       height: 260,
                       child: Center(
-                        child: Text(userVisibleError(snap.error!)),
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                userVisibleError(snap.error!),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 12),
+                              FilledButton(
+                                onPressed: () => setModalState(() {}),
+                                child: const Text('Повторить'),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   );
@@ -1169,7 +1336,22 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                   child: SizedBox(
                     height: 420,
                     child: items.isEmpty
-                        ? const Center(child: Text('Бан-лист пуст'))
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text('Бан-лист пуст'),
+                                  const SizedBox(height: 12),
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context),
+                                    child: const Text('Закрыть'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
                         : ListView.builder(
                             itemCount: items.length,
                             itemBuilder: (context, index) {
@@ -1189,32 +1371,9 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                                   ].join(' • '),
                                 ),
                                 trailing: TextButton(
-                                  onPressed: () async {
-                                    try {
-                                      await ChatService.unbanGroupMember(
-                                        conversationId: _conversation.id,
-                                        userId: row.user.id,
-                                      );
-                                      setModalState(() {});
-                                      if (mounted) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          const SnackBar(
-                                              content: Text(
-                                                  'Пользователь разбанен')),
-                                        );
-                                      }
-                                    } catch (e) {
-                                      if (mounted) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          SnackBar(
-                                            content: Text(userVisibleError(e)),
-                                          ),
-                                        );
-                                      }
-                                    }
-                                  },
+                                  onPressed: () => unawaited(
+                                    _unbanMember(row, setModalState),
+                                  ),
                                   child: const Text('Разбанить'),
                                 ),
                               );
@@ -1608,18 +1767,23 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       ),
     );
     if (ok != true || !mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    Navigator.of(context).pop();
-    widget.onLeftGroup?.call();
-    unawaited(() async {
-      try {
-        await ChatService.leaveGroup(conversationId: _conversation.id);
-      } catch (e) {
-        messenger.showSnackBar(
-          SnackBar(content: Text(userVisibleError(e))),
-        );
-      }
-    }());
+    try {
+      await ChatService.leaveGroup(conversationId: _conversation.id);
+      if (!mounted) return;
+      widget.onLeftGroup?.call();
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_leaveGroup()),
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -1651,47 +1815,53 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                       children: [
                         const SizedBox(height: 16),
                         Center(
-                          child: GestureDetector(
-                            onTap: (_busy || !_canChangeInfo)
-                                ? null
-                                : _changeGroupPhoto,
-                            child: Stack(
-                              alignment: Alignment.bottomRight,
-                              children: [
-                                CircleAvatar(
-                                  radius: 40,
-                                  backgroundImage: resolvedAvatarImage(
-                                    _conversation.avatarUrl,
-                                    decodeWidth: 160,
-                                  ),
-                                  child: resolvedAvatarImage(
-                                            _conversation.avatarUrl,
-                                            decodeWidth: 160,
-                                          ) ==
-                                          null
-                                      ? Text(
-                                          _conversation.displayTitle.characters
-                                              .first
-                                              .toUpperCase(),
-                                          style: theme.textTheme.headlineMedium,
-                                        )
-                                      : null,
-                                ),
-                                if (_canChangeInfo)
-                                  Container(
-                                    padding: const EdgeInsets.all(4),
-                                    decoration: BoxDecoration(
-                                      color: theme.colorScheme.primary,
-                                      shape: BoxShape.circle,
+                          child: Builder(
+                            builder: (context) {
+                              final avatar = Stack(
+                                alignment: Alignment.bottomRight,
+                                children: [
+                                  CircleAvatar(
+                                    radius: 40,
+                                    backgroundImage: resolvedAvatarImage(
+                                      _conversation.avatarUrl,
+                                      decodeWidth: 160,
                                     ),
-                                    child: Icon(
-                                      Icons.camera_alt_outlined,
-                                      size: 16,
-                                      color: theme.colorScheme.onPrimary,
-                                    ),
+                                    child: resolvedAvatarImage(
+                                              _conversation.avatarUrl,
+                                              decodeWidth: 160,
+                                            ) ==
+                                            null
+                                        ? Text(
+                                            _conversation
+                                                .displayTitle.characters
+                                                .first
+                                                .toUpperCase(),
+                                            style:
+                                                theme.textTheme.headlineMedium,
+                                          )
+                                        : null,
                                   ),
-                              ],
-                            ),
+                                  if (_canChangeInfo)
+                                    Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: theme.colorScheme.primary,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        Icons.camera_alt_outlined,
+                                        size: 16,
+                                        color: theme.colorScheme.onPrimary,
+                                      ),
+                                    ),
+                                ],
+                              );
+                              if (!_canChangeInfo) return avatar;
+                              return GestureDetector(
+                                onTap: _busy ? null : _changeGroupPhoto,
+                                child: avatar,
+                              );
+                            },
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -1826,7 +1996,9 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                                 ? 'Выключено'
                                 : 'Через ${_autoDeleteLabel(_conversation.autoDeleteSeconds)}',
                           ),
-                          trailing: const Icon(Icons.chevron_right),
+                          trailing: _canManagePostingPermissions
+                              ? const Icon(Icons.chevron_right)
+                              : null,
                           onTap: (_busy || !_canManagePostingPermissions)
                               ? null
                               : _configureAutoDelete,
@@ -1839,7 +2011,9 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                                 ? 'Выключен'
                                 : '${_slowModeLabel(_conversation.slowModeSeconds)} между сообщениями',
                           ),
-                          trailing: const Icon(Icons.chevron_right),
+                          trailing: _canManagePostingPermissions
+                              ? const Icon(Icons.chevron_right)
+                              : null,
                           onTap: (_busy || !_canManagePostingPermissions)
                               ? null
                               : _configureSlowMode,
@@ -1852,7 +2026,9 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                                 ? 'Выключен'
                                 : '${_conversation.antiFloodMaxMessagesPerMinute} сообщений/мин',
                           ),
-                          trailing: const Icon(Icons.chevron_right),
+                          trailing: _canManagePostingPermissions
+                              ? const Icon(Icons.chevron_right)
+                              : null,
                           onTap: (_busy || !_canManagePostingPermissions)
                               ? null
                               : _configureAntiFloodLimit,
@@ -1884,50 +2060,46 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                               ? null
                               : _openInviteLinkSheet,
                         ),
-                        ListTile(
-                          leading: const Icon(Icons.pending_actions_outlined),
-                          title: const Text('Заявки на вступление'),
-                          trailing: _conversation.pendingJoinRequestsCount > 0
-                              ? Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 3,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color:
-                                        Theme.of(context).colorScheme.primary,
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                  child: Text(
-                                    '${_conversation.pendingJoinRequestsCount}',
-                                    style: TextStyle(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onPrimary,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 12,
+                        if (_canManageMembers) ...[
+                          ListTile(
+                            leading: const Icon(Icons.pending_actions_outlined),
+                            title: const Text('Заявки на вступление'),
+                            trailing: _conversation.pendingJoinRequestsCount > 0
+                                ? Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 3,
                                     ),
-                                  ),
-                                )
-                              : null,
-                          onTap: (_busy || !_canManageMembers)
-                              ? null
-                              : _openJoinRequestsSheet,
-                        ),
-                        ListTile(
-                          leading: const Icon(Icons.block_outlined),
-                          title: const Text('Бан-лист группы'),
-                          onTap: (_busy || !_canManageMembers)
-                              ? null
-                              : _openBansSheet,
-                        ),
-                        ListTile(
-                          leading: const Icon(Icons.history_outlined),
-                          title: const Text('История модерации'),
-                          onTap: (_busy || !_canManageMembers)
-                              ? null
-                              : _openModerationLog,
-                        ),
+                                    decoration: BoxDecoration(
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text(
+                                      '${_conversation.pendingJoinRequestsCount}',
+                                      style: TextStyle(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onPrimary,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  )
+                                : null,
+                            onTap: _busy ? null : _openJoinRequestsSheet,
+                          ),
+                          ListTile(
+                            leading: const Icon(Icons.block_outlined),
+                            title: const Text('Бан-лист группы'),
+                            onTap: _busy ? null : _openBansSheet,
+                          ),
+                          ListTile(
+                            leading: const Icon(Icons.history_outlined),
+                            title: const Text('История модерации'),
+                            onTap: _busy ? null : _openModerationLog,
+                          ),
+                        ],
                         const Divider(),
                         Padding(
                           padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
@@ -2154,7 +2326,15 @@ class _GroupJoinRequestsSheetState extends State<_GroupJoinRequestsSheet> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(
+              _reviewOne(row, approve: approve),
+            ),
+          ),
+        ),
       );
     }
   }
@@ -2201,6 +2381,12 @@ class _GroupJoinRequestsSheetState extends State<_GroupJoinRequestsSheet> {
         content: Text(
           joinRequestsBulkSnackMessage(approve: approve, result: result),
         ),
+        action: result.failed > 0
+            ? SnackBarAction(
+                label: 'Повторить',
+                onPressed: () => unawaited(_reviewAll(approve: approve)),
+              )
+            : null,
       ),
     );
   }
@@ -2242,11 +2428,45 @@ class _GroupJoinRequestsSheetState extends State<_GroupJoinRequestsSheet> {
             if (_busy) const LinearProgressIndicator(minHeight: 2),
             Expanded(
               child: _error != null
-                  ? Center(child: Text(userVisibleError(_error!)))
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              userVisibleError(_error!),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 12),
+                            FilledButton(
+                              onPressed: _reload,
+                              child: const Text('Повторить'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
                   : items == null
                       ? const Center(child: CircularProgressIndicator())
                       : items.isEmpty
-                          ? const Center(child: Text('Нет активных заявок'))
+                          ? Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(24),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Text('Нет активных заявок'),
+                                    const SizedBox(height: 12),
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(context).maybePop(),
+                                      child: const Text('Закрыть'),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            )
                           : ListView.builder(
                               itemCount: items.length,
                               itemBuilder: (context, index) {

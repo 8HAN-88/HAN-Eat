@@ -2,20 +2,17 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../models/post_model.dart';
 import '../../../models/post.dart' show PollData;
 import '../../../services/like_service.dart';
-import '../../../services/post_reaction_service.dart';
-import '../../../services/subscription_status_cache.dart';
-import '../../subscription/application/flex_entitlements.dart';
 import '../../../services/saved_posts_service.dart';
 import '../../../services/repost_service.dart';
 import '../../../widgets/report_content_dialog.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/comment_service.dart';
-import '../../../utils/api_error_parser.dart';
 import '../../../utils/session_snackbar.dart';
 import '../../../widgets/telegram_photo_grid.dart';
 import '../../../utils/number_formatter.dart';
@@ -102,8 +99,6 @@ class _NewPostCardState extends State<NewPostCard>
   bool _isReposting = false;
   bool _isSendingDonation = false;
   bool _isBoosting = false;
-  List<PostReactionChip> _reactions = const [];
-  bool _isReacting = false;
   int? _currentUserId;
   bool _showLikeAnimation = false;
   bool _captionExpanded = false;
@@ -158,7 +153,6 @@ class _NewPostCardState extends State<NewPostCard>
     _isReposted = widget.post.isReposted ?? false;
     _repostsCount = widget.post.repostsCount;
     _displayCommentsCount = widget.post.commentsCount;
-    _reactions = widget.post.reactions;
     _currentUserId =
         AuthService.instance.currentUser?.id ?? _cachedCurrentUserId;
     if (_currentUserId == null) {
@@ -241,7 +235,6 @@ class _NewPostCardState extends State<NewPostCard>
     _isReposted = widget.post.isReposted ?? false;
     _repostsCount = widget.post.repostsCount;
     _displayCommentsCount = widget.post.commentsCount;
-    _reactions = widget.post.reactions;
     _syncFeedChannelRepostFuture();
   }
 
@@ -307,7 +300,11 @@ class _NewPostCardState extends State<NewPostCard>
       );
     } catch (e) {
       if (!mounted) return;
-      await showStarsRequiredSnack(context, e);
+      await showStarsRequiredSnack(
+        context,
+        e,
+        onRetry: () => unawaited(_purchasePaidContent()),
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -331,7 +328,15 @@ class _NewPostCardState extends State<NewPostCard>
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Не удалось открыть ссылку')),
+        SnackBar(
+          content: const Text('Не удалось открыть ссылку'),
+          action: SnackBarAction(
+            label: 'Скопировать',
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: url));
+            },
+          ),
+        ),
       );
     }
   }
@@ -347,43 +352,6 @@ class _NewPostCardState extends State<NewPostCard>
     } catch (_) {}
   }
 
-
-  Widget _buildPostReactions(ColorScheme scheme) {
-    final exclusive = SubscriptionStatusCache.peek()
-            ?.hasEntitlement('exclusive_reactions') ??
-        false;
-    final choices = flexPostReactions(exclusive);
-    final mine = {
-      for (final item in _reactions)
-        if (item.reactedByMe) item.emoji,
-    };
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          for (final emoji in choices)
-            Padding(
-              padding: const EdgeInsets.only(right: 6),
-              child: ActionChip(
-                visualDensity: VisualDensity.compact,
-                label: Text(
-                  () {
-                    final count = _reactions
-                        .where((item) => item.emoji == emoji)
-                        .fold<int>(0, (sum, item) => sum + item.count);
-                    return count > 0 ? '$emoji $count' : emoji;
-                  }(),
-                ),
-                backgroundColor: mine.contains(emoji)
-                    ? scheme.primaryContainer
-                    : scheme.surfaceContainerHighest,
-                onPressed: _isReacting ? null : () => _togglePostReaction(emoji),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
 
   Future<void> _toggleLike() async {
     if (_isLiking) return;
@@ -415,36 +383,12 @@ class _NewPostCardState extends State<NewPostCard>
           context,
           e,
           fallback: 'Не удалось поставить лайк',
+          onRetry: () => unawaited(_toggleLike()),
         );
       }
     } finally {
       if (mounted) {
         setState(() => _isLiking = false);
-      }
-    }
-  }
-
-  Future<void> _togglePostReaction(String emoji) async {
-    if (_isReacting) return;
-    setState(() => _isReacting = true);
-    try {
-      final next = await PostReactionService.toggle(
-        postId: widget.post.id,
-        emoji: emoji,
-      );
-      if (!mounted) return;
-      setState(() => _reactions = next);
-    } catch (e) {
-      if (mounted) {
-        showErrorSnackBar(
-          context,
-          e,
-          fallback: 'Не удалось поставить реакцию',
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isReacting = false);
       }
     }
   }
@@ -470,10 +414,11 @@ class _NewPostCardState extends State<NewPostCard>
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content:
-                  Text(userVisibleError(e, fallback: 'Не удалось сохранить'))),
+        showErrorSnackBar(
+          context,
+          e,
+          fallback: 'Не удалось сохранить',
+          onRetry: () => unawaited(_toggleSave()),
         );
       }
     } finally {
@@ -508,6 +453,7 @@ class _NewPostCardState extends State<NewPostCard>
             context,
             e,
             fallback: 'Не удалось убрать репост',
+            onRetry: () => unawaited(_toggleRepost()),
           );
         }
       } finally {
@@ -551,6 +497,7 @@ class _NewPostCardState extends State<NewPostCard>
           context,
           e,
           fallback: 'Не удалось сделать репост',
+          onRetry: () => unawaited(_toggleRepost()),
         );
       }
     } finally {
@@ -674,10 +621,21 @@ class _NewPostCardState extends State<NewPostCard>
     } catch (e) {
       if (!mounted) return;
       if (isStarsRequiredError(e)) {
-        await showStarsRequiredSnack(context, e, fallback: 'Не удалось отправить донат');
+        await showStarsRequiredSnack(
+          context,
+          e,
+          fallback: 'Не удалось отправить донат',
+          onRetry: () => unawaited(_showDonateDialog()),
+        );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+          SnackBar(
+            content: Text(e.toString().replaceFirst('Exception: ', '')),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_showDonateDialog()),
+            ),
+          ),
         );
       }
     } finally {
@@ -766,10 +724,21 @@ class _NewPostCardState extends State<NewPostCard>
     } catch (e) {
       if (!mounted) return;
       if (isStarsRequiredError(e)) {
-        await showStarsRequiredSnack(context, e, fallback: 'Не удалось запустить буст');
+        await showStarsRequiredSnack(
+          context,
+          e,
+          fallback: 'Не удалось запустить буст',
+          onRetry: () => unawaited(_showBoostDialog()),
+        );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+          SnackBar(
+            content: Text(e.toString().replaceFirst('Exception: ', '')),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_showBoostDialog()),
+            ),
+          ),
         );
       }
     } finally {
@@ -815,12 +784,11 @@ class _NewPostCardState extends State<NewPostCard>
       widget.onPostDeleted?.call();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            userVisibleError(e, fallback: 'Не удалось удалить пост'),
-          ),
-        ),
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось удалить пост',
+        onRetry: () => unawaited(_confirmAndDeletePost()),
       );
     }
   }
@@ -1675,8 +1643,6 @@ class _NewPostCardState extends State<NewPostCard>
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                _buildPostReactions(scheme),
                 if (_likesCount > 0) ...[
                   const SizedBox(height: 8),
                   GestureDetector(

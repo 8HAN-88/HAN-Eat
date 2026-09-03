@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../../app/router_keys.dart';
@@ -344,6 +345,35 @@ class _CallScreenState extends State<CallScreen> {
         error ?? message,
         fallback: message,
       );
+    }
+    await _leaveUi(notifyServer: true);
+  }
+
+  Future<void> _failPermission(String message) async {
+    final ctx = hanEatRootNavigatorKey.currentContext ?? context;
+    if (ctx.mounted) {
+      final openSettings = await showDialog<bool>(
+        context: ctx,
+        builder: (dialogCtx) => AlertDialog(
+          title: const Text('Нет доступа'),
+          content: Text(
+            '$message. Разрешите доступ в настройках и повторите звонок.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(false),
+              child: const Text('Закрыть'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(true),
+              child: const Text('Настройки'),
+            ),
+          ],
+        ),
+      );
+      if (openSettings == true) {
+        await openAppSettings();
+      }
     }
     await _leaveUi(notifyServer: true);
   }

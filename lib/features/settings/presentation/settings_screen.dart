@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -128,6 +130,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       current: _paidMessageStars,
     );
     if (next == null || !mounted) return;
+    await _applyPaidMessageStars(next);
+  }
+
+  Future<void> _applyPaidMessageStars(int next) async {
     setState(() {
       _paidMessageStars = next;
       _privacyBusy = true;
@@ -145,7 +151,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (!mounted) return;
       setState(() => _privacyBusy = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_applyPaidMessageStars(next)),
+          ),
+        ),
       );
       await _loadPrivacyPrefs();
     }
@@ -192,6 +204,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       },
     );
     if (selected == null || !mounted || selected == _lastSeenPrivacy) return;
+    await _applyLastSeenPrivacy(selected);
+  }
+
+  Future<void> _applyLastSeenPrivacy(String selected) async {
     final previous = _lastSeenPrivacy;
     setState(() {
       _lastSeenPrivacy = selected;
@@ -216,7 +232,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _privacyBusy = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_applyLastSeenPrivacy(selected)),
+          ),
+        ),
       );
     }
   }
@@ -243,7 +265,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _privacyBusy = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_toggleShowReadReceipts(enabled)),
+          ),
+        ),
       );
     }
   }

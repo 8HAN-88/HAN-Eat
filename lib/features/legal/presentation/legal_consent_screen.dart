@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -5,6 +7,7 @@ import '../../../app/app_router.dart';
 import '../../auth/sign_out_helper.dart';
 import '../../../services/legal_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../utils/session_snackbar.dart';
 import '../../../widgets/legal_consent_checkbox.dart';
 
 /// Экран повторного согласия (новая версия документов или старые аккаунты).
@@ -78,11 +81,11 @@ class _LegalConsentScreenState extends State<LegalConsentScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(userVisibleError(e)),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
+        showErrorSnackBar(
+          context,
+          e,
+          fallback: 'Не удалось сохранить согласие',
+          onRetry: () => unawaited(_submit()),
         );
       }
     } finally {
@@ -137,6 +140,13 @@ class _LegalConsentScreenState extends State<LegalConsentScreen> {
                         _loadWarning!,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.error,
+                        ),
+                      ),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton(
+                          onPressed: _loading ? null : _load,
+                          child: const Text('Повторить'),
                         ),
                       ),
                     ],

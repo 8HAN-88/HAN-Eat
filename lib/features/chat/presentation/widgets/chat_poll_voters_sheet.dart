@@ -95,6 +95,12 @@ class _ChatPollVotersSheetState extends State<_ChatPollVotersSheet> {
                     child: const Text('Повторить'),
                   ),
                 ),
+                Center(
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    child: const Text('Закрыть'),
+                  ),
+                ),
               ],
             );
           }
@@ -102,8 +108,18 @@ class _ChatPollVotersSheetState extends State<_ChatPollVotersSheet> {
             return ListView(
               controller: controller,
               padding: const EdgeInsets.all(24),
-              children: const [
-                Text('Пока никто не проголосовал', textAlign: TextAlign.center),
+              children: [
+                const Text(
+                  'Пока никто не проголосовал',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Center(
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    child: const Text('Закрыть'),
+                  ),
+                ),
               ],
             );
           }
@@ -111,10 +127,21 @@ class _ChatPollVotersSheetState extends State<_ChatPollVotersSheet> {
             controller: controller,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                child: Text(
-                  'Голоса · ${result.total}',
-                  style: Theme.of(context).textTheme.titleMedium,
+                padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Голоса · ${result.total}',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Закрыть',
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
                 ),
               ),
               for (final option in result.options) ...[

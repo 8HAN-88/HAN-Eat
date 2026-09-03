@@ -1,4 +1,6 @@
 // Экран сохраненных постов
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../../utils/api_error_parser.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +12,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import '../../feed/presentation/new_post_card.dart';
 import '../../../widgets/post_card_skeleton.dart';
 import '../../../core/layout/long_label_tab_bar.dart';
+import '../../../app/app_router.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/app_gradient_background.dart';
 
@@ -97,7 +100,13 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
       _loadPosts(refresh: true);
     } else if (result.message != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message!)),
+        SnackBar(
+          content: Text(result.message!),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_syncWithServer()),
+          ),
+        ),
       );
     }
   }
@@ -207,10 +216,14 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
           ),
         );
       }
-      return const AppEmptyState(
+      return AppEmptyState(
         icon: Icons.bookmark_border,
         title: 'Нет сохранённых постов',
         subtitle: 'Сохраняйте посты — они появятся здесь',
+        action: FilledButton(
+          onPressed: () => context.go(FeedRoute.path),
+          child: const Text('Открыть ленту'),
+        ),
       );
     }
     
@@ -221,7 +234,8 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
           if (notification.metrics.pixels >=
                   notification.metrics.maxScrollExtent * 0.8 &&
               !_isLoading &&
-              _hasMore) {
+              _hasMore &&
+              _loadError == null) {
             _loadMore();
           }
           return false;
@@ -231,6 +245,27 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
           itemCount: _posts.length + (_hasMore ? 1 : 0),
           itemBuilder: (context, index) {
             if (index == _posts.length) {
+              if (_loadError != null && !_isLoading) {
+                return Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        userVisibleError(
+                          _loadError!,
+                          fallback: 'Не удалось загрузить',
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      TextButton(
+                        onPressed: _loadMore,
+                        child: const Text('Повторить'),
+                      ),
+                    ],
+                  ),
+                );
+              }
               return const Center(
                 child: Padding(
                   padding: EdgeInsets.all(16),
@@ -270,10 +305,20 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
       return const Center(child: CircularProgressIndicator());
     }
     if (!_canViewSavedPosts()) {
-      return const AppEmptyState(
+      return AppEmptyState(
         icon: Icons.lock_outline,
         title: 'Сохранённые недоступны',
         subtitle: 'Только вы можете видеть свои сохранённые посты',
+        action: FilledButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(FeedRoute.path);
+            }
+          },
+          child: const Text('Назад'),
+        ),
       );
     }
 
