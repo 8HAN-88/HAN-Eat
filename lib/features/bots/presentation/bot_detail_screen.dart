@@ -1193,6 +1193,7 @@ class _BotProfileEdit {
 
 class BotMiniAppsScreen extends StatefulWidget {
   const BotMiniAppsScreen({
+    super.key,
     required this.botId,
     required this.botUsername,
     this.autoNewApp = false,
@@ -1250,7 +1251,7 @@ class _BotMiniAppsScreenState extends State<BotMiniAppsScreen> {
   }
 
   Future<void> _newApp() async {
-    final result = await showMiniAppForm(
+    final result = await _showMiniAppForm(
       context,
       title: 'New Mini App',
     );
@@ -1286,7 +1287,7 @@ class _BotMiniAppsScreenState extends State<BotMiniAppsScreen> {
   }
 
   Future<void> _editApp(MiniAppItem app) async {
-    final result = await showMiniAppForm(
+    final result = await _showMiniAppForm(
       context,
       title: 'Edit Mini App',
       initial: app,
@@ -1556,7 +1557,7 @@ class _BotMiniAppsScreenState extends State<BotMiniAppsScreen> {
   }
 }
 
-Future<_MiniAppFormResult?> showMiniAppForm(
+Future<_MiniAppFormResult?> _showMiniAppForm(
   BuildContext context, {
   required String title,
   MiniAppItem? initial,
