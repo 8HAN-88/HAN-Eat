@@ -135,49 +135,76 @@ void _dispatchToFlutter({
   } catch (_) {}
 }
 
-void _forwardPointer(html.Event raw) {
-  raw.preventDefault();
-  raw.stopPropagation();
-  if (raw is html.PointerEvent) {
-    _dispatchToFlutter(
-      type: raw.type,
-      x: raw.client.x,
-      y: raw.client.y,
-      pointerId: raw.pointerId ?? 1,
-      buttons: raw.buttons ?? 0,
-    );
-  }
+num _jsNum(Object? value) {
+  if (value is num) return value;
+  return 0;
 }
 
-void _forwardTouch(html.Event raw) {
-  raw.preventDefault();
-  raw.stopPropagation();
-  if (raw is! html.TouchEvent) return;
-  final touches = raw.changedTouches;
-  if (touches == null || touches.isEmpty) return;
-  final t = touches[0];
-  final type = switch (raw.type) {
-    'touchstart' => 'pointerdown',
-    'touchmove' => 'pointermove',
-    'touchend' => 'pointerup',
-    _ => 'pointercancel',
-  };
-  final buttons =
-      raw.type == 'touchend' || raw.type == 'touchcancel' ? 0 : 1;
-  _dispatchToFlutter(
-    type: type,
-    x: t.client.x,
-    y: t.client.y,
-    pointerId: t.identifier ?? 1,
-    buttons: buttons,
-  );
+int _jsInt(Object? value, int fallback) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return fallback;
+}
+
+void _consumeJsEvent(Object raw) {
+  try {
+    js_util.callMethod(raw, 'preventDefault', []);
+    js_util.callMethod(raw, 'stopPropagation', []);
+  } catch (_) {}
+}
+
+void _forwardPointer(Object raw) {
+  try {
+    final type = js_util.getProperty(raw, 'type')?.toString() ?? '';
+    if (type.isEmpty) return;
+    _consumeJsEvent(raw);
+    _dispatchToFlutter(
+      type: type,
+      x: _jsNum(js_util.getProperty(raw, 'clientX')),
+      y: _jsNum(js_util.getProperty(raw, 'clientY')),
+      pointerId: _jsInt(js_util.getProperty(raw, 'pointerId'), 1),
+      buttons: _jsInt(js_util.getProperty(raw, 'buttons'), 0),
+    );
+  } catch (_) {}
+}
+
+void _forwardTouch(Object raw) {
+  try {
+    final type = js_util.getProperty(raw, 'type')?.toString() ?? '';
+    final changed = js_util.getProperty(raw, 'changedTouches');
+    if (changed == null) return;
+    final length = _jsInt(js_util.getProperty(changed, 'length'), 0);
+    if (length < 1) return;
+    Object? touch;
+    try {
+      touch = js_util.callMethod(changed, 'item', [0]);
+    } catch (_) {
+      touch = js_util.getProperty(changed, 0);
+    }
+    if (touch == null) return;
+    _consumeJsEvent(raw);
+    final mapped = switch (type) {
+      'touchstart' => 'pointerdown',
+      'touchmove' => 'pointermove',
+      'touchend' => 'pointerup',
+      _ => 'pointercancel',
+    };
+    final buttons = type == 'touchend' || type == 'touchcancel' ? 0 : 1;
+    _dispatchToFlutter(
+      type: mapped,
+      x: _jsNum(js_util.getProperty(touch, 'clientX')),
+      y: _jsNum(js_util.getProperty(touch, 'clientY')),
+      pointerId: _jsInt(js_util.getProperty(touch, 'identifier'), 1),
+      buttons: buttons,
+    );
+  } catch (_) {}
 }
 
 void _bindShield(html.Element shield) {
   if (_shieldListening) return;
   _shieldListening = true;
   final opts = js_util.jsify({'capture': true, 'passive': false});
-  void listen(String type, void Function(html.Event) handler) {
+  void listen(String type, void Function(Object) handler) {
     js_util.callMethod(shield, 'addEventListener', [
       type,
       js_util.allowInterop(handler),

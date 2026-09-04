@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/post_types.dart';
@@ -23,9 +24,19 @@ class FeedUiPrefs {
     return (prefs.getInt(_tabKey) ?? 1).clamp(0, 2);
   }
 
+  /// Web: холодный старт никогда не открывает «Рилсы» — иначе PWA
+  /// сразу садится на видеослой и кажется, что в приложении только рилсы.
+  static int launchTabIndex(int saved, {required bool isWeb}) {
+    final tab = saved.clamp(0, 2);
+    if (isWeb && tab == 2) return 1;
+    return tab;
+  }
+
   static Future<void> saveTabIndex(int index) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_tabKey, index.clamp(0, 2));
+    var tab = index.clamp(0, 2);
+    if (kIsWeb && tab == 2) tab = 1;
+    await prefs.setInt(_tabKey, tab);
   }
 
   static Future<String> loadSubsFeedType() async {

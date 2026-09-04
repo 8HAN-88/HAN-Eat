@@ -66,10 +66,12 @@ class _MainFeedScreenState extends ConsumerState<MainFeedScreen>
       FeedUiPrefs.loadReelsFollowingOnly(),
     ]);
     if (!mounted) return;
-    var tab = results[0] as int;
-    // Холодный старт с /app/?go=1: не прыгаем в рилсы, пока роутер не стабилен.
-    if (kIsWeb && FeedShellLaunch.takeSkipReelsTab() && tab == 2) {
-      tab = 1;
+    var tab = FeedUiPrefs.launchTabIndex(
+      results[0] as int,
+      isWeb: kIsWeb,
+    );
+    if (kIsWeb) {
+      FeedShellLaunch.takeSkipReelsTab();
     }
     setState(() {
       _subsFeedType = results[1] as String;
