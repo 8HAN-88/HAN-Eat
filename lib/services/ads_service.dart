@@ -141,6 +141,34 @@ class AdsService {
     _throwForResponse(response, 'Не удалось возобновить кампанию');
   }
 
+  static Future<void> recordEvent({
+    required int campaignId,
+    required String kind,
+    String surface = 'feed',
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/ads/events'),
+      headers: await _headers(),
+      body: jsonEncode({
+        'campaign_id': campaignId,
+        'kind': kind,
+        'surface': surface,
+      }),
+    );
+    if (response.statusCode == 200) return;
+    _throwForResponse(response, 'Не удалось отметить событие');
+  }
+
+  static Future<void> hide(int campaignId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/ads/hide'),
+      headers: await _headers(),
+      body: jsonEncode({'campaign_id': campaignId}),
+    );
+    if (response.statusCode == 200) return;
+    _throwForResponse(response, 'Не удалось скрыть рекламу');
+  }
+
   static Future<AdCampaign> archive(int id) async {
     final response = await http.post(
       Uri.parse('$baseUrl/ads/campaigns/$id/archive'),
@@ -323,6 +351,9 @@ class AdCampaign {
     this.updatedAt,
     required this.creative,
     this.advertiser,
+    this.nextStep,
+    this.missing = const [],
+    this.readyToSubmit = false,
   });
 
   final int id;
@@ -344,6 +375,9 @@ class AdCampaign {
   final String? updatedAt;
   final AdCreative creative;
   final AdAdvertiser? advertiser;
+  final String? nextStep;
+  final List<String> missing;
+  final bool readyToSubmit;
 
   bool get isEditable => status == 'draft' || status == 'rejected';
   bool get canSubmit => isEditable;
@@ -360,6 +394,22 @@ class AdCampaign {
         'archived' => 'Архив',
         _ => status,
       };
+
+  String get clientNextStep {
+    final remote = (nextStep ?? '').trim();
+    if (remote.isNotEmpty) return remote;
+    return switch (status) {
+      'pending_review' =>
+        'Заявка у модератора. Статус обновится здесь — обычно это недолго.',
+      'rejected' => 'Исправьте замечание и отправьте заявку снова.',
+      'paused' => 'Показы остановлены. Нажмите «Возобновить».',
+      'archived' => 'Заявка в архиве.',
+      'approved' => isLive
+          ? 'Объявление в эфире. Можно поставить на паузу.'
+          : 'Одобрено. Показы начнутся в указанную дату.',
+      _ => 'Допишите объявление и отправьте заявку на размещение.',
+    };
+  }
 
   String get surfacesLabel {
     if (surfaces.isEmpty) return 'Площадки не выбраны';
@@ -395,6 +445,79 @@ class AdCampaign {
               Map<String, dynamic>.from(json['advertiser'] as Map),
             )
           : null,
+      nextStep: json['next_step'] as String?,
+      missing: (json['missing'] as List<dynamic>? ?? const [])
+          .map((e) => e.toString())
+          .toList(),
+      readyToSubmit: json['ready_to_submit'] as bool? ?? false,
+    );
+  }
+}
+
+class FeedAdItem {
+  const FeedAdItem({
+    required this.campaignId,
+    this.creativeId,
+    required this.title,
+    required this.body,
+    required this.ctaLabel,
+    this.imageUrl,
+    this.advertiserName,
+    required this.destinationType,
+    this.destinationUrl,
+    this.destinationChannelId,
+    this.destinationPostId,
+    this.surface = 'feed',
+  });
+
+  final int campaignId;
+  final int? creativeId;
+  final String title;
+  final String body;
+  final String ctaLabel;
+  final String? imageUrl;
+  final String? advertiserName;
+  final String destinationType;
+  final String? destinationUrl;
+  final int? destinationChannelId;
+  final int? destinationPostId;
+  final String surface;
+
+  AdCampaign get asCampaign => AdCampaign(
+        id: campaignId,
+        advertiserId: 0,
+        name: title,
+        status: 'approved',
+        isLive: true,
+        surfaces: [surface],
+        destinationType: destinationType,
+        destinationUrl: destinationUrl,
+        destinationChannelId: destinationChannelId,
+        destinationPostId: destinationPostId,
+        creative: AdCreative(
+          id: creativeId,
+          title: title,
+          body: body,
+          ctaLabel: ctaLabel,
+          imageUrl: imageUrl,
+          advertiserName: advertiserName,
+        ),
+      );
+
+  factory FeedAdItem.fromJson(Map<String, dynamic> json) {
+    return FeedAdItem(
+      campaignId: (json['campaign_id'] as num?)?.toInt() ?? 0,
+      creativeId: (json['creative_id'] as num?)?.toInt(),
+      title: json['title'] as String? ?? '',
+      body: json['body'] as String? ?? '',
+      ctaLabel: json['cta_label'] as String? ?? 'Подробнее',
+      imageUrl: json['image_url'] as String?,
+      advertiserName: json['advertiser_name'] as String?,
+      destinationType: json['destination_type'] as String? ?? 'url',
+      destinationUrl: json['destination_url'] as String?,
+      destinationChannelId: (json['destination_channel_id'] as num?)?.toInt(),
+      destinationPostId: (json['destination_post_id'] as num?)?.toInt(),
+      surface: json['surface'] as String? ?? 'feed',
     );
   }
 }

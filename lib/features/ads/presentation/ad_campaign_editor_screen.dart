@@ -1,13 +1,17 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../app/app_router.dart';
 import '../../../services/ads_service.dart';
+import '../../../services/auth_service.dart';
 import '../../../services/channel_service.dart';
 import '../../../services/media_upload_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../ads_order.dart';
 import 'widgets/ad_preview_card.dart';
 
 class AdCampaignEditorScreen extends StatefulWidget {
@@ -20,6 +24,7 @@ class AdCampaignEditorScreen extends StatefulWidget {
 }
 
 class _AdCampaignEditorScreenState extends State<AdCampaignEditorScreen> {
+  final _page = PageController();
   final _name = TextEditingController();
   final _title = TextEditingController();
   final _body = TextEditingController();
@@ -39,6 +44,7 @@ class _AdCampaignEditorScreenState extends State<AdCampaignEditorScreen> {
   String? _imageUrl;
   int? _channelId;
   List<Channel> _myChannels = const [];
+  int _step = 0;
 
   bool get _isNew => widget.campaignId == null;
   bool get _editable => _isNew || (_campaign?.isEditable ?? true);
@@ -46,11 +52,13 @@ class _AdCampaignEditorScreenState extends State<AdCampaignEditorScreen> {
   @override
   void initState() {
     super.initState();
+    _advertiserName.text = AuthService.instance.currentUser?.name ?? '';
     _bootstrap();
   }
 
   @override
   void dispose() {
+    _page.dispose();
     _name.dispose();
     _title.dispose();
     _body.dispose();
@@ -83,7 +91,7 @@ class _AdCampaignEditorScreenState extends State<AdCampaignEditorScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = userVisibleError(e, fallback: 'Не удалось открыть кампанию');
+        _error = userVisibleError(e, fallback: 'Не удалось открыть заявку');
         _loading = false;
       });
     }
@@ -95,7 +103,9 @@ class _AdCampaignEditorScreenState extends State<AdCampaignEditorScreen> {
     _title.text = campaign.creative.title;
     _body.text = campaign.creative.body;
     _cta.text = campaign.creative.ctaLabel;
-    _advertiserName.text = campaign.creative.advertiserName ?? '';
+    _advertiserName.text = campaign.creative.advertiserName?.trim().isNotEmpty == true
+        ? campaign.creative.advertiserName!
+        : (AuthService.instance.currentUser?.name ?? '');
     _url.text = campaign.destinationUrl ?? '';
     _postId.text = campaign.destinationPostId?.toString() ?? '';
     _destinationType = campaign.destinationType;
@@ -107,15 +117,16 @@ class _AdCampaignEditorScreenState extends State<AdCampaignEditorScreen> {
   }
 
   AdCampaignDraft _draft() {
+    final title = _title.text.trim();
     return AdCampaignDraft(
-      name: _name.text.trim().isEmpty ? 'Новая кампания' : _name.text.trim(),
+      name: _name.text.trim().isEmpty ? title : _name.text.trim(),
       surfaces: _surfaces.toList(),
       destinationType: _destinationType,
       destinationUrl: _url.text.trim(),
       destinationChannelId: _channelId,
-      destinationPostId: int.tryParse(_postId.text.trim()),
+      destinationPostId: parseAdPostId(_postId.text),
       creative: AdCreativeDraft(
-        title: _title.text.trim(),
+        title: title,
         body: _body.text.trim(),
         ctaLabel: _cta.text.trim().isEmpty ? 'Подробнее' : _cta.text.trim(),
         imageUrl: _imageUrl,
@@ -129,14 +140,14 @@ class _AdCampaignEditorScreenState extends State<AdCampaignEditorScreen> {
     return AdCampaign(
       id: current?.id ?? 0,
       advertiserId: current?.advertiserId ?? 0,
-      name: _name.text.trim().isEmpty ? 'Новая кампания' : _name.text.trim(),
+      name: _title.text.trim().isEmpty ? 'Новая реклама' : _title.text.trim(),
       status: current?.status ?? 'draft',
       isLive: current?.isLive ?? false,
       surfaces: _surfaces.toList(),
       destinationType: _destinationType,
       destinationUrl: _url.text.trim(),
       destinationChannelId: _channelId,
-      destinationPostId: int.tryParse(_postId.text.trim()),
+      destinationPostId: parseAdPostId(_postId.text),
       creative: AdCreative(
         id: current?.creative.id,
         title: _title.text.trim(),
@@ -148,8 +159,64 @@ class _AdCampaignEditorScreenState extends State<AdCampaignEditorScreen> {
     );
   }
 
+  List<AdOrderIssue> _issues() {
+    return validateAdOrder(
+      surfaces: _surfaces,
+      title: _title.text,
+      body: _body.text,
+      imageUrl: _imageUrl,
+      destinationType: _destinationType,
+      destinationUrl: _url.text,
+      channelId: _channelId,
+      postIdRaw: _postId.text,
+    );
+  }
+
+  String? _stepBlocker(int step) {
+    final issues = _issues();
+    if (step == 0 && issues.any((e) => e.field == 'surfaces')) {
+      return issues.firstWhere((e) => e.field == 'surfaces').message;
+    }
+    if (step == 1) {
+      final hit = issues.where((e) => e.field == 'title' || e.field == 'creative');
+      if (hit.isNotEmpty) return hit.first.message;
+    }
+    if (step == 2) {
+      final hit = issues.where((e) => e.field == 'destination');
+      if (hit.isNotEmpty) return hit.first.message;
+    }
+    return null;
+  }
+
+  Future<void> _goTo(int step) async {
+    setState(() => _step = step);
+    if (_page.hasClients) {
+      await _page.animateToPage(
+        step,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
   Future<void> _save({required bool submit}) async {
     if (_saving) return;
+    if (submit) {
+      final issues = _issues();
+      if (issues.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(issues.first.message)),
+        );
+        if (issues.first.field == 'surfaces') {
+          await _goTo(0);
+        } else if (issues.first.field == 'destination') {
+          await _goTo(2);
+        } else {
+          await _goTo(1);
+        }
+        return;
+      }
+    }
     setState(() => _saving = true);
     try {
       final draft = _draft();
@@ -168,17 +235,8 @@ class _AdCampaignEditorScreenState extends State<AdCampaignEditorScreen> {
       if (!mounted) return;
       _applyCampaign(saved);
       setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            submit
-                ? (saved.status == 'approved'
-                    ? 'Кампания одобрена и готова к показу'
-                    : 'Отправлено на модерацию')
-                : 'Черновик сохранён',
-          ),
-        ),
-      );
+      await _showResult(saved, submitted: submit);
+      if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
@@ -187,6 +245,30 @@ class _AdCampaignEditorScreenState extends State<AdCampaignEditorScreen> {
         SnackBar(content: Text(userVisibleError(e))),
       );
     }
+  }
+
+  Future<void> _showResult(AdCampaign saved, {required bool submitted}) async {
+    final title = submitted
+        ? (saved.status == 'approved'
+            ? 'Реклама принята'
+            : 'Заявка отправлена')
+        : 'Черновик сохранён';
+    final body = submitted
+        ? saved.clientNextStep
+        : 'Можете вернуться и дописать позже. Заявка появится в списке.';
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(body),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Понятно'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _pickImage() async {
@@ -215,7 +297,9 @@ class _AdCampaignEditorScreenState extends State<AdCampaignEditorScreen> {
       if (!mounted) return;
       setState(() => _uploading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось загрузить фото'))),
+        SnackBar(
+          content: Text(userVisibleError(e, fallback: 'Не удалось загрузить фото')),
+        ),
       );
     }
   }
@@ -224,44 +308,79 @@ class _AdCampaignEditorScreenState extends State<AdCampaignEditorScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isNew ? 'Новая реклама' : 'Кампания'),
+        title: Text(_isNew ? 'Новая заявка' : 'Заявка'),
       ),
       body: _buildBody(),
-      bottomNavigationBar: _loading || _error != null
-          ? null
-          : SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                child: Row(
-                  children: [
-                    if (_editable)
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: _saving
-                              ? null
-                              : () => unawaited(_save(submit: false)),
-                          child: const Text('Черновик'),
-                        ),
-                      ),
-                    if (_editable) const SizedBox(width: 12),
-                    Expanded(
-                      child: FilledButton(
-                        onPressed: _saving || !_editable
-                            ? null
-                            : () => unawaited(_save(submit: true)),
-                        child: Text(
-                          _saving
-                              ? 'Сохранение…'
-                              : _editable
-                                  ? 'Выложить'
-                                  : _campaign?.statusLabel ?? '',
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+      bottomNavigationBar: _loading || _error != null ? null : _bottomBar(),
+    );
+  }
+
+  Widget _bottomBar() {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        child: Column(
+            mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_campaign != null && !_editable)
+              Text(
+                _campaign!.clientNextStep,
+                textAlign: TextAlign.center,
               ),
+            if (_campaign != null && !_editable) const SizedBox(height: 8),
+            Row(
+              children: [
+                if (_step > 0)
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _saving ? null : () => unawaited(_goTo(_step - 1)),
+                      child: const Text('Назад'),
+                    ),
+                  ),
+                if (_step > 0) const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _saving
+                        ? null
+                        : () {
+                            if (_step < 2) {
+                              final block = _editable ? _stepBlocker(_step) : null;
+                              if (block != null) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(block)),
+                                );
+                                return;
+                              }
+                              unawaited(_goTo(_step + 1));
+                              return;
+                            }
+                            if (!_editable) {
+                              Navigator.of(context).pop();
+                              return;
+                            }
+                            unawaited(_save(submit: true));
+                          },
+                    child: Text(
+                      _saving
+                          ? 'Отправка…'
+                          : _step < 2
+                              ? 'Далее'
+                              : _editable
+                                  ? 'Отправить заявку'
+                                  : 'Закрыть',
+                    ),
+                  ),
+                ),
+              ],
             ),
+            if (_editable && _step == 2)
+              TextButton(
+                onPressed: _saving ? null : () => unawaited(_save(submit: false)),
+                child: const Text('Сохранить черновик'),
+              ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -281,49 +400,189 @@ class _AdCampaignEditorScreenState extends State<AdCampaignEditorScreen> {
       );
     }
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+    return Column(
       children: [
-        if (_campaign != null) ...[
-          Text(
-            _campaign!.statusLabel,
-            style: Theme.of(context).textTheme.titleSmall,
-          ),
-          if ((_campaign!.rejectionReason ?? '').trim().isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(
-                _campaign!.rejectionReason!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              LinearProgressIndicator(value: (_step + 1) / 3),
+              const SizedBox(height: 8),
+              Text(
+                switch (_step) {
+                  0 => 'Шаг 1 из 3 · Где показывать',
+                  1 => 'Шаг 2 из 3 · Объявление',
+                  _ => 'Шаг 3 из 3 · Куда вести',
+                },
+                style: Theme.of(context).textTheme.titleSmall,
               ),
-            ),
-          const SizedBox(height: 12),
-        ],
+              if (_campaign != null) ...[
+                const SizedBox(height: 4),
+                Text(_campaign!.statusLabel),
+                if ((_campaign!.rejectionReason ?? '').trim().isNotEmpty)
+                  Text(
+                    _campaign!.rejectionReason!,
+                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  ),
+              ],
+            ],
+          ),
+        ),
+        Expanded(
+          child: PageView(
+            controller: _page,
+            physics: const NeverScrollableScrollPhysics(),
+            onPageChanged: (i) => setState(() => _step = i),
+            children: [
+              _stepWhere(),
+              _stepCreative(),
+              _stepDestination(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _stepWhere() {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      children: [
+        Text(
+          'Выберите места. Можно несколько — одно объявление подойдёт для всех.',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        const SizedBox(height: 12),
+        _placeTile(
+          id: 'feed',
+          title: 'Лента рекомендаций',
+          subtitle: 'Карточка между постами, как в Instagram',
+          icon: Icons.dynamic_feed_outlined,
+        ),
+        _placeTile(
+          id: 'reels',
+          title: 'Рилсы',
+          subtitle: 'Вертикальный ролик в ленте рилсов',
+          icon: Icons.video_library_outlined,
+        ),
+        _placeTile(
+          id: 'channel',
+          title: 'Стены каналов',
+          subtitle: 'Тихое объявление между постами канала',
+          icon: Icons.campaign_outlined,
+        ),
+      ],
+    );
+  }
+
+  Widget _placeTile({
+    required String id,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+  }) {
+    final selected = _surfaces.contains(id);
+    return Card(
+      child: CheckboxListTile(
+        value: selected,
+        onChanged: !_editable
+            ? null
+            : (value) {
+                setState(() {
+                  if (value == true) {
+                    _surfaces.add(id);
+                  } else if (_surfaces.length > 1) {
+                    _surfaces.remove(id);
+                  }
+                });
+              },
+        secondary: Icon(icon),
+        title: Text(title),
+        subtitle: Text(subtitle),
+      ),
+    );
+  }
+
+  Widget _stepCreative() {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      children: [
         TextField(
-          controller: _name,
+          controller: _advertiserName,
           enabled: _editable,
           decoration: const InputDecoration(
-            labelText: 'Название кампании',
-            hintText: 'Только для вас, клиенты его не видят',
+            labelText: 'Как подписать рекламодателя',
+            hintText: 'Название компании или имя',
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _title,
+          enabled: _editable,
+          maxLength: 80,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(
+            labelText: 'Заголовок',
+            hintText: 'Коротко, что предлагаете',
+          ),
+        ),
+        TextField(
+          controller: _body,
+          enabled: _editable,
+          maxLength: 500,
+          maxLines: 3,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(
+            labelText: 'Текст',
+            hintText: 'Пара предложений для карточки',
+          ),
+        ),
+        TextField(
+          controller: _cta,
+          enabled: _editable,
+          maxLength: 32,
+          decoration: const InputDecoration(
+            labelText: 'Текст кнопки',
+            hintText: 'Подробнее, Заказать, Открыть',
+          ),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: !_editable || _uploading ? null : () => unawaited(_pickImage()),
+          icon: _uploading
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.image_outlined),
+          label: Text(
+            (_imageUrl ?? '').isEmpty
+                ? 'Добавить изображение'
+                : 'Заменить изображение',
           ),
         ),
         const SizedBox(height: 16),
-        Text('Где показывать', style: Theme.of(context).textTheme.titleSmall),
+        Text('Так увидят в ленте', style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          children: [
-            _surfaceChip('feed', 'Лента'),
-            _surfaceChip('reels', 'Рилсы'),
-            _surfaceChip('channel', 'Каналы'),
-          ],
+        AdPreviewCard(campaign: _previewCampaign()),
+      ],
+    );
+  }
+
+  Widget _stepDestination() {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      children: [
+        Text(
+          'Куда открыть, если человек нажмёт кнопку',
+          style: Theme.of(context).textTheme.bodyMedium,
         ),
-        const SizedBox(height: 16),
-        Text('Куда вести', style: Theme.of(context).textTheme.titleSmall),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         SegmentedButton<String>(
           segments: const [
-            ButtonSegment(value: 'url', label: Text('Ссылка')),
+            ButtonSegment(value: 'url', label: Text('Сайт')),
             ButtonSegment(value: 'channel', label: Text('Канал')),
             ButtonSegment(value: 'post', label: Text('Пост')),
           ],
@@ -341,102 +600,57 @@ class _AdCampaignEditorScreenState extends State<AdCampaignEditorScreen> {
             keyboardType: TextInputType.url,
             decoration: const InputDecoration(
               labelText: 'Ссылка',
-              hintText: 'https://',
+              hintText: 'https://ваш-сайт.ru',
             ),
           )
         else if (_destinationType == 'channel')
-          DropdownButtonFormField<int>(
-            value: _myChannels.any((c) => c.id == _channelId) ? _channelId : null,
-            decoration: const InputDecoration(labelText: 'Канал'),
-            items: [
-              for (final channel in _myChannels)
-                DropdownMenuItem(
-                  value: channel.id,
-                  child: Text(channel.name),
-                ),
-            ],
-            onChanged: _editable
-                ? (value) => setState(() => _channelId = value)
-                : null,
-          )
+          _myChannels.isEmpty
+              ? Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.info_outline),
+                    title: const Text('Своих каналов пока нет'),
+                    subtitle: const Text(
+                      'Создайте канал или поставьте обычную ссылку на сайт',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push(CreateChannelRoute.path),
+                  ),
+                )
+              : DropdownButtonFormField<int>(
+                  value: _myChannels.any((c) => c.id == _channelId)
+                      ? _channelId
+                      : null,
+                  decoration: const InputDecoration(labelText: 'Ваш канал'),
+                  items: [
+                    for (final channel in _myChannels)
+                      DropdownMenuItem(
+                        value: channel.id,
+                        child: Text(channel.name),
+                      ),
+                  ],
+                  onChanged: _editable
+                      ? (value) => setState(() => _channelId = value)
+                      : null,
+                )
         else
           TextField(
             controller: _postId,
             enabled: _editable,
-            keyboardType: TextInputType.number,
             decoration: const InputDecoration(
-              labelText: 'ID поста',
-              hintText: 'Число из ссылки на пост',
+              labelText: 'Ссылка или номер поста',
+              hintText: 'https://haneat.app/… или 123',
             ),
           ),
         const SizedBox(height: 20),
-        Text('Объявление', style: Theme.of(context).textTheme.titleSmall),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _advertiserName,
-          enabled: _editable,
-          decoration: const InputDecoration(
-            labelText: 'Имя рекламодателя',
-            hintText: 'Как подпишут карточку',
-          ),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _title,
-          enabled: _editable,
-          maxLength: 80,
-          decoration: const InputDecoration(labelText: 'Заголовок'),
-        ),
-        TextField(
-          controller: _body,
-          enabled: _editable,
-          maxLength: 500,
-          maxLines: 3,
-          decoration: const InputDecoration(labelText: 'Текст'),
-        ),
-        TextField(
-          controller: _cta,
-          enabled: _editable,
-          maxLength: 32,
-          decoration: const InputDecoration(labelText: 'Кнопка'),
-        ),
-        const SizedBox(height: 8),
-        OutlinedButton.icon(
-          onPressed: !_editable || _uploading ? null : () => unawaited(_pickImage()),
-          icon: _uploading
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.image_outlined),
-          label: Text(
-            (_imageUrl ?? '').isEmpty ? 'Добавить изображение' : 'Заменить изображение',
-          ),
-        ),
-        const SizedBox(height: 20),
-        Text('Как увидят в ленте', style: Theme.of(context).textTheme.titleSmall),
+        Text('Проверьте перед отправкой', style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 8),
         AdPreviewCard(campaign: _previewCampaign()),
+        const SizedBox(height: 8),
+        Text(
+          'После отправки модератор проверит объявление. Статус заявки будет в разделе «Заказать рекламу».',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
       ],
-    );
-  }
-
-  Widget _surfaceChip(String id, String label) {
-    return FilterChip(
-      label: Text(label),
-      selected: _surfaces.contains(id),
-      onSelected: !_editable
-          ? null
-          : (selected) {
-              setState(() {
-                if (selected) {
-                  _surfaces.add(id);
-                } else if (_surfaces.length > 1) {
-                  _surfaces.remove(id);
-                }
-              });
-            },
     );
   }
 }

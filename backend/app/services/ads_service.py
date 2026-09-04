@@ -250,6 +250,10 @@ class AdsService:
         if not creative.cta_label:
             creative.cta_label = "Подробнее"
 
+        default_names = {"", "Новая кампания", "Новая реклама"}
+        if (campaign.name or "").strip() in default_names and (creative.title or "").strip():
+            campaign.name = creative.title.strip()[:80]
+
         if require_ready:
             if not (creative.title or "").strip():
                 raise AdsError("Укажите заголовок объявления")
@@ -292,6 +296,10 @@ class AdsService:
                 "advertiser_name": creative.advertiser_name if creative else None,
             },
         }
+        missing, next_step = self._client_guidance(campaign, creative)
+        payload["missing"] = missing
+        payload["next_step"] = next_step
+        payload["ready_to_submit"] = not missing and campaign.status in EDITABLE_STATUSES
         if include_advertiser:
             advertiser = (
                 self.db.query(User).filter(User.id == campaign.advertiser_id).first()
@@ -497,3 +505,129 @@ class AdsService:
                 "campaign": item,
             }
         return None
+
+    def _client_guidance(
+        self,
+        campaign: AdCampaign,
+        creative: Optional[AdCreative],
+    ) -> tuple[list[str], str]:
+        missing: list[str] = []
+        if not (creative and (creative.title or "").strip()):
+            missing.append("title")
+        if not (
+            creative
+            and (
+                (creative.image_url or "").strip()
+                or (creative.body or "").strip()
+            )
+        ):
+            missing.append("creative")
+        dest = campaign.destination_type or "url"
+        if dest == "url" and not (campaign.destination_url or "").strip():
+            missing.append("destination")
+        elif dest == "channel" and not campaign.destination_channel_id:
+            missing.append("destination")
+        elif dest == "post" and not campaign.destination_post_id:
+            missing.append("destination")
+        if not list(campaign.surfaces or []):
+            missing.append("surfaces")
+
+        if campaign.status == STATUS_PENDING:
+            return missing, (
+                "Заявка у модератора. Статус обновится здесь — обычно это недолго."
+            )
+        if campaign.status == STATUS_REJECTED:
+            reason = (campaign.rejection_reason or "").strip()
+            extra = f" {reason}" if reason else ""
+            return missing, f"Исправьте замечание и отправьте заявку снова.{extra}"
+        if campaign.status == STATUS_PAUSED:
+            return missing, "Показы остановлены. Нажмите «Возобновить», чтобы снова показать."
+        if campaign.status == STATUS_ARCHIVED:
+            return missing, "Заявка в архиве. Чтобы разместить ещё раз, создайте новую."
+        if campaign.status == STATUS_APPROVED:
+            if campaign_is_live(campaign):
+                return missing, (
+                    "Объявление в эфире в выбранных местах. "
+                    "Можно поставить на паузу в любой момент."
+                )
+            return missing, "Одобрено. Показы начнутся в указанную дату."
+        if missing:
+            return missing, "Допишите объявление — затем отправьте заявку на размещение."
+        return missing, "Проверьте карточку и отправьте заявку. Мы проверим и включим показы."
+
+    def record_event(
+        self,
+        *,
+        user_id: int,
+        campaign_id: int,
+        kind: str,
+        surface: str = "feed",
+    ) -> dict[str, Any]:
+        from app.models.ad import AdClick, AdImpression
+
+        campaign = self.db.query(AdCampaign).filter(AdCampaign.id == campaign_id).first()
+        if not campaign:
+            raise AdsError("Кампания не найдена", 404)
+        creative = self._creative_for(campaign.id)
+        if not creative:
+            raise AdsError("Нет объявления", 404)
+        key = (kind or "").strip().lower()
+        if key == "impression":
+            self.db.add(
+                AdImpression(
+                    campaign_id=campaign.id,
+                    creative_id=creative.id,
+                    user_id=user_id,
+                    surface=surface if surface in SURFACES else "feed",
+                )
+            )
+        elif key == "click":
+            self.db.add(
+                AdClick(
+                    campaign_id=campaign.id,
+                    creative_id=creative.id,
+                    user_id=user_id,
+                    surface=surface if surface in SURFACES else "feed",
+                )
+            )
+        else:
+            raise AdsError("Неизвестное событие")
+        self.db.commit()
+        return {"ok": True}
+
+    def hide_for_user(self, *, user_id: int, campaign_id: int) -> dict[str, Any]:
+        campaign = self.db.query(AdCampaign).filter(AdCampaign.id == campaign_id).first()
+        if not campaign:
+            raise AdsError("Кампания не найдена", 404)
+        existing = (
+            self.db.query(AdHide)
+            .filter(AdHide.campaign_id == campaign_id, AdHide.user_id == user_id)
+            .first()
+        )
+        if existing is None:
+            self.db.add(AdHide(campaign_id=campaign_id, user_id=user_id))
+            self.db.commit()
+        return {"ok": True}
+
+    def insert_into_feed_items(
+        self,
+        items: list[dict[str, Any]],
+        user_id: int,
+        *,
+        following_only: bool,
+        feed_type: str,
+        cursor: Optional[str],
+    ) -> list[dict[str, Any]]:
+        if following_only or (feed_type or "all") != "all" or cursor:
+            return items
+        if len(items) < 4:
+            return items
+        ad = self.pick_live_for_surface(surface="feed", user_id=user_id)
+        if not ad:
+            return items
+        out = list(items)
+        index = min(8, len(out))
+        if index < 3:
+            index = 3
+        out.insert(index, ad)
+        return out

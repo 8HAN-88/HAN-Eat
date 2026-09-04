@@ -265,8 +265,8 @@ class _ChannelSettingsBottomSheetState
               ),
             ListTile(
               leading: const Icon(Icons.campaign_outlined),
-              title: const Text('Реклама'),
-              subtitle: const Text('Кабинет: разместить объявление'),
+              title: const Text('Заказать рекламу'),
+              subtitle: const Text('Отправить заявку на объявление'),
               onTap: () {
                 Navigator.of(context).pop();
                 context.push(AdsHubRoute.path);

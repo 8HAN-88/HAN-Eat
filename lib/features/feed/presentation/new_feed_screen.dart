@@ -22,6 +22,8 @@ import '../../../app/app_router.dart';
 import '../../../widgets/post_card_skeleton.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
+import '../../ads/ads_order.dart';
+import '../../ads/presentation/widgets/feed_ad_card.dart';
 import '../../content/create_content_actions.dart';
 import '../../navigation/application/feed_scroll_chrome.dart';
 
@@ -56,6 +58,7 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
     with AutomaticKeepAliveClientMixin {
   final ScrollController _scrollController = ScrollController();
   List<PostModel> _posts = [];
+  List<FeedAdPlacement> _ads = [];
   List<FeedWatchNextItem> _watchNext = [];
   bool _isLoading = false;
   bool _hasMore = true;
@@ -255,6 +258,7 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
           refresh ? response.items : <PostModel>[..._posts, ...response.items];
       setState(() {
         _posts = nextPosts;
+        _ads = refresh ? response.ads : _ads;
         _watchNext = refresh ? response.watchNext : _watchNext;
         _nextCursor = response.nextCursor;
         _hasMore = response.hasMore;
@@ -427,7 +431,7 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
                         bottom: _listBottomPadding(context, chromeHidden)),
                     itemCount: 1 +
                         (_showCacheBanner ? 1 : 0) +
-                        _posts.length +
+                        mergeFeedRows(posts: _posts, ads: _ads).length +
                         (_hasMore ? 1 : 0),
                     itemBuilder: (context, index) {
                       if (index == 0) {
@@ -483,9 +487,26 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
                           ),
                         );
                       }
-                      final postIndex = adj - banner;
-                      if (postIndex >= 0 && postIndex < _posts.length) {
-                        final post = _posts[postIndex];
+                      final rows = mergeFeedRows(posts: _posts, ads: _ads);
+                      final rowIndex = adj - banner;
+                      if (rowIndex >= 0 && rowIndex < rows.length) {
+                        final row = rows[rowIndex];
+                        final ad = row.ad;
+                        if (ad != null) {
+                          return FeedAdCard(
+                            key: ValueKey('recommendations_ad_${ad.campaignId}'),
+                            item: ad,
+                            onHidden: () {
+                              setState(() {
+                                _ads = _ads
+                                    .where((e) => e.item.campaignId != ad.campaignId)
+                                    .toList();
+                              });
+                            },
+                          );
+                        }
+                        final post = row.post as PostModel;
+                        final postIndex = row.postPosition ?? 0;
                         return FeedExposureTracker(
                           post: post,
                           feedSurface: 'recommendations_$_feedType',
@@ -535,7 +556,11 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
                           ),
                         );
                       }
-                      if (_hasMore && adj == banner + _posts.length) {
+                      if (_hasMore &&
+                          adj ==
+                              banner +
+                                  mergeFeedRows(posts: _posts, ads: _ads)
+                                      .length) {
                         if (!_isLoading) {
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             if (mounted && !_isLoading && _hasMore) {

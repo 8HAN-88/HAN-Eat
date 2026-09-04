@@ -21,6 +21,7 @@ void main() {
         'image_url': 'https://cdn.example/ad.jpg',
         'advertiser_name': 'HanWe',
       },
+      'next_step': 'Заявка у модератора. Статус обновится здесь — обычно это недолго.',
     });
 
     expect(campaign.id, 7);
@@ -30,6 +31,7 @@ void main() {
     expect(campaign.isEditable, isFalse);
     expect(campaign.creative.title, 'Заголовок');
     expect(campaign.creative.ctaLabel, 'Открыть');
+    expect(campaign.clientNextStep, contains('модератора'));
   });
 
   test('draft campaign can be submitted', () {

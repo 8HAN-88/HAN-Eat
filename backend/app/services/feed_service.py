@@ -101,7 +101,7 @@ class FeedService:
 
         # Проверяем кэш (только если нет курсора, т.к. курсор означает новую страницу)
         cache_key = (
-            f"feed:v3:{user_id}:{feed_type}:include_recipes={include_recipes}:following_only={following_only}"
+            f"feed:v4:{user_id}:{feed_type}:include_recipes={include_recipes}:following_only={following_only}"
             f":sort={sort_by}:hide_promo={hide_promoted}:ai={ai_recommendations}"
         )
         cached_data = None
@@ -187,6 +187,18 @@ class FeedService:
 
         window = ranked_posts[start_index : start_index + limit]
         enriched_posts = self._enrich_posts(window, user_id)
+        try:
+            from app.services.ads_service import AdsService
+
+            enriched_posts = AdsService(self.db).insert_into_feed_items(
+                enriched_posts,
+                user_id,
+                following_only=following_only,
+                feed_type=feed_type,
+                cursor=cursor,
+            )
+        except Exception as exc:
+            logger.warning("Feed ad insert skipped: %s", exc)
 
         has_more = len(ranked_posts) > start_index + limit
         # Курсор — последний отданный пост: клиент передаёт его id, мы начинаем со следующего индекса.

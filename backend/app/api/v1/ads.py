@@ -42,6 +42,16 @@ class AdRejectIn(BaseModel):
     reason: str = Field(..., min_length=2, max_length=400)
 
 
+class AdEventIn(BaseModel):
+    campaign_id: int
+    kind: str = Field(..., pattern="^(impression|click)$")
+    surface: str = "feed"
+
+
+class AdHideIn(BaseModel):
+    campaign_id: int
+
+
 def _raise_ads(exc: AdsError) -> None:
     raise HTTPException(status_code=exc.status_code, detail=exc.message)
 
@@ -153,6 +163,38 @@ async def archive_campaign(
 ):
     try:
         return AdsService(db).archive(campaign_id, current_user)
+    except AdsError as exc:
+        _raise_ads(exc)
+
+
+@router.post("/events")
+async def record_ad_event(
+    body: AdEventIn,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    try:
+        return AdsService(db).record_event(
+            user_id=current_user.id,
+            campaign_id=body.campaign_id,
+            kind=body.kind,
+            surface=body.surface,
+        )
+    except AdsError as exc:
+        _raise_ads(exc)
+
+
+@router.post("/hide")
+async def hide_ad(
+    body: AdHideIn,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    try:
+        return AdsService(db).hide_for_user(
+            user_id=current_user.id,
+            campaign_id=body.campaign_id,
+        )
     except AdsError as exc:
         _raise_ads(exc)
 

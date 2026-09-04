@@ -167,6 +167,63 @@ def test_future_schedule_is_not_live(db_session):
     assert svc.pick_live_for_surface(surface="feed", user_id=admin.id) is None
 
 
+def test_client_next_step_and_auto_name(db_session):
+    user = _user(db_session)
+    svc = AdsService(db_session)
+    created = svc.create(user, {"creative": {"title": "Кофе с собой"}})
+    assert created["name"] == "Кофе с собой"
+    assert created["ready_to_submit"] is False
+    assert "destination" in created["missing"]
+    assert "заявку" in created["next_step"].lower() or "Допишите" in created["next_step"]
+
+    filled = svc.update(
+        created["id"],
+        user,
+        _ready_payload(name="Кофе с собой"),
+    )
+    assert filled["ready_to_submit"] is True
+    assert "Проверьте" in filled["next_step"]
+
+
+def test_insert_feed_ad_after_enough_posts(db_session):
+    admin = _user(db_session, admin=True)
+    viewer = _user(db_session, user_id=2)
+    svc = AdsService(db_session)
+    created = svc.create(admin, _ready_payload())
+    svc.submit(created["id"], admin)
+    posts = [{"kind": "post", "id": i} for i in range(1, 10)]
+    mixed = svc.insert_into_feed_items(
+        posts,
+        viewer.id,
+        following_only=False,
+        feed_type="all",
+        cursor=None,
+    )
+    kinds = [item.get("kind") for item in mixed]
+    assert kinds.count("ad") == 1
+    assert kinds.index("ad") >= 3
+    assert (
+        svc.insert_into_feed_items(
+            posts[:2],
+            viewer.id,
+            following_only=False,
+            feed_type="all",
+            cursor=None,
+        )
+        == posts[:2]
+    )
+
+
+def test_hide_removes_from_inventory(db_session):
+    admin = _user(db_session, admin=True)
+    viewer = _user(db_session, user_id=2)
+    svc = AdsService(db_session)
+    created = svc.create(admin, _ready_payload())
+    svc.submit(created["id"], admin)
+    svc.hide_for_user(user_id=viewer.id, campaign_id=created["id"])
+    assert svc.pick_live_for_surface(surface="feed", user_id=viewer.id) is None
+
+
 def test_submit_requires_title_and_destination(db_session):
     user = _user(db_session)
     svc = AdsService(db_session)

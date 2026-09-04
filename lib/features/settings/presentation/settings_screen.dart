@@ -345,9 +345,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         onTap: () => context.push(MyBotsRoute.path),
       ),
       _SettingsItem(
-        title: 'Реклама',
+        title: 'Заказать рекламу',
         icon: Icons.campaign_outlined,
-        subtitle: 'Кабинет: создать объявление и выложить в ленту, рилсы или каналы',
+        subtitle: 'Заявка: объявление в ленте, рилсах или каналах',
         onTap: () => context.push(AdsHubRoute.path),
       ),
       _SettingsItem(

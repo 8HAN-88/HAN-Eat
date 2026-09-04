@@ -9,9 +9,13 @@ class AdPreviewCard extends StatelessWidget {
   const AdPreviewCard({
     super.key,
     required this.campaign,
+    this.onCta,
+    this.onHide,
   });
 
   final AdCampaign campaign;
+  final VoidCallback? onCta;
+  final VoidCallback? onHide;
 
   @override
   Widget build(BuildContext context) {
@@ -74,6 +78,12 @@ class AdPreviewCard extends StatelessWidget {
                         ),
                   ),
                 ),
+                if (onHide != null)
+                  IconButton(
+                    tooltip: 'Скрыть',
+                    onPressed: onHide,
+                    icon: const Icon(Icons.close),
+                  ),
               ],
             ),
           ),
@@ -118,7 +128,7 @@ class AdPreviewCard extends StatelessWidget {
                 ],
                 const SizedBox(height: 12),
                 FilledButton(
-                  onPressed: null,
+                  onPressed: onCta,
                   child: Text(
                     creative.ctaLabel.trim().isEmpty
                         ? 'Подробнее'

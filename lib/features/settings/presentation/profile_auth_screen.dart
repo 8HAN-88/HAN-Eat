@@ -352,8 +352,8 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
           Card(
             child: ListTile(
               leading: const Icon(Icons.campaign_outlined),
-              title: const Text('Реклама'),
-              subtitle: const Text('Кабинет клиента: создать и выложить объявление'),
+              title: const Text('Заказать рекламу'),
+              subtitle: const Text('Собрать объявление и отправить заявку'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => context.push(AdsHubRoute.path),
             ),
