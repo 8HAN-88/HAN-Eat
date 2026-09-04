@@ -41,38 +41,49 @@ Widget buildWebDomVideoLayer({
     active: active,
     playing: playing,
     muted: muted,
-    behindCanvas: behindCanvas,
+    behindCanvas: true,
     fit: fit,
     borderRadius: borderRadius,
-    revealInsets: revealInsets,
+    revealInsets: EdgeInsets.zero,
     onFailed: onFailed,
   );
 }
 
 final Map<String, html.VideoElement> _videos = {};
 
-void _ensureStacking() {
-  final flutter = html.document.querySelector('flutter-view') ??
-      html.document.querySelector('flt-glass-pane');
+html.Element? _flutterHost() =>
+    html.document.querySelector('flutter-view') ??
+    html.document.querySelector('flt-glass-pane');
+
+void _ensureFlutterAboveVideo() {
+  final flutter = _flutterHost();
   if (flutter != null) {
-    flutter.style.setProperty('position', 'relative');
-    flutter.style.setProperty('z-index', '2');
-    flutter.style.setProperty('background-color', 'transparent');
+    flutter.style
+      ..setProperty('position', 'relative')
+      ..setProperty('z-index', '2')
+      ..setProperty('isolation', 'isolate')
+      ..setProperty('transform', 'translateZ(0)')
+      ..setProperty('pointer-events', 'auto')
+      ..setProperty('background-color', 'transparent');
   }
   for (final canvas in html.document.querySelectorAll('canvas')) {
     canvas.style.setProperty('background-color', 'transparent');
   }
 }
 
-String _clipPath(EdgeInsets insets) {
-  if (insets == EdgeInsets.zero) return 'none';
-  return 'inset(${insets.top}px ${insets.right}px ${insets.bottom}px ${insets.left}px)';
+void _reapOrphans() {
+  final live = _videos.values.toSet();
+  for (final node in html.document.querySelectorAll('video.hanwe-dom-reel')) {
+    if (node is html.VideoElement && !live.contains(node)) {
+      node.pause();
+      node.src = '';
+      node.remove();
+    }
+  }
 }
 
-html.VideoElement _createVideo({
-  required String id,
-  required bool behindCanvas,
-}) {
+html.VideoElement _createVideo({required String id}) {
+  _reapOrphans();
   final video = html.VideoElement()
     ..autoplay = false
     ..loop = true
@@ -81,6 +92,8 @@ html.VideoElement _createVideo({
     ..className = 'hanwe-dom-reel';
   video.setAttribute('playsinline', 'true');
   video.setAttribute('webkit-playsinline', 'true');
+  video.setAttribute('disablepictureinpicture', 'true');
+  video.setAttribute('controlslist', 'nodownload nofullscreen noremoteplayback');
   video.setAttribute('data-hanwe-dom-reel', id);
   video.style
     ..setProperty('position', 'fixed')
@@ -89,20 +102,26 @@ html.VideoElement _createVideo({
     ..setProperty('width', '0')
     ..setProperty('height', '0')
     ..setProperty('object-fit', 'cover')
-    ..setProperty('z-index', behindCanvas ? '1' : '3')
+    ..setProperty('z-index', '0')
     ..setProperty('pointer-events', 'none')
+    ..setProperty('touch-action', 'none')
     ..setProperty('background', '#000')
     ..setProperty('opacity', '0')
     ..setProperty('margin', '0')
     ..setProperty('padding', '0')
-    ..setProperty('border', 'none');
+    ..setProperty('border', 'none')
+    ..setProperty('clip-path', 'none');
 
-  final flutter = html.document.querySelector('flutter-view') ??
-      html.document.querySelector('flt-glass-pane');
-  if (behindCanvas && flutter != null && flutter.parentNode != null) {
+  final flutter = _flutterHost();
+  if (flutter != null && flutter.parentNode != null) {
     flutter.parentNode!.insertBefore(video, flutter);
   } else {
-    html.document.body?.append(video);
+    final body = html.document.body;
+    if (body != null && body.firstChild != null) {
+      body.insertBefore(video, body.firstChild);
+    } else {
+      body?.append(video);
+    }
   }
   return video;
 }
@@ -146,7 +165,7 @@ class _DomReelHostState extends State<_DomReelHost> {
   void initState() {
     super.initState();
     _id = 'hanwe-dom-${identityHashCode(this)}';
-    _ensureStacking();
+    _ensureFlutterAboveVideo();
     _armFrame();
   }
 
@@ -172,6 +191,7 @@ class _DomReelHostState extends State<_DomReelHost> {
       video.src = '';
       video.remove();
     }
+    _reapOrphans();
     super.dispose();
   }
 
@@ -220,52 +240,67 @@ class _DomReelHostState extends State<_DomReelHost> {
       return;
     }
 
-    _ensureStacking();
-    final video = _videos.putIfAbsent(
-      _id,
-      () => _createVideo(id: _id, behindCanvas: widget.behindCanvas),
-    );
+    _ensureFlutterAboveVideo();
+    var live = _videos[_id];
+    if (live == null || live.parentNode == null) {
+      live?.remove();
+      live = _createVideo(id: _id);
+      _videos[_id] = live;
+    }
+    if (live.parentNode != null) {
+      final flutter = _flutterHost();
+      if (flutter != null && flutter.parentNode != null) {
+        final next = live.nextElementSibling;
+        if (next != flutter) {
+          flutter.parentNode!.insertBefore(live, flutter);
+        }
+      }
+    }
 
-    video.style
+    live.style
       ..setProperty('left', '${offset.dx}px')
       ..setProperty('top', '${offset.dy}px')
       ..setProperty('width', '${size.width}px')
       ..setProperty('height', '${size.height}px')
-      ..setProperty('object-fit', widget.fit == BoxFit.contain ? 'contain' : 'cover')
-      ..setProperty('z-index', widget.behindCanvas ? '1' : '3')
+      ..setProperty(
+        'object-fit',
+        widget.fit == BoxFit.contain ? 'contain' : 'cover',
+      )
+      ..setProperty('z-index', '0')
+      ..setProperty('pointer-events', 'none')
+      ..setProperty('clip-path', 'none')
       ..setProperty(
         'border-radius',
         widget.borderRadius > 0 ? '${widget.borderRadius}px' : '0',
       )
-      ..setProperty('clip-path', _clipPath(widget.revealInsets))
       ..setProperty('visibility', 'visible')
       ..setProperty('display', 'block');
 
     final url = widget.urls[_urlIndex.clamp(0, widget.urls.length - 1)];
-    if (forceSrc || video.currentSrc.isEmpty || !_srcMatches(video, url)) {
-      _bindEvents(video);
-      video.muted = true;
-      video.setAttribute('muted', 'true');
-      video.src = url;
-      video.load();
+    if (forceSrc || live.currentSrc.isEmpty || !_srcMatches(live, url)) {
+      _bindEvents(live);
+      live.muted = true;
+      live.setAttribute('muted', 'true');
+      live.src = url;
+      live.load();
     }
 
-    video.muted = widget.muted;
+    live.muted = widget.muted;
     if (widget.muted) {
-      video.setAttribute('muted', 'true');
+      live.setAttribute('muted', 'true');
     } else {
-      video.removeAttribute('muted');
+      live.removeAttribute('muted');
     }
 
     if (widget.playing) {
-      if (video.paused) {
-        final play = video.play();
+      if (live.paused) {
+        final play = live.play();
         if (play != null) {
           play.catchError((_) {});
         }
       }
-    } else if (!video.paused) {
-      video.pause();
+    } else if (!live.paused) {
+      live.pause();
     }
   }
 
@@ -302,9 +337,11 @@ class _DomReelHostState extends State<_DomReelHost> {
     video.pause();
     video.style
       ..setProperty('visibility', 'hidden')
+      ..setProperty('display', 'none')
       ..setProperty('opacity', '0')
       ..setProperty('width', '0')
-      ..setProperty('height', '0');
+      ..setProperty('height', '0')
+      ..setProperty('left', '-9999px');
   }
 
   bool _listEquals(List<String> a, List<String> b) {

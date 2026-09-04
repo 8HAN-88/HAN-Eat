@@ -668,9 +668,14 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor:
+          WebDomVideoLayer.isPreferred ? Colors.transparent : Colors.black,
       body: Stack(
         children: [
+          if (WebDomVideoLayer.isPreferred)
+            const Positioned.fill(
+              child: IgnorePointer(child: CanvasPunchHole()),
+            ),
           PageView.builder(
             controller: _pageController,
             scrollDirection: Axis.vertical,

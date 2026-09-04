@@ -202,10 +202,13 @@
     flutter-view, flt-glass-pane {
       position: relative;
       z-index: 2;
+      isolation: isolate;
+      transform: translateZ(0);
+      pointer-events: auto !important;
     }
     video.hanwe-dom-reel {
       pointer-events: none !important;
-      z-index: 1;
+      z-index: 0 !important;
     }
     /* Flutter web puts <video> in a platform view that steals taps.
        Reels pause / like must reach Flutter. Controls stay in the app UI. */

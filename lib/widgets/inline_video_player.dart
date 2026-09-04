@@ -313,7 +313,7 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
             active: _isVisible || _canAutoPlay,
             playing: _canAutoPlay,
             muted: _isMuted,
-            behindCanvas: false,
+            behindCanvas: true,
             onFailed: () {
               if (mounted) setState(() => _domFailed = true);
             },
