@@ -143,7 +143,7 @@ void _forwardPointer(html.Event raw) {
       type: raw.type,
       x: raw.client.x,
       y: raw.client.y,
-      pointerId: raw.pointerId,
+      pointerId: raw.pointerId ?? 1,
       buttons: raw.buttons ?? 0,
     );
   }
