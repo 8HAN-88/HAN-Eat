@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../core/layout/floating_bottom_padding.dart';
 import '../services/server_config.dart';
 import 'inline_video_player.dart';
+import 'web_dom_video_layer.dart';
 
 /// Автор / канал для оверлея на видео в ленте.
 class FeedVideoAuthorInfo {
@@ -64,12 +65,7 @@ class FeedVideoPlayer extends StatelessWidget {
         final idealHeight = width / aspectRatio;
         final height = idealHeight > maxHeight ? maxHeight : idealHeight;
         final fittedRatio = width > 0 && height > 0 ? width / height : aspectRatio;
-        return SizedBox(
-          width: width,
-          height: height,
-          child: ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-            child: Stack(
+        final media = Stack(
               fit: StackFit.expand,
               clipBehavior: Clip.hardEdge,
               children: [
@@ -210,8 +206,17 @@ class FeedVideoPlayer extends StatelessWidget {
               ),
             ),
           ],
-            ),
-          ),
+        );
+        return SizedBox(
+          width: width,
+          height: height,
+          child: WebDomVideoLayer.isPreferred
+              ? media
+              : ClipRRect(
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(4)),
+                  child: media,
+                ),
         );
       },
     );

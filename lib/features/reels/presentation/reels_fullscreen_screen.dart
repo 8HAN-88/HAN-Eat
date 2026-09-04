@@ -16,6 +16,7 @@ import '../../../services/repost_service.dart';
 import '../../../services/comment_service.dart';
 import '../../comments/presentation/show_post_comments_sheet.dart';
 import '../../../utils/video_player_helper.dart';
+import '../../../widgets/web_dom_video_layer.dart';
 import '../../../services/feed_analytics_service.dart';
 import '../../../widgets/share_action_sheet.dart';
 import '../../../widgets/report_content_dialog.dart';
@@ -241,6 +242,9 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
       final sources = reel.reelVideoSources;
       if (sources.isEmpty) {
         if (mounted) setState(() => _videoInitFailed[i] = true);
+        return;
+      }
+      if (WebDomVideoLayer.isPreferred) {
         return;
       }
 
@@ -704,15 +708,15 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
               }
 
               final reel = _reels[index];
-              return RepaintBoundary(
+              final card = ReelCard(
                 key: ValueKey<int>(reel.id),
-                child: ReelCard(
                 reel: reel,
                 index: index,
                 videoController: _videoControllers[index],
                 videoInitFailed: _videoInitFailed[index] == true,
                 onRetryVideo: () => unawaited(_reloadReelVideo(index)),
                 isCurrent: index == _currentIndex,
+                playbackEnabled: _canPlayVideos,
                 isPaused: _isPaused[index] ?? false,
                 isMuted: _sessionMuted,
                 onMutePreferenceChanged: _setSessionMuted,
@@ -756,8 +760,9 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
                 },
                 onReport: () => reportPostWithDialog(context, reel.id),
                 onQualityChanged: () => _reloadReelVideo(index),
-                ),
               );
+              if (WebDomVideoLayer.isPreferred) return card;
+              return RepaintBoundary(child: card);
             },
           ),
           Positioned(

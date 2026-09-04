@@ -27,3 +27,24 @@ List<String> expandVideoPlaybackUrls(Iterable<String> urls) {
   }
   return out;
 }
+
+/// Для нативного `<video>` на Safari: сначала оригинал / явный URL,
+/// потом остальные MP4, HLS в конце. Транскод 480p часто ещё не лежит
+/// на CDN — если начать с него, плеер сразу рисует «не удалось».
+List<String> durableMp4PlaybackUrls(Iterable<String?> urls) {
+  final mp4 = <String>[];
+  final hls = <String>[];
+  for (final raw in urls) {
+    final url = raw?.trim() ?? '';
+    if (url.isEmpty) continue;
+    if (isHlsVideoUrl(url)) {
+      hls.add(url);
+    } else {
+      mp4.add(url);
+    }
+  }
+  return [
+    ...expandVideoPlaybackUrls(mp4),
+    ...expandVideoPlaybackUrls(hls),
+  ];
+}
