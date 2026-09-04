@@ -75,6 +75,12 @@ class ServerConfig {
         h.endsWith('.haneat.app');
   }
 
+  /// Свой хостинг медиа: API, PWA и CDN (cdn.haneat.com), не чужие аватарки.
+  static bool isFirstPartyMediaHost(String host) {
+    final h = host.toLowerCase();
+    return _isHaneatApiHost(h) || h == 'cdn.haneat.com' || h == 'cdn.haneat.app';
+  }
+
   /// iOS блокирует http:// для видео (ATS) — поднимаем наш API на https.
   static String _preferHttpsForApi(String url) {
     try {
@@ -144,9 +150,9 @@ class ServerConfig {
     return resolveMediaUrl(url);
   }
 
-  /// URL для воспроизведения голосовых в чате.
-  /// Прямой S3/CDN с телефона часто недоступен — идём через API (Range + HTTPS).
-  static String resolveVoiceMediaUrl(String url) {
+  /// Свои загрузки: CDN/S3 → `/api/v1/uploads/file/...` (Range + CORS + HTTPS).
+  /// Нужно Safari PWA: прямой `cdn.haneat.com` без CORS роняет и фото, и видео.
+  static String resolveSameOriginUploadUrl(String url) {
     if (url.isEmpty) return url;
     final resolved = resolveMediaUrl(url);
     try {
@@ -175,7 +181,18 @@ class ServerConfig {
     return resolved;
   }
 
-  /// Аватар / любое внешнее изображение: на web всегда через image-proxy (CORS).
+  /// URL для воспроизведения голосовых в чате.
+  static String resolveVoiceMediaUrl(String url) =>
+      resolveSameOriginUploadUrl(url);
+
+  /// Видео / рилсы: тот же same-origin файл, что и голос (Safari Range).
+  static String resolvePlaybackMediaUrl(String url) =>
+      resolveSameOriginUploadUrl(url);
+
+  /// Аватар / превью / фото поста.
+  ///
+  /// Свой CDN не гоняем через `recipe-image-proxy`: allowlist его не знает
+  /// и отвечает 400 — в профиле это чёрный квадрат и «Повторить».
   static String resolvePublisherAvatarUrl(String url) {
     if (url.isEmpty) return url;
     final resolved = resolveRecipeImageUrl(resolveMediaUrl(url));
@@ -184,11 +201,10 @@ class ServerConfig {
       if (imageUri.scheme != 'https' && imageUri.scheme != 'http') {
         return resolved;
       }
-      final apiHost = Uri.parse(baseUrl).host.toLowerCase();
-      if (imageUri.host.toLowerCase() == apiHost) {
-        return resolved;
+      if (isFirstPartyMediaHost(imageUri.host)) {
+        return resolveSameOriginUploadUrl(resolved);
       }
-      // Внешние CDN / аватары — прокси (критично для web из‑за CORS).
+      // Внешние аватарки — прокси (критично для web из‑за CORS).
       return _recipeImageProxyUrl(resolved);
     } catch (_) {
       return resolved;

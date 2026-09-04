@@ -12,7 +12,12 @@ from app.core.config import settings
 
 def _is_haneat_host(host: str) -> bool:
     h = (host or "").lower()
-    return h in ("api.haneat.app", "haneat.app") or h.endswith(".haneat.app")
+    return h in (
+        "api.haneat.app",
+        "haneat.app",
+        "cdn.haneat.com",
+        "cdn.haneat.app",
+    ) or h.endswith(".haneat.app")
 
 
 def public_base_url() -> str:

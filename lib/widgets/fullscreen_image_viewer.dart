@@ -344,10 +344,6 @@ class _FullscreenMediaImageState extends State<_FullscreenMediaImage> {
       fit: widget.fit,
       fadeInDuration: const Duration(milliseconds: 120),
       fadeOutDuration: Duration.zero,
-      httpHeaders: const {
-        'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
-        'User-Agent': 'HAN-Eat/1.0 (Flutter)',
-      },
       memCacheWidth: memCacheWidth,
       maxWidthDiskCache: 2400,
       placeholder: (_, __) => widget.placeholder,

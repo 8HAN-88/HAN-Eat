@@ -668,8 +668,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       if (isOwnProfile) _buildLazyTab(2, _buildFavoritesTab),
     ];
 
-    return Scaffold(
-      extendBodyBehindAppBar: true,
+    return AppGradientBackground(
+      child: Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
@@ -681,13 +682,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   tooltip: 'Создать пост или рилс',
                   onPressed: _openCreateContent,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 4),
                 NeoCircleAction(
                   icon: Icons.edit_outlined,
                   tooltip: 'Редактировать профиль',
                   onPressed: () => context.push(ProfileAuthRoute.path),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 4),
                 NeoCircleAction(
                   icon: Icons.settings_outlined,
                   tooltip: 'Настройки приложения',
@@ -695,39 +696,38 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                     context.push(SettingsRoute.path);
                   },
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
               ]
             : null,
       ),
-      body: AppGradientBackground(
-        child: NestedScrollView(
-          headerSliverBuilder: (context, innerBoxIsScrolled) {
-            return [
-              SliverToBoxAdapter(
-                child: _buildProfileHeader(user, stats, isOwnProfile),
-              ),
-            ];
-          },
-          body: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 2, bottom: 10),
-                child: NeoUnderlineTabs(
-                  controller: _tabController,
-                  tabs: tabs,
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
+      body: NestedScrollView(
+        headerSliverBuilder: (context, innerBoxIsScrolled) {
+          return [
+            SliverToBoxAdapter(
+              child: _buildProfileHeader(user, stats, isOwnProfile),
+            ),
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _PinnedProfileTabsDelegate(
+                height: 64,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: NeoUnderlineTabs(
+                    controller: _tabController,
+                    tabs: tabs,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                  ),
                 ),
               ),
-              Expanded(
-                child: TabBarView(
-                  controller: _tabController,
-                  children: tabViews,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ];
+        },
+        body: TabBarView(
+          controller: _tabController,
+          children: tabViews,
         ),
       ),
+    ),
     );
   }
 
@@ -738,7 +738,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     final textTheme = theme.textTheme;
 
     return NeoGlassCard(
-      margin: const EdgeInsets.fromLTRB(18, 104, 18, 14),
+      margin: const EdgeInsets.fromLTRB(18, 8, 18, 14),
       padding: EdgeInsets.zero,
       radius: 28,
       gradient: RadialGradient(
@@ -1482,5 +1482,41 @@ class _ProfileStatCell extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _PinnedProfileTabsDelegate extends SliverPersistentHeaderDelegate {
+  _PinnedProfileTabsDelegate({
+    required this.child,
+    required this.height,
+  });
+
+  final Widget child;
+  final double height;
+
+  @override
+  double get minExtent => height;
+
+  @override
+  double get maxExtent => height;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: overlapsContent
+          ? scheme.surface.withValues(alpha: 0.94)
+          : Colors.transparent,
+      child: child,
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _PinnedProfileTabsDelegate oldDelegate) {
+    return height != oldDelegate.height || child != oldDelegate.child;
   }
 }

@@ -20,6 +20,7 @@ import '../../../utils/post_display_title.dart';
 import '../../../widgets/post_card_container.dart';
 import '../../../widgets/feed_video_player.dart';
 import '../../../services/server_config.dart';
+import '../../../models/video_quality_preference.dart';
 import '../../../widgets/share_action_sheet.dart';
 import '../../../widgets/post_poll_section.dart';
 import 'package:go_router/go_router.dart';
@@ -1895,6 +1896,8 @@ class _NewPostCardState extends State<NewPostCard>
           feedVideoAuthor != null) {
         return FeedVideoPlayer(
           videoUrl: post.videoUrl!,
+          playbackUrls: post.reelVideoSources
+              .playbackUrls(VideoQualityPreference.auto),
           thumbnailUrl: post.videoThumbnail,
           author: feedVideoAuthor,
           onDoubleTap: _handleDoubleTapLike,
@@ -1941,7 +1944,8 @@ class _NewPostCardState extends State<NewPostCard>
     }
 
     // Показываем изображения для всех типов постов, если они есть (как в Telegram)
-    final images = effectiveMedia.where((m) => m['type'] == 'image').toList();
+    final images =
+        effectiveMedia.where((m) => _isImageMediaItem(m)).toList();
     if (images.isNotEmpty) {
       // Обработчик клика для открытия детальной страницы поста
       void onMediaTap() {
@@ -1971,7 +1975,7 @@ class _NewPostCardState extends State<NewPostCard>
         return TelegramPhotoGrid(
           imageUrls: imageUrls,
           maxHeight: reelHeight,
-          singleAspectRatio: 9 / 16,
+          singleAspectRatio: 4 / 5,
           borderRadius: BorderRadius.circular(18),
           onDoubleTap: _handleDoubleTapLike,
           enableFullscreen: true,
@@ -1980,7 +1984,8 @@ class _NewPostCardState extends State<NewPostCard>
     }
 
     // Показываем видео для всех типов постов, если они есть (Instagram-style inline autoplay)
-    final videos = effectiveMedia.where((m) => m['type'] == 'video').toList();
+    final videos =
+        effectiveMedia.where((m) => _isVideoMediaItem(m)).toList();
     if (videos.isNotEmpty) {
       final rawVideoUrl = videos[0]['url'] as String;
       final rawThumbnailUrl = videos[0]['thumbnail_url'] as String? ??
@@ -1989,9 +1994,12 @@ class _NewPostCardState extends State<NewPostCard>
       final thumbnailUrl = rawThumbnailUrl != null
           ? ServerConfig.resolveMediaUrl(rawThumbnailUrl)
           : null;
+      final playbackUrls = post.reelVideoSources
+          .playbackUrls(VideoQualityPreference.auto);
       if (feedVideoAuthor != null) {
         return FeedVideoPlayer(
           videoUrl: videoUrl,
+          playbackUrls: playbackUrls,
           thumbnailUrl: thumbnailUrl,
           author: feedVideoAuthor,
           onDoubleTap: _handleDoubleTapLike,
@@ -2007,6 +2015,7 @@ class _NewPostCardState extends State<NewPostCard>
       }
       return FeedVideoPlayer(
         videoUrl: videoUrl,
+        playbackUrls: playbackUrls,
         thumbnailUrl: thumbnailUrl,
         author: FeedVideoAuthorInfo(
           name: post.author?.name ?? 'Автор',
@@ -2030,6 +2039,44 @@ class _NewPostCardState extends State<NewPostCard>
 
   String? _extractLegacyBodyImageUrl(Map<String, dynamic> body) =>
       extractLegacyBodyImageUrl(body);
+
+  bool _isImageMediaItem(dynamic item) {
+    if (item is! Map) return false;
+    final type = item['type']?.toString().toLowerCase();
+    final url = item['url']?.toString() ?? '';
+    if (type == 'image' || type == 'photo' || type == 'picture') return true;
+    if (type == 'video' || type == 'reel') return false;
+    return _looksLikeImageUrl(url);
+  }
+
+  bool _isVideoMediaItem(dynamic item) {
+    if (item is! Map) return false;
+    final type = item['type']?.toString().toLowerCase();
+    final url = item['url']?.toString() ?? '';
+    if (type == 'video' || type == 'reel') return true;
+    if (type == 'image' || type == 'photo' || type == 'picture') return false;
+    return _looksLikeVideoUrl(url);
+  }
+
+  bool _looksLikeImageUrl(String url) {
+    final path = url.split('?').first.toLowerCase();
+    return path.endsWith('.jpg') ||
+        path.endsWith('.jpeg') ||
+        path.endsWith('.png') ||
+        path.endsWith('.webp') ||
+        path.endsWith('.gif') ||
+        path.endsWith('.heic') ||
+        path.endsWith('.heif');
+  }
+
+  bool _looksLikeVideoUrl(String url) {
+    final path = url.split('?').first.toLowerCase();
+    return path.endsWith('.mp4') ||
+        path.endsWith('.mov') ||
+        path.endsWith('.m4v') ||
+        path.endsWith('.webm') ||
+        path.endsWith('.m3u8');
+  }
 
 }
 

@@ -64,6 +64,8 @@ def _proxy_allowed_image_url(image_url: str) -> bool:
         "https://cdn.discordapp.com",
         "https://storage.googleapis.com",
         "https://s3.twcstorage.ru",
+        "https://cdn.haneat.com",
+        "https://cdn.haneat.app",
     )
     low = u.lower()
     return any(low.startswith(p) for p in prefixes)

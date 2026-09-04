@@ -44,7 +44,7 @@ class VideoPlayerHelper {
 
   static VideoPlayerController networkController(String url) {
     return VideoPlayerController.networkUrl(
-      Uri.parse(ServerConfig.resolveMediaUrl(url)),
+      Uri.parse(ServerConfig.resolvePlaybackMediaUrl(url)),
       videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
     );
   }

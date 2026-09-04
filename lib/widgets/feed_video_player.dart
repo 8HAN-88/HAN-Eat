@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../core/layout/floating_bottom_padding.dart';
 import '../services/server_config.dart';
 import 'inline_video_player.dart';
 
@@ -32,6 +33,7 @@ class FeedVideoPlayer extends StatelessWidget {
     required this.videoUrl,
     required this.author,
     this.thumbnailUrl,
+    this.playbackUrls = const [],
     this.onOpenFullscreen,
     this.onDoubleTap,
   });
@@ -39,6 +41,7 @@ class FeedVideoPlayer extends StatelessWidget {
   static const double aspectRatio = 9 / 16;
 
   final String videoUrl;
+  final List<String> playbackUrls;
   final String? thumbnailUrl;
   final FeedVideoAuthorInfo author;
   final VoidCallback? onOpenFullscreen;
@@ -51,23 +54,35 @@ class FeedVideoPlayer extends StatelessWidget {
     final avatar = author.avatarUrl != null && author.avatarUrl!.isNotEmpty
         ? ServerConfig.resolvePublisherAvatarUrl(author.avatarUrl!)
         : null;
+    final size = MediaQuery.sizeOf(context);
+    final maxHeight = (size.height - floatingBottomPadding(context) - 168)
+        .clamp(280.0, size.height * 0.56);
 
-    return AspectRatio(
-      aspectRatio: aspectRatio,
-      child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Positioned.fill(
-              child: InlineVideoPlayer(
-                videoUrl: videoUrl,
-                thumbnailUrl: thumbnailUrl,
-                aspectRatio: aspectRatio,
-                onTap: onOpenFullscreen,
-                onDoubleTap: onDoubleTap,
-              ),
-            ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final idealHeight = width / aspectRatio;
+        final height = idealHeight > maxHeight ? maxHeight : idealHeight;
+        final fittedRatio = width > 0 && height > 0 ? width / height : aspectRatio;
+        return SizedBox(
+          width: width,
+          height: height,
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+            child: Stack(
+              fit: StackFit.expand,
+              clipBehavior: Clip.hardEdge,
+              children: [
+                Positioned.fill(
+                  child: InlineVideoPlayer(
+                    videoUrl: videoUrl,
+                    fallbackUrls: playbackUrls,
+                    thumbnailUrl: thumbnailUrl,
+                    aspectRatio: fittedRatio,
+                    onTap: onOpenFullscreen,
+                    onDoubleTap: onDoubleTap,
+                  ),
+                ),
             Positioned(
               top: 0,
               left: 0,
@@ -195,8 +210,10 @@ class FeedVideoPlayer extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
