@@ -27,7 +27,9 @@ import '../../../services/comment_service.dart';
 import '../../comments/presentation/show_post_comments_sheet.dart';
 import '../../../utils/video_player_helper.dart';
 import '../../../widgets/cover_network_video.dart';
+import '../../../widgets/web_dom_video_layer.dart';
 import '../../../widgets/web_html_reel_video.dart';
+import '../../../utils/video_playback_urls.dart';
 import '../../../utils/number_formatter.dart';
 import '../../../widgets/share_action_sheet.dart';
 import '../../../widgets/report_content_dialog.dart';
@@ -151,6 +153,9 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
       final sources = reel.reelVideoSources;
       if (sources.isEmpty) {
         if (mounted) setState(() => _videoInitFailed[i] = true);
+        return;
+      }
+      if (WebDomVideoLayer.isPreferred) {
         return;
       }
       try {
@@ -827,9 +832,8 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
             }
 
             final reel = _reels[index];
-            return RepaintBoundary(
+            final card = ReelCard(
               key: ValueKey<int>(reel.id),
-              child: ReelCard(
               reel: reel,
               index: index,
               videoController: _videoControllers[index],
@@ -839,6 +843,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
                 _initializeVideos(index, 1);
               },
               isCurrent: index == _currentIndex,
+              playbackEnabled: _canPlayVideos,
               isPaused: _isPaused[index] ?? false,
               isMuted: _sessionMuted,
               onMutePreferenceChanged: _setSessionMuted,
@@ -883,8 +888,9 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
               },
               onReport: () => reportPostWithDialog(context, reel.id),
               onQualityChanged: () => _reloadReelVideo(index),
-              ),
             );
+            if (WebDomVideoLayer.isPreferred) return card;
+            return RepaintBoundary(child: card);
           },
         ),
         if (_servingFromCache)
@@ -1115,6 +1121,7 @@ class ReelCard extends ConsumerStatefulWidget {
   final bool videoInitFailed;
   final VoidCallback? onRetryVideo;
   final bool isCurrent;
+  final bool playbackEnabled;
   final bool isPaused;
   final bool isMuted;
   final ValueChanged<bool> onMutePreferenceChanged;
@@ -1138,6 +1145,7 @@ class ReelCard extends ConsumerStatefulWidget {
     this.videoInitFailed = false,
     this.onRetryVideo,
     required this.isCurrent,
+    this.playbackEnabled = true,
     required this.isPaused,
     required this.isMuted,
     required this.onMutePreferenceChanged,
@@ -1168,6 +1176,7 @@ class _ReelCardState extends ConsumerState<ReelCard>
   VideoPlayerController? _boundController;
   bool _hadVideoFrame = false;
   bool _htmlFallbackFailed = false;
+  bool _domFailed = false;
 
   static const double _igActionGap = 14;
   static const double _igRightInset = 12;
@@ -1204,6 +1213,7 @@ class _ReelCardState extends ConsumerState<ReelCard>
     }
     if (oldWidget.videoInitFailed && !widget.videoInitFailed) {
       _htmlFallbackFailed = false;
+      _domFailed = false;
     }
   }
 
@@ -1337,6 +1347,10 @@ class _ReelCardState extends ConsumerState<ReelCard>
   }
 
   Future<void> _togglePlayback() async {
+    if (_useDomLayer) {
+      widget.onPauseToggle(!widget.isPaused);
+      return;
+    }
     final controller = widget.videoController;
     if (controller == null || !controller.value.isInitialized) return;
     final willPause = controller.value.isPlaying;
@@ -1351,19 +1365,35 @@ class _ReelCardState extends ConsumerState<ReelCard>
     if (paused != willPause) widget.onPauseToggle(paused);
   }
 
-  String? _safariHtmlVideoUrl() {
+  List<String> get _domUrls {
     final sources = widget.reel.reelVideoSources;
-    final raw = sources.mp4_480p ??
-        sources.mp4_720p ??
-        sources.original ??
-        sources.mp4_1080p ??
-        widget.reel.videoUrl;
-    if (raw == null || raw.trim().isEmpty) return null;
-    return ServerConfig.resolveMediaUrl(raw);
+    return durableMp4PlaybackUrls([
+      sources.original,
+      sources.mp4_1080p,
+      sources.mp4_720p,
+      sources.mp4_480p,
+      widget.reel.videoUrl,
+      sources.hls,
+    ]);
+  }
+
+  bool get _useDomLayer =>
+      WebDomVideoLayer.isPreferred &&
+      widget.isCurrent &&
+      widget.playbackEnabled &&
+      _domUrls.isNotEmpty &&
+      !_domFailed;
+
+  String? _safariHtmlVideoUrl() {
+    final urls = _domUrls;
+    return urls.isEmpty ? null : urls.first;
   }
 
   Widget _buildVideoPlaceholder() {
-    if (widget.videoInitFailed) {
+    if (_useDomLayer) {
+      return const SizedBox.expand();
+    }
+    if (widget.videoInitFailed || _domFailed) {
       final htmlUrl = _safariHtmlVideoUrl();
       if (WebHtmlReelVideo.isSupported &&
           htmlUrl != null &&
@@ -1391,7 +1421,10 @@ class _ReelCardState extends ConsumerState<ReelCard>
             const SizedBox(height: 12),
             TextButton(
               onPressed: () {
-                setState(() => _htmlFallbackFailed = false);
+                setState(() {
+                  _htmlFallbackFailed = false;
+                  _domFailed = false;
+                });
                 widget.onRetryVideo!();
               },
               child: const Text('Повторить'),
@@ -1451,8 +1484,30 @@ class _ReelCardState extends ConsumerState<ReelCard>
         children: [
           Container(
             color: Colors.black,
-            child: Center(child: _buildVideoPlaceholder()),
+            child: _useDomLayer
+                ? const SizedBox.expand()
+                : Center(child: _buildVideoPlaceholder()),
           ),
+          if (_useDomLayer)
+            Positioned.fill(
+              child: WebDomVideoLayer(
+                urls: _domUrls,
+                active: true,
+                playing: widget.isCurrent &&
+                    widget.playbackEnabled &&
+                    !widget.isPaused,
+                muted: widget.isMuted,
+                behindCanvas: false,
+                revealInsets: EdgeInsets.only(
+                  top: MediaQuery.paddingOf(context).top + 44,
+                  right: _igRailWidth + _igRightInset,
+                  bottom: MediaQuery.paddingOf(context).bottom + 168,
+                ),
+                onFailed: () {
+                  if (mounted) setState(() => _domFailed = true);
+                },
+              ),
+            ),
           if (_hasVideoFrame)
             IgnorePointer(
               child: SizedBox.expand(

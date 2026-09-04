@@ -7,8 +7,10 @@ import 'package:visibility_detector/visibility_detector.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 import '../services/server_config.dart';
+import '../utils/video_playback_urls.dart';
 import '../utils/video_player_helper.dart';
 import 'cover_network_video.dart';
+import 'web_dom_video_layer.dart';
 import 'web_html_reel_video.dart';
 
 /// Видеоплеер с inline autoplay: воспроизводит при появлении в viewport,
@@ -46,6 +48,7 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
   String? _initKey;
   Timer? _disposeWhenHiddenTimer;
   bool _hadVideoFrame = false;
+  bool _domFailed = false;
 
   static const double _visibilityThresholdPlay = 0.6;
   static const double _visibilityThresholdPause = 0.18;
@@ -84,7 +87,24 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
     }
   }
 
+  List<String> get _domUrls => durableMp4PlaybackUrls([
+        widget.videoUrl,
+        ...widget.fallbackUrls,
+      ]);
+
+  bool get _useDomLayer =>
+      WebDomVideoLayer.isPreferred && _domUrls.isNotEmpty;
+
   Future<void> _ensurePlaying() async {
+    if (_useDomLayer) {
+      if (mounted) {
+        setState(() {
+          _initialized = true;
+          _hasError = false;
+        });
+      }
+      return;
+    }
     if (_controller != null) {
       await VideoPlayerHelper.ensurePlaying(
         _controller!,
@@ -203,7 +223,9 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
       return;
     }
     setState(() => _isMuted = !_isMuted);
-    _controller?.setVolume(_isMuted ? 0 : 1);
+    if (!_useDomLayer) {
+      _controller?.setVolume(_isMuted ? 0 : 1);
+    }
   }
 
   @override
@@ -249,92 +271,158 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
         behavior: HitTestBehavior.opaque,
         child: AspectRatio(
           aspectRatio: widget.aspectRatio,
-          child: ClipRect(
-            child: Stack(
-              fit: StackFit.expand,
-              alignment: Alignment.center,
-              clipBehavior: Clip.hardEdge,
-              children: [
-              if (widget.thumbnailUrl != null)
-                CachedNetworkImage(
-                  imageUrl: ServerConfig.resolvePublisherAvatarUrl(
-                    widget.thumbnailUrl!,
-                  ),
-                  fit: BoxFit.cover,
-                  width: double.infinity,
-                  height: double.infinity,
-                  memCacheWidth: 640,
-                  placeholder: (_, __) => _placeholder(),
-                  errorWidget: (_, __, ___) => _placeholder(),
-                )
-              else
-                _placeholder(),
-              if (!_hasError &&
-                  _hadVideoFrame &&
-                  _controller != null)
-                IgnorePointer(
-                  child: CoverNetworkVideo(controller: _controller!),
+          child: _useDomLayer
+              ? _buildDomStack()
+              : ClipRect(
+                  child: _buildFlutterStack(),
                 ),
-              if (_hasError)
-                WebHtmlReelVideo.isSupported
-                    ? WebHtmlReelVideo(
-                        url: ServerConfig.resolveMediaUrl(widget.videoUrl),
-                        muted: _isMuted,
-                        playing: _canAutoPlay,
-                      )
-                    : Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          _placeholder(),
-                          Center(
-                            child: FilledButton.tonalIcon(
-                              onPressed: () {
-                                setState(() {
-                                  _hasError = false;
-                                  _initialized = false;
-                                  _initKey = null;
-                                  _hadVideoFrame = false;
-                                  _controller?.removeListener(_onVideoTick);
-                                  _controller?.dispose();
-                                  _controller = null;
-                                });
-                                unawaited(_ensurePlaying());
-                              },
-                              icon: const Icon(Icons.refresh, size: 18),
-                              label: const Text('Повторить'),
-                            ),
-                          ),
-                        ],
-                      ),
-              if (_initialized && !_hasError)
-                Positioned(
-                  bottom: 8,
-                  right: 8,
-                  child: GestureDetector(
-                    onTap: () {
-                      setState(() => _isMuted = !_isMuted);
-                      _controller?.setVolume(_isMuted ? 0 : 1);
-                    },
-                    behavior: HitTestBehavior.opaque,
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.black54,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Icon(
-                        _isMuted ? Icons.volume_off : Icons.volume_up,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDomStack() {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (widget.thumbnailUrl != null)
+          CachedNetworkImage(
+            imageUrl: ServerConfig.resolvePublisherAvatarUrl(
+              widget.thumbnailUrl!,
+            ),
+            fit: BoxFit.cover,
+            memCacheWidth: 640,
+            placeholder: (_, __) => _placeholder(),
+            errorWidget: (_, __, ___) => _placeholder(),
+          )
+        else
+          _placeholder(),
+        if (_domFailed)
+          Center(
+            child: FilledButton.tonalIcon(
+              onPressed: () {
+                setState(() => _domFailed = false);
+              },
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Повторить'),
+            ),
+          )
+        else
+          WebDomVideoLayer(
+            urls: _domUrls,
+            active: _isVisible || _canAutoPlay,
+            playing: _canAutoPlay,
+            muted: _isMuted,
+            behindCanvas: false,
+            onFailed: () {
+              if (mounted) setState(() => _domFailed = true);
+            },
+          ),
+        Positioned(
+          bottom: 8,
+          right: 8,
+          child: GestureDetector(
+            onTap: () => setState(() => _isMuted = !_isMuted),
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Icon(
+                _isMuted ? Icons.volume_off : Icons.volume_up,
+                color: Colors.white,
+                size: 20,
+              ),
             ),
           ),
         ),
-      ),
+      ],
+    );
+  }
+
+  Widget _buildFlutterStack() {
+    return Stack(
+      fit: StackFit.expand,
+      alignment: Alignment.center,
+      clipBehavior: Clip.hardEdge,
+      children: [
+        if (widget.thumbnailUrl != null)
+          CachedNetworkImage(
+            imageUrl: ServerConfig.resolvePublisherAvatarUrl(
+              widget.thumbnailUrl!,
+            ),
+            fit: BoxFit.cover,
+            width: double.infinity,
+            height: double.infinity,
+            memCacheWidth: 640,
+            placeholder: (_, __) => _placeholder(),
+            errorWidget: (_, __, ___) => _placeholder(),
+          )
+        else
+          _placeholder(),
+        if (!_hasError && _hadVideoFrame && _controller != null)
+          IgnorePointer(
+            child: CoverNetworkVideo(controller: _controller!),
+          ),
+        if (_hasError)
+          WebHtmlReelVideo.isSupported
+              ? WebHtmlReelVideo(
+                  url: ServerConfig.resolveMediaUrl(widget.videoUrl),
+                  muted: _isMuted,
+                  playing: _canAutoPlay,
+                )
+              : Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    _placeholder(),
+                    Center(
+                      child: FilledButton.tonalIcon(
+                        onPressed: () {
+                          setState(() {
+                            _hasError = false;
+                            _initialized = false;
+                            _initKey = null;
+                            _hadVideoFrame = false;
+                            _domFailed = false;
+                            _controller?.removeListener(_onVideoTick);
+                            _controller?.dispose();
+                            _controller = null;
+                          });
+                          unawaited(_ensurePlaying());
+                        },
+                        icon: const Icon(Icons.refresh, size: 18),
+                        label: const Text('Повторить'),
+                      ),
+                    ),
+                  ],
+                ),
+        if (_initialized && !_hasError)
+          Positioned(
+            bottom: 8,
+            right: 8,
+            child: GestureDetector(
+              onTap: () {
+                setState(() => _isMuted = !_isMuted);
+                _controller?.setVolume(_isMuted ? 0 : 1);
+              },
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Icon(
+                  _isMuted ? Icons.volume_off : Icons.volume_up,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 

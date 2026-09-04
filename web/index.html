@@ -191,11 +191,21 @@
       line-height: 1.35;
     }
     flt-scene-host, flt-glass-pane, flutter-view, flt-renderer, canvas {
-      background-color: var(--bg) !important;
+      /* Transparent: iOS CanvasKit cannot hole-punch HtmlElementView.
+         Dark fill stays on #app-underlay; reel <video> sits between them. */
+      background-color: transparent !important;
       overscroll-behavior: none;
       overscroll-behavior-x: none;
       width: 100% !important;
       max-width: 100% !important;
+    }
+    flutter-view, flt-glass-pane {
+      position: relative;
+      z-index: 2;
+    }
+    video.hanwe-dom-reel {
+      pointer-events: none !important;
+      z-index: 1;
     }
     /* Flutter web puts <video> in a platform view that steals taps.
        Reels pause / like must reach Flutter. Controls stay in the app UI. */
