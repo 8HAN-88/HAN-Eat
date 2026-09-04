@@ -816,6 +816,10 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
     final pageBody = Stack(
       fit: StackFit.expand,
       children: [
+        if (WebDomVideoLayer.isPreferred)
+          const Positioned.fill(
+            child: IgnorePointer(child: CanvasPunchHole()),
+          ),
         PageView.builder(
           controller: _pageController,
           scrollDirection: Axis.vertical,
@@ -1483,7 +1487,7 @@ class _ReelCardState extends ConsumerState<ReelCard>
         fit: StackFit.expand,
         children: [
           Container(
-            color: Colors.black,
+            color: _useDomLayer ? Colors.transparent : Colors.black,
             child: _useDomLayer
                 ? const SizedBox.expand()
                 : Center(child: _buildVideoPlaceholder()),
@@ -1497,12 +1501,7 @@ class _ReelCardState extends ConsumerState<ReelCard>
                     widget.playbackEnabled &&
                     !widget.isPaused,
                 muted: widget.isMuted,
-                behindCanvas: false,
-                revealInsets: EdgeInsets.only(
-                  top: MediaQuery.paddingOf(context).top + 44,
-                  right: _igRailWidth + _igRightInset,
-                  bottom: MediaQuery.paddingOf(context).bottom + 168,
-                ),
+                behindCanvas: true,
                 onFailed: () {
                   if (mounted) setState(() => _domFailed = true);
                 },

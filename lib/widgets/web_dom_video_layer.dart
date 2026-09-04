@@ -5,8 +5,8 @@ import 'web_dom_video_layer_stub.dart'
     if (dart.library.html) 'web_dom_video_layer_html.dart' as impl;
 
 /// Safari / iOS WebKit + CanvasKit: `HtmlElementView` и `video_player_web`
-/// часто дают чёрный кадр. Настоящий `<video>` вешается на `document.body`
-/// поверх canvas (`pointer-events: none`), чтобы ролик был виден.
+/// часто дают чёрный кадр. Настоящий `<video>` стоит *под* flutter-view;
+/// виджет вырезает дырку в canvas. Видео сверху на iOS крадёт все тапы.
 class WebDomVideoLayer extends StatelessWidget {
   const WebDomVideoLayer({
     super.key,
@@ -14,7 +14,7 @@ class WebDomVideoLayer extends StatelessWidget {
     this.active = true,
     this.playing = true,
     this.muted = true,
-    this.behindCanvas = false,
+    this.behindCanvas = true,
     this.fit = BoxFit.cover,
     this.borderRadius = 0,
     this.revealInsets = EdgeInsets.zero,
