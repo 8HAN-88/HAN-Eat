@@ -209,6 +209,15 @@
     video.hanwe-dom-reel {
       pointer-events: none !important;
       z-index: 0 !important;
+      opacity: 0.999;
+    }
+    #hanwe-reel-touch {
+      position: fixed;
+      inset: 0;
+      z-index: 2147483646;
+      pointer-events: auto;
+      touch-action: none;
+      background: transparent;
     }
     /* Flutter web puts <video> in a platform view that steals taps.
        Reels pause / like must reach Flutter. Controls stay in the app UI. */

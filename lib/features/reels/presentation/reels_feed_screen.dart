@@ -816,10 +816,6 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
     final pageBody = Stack(
       fit: StackFit.expand,
       children: [
-        if (WebDomVideoLayer.isPreferred)
-          const Positioned.fill(
-            child: IgnorePointer(child: CanvasPunchHole()),
-          ),
         PageView.builder(
           controller: _pageController,
           scrollDirection: Axis.vertical,

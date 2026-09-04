@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:html' as html;
+import 'dart:js_util' as js_util;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -50,13 +51,17 @@ Widget buildWebDomVideoLayer({
 }
 
 final Map<String, html.VideoElement> _videos = {};
+int _shieldRefs = 0;
+html.DivElement? _shield;
+bool _shieldListening = false;
 
 html.Element? _flutterHost() =>
-    html.document.querySelector('flutter-view') ??
-    html.document.querySelector('flt-glass-pane');
+    html.document.querySelector('flt-glass-pane') ??
+    html.document.querySelector('flutter-view');
 
 void _ensureFlutterAboveVideo() {
-  final flutter = _flutterHost();
+  final flutter = html.document.querySelector('flutter-view') ??
+      html.document.querySelector('flt-glass-pane');
   if (flutter != null) {
     flutter.style
       ..setProperty('position', 'relative')
@@ -80,6 +85,155 @@ void _reapOrphans() {
       node.remove();
     }
   }
+}
+
+Object _pointerInit({
+  required num x,
+  required num y,
+  required int pointerId,
+  required int buttons,
+}) {
+  final o = js_util.newObject();
+  js_util.setProperty(o, 'bubbles', true);
+  js_util.setProperty(o, 'cancelable', true);
+  js_util.setProperty(o, 'composed', true);
+  js_util.setProperty(o, 'pointerId', pointerId);
+  js_util.setProperty(o, 'pointerType', 'touch');
+  js_util.setProperty(o, 'isPrimary', true);
+  js_util.setProperty(o, 'clientX', x);
+  js_util.setProperty(o, 'clientY', y);
+  js_util.setProperty(o, 'screenX', x);
+  js_util.setProperty(o, 'screenY', y);
+  js_util.setProperty(o, 'pageX', x);
+  js_util.setProperty(o, 'pageY', y);
+  js_util.setProperty(o, 'buttons', buttons);
+  js_util.setProperty(o, 'button', buttons > 0 ? 0 : -1);
+  js_util.setProperty(o, 'pressure', buttons > 0 ? 0.5 : 0);
+  js_util.setProperty(o, 'width', 1);
+  js_util.setProperty(o, 'height', 1);
+  js_util.setProperty(o, 'view', html.window);
+  return o;
+}
+
+void _dispatchToFlutter({
+  required String type,
+  required num x,
+  required num y,
+  required int pointerId,
+  required int buttons,
+}) {
+  final pane = _flutterHost();
+  if (pane == null) return;
+  final ctor = js_util.getProperty(html.window, 'PointerEvent');
+  if (ctor == null) return;
+  try {
+    final ev = js_util.callConstructor(ctor, [
+      type,
+      _pointerInit(x: x, y: y, pointerId: pointerId, buttons: buttons),
+    ]);
+    pane.dispatchEvent(ev as html.Event);
+  } catch (_) {}
+}
+
+void _forwardPointer(html.Event raw) {
+  raw.preventDefault();
+  raw.stopPropagation();
+  if (raw is html.PointerEvent) {
+    _dispatchToFlutter(
+      type: raw.type,
+      x: raw.client.x,
+      y: raw.client.y,
+      pointerId: raw.pointerId,
+      buttons: raw.buttons ?? 0,
+    );
+  }
+}
+
+void _forwardTouch(html.Event raw) {
+  raw.preventDefault();
+  raw.stopPropagation();
+  if (raw is! html.TouchEvent) return;
+  final touches = raw.changedTouches;
+  if (touches == null || touches.isEmpty) return;
+  final t = touches[0];
+  final type = switch (raw.type) {
+    'touchstart' => 'pointerdown',
+    'touchmove' => 'pointermove',
+    'touchend' => 'pointerup',
+    _ => 'pointercancel',
+  };
+  final buttons =
+      raw.type == 'touchend' || raw.type == 'touchcancel' ? 0 : 1;
+  _dispatchToFlutter(
+    type: type,
+    x: t.client.x,
+    y: t.client.y,
+    pointerId: t.identifier ?? 1,
+    buttons: buttons,
+  );
+}
+
+void _bindShield(html.Element shield) {
+  if (_shieldListening) return;
+  _shieldListening = true;
+  final opts = js_util.jsify({'capture': true, 'passive': false});
+  void listen(String type, void Function(html.Event) handler) {
+    js_util.callMethod(shield, 'addEventListener', [
+      type,
+      js_util.allowInterop(handler),
+      opts,
+    ]);
+  }
+
+  final ua = html.window.navigator.userAgent.toLowerCase();
+  final ios = ua.contains('iphone') ||
+      ua.contains('ipad') ||
+      ua.contains('ipod');
+  if (ios) {
+    listen('touchstart', _forwardTouch);
+    listen('touchmove', _forwardTouch);
+    listen('touchend', _forwardTouch);
+    listen('touchcancel', _forwardTouch);
+  } else {
+    listen('pointerdown', _forwardPointer);
+    listen('pointermove', _forwardPointer);
+    listen('pointerup', _forwardPointer);
+    listen('pointercancel', _forwardPointer);
+  }
+}
+
+void _acquireTouchShield() {
+  _shieldRefs += 1;
+  if (_shield != null) return;
+  final existing = html.document.getElementById('hanwe-reel-touch');
+  final shield = existing is html.DivElement
+      ? existing
+      : (html.DivElement()..id = 'hanwe-reel-touch');
+  shield.style
+    ..setProperty('position', 'fixed')
+    ..setProperty('left', '0')
+    ..setProperty('top', '0')
+    ..setProperty('right', '0')
+    ..setProperty('bottom', '0')
+    ..setProperty('width', '100%')
+    ..setProperty('height', '100%')
+    ..setProperty('z-index', '2147483646')
+    ..setProperty('pointer-events', 'auto')
+    ..setProperty('touch-action', 'none')
+    ..setProperty('background', 'transparent');
+  if (shield.parentNode == null) {
+    html.document.body?.append(shield);
+  }
+  _shield = shield;
+  _bindShield(shield);
+}
+
+void _releaseTouchShield() {
+  if (_shieldRefs > 0) _shieldRefs -= 1;
+  if (_shieldRefs > 0) return;
+  _shield?.remove();
+  _shield = null;
+  _shieldListening = false;
 }
 
 html.VideoElement _createVideo({required String id}) {
@@ -107,12 +261,14 @@ html.VideoElement _createVideo({required String id}) {
     ..setProperty('touch-action', 'none')
     ..setProperty('background', '#000')
     ..setProperty('opacity', '0')
+    ..setProperty('-webkit-filter', 'opacity(0.999)')
     ..setProperty('margin', '0')
     ..setProperty('padding', '0')
     ..setProperty('border', 'none')
     ..setProperty('clip-path', 'none');
 
-  final flutter = _flutterHost();
+  final flutter = html.document.querySelector('flutter-view') ??
+      html.document.querySelector('flt-glass-pane');
   if (flutter != null && flutter.parentNode != null) {
     flutter.parentNode!.insertBefore(video, flutter);
   } else {
@@ -158,6 +314,7 @@ class _DomReelHostState extends State<_DomReelHost> {
   int _urlIndex = 0;
   bool _failed = false;
   bool _frameArmed = false;
+  bool _holdingShield = false;
   StreamSubscription<html.Event>? _errorSub;
   StreamSubscription<html.Event>? _canPlaySub;
 
@@ -191,8 +348,21 @@ class _DomReelHostState extends State<_DomReelHost> {
       video.src = '';
       video.remove();
     }
+    _dropShield();
     _reapOrphans();
     super.dispose();
+  }
+
+  void _holdShield() {
+    if (_holdingShield) return;
+    _holdingShield = true;
+    _acquireTouchShield();
+  }
+
+  void _dropShield() {
+    if (!_holdingShield) return;
+    _holdingShield = false;
+    _releaseTouchShield();
   }
 
   void _armFrame() {
@@ -241,6 +411,7 @@ class _DomReelHostState extends State<_DomReelHost> {
     }
 
     _ensureFlutterAboveVideo();
+    _holdShield();
     var live = _videos[_id];
     if (live == null || live.parentNode == null) {
       live?.remove();
@@ -248,7 +419,8 @@ class _DomReelHostState extends State<_DomReelHost> {
       _videos[_id] = live;
     }
     if (live.parentNode != null) {
-      final flutter = _flutterHost();
+      final flutter = html.document.querySelector('flutter-view') ??
+          html.document.querySelector('flt-glass-pane');
       if (flutter != null && flutter.parentNode != null) {
         final next = live.nextElementSibling;
         if (next != flutter) {
@@ -314,7 +486,7 @@ class _DomReelHostState extends State<_DomReelHost> {
     _errorSub?.cancel();
     _canPlaySub?.cancel();
     _canPlaySub = video.onCanPlay.listen((_) {
-      video.style.setProperty('opacity', '1');
+      video.style.setProperty('opacity', '0.999');
     });
     _errorSub = video.onError.listen((_) {
       if (!mounted) return;
@@ -332,6 +504,7 @@ class _DomReelHostState extends State<_DomReelHost> {
   }
 
   void _hide() {
+    _dropShield();
     final video = _videos[_id];
     if (video == null) return;
     video.pause();

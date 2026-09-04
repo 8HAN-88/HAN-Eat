@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'web_dom_video_layer_stub.dart'
     if (dart.library.html) 'web_dom_video_layer_html.dart' as impl;
 
-/// Safari / iOS WebKit + CanvasKit: `HtmlElementView` и `video_player_web`
-/// часто дают чёрный кадр. Настоящий `<video>` стоит *под* flutter-view;
-/// виджет вырезает дырку в canvas. Видео сверху на iOS крадёт все тапы.
+/// Safari / iOS WebKit: `<video>` уходит в нативный слой и жрёт тапы.
+/// Ролик рисуем под canvas, поверх — прозрачный щит, который отдаёт
+/// жесты во Flutter (лайк, свайп, табы).
 class WebDomVideoLayer extends StatelessWidget {
   const WebDomVideoLayer({
     super.key,
