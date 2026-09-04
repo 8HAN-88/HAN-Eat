@@ -8,6 +8,12 @@ void main() {
     expect(WebDomVideoLayer.isSupported, isFalse);
   });
 
+  test('DOM reel layer stays behind the Flutter view by default', () {
+    const layer = WebDomVideoLayer(urls: ['https://cdn.example/a.mp4']);
+    expect(layer.behindCanvas, isTrue);
+    expect(layer.revealInsets, EdgeInsets.zero);
+  });
+
   testWidgets('CanvasPunchHole paints without throwing', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
