@@ -11,7 +11,8 @@ bool get isDomReelVideoPreferred {
     final ios = lower.contains('iphone') ||
         lower.contains('ipad') ||
         lower.contains('ipod') ||
-        (lower.contains('mac') && html.window.navigator.maxTouchPoints > 1);
+        (lower.contains('mac') &&
+            (html.window.navigator.maxTouchPoints ?? 0) > 1);
     if (ios) return true;
     final safari = lower.contains('safari') &&
         !lower.contains('chrome') &&
