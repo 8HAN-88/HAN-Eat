@@ -34,6 +34,7 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
   int _lastTabIndex = 0;
   String _searchQuery = '';
   bool _loading = true;
+  bool _hasLoadedOnce = false;
   String? _error;
   List<MiniAppItem> _catalog = const [];
   List<MiniAppItem> _myApps = const [];
@@ -64,10 +65,13 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
   }
 
   Future<void> _reload() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    final blocking = !_hasLoadedOnce;
+    if (mounted) {
+      setState(() {
+        if (blocking) _loading = true;
+        _error = null;
+      });
+    }
     try {
       final catalog = await MiniAppsService.fetchCatalog(
         query: _searchQuery,
@@ -79,12 +83,14 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
         _catalog = catalog;
         _myApps = myApps;
         _loading = false;
+        _hasLoadedOnce = true;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _error = '$e';
         _loading = false;
+        _hasLoadedOnce = true;
       });
     }
   }
@@ -212,13 +218,18 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
         ],
       ),
     );
-    if (selected == null || !mounted) return;
+    final bot = selected;
+    if (bot == null || !mounted) return;
 
-    await context.push(
-      BotDetailRoute.pathFor(
-        selected.id,
-        username: selected.username,
-        section: BotDetailOpenSection.newApp,
+    await Navigator.of(context).push<void>(
+      PageRouteBuilder<void>(
+        pageBuilder: (_, __, ___) => BotMiniAppsScreen(
+          botId: bot.id,
+          botUsername: bot.username,
+          autoNewApp: true,
+        ),
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
       ),
     );
     if (mounted) {
@@ -398,9 +409,9 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
                 subtitle: _emptySubtitle,
                 action: _tabs.index == 1
                     ? FilledButton.icon(
-                        onPressed: _openMyBots,
-                        icon: const Icon(Icons.smart_toy_outlined),
-                        label: const Text('Мои боты'),
+                        onPressed: _publishMiniApp,
+                        icon: const Icon(Icons.add_rounded),
+                        label: const Text('New Mini App'),
                       )
                     : (_searchQuery.isNotEmpty
                         ? TextButton(
@@ -450,7 +461,7 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
       return 'Попробуйте другой запрос.';
     }
     if (_tabs.index == 1) {
-      return 'Создайте приложение в «Мои боты» → Mini Apps → New App. После проверки оно появится здесь и в каталоге.';
+      return 'Нажмите «New Mini App» — выберите бота и заполните форму. После проверки приложение появится здесь и в каталоге.';
     }
     return 'Каталог приложений ботов. Чтобы выложить своё — как в Telegram через бота (BotFather).';
   }
@@ -524,7 +535,9 @@ class _MiniAppsNeoHeader extends StatelessWidget {
               onChanged: onSearchChanged,
               textInputAction: TextInputAction.search,
               decoration: InputDecoration(
-                hintText: 'Поиск в каталоге',
+                hintText: controller.index == 1
+                    ? 'Поиск в своих'
+                    : 'Поиск в каталоге',
                 prefixIcon: const Icon(Icons.search_rounded),
                 suffixIcon: searchQuery.isEmpty
                     ? null

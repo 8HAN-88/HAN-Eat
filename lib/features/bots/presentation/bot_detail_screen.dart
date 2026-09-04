@@ -62,7 +62,6 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
   bool _isLoading = true;
   List<BotCommandCreate> _commands = [];
   List<MiniAppItem> _miniApps = [];
-  bool _miniAppsLoading = false;
   String? _commandsError;
   String? _miniAppsError;
   final _webhookController = TextEditingController();
@@ -166,7 +165,6 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
 
   Future<void> _loadMiniApps() async {
     if (!mounted) return;
-    setState(() => _miniAppsLoading = true);
     try {
       final apps = await MiniAppsService.fetchByBot(widget.botId);
       if (mounted) {
@@ -182,8 +180,6 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
           _miniAppsError = userVisibleError(e);
         });
       }
-    } finally {
-      if (mounted) setState(() => _miniAppsLoading = false);
     }
   }
 
@@ -401,15 +397,17 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
 
   Future<void> _manageMiniApps({bool autoNewApp = false}) async {
     await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => _BotMiniAppsScreen(
+      PageRouteBuilder<void>(
+        pageBuilder: (_, __, ___) => BotMiniAppsScreen(
           botId: widget.botId,
           botUsername: widget.botUsername,
           autoNewApp: autoNewApp,
         ),
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
       ),
     );
-    await _loadMiniApps();
+    if (mounted) await _loadMiniApps();
   }
 
   Future<void> _manageWebhook() async {
@@ -937,13 +935,11 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
                                   _BotFatherTile(
                                     icon: Icons.apps_rounded,
                                     title: 'Mini Apps',
-                                    subtitle: _miniAppsLoading
-                                        ? 'Загрузка…'
-                                        : _miniAppsError != null
-                                            ? 'Не удалось загрузить'
-                                            : _miniApps.isEmpty
-                                                ? 'New App · Edit App · Delete App'
-                                                : '${_miniApps.length} · ${_miniApps.where((a) => a.isApproved).length} в каталоге',
+                                    subtitle: _miniAppsError != null
+                                        ? 'Не удалось загрузить'
+                                        : _miniApps.isEmpty
+                                            ? 'New App · Edit App · Delete App'
+                                            : '${_miniApps.length} · ${_miniApps.where((a) => a.isApproved).length} в каталоге',
                                     onTap: _miniAppsError != null
                                         ? () => unawaited(_loadMiniApps())
                                         : () => unawaited(_manageMiniApps()),
@@ -1195,8 +1191,9 @@ class _BotProfileEdit {
 // Mini Apps (BotFather: /newapp /editapp /deleteapp)
 // ---------------------------------------------------------------------------
 
-class _BotMiniAppsScreen extends StatefulWidget {
-  const _BotMiniAppsScreen({
+class BotMiniAppsScreen extends StatefulWidget {
+  const BotMiniAppsScreen({
+    super.key,
     required this.botId,
     required this.botUsername,
     this.autoNewApp = false,
@@ -1207,10 +1204,10 @@ class _BotMiniAppsScreen extends StatefulWidget {
   final bool autoNewApp;
 
   @override
-  State<_BotMiniAppsScreen> createState() => _BotMiniAppsScreenState();
+  State<BotMiniAppsScreen> createState() => _BotMiniAppsScreenState();
 }
 
-class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
+class _BotMiniAppsScreenState extends State<BotMiniAppsScreen> {
   bool _loading = true;
   List<MiniAppItem> _apps = const [];
   String? _error;
@@ -1219,18 +1216,19 @@ class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
   @override
   void initState() {
     super.initState();
-    _reload().then((_) {
-      if (!mounted || _didAutoNewApp || !widget.autoNewApp) return;
+    unawaited(_reload());
+    if (widget.autoNewApp) {
       _didAutoNewApp = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) unawaited(_newApp());
       });
-    });
+    }
   }
 
   Future<void> _reload() async {
+    final blocking = _apps.isEmpty;
     setState(() {
-      _loading = true;
+      if (blocking) _loading = true;
       _error = null;
     });
     try {
@@ -1253,9 +1251,9 @@ class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
   }
 
   Future<void> _newApp() async {
-    final result = await showDialog<_MiniAppFormResult>(
-      context: context,
-      builder: (_) => const _MiniAppFormDialog(title: 'New Mini App'),
+    final result = await _showMiniAppForm(
+      context,
+      title: 'New Mini App',
     );
     if (result == null) return;
     try {
@@ -1289,13 +1287,11 @@ class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
   }
 
   Future<void> _editApp(MiniAppItem app) async {
-    final result = await showDialog<_MiniAppFormResult>(
-      context: context,
-      builder: (_) => _MiniAppFormDialog(
-        title: 'Edit Mini App',
-        initial: app,
-        shortNameReadOnly: true,
-      ),
+    final result = await _showMiniAppForm(
+      context,
+      title: 'Edit Mini App',
+      initial: app,
+      shortNameReadOnly: true,
     );
     if (result == null) return;
     try {
@@ -1561,6 +1557,30 @@ class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
   }
 }
 
+Future<_MiniAppFormResult?> _showMiniAppForm(
+  BuildContext context, {
+  required String title,
+  MiniAppItem? initial,
+  bool shortNameReadOnly = false,
+}) {
+  return showModalBottomSheet<_MiniAppFormResult>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    showDragHandle: true,
+    builder: (ctx) => Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.viewInsetsOf(ctx).bottom,
+      ),
+      child: _MiniAppFormDialog(
+        title: title,
+        initial: initial,
+        shortNameReadOnly: shortNameReadOnly,
+      ),
+    ),
+  );
+}
+
 class _MiniAppFormResult {
   const _MiniAppFormResult({
     required this.name,
@@ -1628,104 +1648,152 @@ class _MiniAppFormDialogState extends State<_MiniAppFormDialog> {
     super.dispose();
   }
 
+  void _submit() {
+    final name = _name.text.trim();
+    final shortName = _short.text.trim().toLowerCase();
+    final url = _url.text.trim();
+    if (name.isEmpty || shortName.isEmpty || url.isEmpty) return;
+    if (!_shortRe.hasMatch(shortName)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Short name: 3–30 символов, a-z 0-9 _'),
+        ),
+      );
+      return;
+    }
+    Navigator.pop(
+      context,
+      _MiniAppFormResult(
+        name: name,
+        shortName: shortName,
+        url: url,
+        description: _desc.text.trim().isEmpty ? null : _desc.text.trim(),
+        category: _category,
+        iconUrl: _icon.text.trim().isEmpty ? null : _icon.text.trim(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.title),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _name,
-              decoration: const InputDecoration(labelText: 'Title'),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _short,
-              readOnly: widget.shortNameReadOnly,
-              decoration: const InputDecoration(
-                labelText: 'Short name',
-                helperText: '3–30: a-z, 0-9, _ · уникален для бота',
+    const fieldGap = SizedBox(height: 16);
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.88,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                widget.title,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
               ),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[a-z0-9_]')),
+            ),
+          ),
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextField(
+                    controller: _name,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: 'Название',
+                      hintText: 'Как в каталоге',
+                    ),
+                  ),
+                  fieldGap,
+                  TextField(
+                    controller: _short,
+                    readOnly: widget.shortNameReadOnly,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: 'Short name',
+                      helperText: '3–30 символов: a-z, 0-9, _',
+                      helperMaxLines: 2,
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[a-z0-9_]')),
+                    ],
+                  ),
+                  fieldGap,
+                  TextField(
+                    controller: _url,
+                    keyboardType: TextInputType.url,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: 'Web App URL',
+                      hintText: 'https://…',
+                    ),
+                  ),
+                  fieldGap,
+                  TextField(
+                    controller: _desc,
+                    maxLines: 3,
+                    textInputAction: TextInputAction.newline,
+                    decoration: const InputDecoration(
+                      labelText: 'Описание',
+                      alignLabelWithHint: true,
+                    ),
+                  ),
+                  fieldGap,
+                  DropdownButtonFormField<String>(
+                    value: _category,
+                    decoration: const InputDecoration(labelText: 'Категория'),
+                    items: MiniAppCategory.known
+                        .map(
+                          (c) => DropdownMenuItem(
+                            value: c.id,
+                            child: Text(c.label),
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setState(() => _category = v);
+                    },
+                  ),
+                  fieldGap,
+                  TextField(
+                    controller: _icon,
+                    keyboardType: TextInputType.url,
+                    decoration: const InputDecoration(
+                      labelText: 'Photo URL',
+                      hintText: 'необязательно',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+            child: Row(
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Отмена'),
+                ),
+                const Spacer(),
+                FilledButton(
+                  onPressed: _submit,
+                  child: Text(
+                    widget.initial == null ? 'Создать' : 'Сохранить',
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _url,
-              decoration: const InputDecoration(
-                labelText: 'Web App URL',
-                hintText: 'https://…',
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _desc,
-              maxLines: 3,
-              decoration: const InputDecoration(labelText: 'Description'),
-            ),
-            const SizedBox(height: 10),
-            DropdownButtonFormField<String>(
-              value: _category,
-              decoration: const InputDecoration(labelText: 'Category'),
-              items: MiniAppCategory.known
-                  .map(
-                    (c) => DropdownMenuItem(value: c.id, child: Text(c.label)),
-                  )
-                  .toList(growable: false),
-              onChanged: (v) {
-                if (v == null) return;
-                setState(() => _category = v);
-              },
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _icon,
-              decoration: const InputDecoration(
-                labelText: 'Photo URL (опционально)',
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Отмена'),
-        ),
-        FilledButton(
-          onPressed: () {
-            final name = _name.text.trim();
-            final shortName = _short.text.trim().toLowerCase();
-            final url = _url.text.trim();
-            if (name.isEmpty || shortName.isEmpty || url.isEmpty) return;
-            if (!_shortRe.hasMatch(shortName)) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Short name: 3–30 символов, a-z 0-9 _'),
-                ),
-              );
-              return;
-            }
-            Navigator.pop(
-              context,
-              _MiniAppFormResult(
-                name: name,
-                shortName: shortName,
-                url: url,
-                description:
-                    _desc.text.trim().isEmpty ? null : _desc.text.trim(),
-                category: _category,
-                iconUrl:
-                    _icon.text.trim().isEmpty ? null : _icon.text.trim(),
-              ),
-            );
-          },
-          child: Text(widget.initial == null ? 'Создать' : 'Сохранить'),
-        ),
-      ],
     );
   }
 }

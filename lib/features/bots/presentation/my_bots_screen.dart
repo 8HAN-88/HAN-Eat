@@ -34,8 +34,9 @@ class _MyBotsScreenState extends State<MyBotsScreen> {
   }
 
   Future<void> _loadBots() async {
+    final blocking = _bots.isEmpty;
     setState(() {
-      _isLoading = true;
+      if (blocking) _isLoading = true;
       _error = null;
     });
     try {
@@ -57,13 +58,15 @@ class _MyBotsScreenState extends State<MyBotsScreen> {
   }) async {
     if (initialToken != null || showTokenSheet) {
       await Navigator.of(context).push<void>(
-        MaterialPageRoute(
-          builder: (_) => BotDetailScreen(
+        PageRouteBuilder<void>(
+          pageBuilder: (_, __, ___) => BotDetailScreen(
             botId: bot.id,
             botUsername: bot.username,
             initialToken: initialToken,
             showTokenOnOpen: showTokenSheet,
           ),
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
         ),
       );
     } else {
