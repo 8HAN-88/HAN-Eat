@@ -26,9 +26,21 @@ void main() {
     expect(campaign.id, 7);
     expect(campaign.statusLabel, 'На модерации');
     expect(campaign.surfacesLabel, 'Лента · Рилсы');
-    expect(campaign.canSubmit, isTrue);
+    expect(campaign.canSubmit, isFalse);
+    expect(campaign.isEditable, isFalse);
     expect(campaign.creative.title, 'Заголовок');
     expect(campaign.creative.ctaLabel, 'Открыть');
+  });
+
+  test('draft campaign can be submitted', () {
+    final campaign = AdCampaign.fromJson({
+      'id': 1,
+      'status': 'draft',
+      'surfaces': ['feed'],
+      'creative': {'title': 'Черновик'},
+    });
+    expect(campaign.canSubmit, isTrue);
+    expect(campaign.statusLabel, 'Черновик');
   });
 
   test('FeedResponse skips unknown item kinds such as ads', () {
