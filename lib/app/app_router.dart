@@ -598,7 +598,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: MyBotsRoute.path,
         name: MyBotsRoute.name,
         pageBuilder: (context, state) =>
-            const MaterialPage(child: MyBotsScreen()),
+            const NoTransitionPage(child: MyBotsScreen()),
       ),
       GoRoute(
         path: BotDetailRoute.path,
@@ -616,7 +616,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             'token' => BotDetailOpenSection.token,
             _ => BotDetailOpenSection.none,
           };
-          return MaterialPage(
+          return NoTransitionPage(
             child: BotDetailScreen(
               botId: id,
               botUsername: username,
