@@ -18,6 +18,7 @@ analyzer:
     unused_local_variable: ignore
     deprecated_member_use: ignore
   exclude:
+    - lib/widgets/web_html_reel_video_html.dart
     - lib/app/web_plugins_heavy.dart
     - lib/core/platform/pwa_install_web.dart
     - lib/core/platform/web_page_visibility_web.dart

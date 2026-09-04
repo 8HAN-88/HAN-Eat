@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 
 import '../core/network/connection_type.dart';
@@ -8,6 +9,7 @@ import '../models/video_quality_preference.dart';
 import '../services/reel_video_sources.dart';
 import '../services/server_config.dart';
 import '../services/video_cache_service.dart';
+import 'video_playback_urls.dart';
 
 /// Результат инициализации рилса: контроллер + опциональный апгрейд качества.
 class ReelPlaybackHandle {
@@ -44,9 +46,14 @@ class VideoPlayerHelper {
 
   static VideoPlayerController networkController(String url) {
     return VideoPlayerController.networkUrl(
-      Uri.parse(ServerConfig.resolvePlaybackMediaUrl(url)),
+      Uri.parse(ServerConfig.resolveMediaUrl(url)),
       videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
     );
+  }
+
+  static bool _isMissingVideoPlugin(Object error) {
+    return error is MissingPluginException ||
+        error.toString().contains('MissingPluginException');
   }
 
   /// Рилс: быстрый старт + fallback на другие варианты видео.
@@ -58,14 +65,16 @@ class VideoPlayerHelper {
     bool autoPlay = false,
   }) async {
     final onWifi = await deviceOnWifiOrEthernet();
-    final startUrls = sources.playbackUrls(qualityPref);
+    final startUrls = expandVideoPlaybackUrls(sources.playbackUrls(qualityPref));
     if (startUrls.isEmpty) {
       throw Exception('no video url');
     }
 
     Object? lastError;
     VideoPlayerController? controller;
-    for (final url in startUrls) {
+    var retriedMissingPlugin = false;
+    for (var i = 0; i < startUrls.length; i++) {
+      final url = startUrls[i];
       try {
         controller = await _createControllerForUrl(
           url,
@@ -78,6 +87,13 @@ class VideoPlayerHelper {
       } catch (e) {
         lastError = e;
         debugPrint('Reel video init failed for $url: $e');
+        if (kIsWeb &&
+            !retriedMissingPlugin &&
+            _isMissingVideoPlugin(e)) {
+          retriedMissingPlugin = true;
+          await Future<void>.delayed(const Duration(milliseconds: 400));
+          i -= 1;
+        }
       }
     }
 
@@ -99,14 +115,26 @@ class VideoPlayerHelper {
     bool muted = true,
     bool autoPlay = false,
   }) async {
-    final controller = await _createControllerForUrl(
-      url,
-      loop: loop,
-      muted: muted,
-      autoPlay: autoPlay,
-      prefetchInBackground: _shouldUseFileCache(url),
-    );
-    return controller;
+    final candidates = expandVideoPlaybackUrls([url]);
+    if (candidates.isEmpty) {
+      throw Exception('no video url');
+    }
+    Object? lastError;
+    for (final candidate in candidates) {
+      try {
+        return await _createControllerForUrl(
+          candidate,
+          loop: loop,
+          muted: muted,
+          autoPlay: autoPlay,
+          prefetchInBackground: _shouldUseFileCache(candidate),
+        );
+      } catch (e) {
+        lastError = e;
+        debugPrint('Prepared video init failed for $candidate: $e');
+      }
+    }
+    throw Exception('video init failed: $lastError');
   }
 
   static Future<VideoPlayerController> _createControllerForUrl(
