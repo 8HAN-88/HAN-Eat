@@ -11284,15 +11284,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
-  /// Composer banners sit inside [AnimatedSize] — avoid nested slide/size fades.
-  Widget _composerStrip({
-    required bool visible,
-    required Widget child,
-  }) {
-    if (!visible) return const SizedBox.shrink();
-    return child;
-  }
-
   Widget _buildReplyKeyboardStrip(ColorScheme scheme) {
     final kb = _replyKeyboard;
     if (kb == null || kb.isEmpty) return const SizedBox.shrink();
@@ -16137,103 +16128,94 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                             !_pendingMediaByTempId
                                 .containsKey(_pendingMediaRetry!.tempId))
                           _pendingMediaRetryBanner(scheme),
-                        _composerStrip(
-                          visible: _composerLinkPreviewUrl != null &&
-                              _editingMessage == null,
-                          child: Material(
-                                  color: Theme.of(context).brightness ==
-                                          Brightness.dark
-                                      ? const Color(0xFF1A2632)
-                                      : scheme.surface,
-                                  child: Padding(
-                                    padding:
-                                        const EdgeInsets.fromLTRB(10, 4, 2, 4),
-                                    child: Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Expanded(
-                                          child: ChatLinkPreview(
-                                            url: _composerLinkPreviewUrl!,
-                                            foregroundColor: scheme.onSurface,
-                                            accentColor: scheme.primary,
-                                            backgroundColor: scheme
-                                                .surfaceContainerHighest
-                                                .withValues(alpha: 0.55),
-                                            compact: true,
-                                            showActions: false,
-                                          ),
-                                        ),
-                                        IconButton(
-                                          tooltip: 'Скрыть превью',
-                                          icon: const Icon(Icons.close, size: 18),
-                                          onPressed: () {
-                                            setState(() {
-                                              _composerLinkPreviewDismissedUrl =
-                                                  _composerLinkPreviewUrl;
-                                              _composerLinkPreviewUrl = null;
-                                            });
-                                          },
-                                        ),
-                                      ],
+                        if (_composerLinkPreviewUrl != null &&
+                            _editingMessage == null)
+                          Material(
+                            color: Theme.of(context).brightness ==
+                                    Brightness.dark
+                                ? const Color(0xFF1A2632)
+                                : scheme.surface,
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.fromLTRB(10, 4, 2, 4),
+                              child: Row(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: ChatLinkPreview(
+                                      url: _composerLinkPreviewUrl!,
+                                      foregroundColor: scheme.onSurface,
+                                      accentColor: scheme.primary,
+                                      backgroundColor: scheme
+                                          .surfaceContainerHighest
+                                          .withValues(alpha: 0.55),
+                                      compact: true,
+                                      showActions: false,
                                     ),
                                   ),
+                                  IconButton(
+                                    tooltip: 'Скрыть превью',
+                                    icon: const Icon(Icons.close, size: 18),
+                                    onPressed: () {
+                                      setState(() {
+                                        _composerLinkPreviewDismissedUrl =
+                                            _composerLinkPreviewUrl;
+                                        _composerLinkPreviewUrl = null;
+                                      });
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        if (_editingMessage != null)
+                          _telegramReplyStrip(
+                            author: _editingMessage!.type == 'text'
+                                ? 'Редактирование'
+                                : 'Подпись',
+                            preview: _editingMessage!.content.trim().isEmpty
+                                ? (_editingMessage!.type == 'image'
+                                    ? 'Фото'
+                                    : _editingMessage!.type == 'video'
+                                        ? 'Видео'
+                                        : 'Файл')
+                                : _editingMessage!.content,
+                            onClose: _cancelEdit,
+                          ),
+                        if (_privateReply != null)
+                          _telegramReplyStrip(
+                            author: _privateReply!.stripAuthor,
+                            preview: _privateReply!.preview,
+                            onTap: () {
+                              final q = _privateReply;
+                              if (q == null) return;
+                              unawaited(
+                                _openForwardedOriginal(
+                                  conversationId: q.sourceConversationId,
+                                  messageId: q.sourceMessageId,
                                 ),
-                        ),
-                        _composerStrip(
-                          visible: _editingMessage != null,
-                          child: _telegramReplyStrip(
-                                  author: _editingMessage!.type == 'text'
-                                      ? 'Редактирование'
-                                      : 'Подпись',
-                                  preview: _editingMessage!.content.trim().isEmpty
-                                      ? (_editingMessage!.type == 'image'
-                                          ? 'Фото'
-                                          : _editingMessage!.type == 'video'
-                                              ? 'Видео'
-                                              : 'Файл')
-                                      : _editingMessage!.content,
-                                  onClose: _cancelEdit,
-                                ),
-                        ),
-                        _composerStrip(
-                          visible: _privateReply != null,
-                          child: _telegramReplyStrip(
-                                  author: _privateReply!.stripAuthor,
-                                  preview: _privateReply!.preview,
-                                  onTap: () {
-                                    final q = _privateReply;
-                                    if (q == null) return;
-                                    unawaited(
-                                      _openForwardedOriginal(
-                                        conversationId: q.sourceConversationId,
-                                        messageId: q.sourceMessageId,
-                                      ),
-                                    );
-                                  },
-                                  onClose: () {
-                                    setState(() => _privateReply = null);
-                                  },
-                                ),
-                        ),
-                        _composerStrip(
-                          visible: _replyTo != null && _privateReply == null,
-                          child: _telegramReplyStrip(
-                                  author: _replyTo!.isMine
-                                      ? 'Вы'
-                                      : (_replyTo!.senderName ??
-                                          _senderNames[_replyTo!.senderId] ??
-                                          _conversation.displayTitle),
-                                  preview: _messagePreview(_replyTo!),
-                                  onClose: () {
-                                    setState(() => _replyTo = null);
-                                    _scheduleDraftSave();
-                                  },
-                                ),
-                        ),
-                        _composerStrip(
-                          visible: !canSendInGroup,
-                          child: _composerInfoBanner(
+                              );
+                            },
+                            onClose: () {
+                              setState(() => _privateReply = null);
+                            },
+                          ),
+                        if (_replyTo != null && _privateReply == null)
+                          _telegramReplyStrip(
+                            author: _replyTo!.isMine
+                                ? 'Вы'
+                                : (_replyTo!.senderName ??
+                                    _senderNames[_replyTo!.senderId] ??
+                                    _conversation.displayTitle),
+                            preview: _messagePreview(_replyTo!),
+                            onClose: () {
+                              setState(() => _replyTo = null);
+                              _scheduleDraftSave();
+                            },
+                          ),
+                        if (!canSendInGroup)
+                          _composerInfoBanner(
                             backgroundColor: scheme.secondaryContainer
                                 .withValues(alpha: 0.45),
                             foregroundColor: scheme.onSecondaryContainer,
@@ -16242,10 +16224,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                 ? 'Отправка сообщений ограничена модератором'
                                 : 'Только админы могут отправлять сообщения',
                           ),
-                        ),
-                        _composerStrip(
-                          visible: peerBlockedByMe,
-                          child: _composerInfoBanner(
+                        if (peerBlockedByMe)
+                          _composerInfoBanner(
                             backgroundColor: scheme.errorContainer
                                 .withValues(alpha: 0.55),
                             foregroundColor: scheme.onErrorContainer,
@@ -16257,7 +16237,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                               child: const Text('Разблокировать'),
                             ),
                           ),
-                        ),
                         if (!canSendNow && canCompose)
                           _compactComposerStrip(
                             icon: activeCooldownIcon,
