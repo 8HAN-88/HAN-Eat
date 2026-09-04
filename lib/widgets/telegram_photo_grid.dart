@@ -389,10 +389,6 @@ class TelegramPhotoGrid extends StatelessWidget {
         fit: BoxFit.cover,
         fadeInDuration: Duration.zero,
         fadeOutDuration: Duration.zero,
-        httpHeaders: const {
-          'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
-          'User-Agent': 'HAN-Eat/1.0 (Flutter)',
-        },
         memCacheWidth: memCacheWidth,
         memCacheHeight: memCacheHeight,
         maxWidthDiskCache: 1200,
@@ -400,13 +396,13 @@ class TelegramPhotoGrid extends StatelessWidget {
         placeholder: (context, url) => Container(
           width: width.isFinite ? width : double.infinity,
           height: height.isFinite ? height : maxHeight,
-          color: Colors.grey[300],
+          color: const Color(0xFF1A1A1A),
         ),
         errorWidget: (context, url, error) => Container(
           width: width.isFinite ? width : double.infinity,
           height: height.isFinite ? height : maxHeight,
-          color: Colors.grey[300],
-          child: const Icon(Icons.error, color: Colors.red),
+          color: const Color(0xFF1A1A1A),
+          child: const Icon(Icons.broken_image_outlined, color: Colors.white38),
         ),
       );
     }
@@ -616,10 +612,6 @@ class _ModernPhotoCarouselState extends State<_ModernPhotoCarousel> {
       fit: BoxFit.cover,
       fadeInDuration: const Duration(milliseconds: 140),
       fadeOutDuration: Duration.zero,
-      httpHeaders: const {
-        'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
-        'User-Agent': 'HAN-Eat/1.0 (Flutter)',
-      },
       memCacheWidth: memCacheWidth,
       memCacheHeight: memCacheHeight,
       maxWidthDiskCache: 1200,

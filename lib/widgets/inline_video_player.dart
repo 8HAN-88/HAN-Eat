@@ -14,6 +14,7 @@ import 'cover_network_video.dart';
 /// ставит на паузу при скролле. Muted по умолчанию.
 class InlineVideoPlayer extends StatefulWidget {
   final String videoUrl;
+  final List<String> fallbackUrls;
   final String? thumbnailUrl;
   final double aspectRatio;
   final VoidCallback? onTap;
@@ -22,6 +23,7 @@ class InlineVideoPlayer extends StatefulWidget {
   const InlineVideoPlayer({
     super.key,
     required this.videoUrl,
+    this.fallbackUrls = const [],
     this.thumbnailUrl,
     this.aspectRatio = 16 / 9,
     this.onTap,
@@ -90,43 +92,74 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
       return;
     }
 
-    if (_initKey == widget.videoUrl) return;
-    _initKey = widget.videoUrl;
+    final candidates = <String>[];
+    void addUrl(String raw) {
+      final url = raw.trim();
+      if (url.isEmpty || candidates.contains(url)) return;
+      candidates.add(url);
+    }
 
-    try {
-      final controller = await VideoPlayerHelper.createPreparedController(
-        widget.videoUrl,
-        muted: _isMuted,
-        autoPlay: false,
-      );
-
-      if (!mounted) {
-        controller.dispose();
-        return;
-      }
-
-      controller.addListener(_onVideoTick);
-      setState(() {
-        _controller = controller;
-        _initialized = true;
-      });
-
-      if (_canAutoPlay) {
-        await VideoPlayerHelper.ensurePlaying(
-          controller,
-          shouldContinue: () => mounted && _canAutoPlay,
-        );
-      } else {
-        await controller.pause();
-      }
-    } catch (e) {
-      debugPrint('InlineVideoPlayer init error: $e');
+    addUrl(widget.videoUrl);
+    for (final url in widget.fallbackUrls) {
+      addUrl(url);
+    }
+    if (candidates.isEmpty) {
       if (mounted) {
         setState(() {
           _hasError = true;
           _initialized = true;
         });
       }
+      return;
+    }
+
+    final initKey = candidates.join('|');
+    if (_initKey == initKey) return;
+    _initKey = initKey;
+
+    Object? lastError;
+    for (final url in candidates) {
+      if (!mounted) return;
+      try {
+        final controller = await VideoPlayerHelper.createPreparedController(
+          url,
+          muted: _isMuted,
+          autoPlay: false,
+        );
+
+        if (!mounted) {
+          controller.dispose();
+          return;
+        }
+
+        controller.addListener(_onVideoTick);
+        setState(() {
+          _controller = controller;
+          _initialized = true;
+          _hasError = false;
+        });
+
+        if (_canAutoPlay) {
+          await VideoPlayerHelper.ensurePlaying(
+            controller,
+            shouldContinue: () => mounted && _canAutoPlay,
+          );
+        } else {
+          await controller.pause();
+        }
+        return;
+      } catch (e) {
+        lastError = e;
+        debugPrint('InlineVideoPlayer init error for $url: $e');
+      }
+    }
+
+    debugPrint('InlineVideoPlayer init failed: $lastError');
+    if (mounted) {
+      setState(() {
+        _hasError = true;
+        _initialized = true;
+      });
     }
   }
 
@@ -215,10 +248,12 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
         behavior: HitTestBehavior.opaque,
         child: AspectRatio(
           aspectRatio: widget.aspectRatio,
-          child: Stack(
-            fit: StackFit.expand,
-            alignment: Alignment.center,
-            children: [
+          child: ClipRect(
+            child: Stack(
+              fit: StackFit.expand,
+              alignment: Alignment.center,
+              clipBehavior: Clip.hardEdge,
+              children: [
               if (widget.thumbnailUrl != null)
                 CachedNetworkImage(
                   imageUrl: ServerConfig.resolvePublisherAvatarUrl(
@@ -289,6 +324,7 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
                   ),
                 ),
             ],
+            ),
           ),
         ),
       ),

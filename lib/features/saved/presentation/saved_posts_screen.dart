@@ -15,6 +15,7 @@ import '../../../core/layout/long_label_tab_bar.dart';
 import '../../../app/app_router.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/app_gradient_background.dart';
+import '../../../core/layout/floating_bottom_padding.dart';
 
 class SavedPostsScreen extends ConsumerStatefulWidget {
   final int? userId; // Если null, то текущий пользователь
@@ -216,13 +217,21 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
           ),
         );
       }
-      return AppEmptyState(
-        icon: Icons.bookmark_border,
-        title: 'Нет сохранённых постов',
-        subtitle: 'Сохраняйте посты — они появятся здесь',
-        action: FilledButton(
-          onPressed: () => context.go(FeedRoute.path),
-          child: const Text('Открыть ленту'),
+      return Padding(
+        padding: EdgeInsets.fromLTRB(
+          8,
+          8,
+          8,
+          floatingBottomPadding(context),
+        ),
+        child: AppEmptyState(
+          icon: Icons.bookmark_border,
+          title: 'Нет сохранённых постов',
+          subtitle: 'Сохраняйте посты — они появятся здесь',
+          action: FilledButton(
+            onPressed: () => context.go(FeedRoute.path),
+            child: const Text('Открыть ленту'),
+          ),
         ),
       );
     }
@@ -242,6 +251,7 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
         },
         child: ListView.builder(
           primary: true,
+          padding: EdgeInsets.only(bottom: floatingBottomPadding(context)),
           itemCount: _posts.length + (_hasMore ? 1 : 0),
           itemBuilder: (context, index) {
             if (index == _posts.length) {
@@ -346,27 +356,13 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
             ],
           ),
         if (widget.embedded)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
-            child: Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'Сохранённые',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-                  ),
-                ),
-                if (_isOffline)
-                  const Padding(
-                    padding: EdgeInsets.only(right: 4),
-                    child: Icon(Icons.cloud_off, color: Colors.orange, size: 20),
-                  ),
-                IconButton(
-                  icon: const Icon(Icons.sync),
-                  onPressed: _isOffline ? null : () => _syncWithServer(),
-                  tooltip: 'Синхронизировать',
-                ),
-              ],
+          Align(
+            alignment: Alignment.centerRight,
+            child: IconButton(
+              icon: Icon(_isOffline ? Icons.cloud_off : Icons.sync),
+              color: _isOffline ? Colors.orange : null,
+              onPressed: _isOffline ? null : () => _syncWithServer(),
+              tooltip: 'Синхронизировать',
             ),
           ),
         longLabelTabBar(
