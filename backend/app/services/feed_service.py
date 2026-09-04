@@ -1968,6 +1968,7 @@ class FeedService:
                 }
 
             enriched.append({
+                "kind": "post",
                 "id": post.id,
                 "type": post.type,
                 "title": post.title,

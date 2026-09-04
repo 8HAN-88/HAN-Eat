@@ -264,6 +264,8 @@ class FeedResponse {
     for (final item in itemsList) {
       try {
         if (item is Map<String, dynamic>) {
+          final kind = item['kind'] as String? ?? 'post';
+          if (kind != 'post') continue;
           posts.add(PostModel.fromJson(item));
         }
       } catch (e) {

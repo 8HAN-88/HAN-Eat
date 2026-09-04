@@ -196,6 +196,16 @@ class _CreatorToolsScreenState extends State<CreatorToolsScreen> {
             onTap: () => context.push(SubscriptionRoute.pathWithProduct('creator')),
           ),
         ),
+        const SizedBox(height: 12),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.campaign_outlined),
+            title: const Text('Реклама для клиентов'),
+            subtitle: const Text('Отдельный кабинет: объявления в ленте, рилсах и каналах'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push(AdsHubRoute.path),
+          ),
+        ),
       ],
     );
   }

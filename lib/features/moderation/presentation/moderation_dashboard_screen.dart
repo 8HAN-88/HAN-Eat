@@ -423,6 +423,12 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen> {
                         icon: const Icon(Icons.apps_outlined),
                         label: const Text('Модерация mini apps'),
                       ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: () => context.push(AdsReviewRoute.path),
+                        icon: const Icon(Icons.campaign_outlined),
+                        label: const Text('Модерация рекламы'),
+                      ),
                       const SizedBox(height: 24),
                       _StatGrid(data: _data!),
                       if (_data!.botWebhookQueue != null) ...[

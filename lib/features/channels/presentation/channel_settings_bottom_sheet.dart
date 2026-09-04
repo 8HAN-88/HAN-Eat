@@ -264,6 +264,15 @@ class _ChannelSettingsBottomSheetState
                 },
               ),
             ListTile(
+              leading: const Icon(Icons.campaign_outlined),
+              title: const Text('Реклама'),
+              subtitle: const Text('Кабинет: разместить объявление'),
+              onTap: () {
+                Navigator.of(context).pop();
+                context.push(AdsHubRoute.path);
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.celebration_outlined),
               title: const Text('Розыгрыш Stars'),
               subtitle: Text(
