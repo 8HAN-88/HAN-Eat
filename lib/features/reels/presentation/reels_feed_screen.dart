@@ -27,6 +27,7 @@ import '../../../services/comment_service.dart';
 import '../../comments/presentation/show_post_comments_sheet.dart';
 import '../../../utils/video_player_helper.dart';
 import '../../../widgets/cover_network_video.dart';
+import '../../../widgets/web_html_reel_video.dart';
 import '../../../utils/number_formatter.dart';
 import '../../../widgets/share_action_sheet.dart';
 import '../../../widgets/report_content_dialog.dart';
@@ -1166,6 +1167,7 @@ class _ReelCardState extends ConsumerState<ReelCard>
   final List<TapGestureRecognizer> _descriptionRecognizers = [];
   VideoPlayerController? _boundController;
   bool _hadVideoFrame = false;
+  bool _htmlFallbackFailed = false;
 
   static const double _igActionGap = 14;
   static const double _igRightInset = 12;
@@ -1199,6 +1201,9 @@ class _ReelCardState extends ConsumerState<ReelCard>
     if (oldWidget.videoController != widget.videoController) {
       _hadVideoFrame = false;
       _bindController(widget.videoController);
+    }
+    if (oldWidget.videoInitFailed && !widget.videoInitFailed) {
+      _htmlFallbackFailed = false;
     }
   }
 
@@ -1346,8 +1351,32 @@ class _ReelCardState extends ConsumerState<ReelCard>
     if (paused != willPause) widget.onPauseToggle(paused);
   }
 
+  String? _safariHtmlVideoUrl() {
+    final sources = widget.reel.reelVideoSources;
+    final raw = sources.mp4_480p ??
+        sources.mp4_720p ??
+        sources.original ??
+        sources.mp4_1080p ??
+        widget.reel.videoUrl;
+    if (raw == null || raw.trim().isEmpty) return null;
+    return ServerConfig.resolveMediaUrl(raw);
+  }
+
   Widget _buildVideoPlaceholder() {
     if (widget.videoInitFailed) {
+      final htmlUrl = _safariHtmlVideoUrl();
+      if (WebHtmlReelVideo.isSupported &&
+          htmlUrl != null &&
+          !_htmlFallbackFailed) {
+        return WebHtmlReelVideo(
+          url: htmlUrl,
+          muted: widget.isMuted,
+          playing: widget.isCurrent && !widget.isPaused,
+          onError: () {
+            if (mounted) setState(() => _htmlFallbackFailed = true);
+          },
+        );
+      }
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1361,7 +1390,10 @@ class _ReelCardState extends ConsumerState<ReelCard>
           if (widget.onRetryVideo != null) ...[
             const SizedBox(height: 12),
             TextButton(
-              onPressed: widget.onRetryVideo,
+              onPressed: () {
+                setState(() => _htmlFallbackFailed = false);
+                widget.onRetryVideo!();
+              },
               child: const Text('Повторить'),
             ),
           ],

@@ -9,6 +9,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../services/server_config.dart';
 import '../utils/video_player_helper.dart';
 import 'cover_network_video.dart';
+import 'web_html_reel_video.dart';
 
 /// Видеоплеер с inline autoplay: воспроизводит при появлении в viewport,
 /// ставит на паузу при скролле. Muted по умолчанию.
@@ -275,30 +276,36 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
                   child: CoverNetworkVideo(controller: _controller!),
                 ),
               if (_hasError)
-                Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    _placeholder(),
-                    Center(
-                      child: FilledButton.tonalIcon(
-                        onPressed: () {
-                          setState(() {
-                            _hasError = false;
-                            _initialized = false;
-                            _initKey = null;
-                            _hadVideoFrame = false;
-                            _controller?.removeListener(_onVideoTick);
-                            _controller?.dispose();
-                            _controller = null;
-                          });
-                          unawaited(_ensurePlaying());
-                        },
-                        icon: const Icon(Icons.refresh, size: 18),
-                        label: const Text('Повторить'),
+                WebHtmlReelVideo.isSupported
+                    ? WebHtmlReelVideo(
+                        url: ServerConfig.resolveMediaUrl(widget.videoUrl),
+                        muted: _isMuted,
+                        playing: _canAutoPlay,
+                      )
+                    : Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          _placeholder(),
+                          Center(
+                            child: FilledButton.tonalIcon(
+                              onPressed: () {
+                                setState(() {
+                                  _hasError = false;
+                                  _initialized = false;
+                                  _initKey = null;
+                                  _hadVideoFrame = false;
+                                  _controller?.removeListener(_onVideoTick);
+                                  _controller?.dispose();
+                                  _controller = null;
+                                });
+                                unawaited(_ensurePlaying());
+                              },
+                              icon: const Icon(Icons.refresh, size: 18),
+                              label: const Text('Повторить'),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
               if (_initialized && !_hasError)
                 Positioned(
                   bottom: 8,
