@@ -8,7 +8,15 @@ from sqlalchemy.pool import StaticPool
 from app.models.ad import AdCampaign, AdCreative, AdHide
 from app.models.subscription import Subscription
 from app.models.user import User
-from app.services.ads_service import AdsError, AdsService, STATUS_APPROVED, STATUS_PENDING
+from app.services.ads_service import (
+    AdsError,
+    AdsService,
+    STATUS_APPROVED,
+    STATUS_PENDING,
+    normalize_destination_url,
+    strip_ad_items,
+    valid_media_url,
+)
 
 
 @pytest.fixture()
@@ -230,3 +238,70 @@ def test_submit_requires_title_and_destination(db_session):
     created = svc.create(user, {"name": "Пустая"})
     with pytest.raises(AdsError):
         svc.submit(created["id"], user, {"creative": {"title": ""}})
+
+
+def test_draft_allows_empty_name_and_relative_image(db_session):
+    user = _user(db_session)
+    svc = AdsService(db_session)
+    created = svc.create(user, {"name": ""})
+    assert created["name"] == "Новая кампания"
+
+    updated = svc.update(
+        created["id"],
+        user,
+        {
+            "name": "",
+            "destination_type": "url",
+            "destination_url": "haneat.app/promo",
+            "destination_channel_id": None,
+            "destination_post_id": None,
+            "creative": {
+                "title": "Акция",
+                "image_url": "/api/v1/uploads/file/uploads/user_1/ad.jpg",
+            },
+        },
+    )
+    assert updated["name"] == "Акция"
+    assert updated["destination_url"] == "https://haneat.app/promo"
+    assert updated["destination_channel_id"] is None
+    image = updated["creative"]["image_url"]
+    assert image
+    assert "uploads/user_1/ad.jpg" in image
+
+
+def test_url_and_media_helpers():
+    assert normalize_destination_url("site.ru") == "https://site.ru"
+    assert normalize_destination_url("https://ok.example") == "https://ok.example"
+    assert valid_media_url("/uploads/file/uploads/user_1/a.jpg") is True
+    assert valid_media_url("uploads/user_1/a.jpg") is True
+    assert valid_media_url("javascript:alert(1)") is False
+    assert strip_ad_items(
+        [{"kind": "post", "id": 1}, {"kind": "ad", "campaign_id": 9}, {"kind": "post", "id": 2}]
+    ) == [{"kind": "post", "id": 1}, {"kind": "post", "id": 2}]
+
+
+def test_insert_feed_strips_stale_ads_and_supports_reels_filter(db_session):
+    admin = _user(db_session, admin=True)
+    viewer = _user(db_session, user_id=2)
+    svc = AdsService(db_session)
+    created = svc.create(admin, _ready_payload(surfaces=["reels"]))
+    svc.submit(created["id"], admin)
+    stale = [{"kind": "post", "id": i} for i in range(1, 10)]
+    stale.insert(4, {"kind": "ad", "campaign_id": 999, "title": "старая"})
+    mixed = svc.insert_into_feed_items(
+        stale,
+        viewer.id,
+        following_only=False,
+        feed_type="reels",
+        cursor=None,
+    )
+    ads = [item for item in mixed if item.get("kind") == "ad"]
+    assert len(ads) == 1
+    assert ads[0]["campaign_id"] == created["id"]
+    assert svc.insert_into_feed_items(
+        stale,
+        viewer.id,
+        following_only=False,
+        feed_type="all",
+        cursor=None,
+    ) == strip_ad_items(stale)

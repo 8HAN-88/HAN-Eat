@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 
 from sqlalchemy.orm import Session
 
+from app.core.media_urls import normalize_media_url
 from app.models.ad import AdCampaign, AdCreative, AdHide
 from app.models.community import Channel
 from app.models.post import Post
@@ -82,6 +83,46 @@ def _valid_http_url(url: str) -> bool:
     return bool(host)
 
 
+def normalize_destination_url(url: Optional[str]) -> str:
+    """Accept site.ru and //cdn.example/x — clients rarely type https://."""
+    raw = (url or "").strip()
+    if not raw:
+        return ""
+    if raw.startswith(("https://", "http://")):
+        return raw
+    if raw.startswith("//"):
+        return f"https:{raw}"
+    host = raw.split("/")[0].split("?")[0].split(":")[0]
+    if " " in raw or "." not in host:
+        return raw
+    return f"https://{raw.lstrip('/')}"
+
+
+def valid_media_url(url: str) -> bool:
+    """First-party uploads may be relative /uploads/... or a CDN path."""
+    raw = (url or "").strip()
+    if not raw:
+        return False
+    lower = raw.lower()
+    if lower.startswith(("javascript:", "data:", "file:")):
+        return False
+    if raw.startswith("/") and not raw.startswith("//"):
+        return len(raw) > 1
+    if lower.startswith(("uploads/", "media/", "api/v1/uploads/")):
+        return True
+    return _valid_http_url(raw)
+
+
+def strip_ad_items(items: Optional[list[Any]]) -> list[Any]:
+    """Drop previously injected ads so a cached feed can be re-filled live."""
+    out: list[Any] = []
+    for item in items or []:
+        if isinstance(item, dict) and item.get("kind") == "ad":
+            continue
+        out.append(item)
+    return out
+
+
 def campaign_is_live(campaign: AdCampaign, now: Optional[datetime] = None) -> bool:
     if campaign.status != STATUS_APPROVED:
         return False
@@ -137,7 +178,7 @@ class AdsService:
         if destination_type not in DESTINATION_TYPES:
             raise AdsError("Тип перехода: ссылка, канал или пост")
         if destination_type == "url":
-            url = (destination_url or "").strip()
+            url = normalize_destination_url(destination_url)
             if require_ready and not url:
                 raise AdsError("Укажите ссылку для перехода")
             if url and not _valid_http_url(url):
@@ -179,14 +220,16 @@ class AdsService:
         if "name" in payload or campaign.name is None:
             name = _clip(payload.get("name", campaign.name), 80)
             if not name:
-                raise AdsError("Введите название кампании")
+                if require_ready:
+                    raise AdsError("Введите название кампании")
+                name = _clip(campaign.name, 80) or "Новая кампания"
             campaign.name = name
         if "surfaces" in payload or not campaign.surfaces:
             campaign.surfaces = _parse_surfaces(payload.get("surfaces", campaign.surfaces))
         if "destination_type" in payload:
             campaign.destination_type = str(payload.get("destination_type") or "url")
         if "destination_url" in payload:
-            url = _clip(payload.get("destination_url"), 2000) or None
+            url = normalize_destination_url(_clip(payload.get("destination_url"), 2000)) or None
             campaign.destination_url = url
         if "destination_channel_id" in payload:
             raw = payload.get("destination_channel_id")
@@ -234,14 +277,14 @@ class AdsService:
                 creative.cta_label = _clip(raw_creative.get("cta_label"), 32) or "Подробнее"
             if "image_url" in raw_creative:
                 image = _clip(raw_creative.get("image_url"), 2000) or None
-                if image and not _valid_http_url(image):
+                if image and not valid_media_url(image):
                     raise AdsError("Некорректная ссылка на изображение")
-                creative.image_url = image
+                creative.image_url = normalize_media_url(image) if image else None
             if "video_url" in raw_creative:
                 video = _clip(raw_creative.get("video_url"), 2000) or None
-                if video and not _valid_http_url(video):
+                if video and not valid_media_url(video):
                     raise AdsError("Некорректная ссылка на видео")
-                creative.video_url = video
+                creative.video_url = normalize_media_url(video) if video else None
             if "advertiser_name" in raw_creative:
                 creative.advertiser_name = _clip(raw_creative.get("advertiser_name"), 80) or None
 
@@ -291,8 +334,12 @@ class AdsService:
                 "title": creative.title if creative else "",
                 "body": creative.body if creative else "",
                 "cta_label": (creative.cta_label if creative else None) or "Подробнее",
-                "image_url": creative.image_url if creative else None,
-                "video_url": creative.video_url if creative else None,
+                "image_url": (
+                    normalize_media_url(creative.image_url) if creative and creative.image_url else None
+                ),
+                "video_url": (
+                    normalize_media_url(creative.video_url) if creative and creative.video_url else None
+                ),
                 "advertiser_name": creative.advertiser_name if creative else None,
             },
         }
@@ -496,8 +543,8 @@ class AdsService:
                 "title": creative.title,
                 "body": creative.body,
                 "cta_label": creative.cta_label or "Подробнее",
-                "image_url": creative.image_url,
-                "video_url": creative.video_url,
+                "image_url": normalize_media_url(creative.image_url) if creative.image_url else None,
+                "video_url": normalize_media_url(creative.video_url) if creative.video_url else None,
                 "destination_type": campaign.destination_type,
                 "destination_url": campaign.destination_url,
                 "destination_channel_id": campaign.destination_channel_id,
@@ -523,7 +570,7 @@ class AdsService:
         ):
             missing.append("creative")
         dest = campaign.destination_type or "url"
-        if dest == "url" and not (campaign.destination_url or "").strip():
+        if dest == "url" and not normalize_destination_url(campaign.destination_url):
             missing.append("destination")
         elif dest == "channel" and not campaign.destination_channel_id:
             missing.append("destination")
@@ -618,14 +665,23 @@ class AdsService:
         feed_type: str,
         cursor: Optional[str],
     ) -> list[dict[str, Any]]:
-        if following_only or (feed_type or "all") != "all" or cursor:
-            return items
-        if len(items) < 4:
-            return items
-        ad = self.pick_live_for_surface(surface="feed", user_id=user_id)
+        out = strip_ad_items(items)
+        if following_only or cursor:
+            return out
+        ft = (feed_type or "all").lower()
+        if ft == "reels":
+            surface = "reels"
+        elif ft == "all":
+            surface = "feed"
+        else:
+            return out
+        if len(out) < 4:
+            return out
+        ad = self.pick_live_for_surface(surface=surface, user_id=user_id)
+        if not ad and surface == "reels":
+            ad = self.pick_live_for_surface(surface="feed", user_id=user_id)
         if not ad:
-            return items
-        out = list(items)
+            return out
         index = min(8, len(out))
         if index < 3:
             index = 3

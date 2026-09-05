@@ -70,6 +70,18 @@ async def ads_meta():
     }
 
 
+@router.get("/inventory")
+async def ads_inventory(
+    surface: str = "feed",
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    key = (surface or "feed").strip().lower()
+    if key not in SURFACES:
+        key = "feed"
+    return {"item": AdsService(db).pick_live_for_surface(surface=key, user_id=current_user.id)}
+
+
 @router.get("/campaigns")
 async def list_my_campaigns(
     current_user: User = Depends(get_current_user_required),

@@ -6,6 +6,26 @@ class AdOrderIssue {
   final String message;
 }
 
+String normalizeAdDestinationUrl(String raw) {
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) return trimmed;
+  final lower = trimmed.toLowerCase();
+  if (lower.startsWith('https://') || lower.startsWith('http://')) {
+    return trimmed;
+  }
+  if (trimmed.startsWith('//')) return 'https:$trimmed';
+  return 'https://$trimmed';
+}
+
+bool isAdDestinationUrl(String raw) {
+  final url = normalizeAdDestinationUrl(raw);
+  if (url.isEmpty) return false;
+  final uri = Uri.tryParse(url);
+  return uri != null &&
+      (uri.isScheme('https') || uri.isScheme('http')) &&
+      (uri.host.trim().isNotEmpty);
+}
+
 int? parseAdPostId(String raw) {
   final trimmed = raw.trim();
   if (trimmed.isEmpty) return null;
@@ -54,12 +74,11 @@ List<AdOrderIssue> validateAdOrder({
   }
   switch (destinationType) {
     case 'url':
-      final url = destinationUrl.trim();
-      if (url.isEmpty || !(url.startsWith('https://') || url.startsWith('http://'))) {
+      if (!isAdDestinationUrl(destinationUrl)) {
         issues.add(
           const AdOrderIssue(
             'destination',
-            'Укажите ссылку, куда вести по нажатию — с https://',
+            'Укажите ссылку, куда вести по нажатию — можно без https://',
           ),
         );
       }

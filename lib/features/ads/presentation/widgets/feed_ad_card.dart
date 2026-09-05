@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../app/app_router.dart';
 import '../../../../services/ads_service.dart';
 import '../../../../utils/api_error_parser.dart';
+import '../../ads_order.dart';
 import 'ad_preview_card.dart';
 
 class FeedAdCard extends StatefulWidget {
@@ -62,7 +63,7 @@ class _FeedAdCardState extends State<FeedAdCard> {
       context.push(PostFeedRoute.pathFor(item.destinationPostId!));
       return;
     }
-    final raw = (item.destinationUrl ?? '').trim();
+    final raw = normalizeAdDestinationUrl(item.destinationUrl ?? '');
     final uri = Uri.tryParse(raw);
     if (uri == null || !uri.hasScheme) {
       if (!mounted) return;

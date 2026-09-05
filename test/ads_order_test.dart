@@ -18,7 +18,7 @@ void main() {
       body: '',
       imageUrl: null,
       destinationType: 'url',
-      destinationUrl: 'site.ru',
+      destinationUrl: 'нет ссылки',
       channelId: null,
       postIdRaw: '',
     );
@@ -30,12 +30,15 @@ void main() {
         body: 'С собой',
         imageUrl: null,
         destinationType: 'url',
-        destinationUrl: 'https://cafe.example',
+        destinationUrl: 'cafe.example',
         channelId: null,
         postIdRaw: '',
       ),
       isEmpty,
     );
+    expect(normalizeAdDestinationUrl('site.ru'), 'https://site.ru');
+    expect(isAdDestinationUrl('site.ru'), isTrue);
+    expect(isAdDestinationUrl('нет'), isFalse);
   });
 
   test('mergeFeedRows inserts an ad before the given post index', () {

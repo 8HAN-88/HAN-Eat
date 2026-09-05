@@ -32,17 +32,32 @@ class AdsService {
       if (draft.surfaces != null) 'surfaces': draft.surfaces,
       if (draft.destinationType != null)
         'destination_type': draft.destinationType,
-      if (draft.destinationUrl != null)
-        'destination_url': draft.destinationUrl,
-      if (draft.destinationChannelId != null)
-        'destination_channel_id': draft.destinationChannelId,
-      if (draft.destinationPostId != null)
-        'destination_post_id': draft.destinationPostId,
+      'destination_url': draft.destinationUrl,
+      'destination_channel_id': draft.destinationChannelId,
+      'destination_post_id': draft.destinationPostId,
       if (draft.startsAt != null) 'starts_at': draft.startsAt,
       if (draft.endsAt != null) 'ends_at': draft.endsAt,
       if (draft.dailyCap != null) 'daily_cap': draft.dailyCap,
       if (draft.creative != null) 'creative': draft.creative!.toJson(),
     };
+  }
+
+  static Future<FeedAdItem?> pickInventory({String surface = 'feed'}) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/ads/inventory').replace(
+        queryParameters: {'surface': surface},
+      ),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      if (data is! Map) return null;
+      final item = data['item'];
+      if (item is! Map) return null;
+      final parsed = FeedAdItem.fromJson(Map<String, dynamic>.from(item));
+      return parsed.campaignId > 0 ? parsed : null;
+    }
+    _throwForResponse(response, 'Не удалось загрузить рекламу');
   }
 
   static Future<List<AdCampaign>> listMine() async {
@@ -438,7 +453,9 @@ class AdCampaign {
       createdAt: json['created_at'] as String?,
       updatedAt: json['updated_at'] as String?,
       creative: AdCreative.fromJson(
-        json['creative'] as Map<String, dynamic>? ?? const {},
+        json['creative'] is Map
+            ? Map<String, dynamic>.from(json['creative'] as Map)
+            : const {},
       ),
       advertiser: json['advertiser'] is Map
           ? AdAdvertiser.fromJson(

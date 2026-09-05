@@ -268,10 +268,11 @@ class FeedResponse {
     final ads = <FeedAdPlacement>[];
     for (final item in itemsList) {
       try {
-        if (item is Map<String, dynamic>) {
-          final kind = item['kind'] as String? ?? 'post';
+        if (item is Map) {
+          final mapped = Map<String, dynamic>.from(item);
+          final kind = mapped['kind'] as String? ?? 'post';
           if (kind == 'ad') {
-            final ad = FeedAdItem.fromJson(item);
+            final ad = FeedAdItem.fromJson(mapped);
             if (ad.campaignId > 0) {
               ads.add(
                 FeedAdPlacement(
@@ -283,7 +284,7 @@ class FeedResponse {
             continue;
           }
           if (kind != 'post') continue;
-          posts.add(PostModel.fromJson(item));
+          posts.add(PostModel.fromJson(mapped));
         }
       } catch (e) {
         if (kDebugMode) {

@@ -113,18 +113,29 @@ class _AdCampaignEditorScreenState extends State<AdCampaignEditorScreen> {
     _channelId = campaign.destinationChannelId;
     _surfaces
       ..clear()
-      ..addAll(campaign.surfaces.isEmpty ? const ['feed'] : campaign.surfaces);
+      ..add('feed')
+      ..addAll(campaign.surfaces);
   }
 
   AdCampaignDraft _draft() {
     final title = _title.text.trim();
+    final name = _name.text.trim().isEmpty
+        ? (title.isEmpty ? 'Новая кампания' : title)
+        : _name.text.trim();
+    final surfaces = {
+      'feed',
+      ..._surfaces,
+    }.toList();
     return AdCampaignDraft(
-      name: _name.text.trim().isEmpty ? title : _name.text.trim(),
-      surfaces: _surfaces.toList(),
+      name: name,
+      surfaces: surfaces,
       destinationType: _destinationType,
-      destinationUrl: _url.text.trim(),
-      destinationChannelId: _channelId,
-      destinationPostId: parseAdPostId(_postId.text),
+      destinationUrl: _destinationType == 'url'
+          ? normalizeAdDestinationUrl(_url.text)
+          : null,
+      destinationChannelId: _destinationType == 'channel' ? _channelId : null,
+      destinationPostId:
+          _destinationType == 'post' ? parseAdPostId(_postId.text) : null,
       creative: AdCreativeDraft(
         title: title,
         body: _body.text.trim(),
@@ -143,7 +154,7 @@ class _AdCampaignEditorScreenState extends State<AdCampaignEditorScreen> {
       name: _title.text.trim().isEmpty ? 'Новая реклама' : _title.text.trim(),
       status: current?.status ?? 'draft',
       isLive: current?.isLive ?? false,
-      surfaces: _surfaces.toList(),
+      surfaces: {'feed', ..._surfaces}.toList(),
       destinationType: _destinationType,
       destinationUrl: _url.text.trim(),
       destinationChannelId: _channelId,
@@ -373,7 +384,7 @@ class _AdCampaignEditorScreenState extends State<AdCampaignEditorScreen> {
                 ),
               ],
             ),
-            if (_editable && _step == 2)
+            if (_editable)
               TextButton(
                 onPressed: _saving ? null : () => unawaited(_save(submit: false)),
                 child: const Text('Сохранить черновик'),
@@ -457,19 +468,20 @@ class _AdCampaignEditorScreenState extends State<AdCampaignEditorScreen> {
         _placeTile(
           id: 'feed',
           title: 'Лента рекомендаций',
-          subtitle: 'Карточка между постами, как в Instagram',
+          subtitle: 'Карточка между постами. Всегда включена — так заявку видно сразу после одобрения',
           icon: Icons.dynamic_feed_outlined,
+          lockedOn: true,
         ),
         _placeTile(
           id: 'reels',
           title: 'Рилсы',
-          subtitle: 'Вертикальный ролик в ленте рилсов',
+          subtitle: 'Та же карточка в ленте рилсов. Без видео поверх плеера — так стабильнее на iPhone',
           icon: Icons.video_library_outlined,
         ),
         _placeTile(
           id: 'channel',
           title: 'Стены каналов',
-          subtitle: 'Тихое объявление между постами канала',
+          subtitle: 'Тихая карточка между постами канала',
           icon: Icons.campaign_outlined,
         ),
       ],
@@ -481,12 +493,13 @@ class _AdCampaignEditorScreenState extends State<AdCampaignEditorScreen> {
     required String title,
     required String subtitle,
     required IconData icon,
+    bool lockedOn = false,
   }) {
-    final selected = _surfaces.contains(id);
+    final selected = lockedOn || _surfaces.contains(id);
     return Card(
       child: CheckboxListTile(
         value: selected,
-        onChanged: !_editable
+        onChanged: !_editable || lockedOn
             ? null
             : (value) {
                 setState(() {
@@ -600,7 +613,7 @@ class _AdCampaignEditorScreenState extends State<AdCampaignEditorScreen> {
             keyboardType: TextInputType.url,
             decoration: const InputDecoration(
               labelText: 'Ссылка',
-              hintText: 'https://ваш-сайт.ru',
+              hintText: 'ваш-сайт.ru или https://…',
             ),
           )
         else if (_destinationType == 'channel')
