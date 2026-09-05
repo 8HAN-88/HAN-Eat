@@ -7,7 +7,7 @@ from fastapi import APIRouter, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.core.config import settings
-from app.api.v1 import auth, users, posts, feed, channels, communities, media, moderation, likes, comments, saved_posts, reposts, reports, analytics, notifications, subscriptions, support, search, payments, recipes, community_upload, creator, system, legal, chats, link_preview, realtime, paid_features, bots, bot_chats, donations, stories, miniapps, stickers, calls, gifs, flex_subscription, ai_assist
+from app.api.v1 import auth, users, posts, feed, channels, communities, media, moderation, likes, comments, saved_posts, reposts, reports, analytics, notifications, subscriptions, support, search, payments, recipes, community_upload, creator, system, legal, chats, link_preview, realtime, paid_features, bots, bot_chats, donations, stories, miniapps, stickers, calls, gifs, flex_subscription, ai_assist, ads
 import app.services.user_realtime_hooks  # noqa: F401 — регистрация after_commit hooks
 from app.middleware.monitoring import PerformanceMonitoringMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
@@ -133,6 +133,7 @@ app.include_router(_retired_kitchen)
 app.include_router(recipes.router, prefix="/api/v1", tags=["Recipes"])
 app.include_router(community_upload.router, prefix="/api/v1", tags=["Community"])
 app.include_router(creator.router, prefix="/api/v1/creator", tags=["Creator"])
+app.include_router(ads.router, prefix="/api/v1/ads", tags=["Ads"])
 app.include_router(system.router, prefix="/api/v1/system", tags=["System"])
 app.include_router(legal.pages_router, tags=["Legal"])
 app.include_router(legal.api_router, prefix="/api/v1/legal", tags=["Legal"])

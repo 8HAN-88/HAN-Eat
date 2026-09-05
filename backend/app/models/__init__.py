@@ -59,6 +59,7 @@ from app.models.flex_subscription import (
     UserFlexSlot,
     UserFlexSubscription,
 )
+from app.models.ad import AdCampaign, AdClick, AdCreative, AdHide, AdImpression
 from app.models.miniapp import BotMiniApp, MiniAppInstall, MiniAppLaunch
 from app.models.sticker import (
     StickerPack,
@@ -93,5 +94,10 @@ __all__ = [
     "SubscriptionFeatureBlock",
     "UserFlexSubscription",
     "UserFlexSlot",
+    "AdCampaign",
+    "AdCreative",
+    "AdImpression",
+    "AdClick",
+    "AdHide",
 ]
 

@@ -59,6 +59,9 @@ import '../features/channels/presentation/channel_settings_screen.dart';
 import '../features/creator/presentation/scheduled_posts_screen.dart';
 import '../features/creator/presentation/promoted_posts_screen.dart';
 import '../features/creator/presentation/creator_tools_screen.dart';
+import '../features/ads/presentation/advertiser_hub_screen.dart';
+import '../features/ads/presentation/ad_campaign_editor_screen.dart';
+import '../features/ads/presentation/ads_review_screen.dart';
 import '../features/channels/presentation/channel_management_screen.dart';
 import '../features/notifications/presentation/notifications_screen.dart';
 import '../features/settings/notification_settings_page.dart';
@@ -476,6 +479,34 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: PromotedPostsRoute.name,
         pageBuilder: (context, state) =>
             const MaterialPage(child: PromotedPostsScreen()),
+      ),
+      GoRoute(
+        path: AdsHubRoute.path,
+        name: AdsHubRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: AdvertiserHubScreen()),
+      ),
+      GoRoute(
+        path: AdsCampaignEditorRoute.path,
+        name: AdsCampaignEditorRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: AdCampaignEditorScreen()),
+      ),
+      GoRoute(
+        path: AdsCampaignEditorRoute.editPath,
+        name: AdsCampaignEditorRoute.editName,
+        pageBuilder: (context, state) {
+          final id = int.tryParse(state.pathParameters['campaignId'] ?? '');
+          return MaterialPage(
+            child: AdCampaignEditorScreen(campaignId: id),
+          );
+        },
+      ),
+      GoRoute(
+        path: AdsReviewRoute.path,
+        name: AdsReviewRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: AdsReviewScreen()),
       ),
       GoRoute(
         path: SubscriptionRoute.path,
@@ -1572,6 +1603,25 @@ class ScheduledPostsRoute {
 class PromotedPostsRoute {
   static const path = '/creator/promoted-posts';
   static const name = 'promoted_posts';
+}
+
+class AdsHubRoute {
+  static const path = '/ads';
+  static const name = 'ads_hub';
+}
+
+class AdsCampaignEditorRoute {
+  static const path = '/ads/new';
+  static const name = 'ads_campaign_new';
+  static const editPath = '/ads/:campaignId';
+  static const editName = 'ads_campaign_edit';
+
+  static String pathFor(int campaignId) => '/ads/$campaignId';
+}
+
+class AdsReviewRoute {
+  static const path = '/moderation/ads';
+  static const name = 'ads_review';
 }
 
 class SubscriptionRoute {

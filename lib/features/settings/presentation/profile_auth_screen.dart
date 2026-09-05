@@ -349,6 +349,16 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
             ),
           ),
           const SizedBox(height: 16),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.campaign_outlined),
+              title: const Text('Заказать рекламу'),
+              subtitle: const Text('Собрать объявление и отправить заявку'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push(AdsHubRoute.path),
+            ),
+          ),
+          const SizedBox(height: 16),
           // Выход
           OutlinedButton.icon(
             icon: const Icon(Icons.logout),

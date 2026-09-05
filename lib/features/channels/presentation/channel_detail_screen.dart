@@ -23,7 +23,10 @@ import 'channel_search_screen.dart';
 import 'channel_create_content_sheet.dart';
 
 import 'channel_post_card.dart';
+import '../../ads/ads_order.dart';
+import '../../ads/presentation/widgets/feed_ad_card.dart';
 import '../../comments/presentation/show_post_comments_sheet.dart';
+import '../../../services/ads_service.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../monetization/presentation/support_button.dart';
 import '../../monetization/presentation/channel_subscription_button.dart';
@@ -747,6 +750,7 @@ class ChannelPostsList extends StatefulWidget {
 
 class ChannelPostsListState extends State<ChannelPostsList> {
   List<PostModel> _posts = [];
+  FeedAdItem? _channelAd;
   Object? _postsLoadError;
   bool _isLoading = true;
   bool _requestInFlight = false;
@@ -942,6 +946,16 @@ class ChannelPostsListState extends State<ChannelPostsList> {
         });
       }
     }
+    unawaited(_loadChannelAd());
+  }
+
+  Future<void> _loadChannelAd() async {
+    if (widget.postType != null) return;
+    try {
+      final ad = await AdsService.pickInventory(surface: 'channel');
+      if (!mounted) return;
+      setState(() => _channelAd = ad);
+    } catch (_) {}
   }
 
   // Загрузка старых постов (при прокрутке вниз)
@@ -1047,13 +1061,23 @@ class ChannelPostsListState extends State<ChannelPostsList> {
         break;
     }
 
+    final rows = mergeFeedRows(
+      posts: _posts,
+      ads: [
+        if (_channelAd != null && _posts.length >= 4)
+          FeedAdPlacement(
+            insertBeforePostIndex: 3,
+            item: _channelAd!,
+          ),
+      ],
+    );
     return ListView.builder(
       key: _pageStorageKey,
       controller: _scrollController,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      itemCount: _posts.length + (_hasMoreOld && _isLoadingMore ? 1 : 0),
+      itemCount: rows.length + (_hasMoreOld && _isLoadingMore ? 1 : 0),
       itemBuilder: (context, index) {
-        if (index == _posts.length) {
+        if (index == rows.length) {
           return _isLoadingMore
               ? const Padding(
                   padding: EdgeInsets.all(16),
@@ -1062,7 +1086,20 @@ class ChannelPostsListState extends State<ChannelPostsList> {
               : const SizedBox.shrink();
         }
 
-        final post = _posts[index];
+        final row = rows[index];
+        if (row.isAd && row.ad != null) {
+          return Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 600),
+              child: FeedAdCard(
+                item: row.ad!,
+                onHidden: () => setState(() => _channelAd = null),
+              ),
+            ),
+          );
+        }
+
+        final post = row.post as PostModel;
         return Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 600),
