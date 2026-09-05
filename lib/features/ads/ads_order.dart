@@ -8,22 +8,26 @@ class AdOrderIssue {
 
 String normalizeAdDestinationUrl(String raw) {
   final trimmed = raw.trim();
-  if (trimmed.isEmpty) return trimmed;
+  if (trimmed.isEmpty || trimmed.contains(RegExp(r'\s'))) {
+    return trimmed;
+  }
   final lower = trimmed.toLowerCase();
   if (lower.startsWith('https://') || lower.startsWith('http://')) {
     return trimmed;
   }
   if (trimmed.startsWith('//')) return 'https:$trimmed';
+  final host = trimmed.split('/').first.split('?').first.split(':').first;
+  if (!host.contains('.')) return trimmed;
   return 'https://$trimmed';
 }
 
 bool isAdDestinationUrl(String raw) {
   final url = normalizeAdDestinationUrl(raw);
-  if (url.isEmpty) return false;
+  if (url.isEmpty || url.contains(RegExp(r'\s'))) return false;
   final uri = Uri.tryParse(url);
   return uri != null &&
       (uri.isScheme('https') || uri.isScheme('http')) &&
-      (uri.host.trim().isNotEmpty);
+      uri.host.contains('.');
 }
 
 int? parseAdPostId(String raw) {

@@ -18,7 +18,7 @@ void main() {
       body: '',
       imageUrl: null,
       destinationType: 'url',
-      destinationUrl: 'нет ссылки',
+      destinationUrl: '',
       channelId: null,
       postIdRaw: '',
     );
