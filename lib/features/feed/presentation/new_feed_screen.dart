@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/app/app_variant.dart';
 import '../../../core/network/feed_connectivity.dart';
 import '../../../core/network/feed_load_helper.dart';
 import '../../../models/post_model.dart';
@@ -88,7 +87,10 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
   }
 
   String _cacheVariant([String? feedType, FeedSortMode? sortMode]) =>
-      'rec_${AppVariant.current.name}_${feedType ?? _feedType}_${(sortMode ?? _sortMode).value}';
+      FeedCacheKeys.recommendations(
+        feedType: feedType ?? _feedType,
+        sort: (sortMode ?? _sortMode).value,
+      );
 
   @override
   bool get wantKeepAlive => true;
@@ -372,7 +374,16 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
         !_loadKickoff && _posts.isEmpty && !_isLoading;
     final emptyOrLoading = showInitialPlaceholder ||
             (_posts.isEmpty && _isLoading)
-        ? const PostListSkeletonLoader(itemCount: 5)
+        ? ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.only(bottom: 24),
+            children: [
+              FeedStoriesStrip(refreshToken: _storiesRefreshToken),
+              const PostCardSkeleton(),
+              const PostCardSkeleton(),
+              const PostCardSkeleton(),
+            ],
+          )
         : _posts.isEmpty
             ? ValueListenableBuilder<bool>(
                 valueListenable: feedScrollChromeHidden,

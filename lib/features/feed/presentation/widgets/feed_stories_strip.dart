@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../services/auth_service.dart';
 import '../../../../services/server_config.dart';
+import '../../../../services/story_feed_cache.dart';
 import '../../../stories/data/story_models.dart';
 import '../../../stories/data/story_service.dart';
 import '../../../stories/presentation/story_camera_screen.dart';
@@ -33,6 +34,11 @@ class _FeedStoriesStripState extends State<FeedStoriesStrip> {
   @override
   void initState() {
     super.initState();
+    final cached = StoryService.groupByAuthor(StoryFeedCache.peek());
+    if (cached.isNotEmpty) {
+      _groups = cached;
+      _loading = false;
+    }
     unawaited(_load());
   }
 

@@ -13,6 +13,7 @@ import '../services/notification_settings_service.dart';
 import '../services/feed_sync_service.dart';
 import '../services/feed_cache_service.dart';
 import '../services/feed_api_cache.dart';
+import '../services/story_feed_cache.dart';
 import '../services/saved_posts_service.dart';
 import '../services/chat_cache_service.dart';
 import '../services/profile_cache_service.dart';
@@ -35,6 +36,9 @@ Future<void> _warmMessengerCaches() {
   return Future.wait<void>([
     FeedApiCache.warmUp().catchError((Object e) {
       debugPrint('FeedApiCache warmUp: $e');
+    }),
+    StoryFeedCache.warmUp().catchError((Object e) {
+      debugPrint('StoryFeedCache warmUp: $e');
     }),
     ChatCacheService.warmUp().catchError((Object e) {
       debugPrint('ChatCacheService warmUp: $e');
@@ -167,6 +171,9 @@ Future<void> bootstrapServicesDeferred() async {
       Future.wait<void>([
         FeedApiCache.warmUp().catchError((Object e) {
           debugPrint('FeedApiCache warmUp (web): $e');
+        }),
+        StoryFeedCache.warmUp().catchError((Object e) {
+          debugPrint('StoryFeedCache warmUp (web): $e');
         }),
         ChatCacheService.warmUp().catchError((Object e) {
           debugPrint('ChatCacheService warmUp (web): $e');

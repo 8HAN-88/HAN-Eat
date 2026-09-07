@@ -242,31 +242,17 @@ class AuthService {
       var user = await getCurrentUser();
       final token = await getAccessToken();
 
-      // HTML auth gate may persist tokens before Flutter; recover user via API
-      // if the cached user JSON is missing/corrupt.
+      // HTML auth gate may persist tokens before Flutter. Never block first
+      // paint on /users/me — Instagram opens chrome from disk on 3G.
       if (user == null &&
           token != null &&
           token.isNotEmpty &&
           (kIsWeb || deferTokenRefresh)) {
-        try {
-          final uri = Uri.parse('$baseUrl/users/me');
-          final response = await http
-              .get(uri, headers: {'Authorization': 'Bearer $token'})
-              .timeout(
-                kIsWeb
-                    ? ColdStartPolicy.webUsersMeTimeout
-                    : const Duration(seconds: 8),
-              );
-          if (response.statusCode == 200) {
-            final restored = User.fromJson(
-              jsonDecode(response.body) as Map<String, dynamic>,
-            );
-            user = restored;
-            await _saveUser(restored);
-            debugPrint('✅ AuthService: user restored from /users/me');
-          }
-        } catch (e) {
-          debugPrint('⚠️ AuthService: /users/me restore failed: $e');
+        if (deferTokenRefresh) {
+          unawaited(_restoreUserFromMe(token));
+        } else {
+          await _restoreUserFromMe(token);
+          user = instance._cachedUser ?? await getCurrentUser();
         }
       }
 
@@ -335,6 +321,50 @@ class AuthService {
     } catch (e) {
       debugPrint('❌ AuthService: Ошибка при загрузке пользователя: $e');
       instance._cachedUser = null;
+    }
+  }
+
+  /// Только диск: пользователь + токен. Без сети — чтобы на 3G сразу открыть ленту.
+  static Future<bool> restoreLocalSession() async {
+    try {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.reload();
+      } catch (_) {}
+      final user = await getCurrentUser();
+      final token = await getAccessToken();
+      if (user == null || token == null || token.isEmpty) return false;
+      instance._cachedUser = user;
+      AccountSessionService.restoreCachedUser(user);
+      sessionRevision.value++;
+      return true;
+    } catch (e) {
+      debugPrint('AuthService.restoreLocalSession: $e');
+      return false;
+    }
+  }
+
+  static Future<void> _restoreUserFromMe(String token) async {
+    try {
+      final uri = Uri.parse('$baseUrl/users/me');
+      final response = await http
+          .get(uri, headers: {'Authorization': 'Bearer $token'})
+          .timeout(
+            kIsWeb
+                ? ColdStartPolicy.webUsersMeTimeout
+                : const Duration(seconds: 8),
+          );
+      if (response.statusCode != 200) return;
+      final restored = User.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+      await _saveUser(restored);
+      instance._cachedUser = restored;
+      AccountSessionService.restoreCachedUser(restored);
+      sessionRevision.value++;
+      debugPrint('✅ AuthService: user restored from /users/me');
+    } catch (e) {
+      debugPrint('⚠️ AuthService: /users/me restore failed: $e');
     }
   }
 

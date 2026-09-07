@@ -5,20 +5,30 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../services/api_service.dart';
 import '../../../services/media_upload_service.dart';
+import '../../../services/story_feed_cache.dart';
 import 'story_models.dart';
 
 class StoryService {
   static Future<List<StoryDto>> fetchActiveStories({int limit = 100}) async {
-    final response = await http.get(
-      ApiService.uri('/stories', {'limit': '$limit'}),
-      headers: await ApiService.authHeaders(),
-    );
-    ApiService.ensureSuccess(response);
-    final data = jsonDecode(response.body) as List<dynamic>;
-    return data
-        .map((item) => StoryDto.fromJson(item as Map<String, dynamic>))
-        .where((story) => !story.isExpired)
-        .toList();
+    try {
+      final response = await http.get(
+        ApiService.uri('/stories', {'limit': '$limit'}),
+        headers: await ApiService.authHeaders(),
+      );
+      ApiService.ensureSuccess(response);
+      final data = jsonDecode(response.body) as List<dynamic>;
+      final stories = data
+          .whereType<Map>()
+          .map((item) => StoryDto.fromJson(Map<String, dynamic>.from(item)))
+          .where((story) => !story.isExpired)
+          .toList();
+      await StoryFeedCache.save(stories);
+      return stories;
+    } catch (_) {
+      final cached = StoryFeedCache.peek();
+      if (cached.isNotEmpty) return cached;
+      rethrow;
+    }
   }
 
   static Future<List<StoryDto>> fetchMyStories() async {
