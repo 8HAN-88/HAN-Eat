@@ -680,9 +680,9 @@
         var scriptEl = null;
 
         function maybeHideSplash() {
-          // Hide as soon as Flutter paints StartupShell. Waiting for the
-          // deferred home route kept the HTML splash on iPhone for 20–30s.
-          if (splashHidden || !firstFrame) return;
+          // One splash only: keep HTML until Flutter has login/home, not the
+          // second branded spinner from StartupShell.
+          if (splashHidden || !firstFrame || !primaryUiReady) return;
           splashHidden = true;
           settled = true;
           markBootOk();
@@ -786,11 +786,11 @@
         });
 
         setTimeout(function () {
-          if (firstFrame && !primaryUiReady) {
+          if (firstFrame && !splashHidden) {
             primaryUiReady = true;
             maybeHideSplash();
           }
-        }, 2500);
+        }, 8000);
 
         setTimeout(function () {
           if (!firstFrame && sub) {
@@ -820,19 +820,11 @@
       }
 
       function openContinueOrAuto() {
-        // Обычный пользователь видит только «Открываем…» — без технических текстов.
-        showOnly('continue-gate');
-        var loading = document.getElementById('continue-loading');
-        var retry = document.getElementById('continue-retry');
-        if (loading) loading.style.display = 'block';
-        if (retry) retry.style.display = 'none';
+        // Не второй сплэш «Открываем…»: сразу тот же boot-splash.
         clearError();
         ping(hasBootOk() ? 'continue=1&auto=1' : 'continue=1&first=1');
-
         ensureLatestShellThen(function () {
-          setTimeout(function () {
-            startFlutterAtApp();
-          }, hasBootOk() ? 40 : 100);
+          startFlutterAtApp();
         });
       }
 

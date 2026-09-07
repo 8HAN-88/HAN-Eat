@@ -36,6 +36,7 @@ class _StartupShellState extends State<StartupShell> {
   bool _fullAppLibraryLoaded = false;
   bool _fullAppLoadStarted = false;
   bool _hasLocalSession = false;
+  bool _htmlSplashSignaled = false;
 
   void _enterFullAppIfSessionReady() {
     if (!kIsWeb || AuthService.instance.currentUser != null) {
@@ -70,9 +71,6 @@ class _StartupShellState extends State<StartupShell> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_runBootstrapInBackground());
     });
-    if (kIsWeb) {
-      notifyPrimaryUiReady();
-    }
     Future<void>.delayed(Duration(seconds: kIsWeb ? 4 : 12), () {
       if (!mounted || AppBootstrapState.authReady.value) return;
       debugPrint('⚠️ StartupShell: timeout — открываем UI');
@@ -170,6 +168,7 @@ class _StartupShellState extends State<StartupShell> {
       AppBootstrapState.servicesReady.value = false;
       AppBootstrapState.primaryUiReady.value = false;
       AppBootstrapState.loadFullApp.value = false;
+      _htmlSplashSignaled = false;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_ensureFullAppLoaded());
@@ -235,6 +234,25 @@ class _StartupShellState extends State<StartupShell> {
       }
       _openMainUi();
     }
+  }
+
+  void _signalHtmlSplashCanHide() {
+    if (!kIsWeb || _htmlSplashSignaled) return;
+    _htmlSplashSignaled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      notifyPrimaryUiReady();
+    });
+  }
+
+  /// На web HTML-сплэш уже крутится — второй логотип не рисуем.
+  Widget _underHtmlSplash() {
+    return const MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        backgroundColor: _kStartupCanvas,
+        body: SizedBox.expand(),
+      ),
+    );
   }
 
   Widget _loadingApp({String? subtitle}) {
@@ -338,25 +356,31 @@ class _StartupShellState extends State<StartupShell> {
       valueListenable: AppBootstrapState.authReady,
       builder: (context, ready, _) {
         if (!ready) {
-          if (_hasLocalSession) return const StartupHomePlaceholder();
-          return _loadingApp();
+          if (_hasLocalSession) {
+            _signalHtmlSplashCanHide();
+            return const StartupHomePlaceholder();
+          }
+          return kIsWeb ? _underHtmlSplash() : _loadingApp();
         }
 
         return ValueListenableBuilder<bool>(
           valueListenable: AppBootstrapState.loadFullApp,
           builder: (context, wantFull, _) {
             if (kIsWeb && !wantFull && !_hasLocalSession) {
+              _signalHtmlSplashCanHide();
               return const WebAuthApp();
             }
             if (!_fullAppLibraryLoaded) {
               unawaited(_ensureFullAppLoaded());
               if (_hasLocalSession || AuthService.instance.currentUser != null) {
+                _signalHtmlSplashCanHide();
                 return const StartupHomePlaceholder();
               }
-              return _loadingApp(
-                subtitle: kIsWeb ? 'Загружаем приложение…' : null,
-              );
+              return kIsWeb
+                  ? _underHtmlSplash()
+                  : _loadingApp();
             }
+            _signalHtmlSplashCanHide();
             return ProviderScope(child: full_app.HanEatApp());
           },
         );
