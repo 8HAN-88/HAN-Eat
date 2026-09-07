@@ -11,6 +11,7 @@ import '../../../core/theme/color_schemes.dart';
 import '../../../core/web/boot_ready_signal.dart';
 import '../../../services/auth_service.dart';
 import '../../../widgets/app_gradient_background.dart';
+import '../../../widgets/telegram_connection_chrome.dart';
 import '../../../widgets/telegram_ui.dart';
 import '../../channels/application/channels_list_refresh_provider.dart';
 import '../application/chats_hub_refresh_provider.dart';
@@ -220,8 +221,8 @@ class _ChatsNeoHeader extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: Text(
-                    'Сообщения',
+                  child: TelegramConnectionAwareTitle(
+                    fallback: 'Сообщения',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                           fontWeight: FontWeight.w900,
                           letterSpacing: -0.8,
