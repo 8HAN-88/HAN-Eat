@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/app/app_variant.dart';
 import '../../../core/network/feed_connectivity.dart';
 import '../../../core/network/feed_load_helper.dart';
 import '../../../models/post_model.dart';
@@ -73,7 +72,7 @@ class _SubscriptionsFeedScreenState
   int _storiesRefreshToken = 0;
 
   String get _cacheVariant =>
-      'following_${AppVariant.current.name}_${_feedType}_${_sortMode.value}';
+      FeedCacheKeys.following(feedType: _feedType, sort: _sortMode.value);
 
   Future<void> _refreshAll() async {
     setState(() => _storiesRefreshToken++);
@@ -364,7 +363,15 @@ class _SubscriptionsFeedScreenState
       child: RefreshIndicator(
         onRefresh: _refreshAll,
         child: _posts.isEmpty && _isLoading
-            ? const PostListSkeletonLoader(itemCount: 5)
+            ? ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [
+                  FeedStoriesStrip(refreshToken: _storiesRefreshToken),
+                  const PostCardSkeleton(),
+                  const PostCardSkeleton(),
+                  const PostCardSkeleton(),
+                ],
+              )
             : ValueListenableBuilder<bool>(
                 valueListenable: feedScrollChromeHidden,
                 builder: (context, chromeHidden, _) {

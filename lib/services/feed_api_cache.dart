@@ -3,7 +3,31 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/app/app_variant.dart';
 import '../models/post_model.dart';
+
+/// Ключи кэша ленты — те же, что рисует UI.
+class FeedCacheKeys {
+  FeedCacheKeys._();
+
+  static String recommendations({
+    String feedType = 'all',
+    String sort = 'personalized',
+  }) =>
+      'rec_${AppVariant.current.name}_${feedType}_$sort';
+
+  static String following({
+    String feedType = 'all',
+    String sort = 'recent',
+  }) =>
+      'following_${AppVariant.current.name}_${feedType}_$sort';
+
+  static String reels({bool followingOnly = false}) =>
+      followingOnly ? 'rec_reels_following' : 'rec_reels';
+
+  static const legacyRecommendations = 'rec_all_personalized';
+  static const legacyFollowing = 'following_all_recent';
+}
 
 /// Последняя успешная выдача API `/feed` для офлайн-режима (SharedPreferences).
 class FeedApiCache {
@@ -11,18 +35,40 @@ class FeedApiCache {
 
   static final Map<String, List<PostModel>> _memory = {};
 
-  static const defaultWarmVariants = <String>[
-    'rec_all_personalized',
-    'following_all_recent',
-    'rec_reels',
-    'rec_reels_following',
+  static final defaultWarmVariants = <String>[
+    FeedCacheKeys.recommendations(),
+    FeedCacheKeys.legacyRecommendations,
+    FeedCacheKeys.following(),
+    FeedCacheKeys.legacyFollowing,
+    FeedCacheKeys.reels(),
+    FeedCacheKeys.reels(followingOnly: true),
   ];
+
+  static List<String> aliasesOf(String variant) {
+    if (variant == FeedCacheKeys.recommendations()) {
+      return const [FeedCacheKeys.legacyRecommendations, 'rec_all'];
+    }
+    if (variant == FeedCacheKeys.following()) {
+      return const [FeedCacheKeys.legacyFollowing, 'following'];
+    }
+    return const [];
+  }
 
   static String _prefsKey(String variant) => 'feed_api_cache_v1_$variant';
 
-  /// Синхронно из RAM после [warmUp].
+  /// Синхронно из RAM после [warmUp]. Пустой ключ — смотрим старые алиасы.
   static List<PostModel> peek(String variant) {
-    return List<PostModel>.from(_memory[variant] ?? const []);
+    final hit = _memory[variant];
+    if (hit != null && hit.isNotEmpty) {
+      return List<PostModel>.from(hit);
+    }
+    for (final alias in aliasesOf(variant)) {
+      final other = _memory[alias];
+      if (other != null && other.isNotEmpty) {
+        return List<PostModel>.from(other);
+      }
+    }
+    return const [];
   }
 
   /// Прогрев дискового кэша в память до открытия ленты.
@@ -99,10 +145,22 @@ class FeedApiCache {
   }
 
   static Future<List<PostModel>> load(String variant) async {
-    if (_memory.containsKey(variant)) {
-      return List<PostModel>.from(_memory[variant]!);
+    final memory = _memory[variant];
+    if (memory != null && memory.isNotEmpty) {
+      return List<PostModel>.from(memory);
     }
-    final posts = await _loadFromDisk(variant);
+    var posts = await _loadFromDisk(variant);
+    if (posts.isEmpty) {
+      for (final alias in aliasesOf(variant)) {
+        final aliased = _memory[alias];
+        if (aliased != null && aliased.isNotEmpty) {
+          posts = List<PostModel>.from(aliased);
+          break;
+        }
+        posts = await _loadFromDisk(alias);
+        if (posts.isNotEmpty) break;
+      }
+    }
     _memory[variant] = posts;
     return List<PostModel>.from(posts);
   }

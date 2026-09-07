@@ -38,5 +38,32 @@ void main() {
       final loaded = await FeedApiCache.load('missing');
       expect(loaded, isEmpty);
     });
+
+    test('peek falls back to legacy recommendation key', () async {
+      SharedPreferences.setMockInitialValues({});
+      await FeedApiCache.clear(FeedCacheKeys.recommendations());
+      await FeedApiCache.clear(FeedCacheKeys.legacyRecommendations);
+      await FeedApiCache.clear('rec_all');
+      final posts = [
+        PostModel(
+          id: 7,
+          type: 'text',
+          status: 'published',
+          createdAt: DateTime(2026, 1, 1),
+          userId: 1,
+          likesCount: 0,
+          commentsCount: 0,
+          repostsCount: 0,
+          viewsCount: 0,
+          isLiked: false,
+          title: 'Cached',
+        ),
+      ];
+      await FeedApiCache.save(FeedCacheKeys.legacyRecommendations, posts);
+      expect(
+        FeedApiCache.peek(FeedCacheKeys.recommendations()).single.id,
+        7,
+      );
+    });
   });
 }

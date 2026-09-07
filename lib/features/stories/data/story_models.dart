@@ -12,11 +12,18 @@ class StoryAuthor {
   final String? avatarUrl;
 
   factory StoryAuthor.fromJson(Map<String, dynamic> json) => StoryAuthor(
-        id: json['id'] as int,
+        id: (json['id'] as num?)?.toInt() ?? 0,
         name: json['name'] as String? ?? 'Пользователь',
         username: json['username'] as String?,
         avatarUrl: json['avatar_url'] as String?,
       );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'username': username,
+        'avatar_url': avatarUrl,
+      };
 }
 
 class StoryReactionSummary {
@@ -31,8 +38,13 @@ class StoryReactionSummary {
   factory StoryReactionSummary.fromJson(Map<String, dynamic> json) =>
       StoryReactionSummary(
         emoji: json['emoji'] as String? ?? '',
-        count: json['count'] as int? ?? 0,
+        count: (json['count'] as num?)?.toInt() ?? 0,
       );
+
+  Map<String, dynamic> toJson() => {
+        'emoji': emoji,
+        'count': count,
+      };
 }
 
 class StoryDto {
@@ -91,6 +103,22 @@ class StoryDto {
       myReaction: json['my_reaction'] as String?,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'user_id': userId,
+        'media_url': mediaUrl,
+        'thumbnail_url': thumbnailUrl,
+        'media_type': mediaType,
+        'caption': caption,
+        'visibility': visibility,
+        'views_count': viewsCount,
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'expires_at': expiresAt.toUtc().toIso8601String(),
+        'author': author.toJson(),
+        'reactions': reactions.map((e) => e.toJson()).toList(),
+        'my_reaction': myReaction,
+      };
 
   StoryDto copyWith({
     int? viewsCount,

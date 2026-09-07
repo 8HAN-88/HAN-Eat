@@ -6,9 +6,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/web/boot_ready_signal.dart';
 import '../services/auth_service.dart';
+import '../services/feed_api_cache.dart';
+import '../services/story_feed_cache.dart';
 import '../services/web_app_update_service.dart';
 import '../utils/api_error_parser.dart';
 import '../widgets/app_brand_logo.dart';
+import 'startup_home_placeholder.dart';
 import 'app.dart' deferred as full_app;
 import 'app_bootstrap_state.dart';
 import 'bootstrap.dart' deferred as heavy_boot;
@@ -32,6 +35,8 @@ class _StartupShellState extends State<StartupShell> {
   Object? _fullAppLoadError;
   bool _fullAppLibraryLoaded = false;
   bool _fullAppLoadStarted = false;
+  bool _hasLocalSession = false;
+  bool _htmlSplashSignaled = false;
 
   void _enterFullAppIfSessionReady() {
     if (!kIsWeb || AuthService.instance.currentUser != null) {
@@ -62,12 +67,10 @@ class _StartupShellState extends State<StartupShell> {
     // Качаем deferred-чанк сразу, параллельно с auth — иначе iPhone Safari
     // сидит 20–30 с на «Загружаем приложение…» после восстановления сессии.
     unawaited(_ensureFullAppLoaded());
+    unawaited(_openFromDiskLikeInstagram());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_runBootstrapInBackground());
     });
-    if (kIsWeb) {
-      notifyPrimaryUiReady();
-    }
     Future<void>.delayed(Duration(seconds: kIsWeb ? 4 : 12), () {
       if (!mounted || AppBootstrapState.authReady.value) return;
       debugPrint('⚠️ StartupShell: timeout — открываем UI');
@@ -165,6 +168,7 @@ class _StartupShellState extends State<StartupShell> {
       AppBootstrapState.servicesReady.value = false;
       AppBootstrapState.primaryUiReady.value = false;
       AppBootstrapState.loadFullApp.value = false;
+      _htmlSplashSignaled = false;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_ensureFullAppLoaded());
@@ -172,12 +176,29 @@ class _StartupShellState extends State<StartupShell> {
     });
   }
 
+  Future<void> _openFromDiskLikeInstagram() async {
+    unawaited(FeedApiCache.warmUp());
+    unawaited(StoryFeedCache.warmUp());
+    try {
+      final restored = await AuthService.restoreLocalSession().timeout(
+        const Duration(milliseconds: 600),
+      );
+      if (!mounted) return;
+      if (restored) {
+        setState(() => _hasLocalSession = true);
+        _openMainUi();
+      }
+    } catch (e) {
+      debugPrint('StartupShell local session: $e');
+    }
+  }
+
   Future<void> _runBootstrapInBackground() async {
     try {
       await bootstrapEarly().timeout(
-        const Duration(seconds: 8),
+        Duration(seconds: kIsWeb ? 2 : 8),
         onTimeout: () {
-          debugPrint('⚠️ bootstrapEarly: timeout 8s — продолжаем');
+          debugPrint('⚠️ bootstrapEarly: timeout — продолжаем');
         },
       );
     } catch (e, st) {
@@ -197,17 +218,41 @@ class _StartupShellState extends State<StartupShell> {
         setState(() => _error = e);
       }
     } finally {
+      if (AuthService.instance.currentUser != null && mounted) {
+        setState(() => _hasLocalSession = true);
+      }
       if (kIsWeb && AuthService.instance.currentUser == null) {
         try {
           final token = await AuthService.getAccessToken();
           if (token != null && token.isNotEmpty) {
-            debugPrint('StartupShell: токен есть — ждём user, не логин');
+            debugPrint('StartupShell: токен есть — открываем оболочку');
+            if (mounted) setState(() => _hasLocalSession = true);
+            _openMainUi();
             return;
           }
         } catch (_) {}
       }
       _openMainUi();
     }
+  }
+
+  void _signalHtmlSplashCanHide() {
+    if (!kIsWeb || _htmlSplashSignaled) return;
+    _htmlSplashSignaled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      notifyPrimaryUiReady();
+    });
+  }
+
+  /// На web HTML-сплэш уже крутится — второй логотип не рисуем.
+  Widget _underHtmlSplash() {
+    return const MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        backgroundColor: _kStartupCanvas,
+        body: SizedBox.expand(),
+      ),
+    );
   }
 
   Widget _loadingApp({String? subtitle}) {
@@ -310,20 +355,32 @@ class _StartupShellState extends State<StartupShell> {
     return ValueListenableBuilder<bool>(
       valueListenable: AppBootstrapState.authReady,
       builder: (context, ready, _) {
-        if (!ready) return _loadingApp();
+        if (!ready) {
+          if (_hasLocalSession) {
+            _signalHtmlSplashCanHide();
+            return const StartupHomePlaceholder();
+          }
+          return kIsWeb ? _underHtmlSplash() : _loadingApp();
+        }
 
         return ValueListenableBuilder<bool>(
           valueListenable: AppBootstrapState.loadFullApp,
           builder: (context, wantFull, _) {
-            if (kIsWeb && !wantFull) {
+            if (kIsWeb && !wantFull && !_hasLocalSession) {
+              _signalHtmlSplashCanHide();
               return const WebAuthApp();
             }
             if (!_fullAppLibraryLoaded) {
               unawaited(_ensureFullAppLoaded());
-              return _loadingApp(
-                subtitle: kIsWeb ? 'Загружаем приложение…' : null,
-              );
+              if (_hasLocalSession || AuthService.instance.currentUser != null) {
+                _signalHtmlSplashCanHide();
+                return const StartupHomePlaceholder();
+              }
+              return kIsWeb
+                  ? _underHtmlSplash()
+                  : _loadingApp();
             }
+            _signalHtmlSplashCanHide();
             return ProviderScope(child: full_app.HanEatApp());
           },
         );
