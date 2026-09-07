@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 bool get isDomReelVideoPreferred => false;
 
+void forceReleaseDomVideoTouchShield() {}
+
 Widget buildWebDomVideoLayer({
   required List<String> urls,
   required bool active,

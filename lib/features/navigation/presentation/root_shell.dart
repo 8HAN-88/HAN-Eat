@@ -67,6 +67,7 @@ class _RootShellState extends ConsumerState<RootShell> {
   int _unreadDmCount = 0;
   int _unreadChannelCount = 0;
   bool _shellIndexFixScheduled = false;
+  late final Listenable _connectivityListenable;
 
   static int _clampShellIndex(int index) =>
       index.clamp(0, RootShell._destinations.length - 1);
@@ -110,6 +111,11 @@ class _RootShellState extends ConsumerState<RootShell> {
   @override
   void initState() {
     super.initState();
+    _connectivityListenable = Listenable.merge([
+      FeedSyncService.onlineListenable,
+      ApiReachabilityService.instance.isApiReachable,
+      ApiReachabilityService.instance.isApiConnecting,
+    ]);
     AppBootstrapState.primaryUiReady.value = true;
     notifyPrimaryUiReady();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -424,11 +430,7 @@ class _RootShellState extends ConsumerState<RootShell> {
               backgroundColor: pageBg,
               extendBody: true,
               body: ListenableBuilder(
-                listenable: Listenable.merge([
-                  FeedSyncService.onlineListenable,
-                  ApiReachabilityService.instance.isApiReachable,
-                  ApiReachabilityService.instance.isApiConnecting,
-                ]),
+                listenable: _connectivityListenable,
                 builder: (context, _) {
                   final online = FeedSyncService.onlineListenable.value;
                   return Column(

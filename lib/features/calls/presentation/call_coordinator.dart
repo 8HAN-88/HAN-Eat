@@ -128,7 +128,9 @@ class CallCoordinator {
     final entry = _callOverlay;
     _callOverlay = null;
     minimized.value = false;
-    entry?.remove();
+    try {
+      entry?.remove();
+    } catch (_) {}
     final c = _callUiCompleter;
     _callUiCompleter = null;
     if (c != null && !c.isCompleted) c.complete();
