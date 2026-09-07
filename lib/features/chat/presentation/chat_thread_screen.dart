@@ -37,6 +37,7 @@ import '../../../core/theme/color_schemes.dart';
 import '../../../core/haptics/app_haptics.dart';
 import '../../../core/network/feed_load_helper.dart';
 import '../../../core/network/haneat_http_client.dart';
+import '../../../core/network/telegram_connection_status.dart';
 import '../../../core/platform/device_location.dart';
 import '../../../core/platform/web_page_visibility.dart';
 import '../../../models/chat_models.dart';
@@ -14656,12 +14657,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final apiConnecting = ApiReachabilityService.instance.isApiConnecting.value;
     String subtitle = '';
     // Telegram-style: connection status takes priority over last-seen.
-    if (!FeedSyncService.onlineListenable.value) {
-      subtitle = 'Ожидание сети…';
-    } else if (!apiReachable || apiConnecting) {
-      subtitle = 'соединение…';
-    } else if (!_sseConnected) {
-      subtitle = 'обновление…';
+    final connectionPhase = TelegramConnectionStatus.resolve(
+      deviceOnline: FeedSyncService.onlineListenable.value,
+      apiReachable: apiReachable,
+      apiConnecting: apiConnecting,
+      realtimeConnected: _sseConnected,
+    );
+    final connectionLabel = TelegramConnectionStatus.labelFor(connectionPhase);
+    if (connectionLabel != null) {
+      subtitle = connectionLabel;
     } else if (isSaved) {
       subtitle = 'Сохраняйте сообщения и заметки';
     } else if (_peerTyping) {
@@ -14674,9 +14678,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
     if (_muted &&
         subtitle.isNotEmpty &&
-        !subtitle.startsWith('соединение') &&
-        !subtitle.startsWith('обновление') &&
-        !subtitle.startsWith('Ожидание')) {
+        !TelegramConnectionStatus.isConnectionLabel(subtitle)) {
       subtitle =
           '$subtitle · ${formatChatMuteUntilLabel(
             _conversation.mutedUntil,
@@ -14688,9 +14690,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         notifyMode: _conversation.notifyMode,
       );
     }
-    final connectingHeader = subtitle == 'соединение…' ||
-        subtitle == 'обновление…' ||
-        subtitle == 'Ожидание сети…';
+    final connectingHeader =
+        TelegramConnectionStatus.isConnectionLabel(subtitle);
     final subtitleStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
           color: isSaved
               ? scheme.onSurfaceVariant

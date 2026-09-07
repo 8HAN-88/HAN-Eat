@@ -84,7 +84,6 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
   /// Peer user ids from the Contacts list (for folder contacts/non_contacts).
   Set<int> _contactUserIds = {};
   bool _showGesturesHint = false;
-  bool _servingFromCache = false;
   Map<int, ChatDraft> _drafts = {};
   /// conversationId → (userId → typing expires at, local clock).
   final Map<int, Map<int, DateTime>> _typingUntilByUser = {};
@@ -423,7 +422,6 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     _entries
       ..clear()
       ..addAll(cachedRest.map(ChatInboxEntry.new));
-    _servingFromCache = true;
     _loading = false;
     unawaited(_refreshDrafts());
   }
@@ -1031,7 +1029,6 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
             ..addAll(cachedRest.map(ChatInboxEntry.new));
           _loading = false;
           _error = null;
-          _servingFromCache = true;
         });
         _warmTopThreads(cachedRest);
       } else {
@@ -1116,7 +1113,6 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         _error = null;
         _chatsPartialError = null;
         _loading = false;
-        _servingFromCache = false;
       });
       unawaited(_refreshDrafts());
     }
@@ -1147,7 +1143,6 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         setState(() {
           _error = null;
           _loading = false;
-          _servingFromCache = true;
         });
         return;
       }
@@ -1162,7 +1157,6 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         _chatsPartialError = null;
         _joinInboxPartialError = null;
         _loading = false;
-        _servingFromCache = false;
       });
       return;
     }
@@ -1240,7 +1234,6 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
               ? joinInboxError
               : null;
       _loading = false;
-      _servingFromCache = false;
     });
     if (isTransientRateLimitError(chatsError) ||
         isTransientRateLimitError(joinInboxError)) {
@@ -2259,59 +2252,6 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     }
   }
 
-  Widget _hubOfflineBanner() {
-    final scheme = Theme.of(context).colorScheme;
-    final connecting = ApiReachabilityService.instance.isApiConnecting.value;
-    final message = connecting
-        ? 'Соединение…'
-        : 'Ожидание сети…';
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-      child: Material(
-        color: scheme.secondaryContainer.withValues(alpha: 0.95),
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Row(
-            children: [
-              if (connecting)
-                SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: scheme.onSecondaryContainer,
-                  ),
-                )
-              else
-                Icon(
-                  Icons.cloud_off_outlined,
-                  size: 20,
-                  color: scheme.onSecondaryContainer,
-                ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  message,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: scheme.onSecondaryContainer,
-                      ),
-                ),
-              ),
-              TextButton(
-                onPressed: () => unawaited(_load()),
-                child: Text(
-                  'Обновить',
-                  style: TextStyle(color: scheme.onSecondaryContainer),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   void _onFolderLongPress(ChatFolder folder) {
     showTelegramActionSheet<void>(
       context: context,
@@ -2428,10 +2368,6 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
             SliverToBoxAdapter(
               child: ChatsHubGesturesHint(onDismiss: _dismissGesturesHint),
             ),
-          // Silent cache while online (Telegram-style). Banner only when offline.
-          if (_servingFromCache &&
-              !ApiReachabilityService.instance.isApiReachable.value)
-            SliverToBoxAdapter(child: _hubOfflineBanner()),
           if (widget.searchQuery.trim().isEmpty)
             SliverToBoxAdapter(
               child: ChatHubFolderBar(

@@ -17,6 +17,7 @@ import '../services/auth_service.dart';
 import '../services/user_realtime_service.dart';
 import '../services/web_app_update_service.dart';
 import '../features/settings/application/subscription_status_provider.dart';
+import '../widgets/connectivity_status_banner.dart';
 
 class HanEatApp extends ConsumerStatefulWidget {
   const HanEatApp({super.key});
@@ -158,7 +159,27 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
               color: canvas,
               child: DefaultTextStyle(
                 style: defaultBody.copyWith(color: Colors.white),
-                child: kIsWeb ? ClipRect(child: content) : content,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const ConnectivityStatusBanner(),
+                    Expanded(
+                      child: ValueListenableBuilder<bool>(
+                        valueListenable: ConnectivityStatusBanner.occupiesTop,
+                        builder: (context, occupyTop, _) {
+                          final page =
+                              kIsWeb ? ClipRect(child: content) : content;
+                          if (!occupyTop) return page;
+                          return MediaQuery.removePadding(
+                            context: context,
+                            removeTop: true,
+                            child: page,
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           );

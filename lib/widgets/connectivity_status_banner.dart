@@ -1,17 +1,17 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import '../../../core/haptics/app_haptics.dart';
-import '../services/api_reachability_service.dart';
-import '../services/auth_service.dart';
-import '../services/feed_sync_service.dart';
-import '../services/user_realtime_service.dart';
+import '../core/haptics/app_haptics.dart';
+import '../core/network/telegram_connection_status.dart';
+import 'telegram_connection_chrome.dart';
 
-/// Тонкая полоска статуса сети (как «Подключение…» в Telegram).
+/// Полоска сверху, как статус в шапке Telegram.
 class ConnectivityStatusBanner extends StatefulWidget {
   const ConnectivityStatusBanner({super.key});
+
+  /// Пока полоска на экране, нижние экраны не должны повторно есть SafeArea.
+  static final ValueNotifier<bool> occupiesTop = ValueNotifier(false);
 
   @override
   State<ConnectivityStatusBanner> createState() =>
@@ -19,22 +19,19 @@ class ConnectivityStatusBanner extends StatefulWidget {
 }
 
 class _ConnectivityStatusBannerState extends State<ConnectivityStatusBanner> {
-  bool? _lastHealthy;
+  TelegramConnectionPhase? _lastPhase;
   Timer? _recoveredTimer;
   bool _showRecovered = false;
 
+  late final Listenable _listenable;
   late final VoidCallback _onStatusChanged;
 
   @override
   void initState() {
     super.initState();
+    _listenable = TelegramConnectionChrome.listenable();
     _onStatusChanged = _handleStatusChanged;
-    FeedSyncService.onlineListenable.addListener(_onStatusChanged);
-    ApiReachabilityService.instance.isApiReachable
-        .addListener(_onStatusChanged);
-    ApiReachabilityService.instance.isApiConnecting
-        .addListener(_onStatusChanged);
-    UserRealtimeService.instance.connected.addListener(_onStatusChanged);
+    _listenable.addListener(_onStatusChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _handleStatusChanged();
     });
@@ -43,49 +40,47 @@ class _ConnectivityStatusBannerState extends State<ConnectivityStatusBanner> {
   @override
   void dispose() {
     _recoveredTimer?.cancel();
-    FeedSyncService.onlineListenable.removeListener(_onStatusChanged);
-    ApiReachabilityService.instance.isApiReachable
-        .removeListener(_onStatusChanged);
-    ApiReachabilityService.instance.isApiConnecting
-        .removeListener(_onStatusChanged);
-    UserRealtimeService.instance.connected.removeListener(_onStatusChanged);
+    _listenable.removeListener(_onStatusChanged);
+    if (ConnectivityStatusBanner.occupiesTop.value) {
+      ConnectivityStatusBanner.occupiesTop.value = false;
+    }
     super.dispose();
   }
 
-  bool get _deviceOnline => FeedSyncService.onlineListenable.value;
+  TelegramConnectionPhase get _phase => TelegramConnectionChrome.phase();
 
-  bool get _apiReachable => ApiReachabilityService.instance.isApiReachable.value;
-
-  bool get _realtimeReady {
-    if (AuthService.instance.currentUser == null) return true;
-    if (kIsWeb && ApiReachabilityService.instance.isApiReachable.value) {
-      // На web SSE может догонять API — не блокируем UI баннером «Подключение…».
-      return true;
-    }
-    return UserRealtimeService.instance.connected.value;
+  void _scheduleOccupiesTop(bool occupy) {
+    if (ConnectivityStatusBanner.occupiesTop.value == occupy) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (ConnectivityStatusBanner.occupiesTop.value != occupy) {
+        ConnectivityStatusBanner.occupiesTop.value = occupy;
+      }
+    });
   }
-
-  bool get _isHealthy => _deviceOnline && _apiReachable && _realtimeReady;
 
   void _handleStatusChanged() {
     if (!mounted) return;
 
-    final healthy = _isHealthy;
-    if (_lastHealthy == false && healthy) {
+    final phase = _phase;
+    final wasTrouble =
+        _lastPhase != null && _lastPhase != TelegramConnectionPhase.ok;
+    if (wasTrouble && phase == TelegramConnectionPhase.ok) {
       AppHaptics.light();
       _recoveredTimer?.cancel();
       setState(() => _showRecovered = true);
       _recoveredTimer = Timer(const Duration(seconds: 2), () {
         if (mounted) setState(() => _showRecovered = false);
       });
-    } else if (!healthy && _lastHealthy == true) {
+    } else if (phase != TelegramConnectionPhase.ok &&
+        _lastPhase == TelegramConnectionPhase.ok) {
       AppHaptics.medium();
     }
 
-    if (_lastHealthy != healthy || _showRecovered) {
-      setState(() => _lastHealthy = healthy);
+    if (_lastPhase != phase || _showRecovered) {
+      setState(() => _lastPhase = phase);
     } else {
-      _lastHealthy = healthy;
+      _lastPhase = phase;
     }
   }
 
@@ -93,8 +88,10 @@ class _ConnectivityStatusBannerState extends State<ConnectivityStatusBanner> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final phase = _phase;
 
-    if (_showRecovered && _isHealthy) {
+    if (_showRecovered && phase == TelegramConnectionPhase.ok) {
+      _scheduleOccupiesTop(true);
       return _BannerShell(
         color: scheme.tertiaryContainer,
         foreground: scheme.onTertiaryContainer,
@@ -104,30 +101,21 @@ class _ConnectivityStatusBannerState extends State<ConnectivityStatusBanner> {
       );
     }
 
-    if (_isHealthy &&
-        !ApiReachabilityService.instance.isApiConnecting.value) {
+    final message = TelegramConnectionStatus.labelFor(phase);
+    if (message == null) {
+      _scheduleOccupiesTop(false);
       return const SizedBox.shrink();
     }
 
-    if (!_deviceOnline) {
-      return _BannerShell(
-        color: scheme.surfaceContainerHighest,
-        foreground: scheme.onSurfaceVariant,
-        icon: Icons.wifi_off_rounded,
-        message: 'Ожидание сети…',
-        textTheme: textTheme,
-        showSpinner: false,
-      );
-    }
-
-    // Same wording as Telegram's chats header.
+    _scheduleOccupiesTop(true);
+    final waiting = phase == TelegramConnectionPhase.waitingNetwork;
     return _BannerShell(
       color: scheme.surfaceContainerHighest,
       foreground: scheme.onSurfaceVariant,
-      icon: Icons.sync_rounded,
-      message: 'Соединение…',
+      icon: waiting ? Icons.wifi_off_rounded : Icons.sync_rounded,
+      message: message,
       textTheme: textTheme,
-      showSpinner: true,
+      showSpinner: !waiting,
     );
   }
 }
@@ -160,8 +148,9 @@ class _BannerShell extends StatelessWidget {
         child: SafeArea(
           bottom: false,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 if (showSpinner)
                   SizedBox(
@@ -175,14 +164,15 @@ class _BannerShell extends StatelessWidget {
                 else
                   Icon(icon, size: 16, color: foreground),
                 const SizedBox(width: 8),
-                Expanded(
+                Flexible(
                   child: Text(
                     message,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: textTheme.labelMedium?.copyWith(
+                    textAlign: TextAlign.center,
+                    style: textTheme.titleSmall?.copyWith(
                       color: foreground,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
