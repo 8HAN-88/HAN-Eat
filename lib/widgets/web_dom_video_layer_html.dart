@@ -331,6 +331,10 @@ void _layoutShield() {
 }
 
 void _acquireTouchShield(String id, _ShieldRect rect) {
+  if (!DomVideoTouchPolicy.enableTouchShield) {
+    _forceReleaseShield();
+    return;
+  }
   if (_flutterHost() == null) {
     _forceReleaseShield();
     return;
