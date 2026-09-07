@@ -36,6 +36,9 @@ class WebDomVideoLayer extends StatelessWidget {
   /// iPhone / iPad / desktop Safari — CanvasKit не пробивает platform view.
   static bool get isPreferred => impl.isDomReelVideoPreferred;
 
+  /// Снять застрявший полноэкранный щит, который глушит все тапы в PWA.
+  static void releaseStuckTouchShield() => impl.forceReleaseDomVideoTouchShield();
+
   @override
   Widget build(BuildContext context) {
     return Stack(

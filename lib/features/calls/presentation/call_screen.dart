@@ -643,6 +643,9 @@ class _CallScreenState extends State<CallScreen> {
       CallCoordinator.instance.clearActiveCall(_call.id);
       unawaited(WakelockPlus.disable());
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      CallCoordinator.instance.closeCallUi();
+    });
     super.dispose();
   }
 

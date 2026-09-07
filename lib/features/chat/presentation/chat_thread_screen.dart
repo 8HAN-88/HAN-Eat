@@ -6165,6 +6165,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _typingUserIds.clear();
     _inlineDebounce?.cancel();
     _composerLinkDebounce?.cancel();
+    _hideBotAutocompleteOverlay();
     _hideInlineOverlay();
     _markReadDebounce?.cancel();
     _markDeliveredDebounce?.cancel();

@@ -694,6 +694,9 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     if (!_ending) {
       unawaited(_cleanup(notifyServer: true));
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      CallCoordinator.instance.closeCallUi();
+    });
     super.dispose();
   }
 

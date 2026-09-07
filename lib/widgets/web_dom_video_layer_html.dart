@@ -1,9 +1,13 @@
 import 'dart:async';
 import 'dart:html' as html;
 import 'dart:js_util' as js_util;
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+
+import '../core/platform/web_page_visibility.dart';
+import '../features/reels/application/dom_video_touch_policy.dart';
 
 bool get isDomReelVideoPreferred {
   try {
@@ -24,6 +28,10 @@ bool get isDomReelVideoPreferred {
   } catch (_) {
     return false;
   }
+}
+
+void forceReleaseDomVideoTouchShield() {
+  _forceReleaseShield();
 }
 
 Widget buildWebDomVideoLayer({
@@ -51,13 +59,47 @@ Widget buildWebDomVideoLayer({
 }
 
 final Map<String, html.VideoElement> _videos = {};
-int _shieldRefs = 0;
+final Map<String, _ShieldRect> _holderRects = {};
 html.DivElement? _shield;
 bool _shieldListening = false;
+bool _visibilityHooked = false;
+bool _watchdogArmed = false;
+
+class _ShieldRect {
+  const _ShieldRect(this.left, this.top, this.width, this.height);
+
+  final double left;
+  final double top;
+  final double width;
+  final double height;
+}
 
 html.Element? _flutterHost() =>
     html.document.querySelector('flt-glass-pane') ??
     html.document.querySelector('flutter-view');
+
+void _ensureVisibilityHook() {
+  if (_visibilityHooked) return;
+  _visibilityHooked = true;
+  registerWebPageVisibilityListener(
+    () {},
+    onHidden: _forceReleaseShield,
+  );
+}
+
+void _ensureWatchdog() {
+  if (_watchdogArmed) return;
+  _watchdogArmed = true;
+  Timer.periodic(const Duration(seconds: 8), (_) {
+    if (_holderRects.isEmpty) {
+      if (_shield != null) _forceReleaseShield();
+      return;
+    }
+    if (_flutterHost() == null) {
+      _forceReleaseShield();
+    }
+  });
+}
 
 void _ensureFlutterAboveVideo() {
   final flutter = html.document.querySelector('flutter-view') ??
@@ -115,7 +157,7 @@ Object _pointerInit({
   return o;
 }
 
-void _dispatchToFlutter({
+bool _dispatchToFlutter({
   required String type,
   required num x,
   required num y,
@@ -123,16 +165,19 @@ void _dispatchToFlutter({
   required int buttons,
 }) {
   final pane = _flutterHost();
-  if (pane == null) return;
+  if (pane == null) return false;
   final ctor = js_util.getProperty(html.window, 'PointerEvent');
-  if (ctor == null) return;
+  if (ctor == null) return false;
   try {
     final ev = js_util.callConstructor(ctor, [
       type,
       _pointerInit(x: x, y: y, pointerId: pointerId, buttons: buttons),
     ]);
     pane.dispatchEvent(ev as html.Event);
-  } catch (_) {}
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
 
 num _jsNum(Object? value) {
@@ -153,19 +198,41 @@ void _consumeJsEvent(Object raw) {
   } catch (_) {}
 }
 
+void _forwardOrFailOpen({
+  required Object raw,
+  required bool dispatched,
+  required bool hostFound,
+}) {
+  if (DomVideoTouchPolicy.shouldFailOpen(
+    hostFound: hostFound,
+    dispatched: dispatched,
+  )) {
+    _forceReleaseShield();
+    return;
+  }
+  _consumeJsEvent(raw);
+}
+
 void _forwardPointer(Object raw) {
   try {
     final type = js_util.getProperty(raw, 'type')?.toString() ?? '';
     if (type.isEmpty) return;
-    _consumeJsEvent(raw);
-    _dispatchToFlutter(
+    final hostFound = _flutterHost() != null;
+    final dispatched = _dispatchToFlutter(
       type: type,
       x: _jsNum(js_util.getProperty(raw, 'clientX')),
       y: _jsNum(js_util.getProperty(raw, 'clientY')),
       pointerId: _jsInt(js_util.getProperty(raw, 'pointerId'), 1),
       buttons: _jsInt(js_util.getProperty(raw, 'buttons'), 0),
     );
-  } catch (_) {}
+    _forwardOrFailOpen(
+      raw: raw,
+      dispatched: dispatched,
+      hostFound: hostFound,
+    );
+  } catch (_) {
+    _forceReleaseShield();
+  }
 }
 
 void _forwardTouch(Object raw) {
@@ -182,7 +249,6 @@ void _forwardTouch(Object raw) {
       touch = js_util.getProperty(changed, 0);
     }
     if (touch == null) return;
-    _consumeJsEvent(raw);
     final mapped = switch (type) {
       'touchstart' => 'pointerdown',
       'touchmove' => 'pointermove',
@@ -190,14 +256,22 @@ void _forwardTouch(Object raw) {
       _ => 'pointercancel',
     };
     final buttons = type == 'touchend' || type == 'touchcancel' ? 0 : 1;
-    _dispatchToFlutter(
+    final hostFound = _flutterHost() != null;
+    final dispatched = _dispatchToFlutter(
       type: mapped,
       x: _jsNum(js_util.getProperty(touch, 'clientX')),
       y: _jsNum(js_util.getProperty(touch, 'clientY')),
       pointerId: _jsInt(js_util.getProperty(touch, 'identifier'), 1),
       buttons: buttons,
     );
-  } catch (_) {}
+    _forwardOrFailOpen(
+      raw: raw,
+      dispatched: dispatched,
+      hostFound: hostFound,
+    );
+  } catch (_) {
+    _forceReleaseShield();
+  }
 }
 
 void _bindShield(html.Element shield) {
@@ -229,38 +303,73 @@ void _bindShield(html.Element shield) {
   }
 }
 
-void _acquireTouchShield() {
-  _shieldRefs += 1;
-  if (_shield != null) return;
-  final existing = html.document.getElementById('hanwe-reel-touch');
-  final shield = existing is html.DivElement
-      ? existing
-      : (html.DivElement()..id = 'hanwe-reel-touch');
+void _layoutShield() {
+  final shield = _shield;
+  if (shield == null || _holderRects.isEmpty) return;
+  var left = double.infinity;
+  var top = double.infinity;
+  var right = double.negativeInfinity;
+  var bottom = double.negativeInfinity;
+  for (final rect in _holderRects.values) {
+    left = math.min(left, rect.left);
+    top = math.min(top, rect.top);
+    right = math.max(right, rect.left + rect.width);
+    bottom = math.max(bottom, rect.top + rect.height);
+  }
   shield.style
     ..setProperty('position', 'fixed')
-    ..setProperty('left', '0')
-    ..setProperty('top', '0')
-    ..setProperty('right', '0')
-    ..setProperty('bottom', '0')
-    ..setProperty('width', '100%')
-    ..setProperty('height', '100%')
+    ..setProperty('left', '${left}px')
+    ..setProperty('top', '${top}px')
+    ..setProperty('width', '${right - left}px')
+    ..setProperty('height', '${bottom - top}px')
+    ..setProperty('right', 'auto')
+    ..setProperty('bottom', 'auto')
     ..setProperty('z-index', '2147483646')
     ..setProperty('pointer-events', 'auto')
     ..setProperty('touch-action', 'none')
     ..setProperty('background', 'transparent');
-  if (shield.parentNode == null) {
-    html.document.body?.append(shield);
-  }
-  _shield = shield;
-  _bindShield(shield);
 }
 
-void _releaseTouchShield() {
-  if (_shieldRefs > 0) _shieldRefs -= 1;
-  if (_shieldRefs > 0) return;
+void _acquireTouchShield(String id, _ShieldRect rect) {
+  if (_flutterHost() == null) {
+    _forceReleaseShield();
+    return;
+  }
+  _ensureVisibilityHook();
+  _ensureWatchdog();
+  _holderRects[id] = rect;
+  if (_shield == null) {
+    final existing = html.document.getElementById('hanwe-reel-touch');
+    final shield = existing is html.DivElement
+        ? existing
+        : (html.DivElement()..id = 'hanwe-reel-touch');
+    if (shield.parentNode == null) {
+      html.document.body?.append(shield);
+    }
+    _shield = shield;
+    _bindShield(shield);
+  }
+  _layoutShield();
+}
+
+void _releaseTouchShield(String id) {
+  _holderRects.remove(id);
+  if (_holderRects.isEmpty) {
+    _forceReleaseShield();
+    return;
+  }
+  _layoutShield();
+}
+
+void _forceReleaseShield() {
+  _holderRects.clear();
+  _shield?.style.setProperty('pointer-events', 'none');
   _shield?.remove();
   _shield = null;
   _shieldListening = false;
+  for (final node in html.document.querySelectorAll('#hanwe-reel-touch')) {
+    node.remove();
+  }
 }
 
 html.VideoElement _createVideo({required String id}) {
@@ -342,6 +451,7 @@ class _DomReelHostState extends State<_DomReelHost> {
   bool _failed = false;
   bool _frameArmed = false;
   bool _holdingShield = false;
+  DateTime? _lastSync;
   StreamSubscription<html.Event>? _errorSub;
   StreamSubscription<html.Event>? _canPlaySub;
 
@@ -350,7 +460,13 @@ class _DomReelHostState extends State<_DomReelHost> {
     super.initState();
     _id = 'hanwe-dom-${identityHashCode(this)}';
     _ensureFlutterAboveVideo();
-    _armFrame();
+    if (DomVideoTouchPolicy.shouldKeepFrameLoop(
+      active: widget.active,
+      failed: _failed,
+      hasUrls: widget.urls.isNotEmpty,
+    )) {
+      _armFrame();
+    }
   }
 
   @override
@@ -361,7 +477,17 @@ class _DomReelHostState extends State<_DomReelHost> {
       _failed = false;
       _videos[_id]?.src = '';
     }
-    _sync(forceSrc: !_listEquals(oldWidget.urls, widget.urls));
+    if (DomVideoTouchPolicy.shouldKeepFrameLoop(
+      active: widget.active,
+      failed: _failed,
+      hasUrls: widget.urls.isNotEmpty,
+    )) {
+      _armFrame();
+      _sync(forceSrc: !_listEquals(oldWidget.urls, widget.urls));
+    } else {
+      _frameArmed = false;
+      _hide();
+    }
   }
 
   @override
@@ -380,16 +506,15 @@ class _DomReelHostState extends State<_DomReelHost> {
     super.dispose();
   }
 
-  void _holdShield() {
-    if (_holdingShield) return;
+  void _holdShield(_ShieldRect rect) {
     _holdingShield = true;
-    _acquireTouchShield();
+    _acquireTouchShield(_id, rect);
   }
 
   void _dropShield() {
-    if (!_holdingShield) return;
+    if (!_holdingShield && !_holderRects.containsKey(_id)) return;
     _holdingShield = false;
-    _releaseTouchShield();
+    _releaseTouchShield(_id);
   }
 
   void _armFrame() {
@@ -403,7 +528,30 @@ class _DomReelHostState extends State<_DomReelHost> {
       _frameArmed = false;
       return;
     }
-    _sync();
+    final keep = DomVideoTouchPolicy.shouldKeepFrameLoop(
+      active: widget.active,
+      failed: _failed,
+      hasUrls: widget.urls.isNotEmpty,
+    );
+    if (!keep) {
+      _frameArmed = false;
+      _hide();
+      return;
+    }
+    final now = DateTime.now();
+    if (DomVideoTouchPolicy.shouldSyncNow(now: now, lastSync: _lastSync)) {
+      _lastSync = now;
+      _sync();
+    }
+    if (!mounted ||
+        !DomVideoTouchPolicy.shouldKeepFrameLoop(
+          active: widget.active,
+          failed: _failed,
+          hasUrls: widget.urls.isNotEmpty,
+        )) {
+      _frameArmed = false;
+      return;
+    }
     SchedulerBinding.instance.addPostFrameCallback(_onFrame);
   }
 
@@ -438,7 +586,9 @@ class _DomReelHostState extends State<_DomReelHost> {
     }
 
     _ensureFlutterAboveVideo();
-    _holdShield();
+    _holdShield(
+      _ShieldRect(offset.dx, offset.dy, size.width, size.height),
+    );
     var live = _videos[_id];
     if (live == null || live.parentNode == null) {
       live?.remove();

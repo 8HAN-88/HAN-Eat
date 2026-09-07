@@ -18,6 +18,7 @@ import '../services/user_realtime_service.dart';
 import '../services/web_app_update_service.dart';
 import '../features/settings/application/subscription_status_provider.dart';
 import '../widgets/connectivity_status_banner.dart';
+import '../widgets/web_dom_video_layer.dart';
 
 class HanEatApp extends ConsumerStatefulWidget {
   const HanEatApp({super.key});
@@ -73,6 +74,7 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
     if (kIsWeb) {
       // На web lifecycle ненадёжен (маршруты, клавиатура) — realtime только через visibility API.
       if (state == AppLifecycleState.resumed) {
+        WebDomVideoLayer.releaseStuckTouchShield();
         UserRealtimeService.instance.resumeFromBackground();
         unawaited(ApiReachabilityService.instance.warmUp(force: true));
         unawaited(AuthService.getAccessTokenForApi());
