@@ -212,12 +212,8 @@
       opacity: 0.999;
     }
     #hanwe-reel-touch {
-      position: fixed;
-      inset: 0;
-      z-index: 2147483646;
-      pointer-events: auto;
-      touch-action: none;
-      background: transparent;
+      display: none !important;
+      pointer-events: none !important;
     }
     /* Flutter web puts <video> in a platform view that steals taps.
        Reels pause / like must reach Flutter. Controls stay in the app UI. */
@@ -245,12 +241,26 @@
             root.querySelectorAll('video').forEach(hanMarkVideo);
           }
         }
+        function hanKillTouchShield(root) {
+          var node = (root && root.id === 'hanwe-reel-touch')
+            ? root
+            : document.getElementById('hanwe-reel-touch');
+          if (node && node.parentNode) node.parentNode.removeChild(node);
+        }
         hanScanVideos(document);
+        hanKillTouchShield();
         if (window.MutationObserver) {
           new MutationObserver(function (muts) {
             for (var i = 0; i < muts.length; i++) {
               var nodes = muts[i].addedNodes;
-              for (var j = 0; j < nodes.length; j++) hanScanVideos(nodes[j]);
+              for (var j = 0; j < nodes.length; j++) {
+                hanScanVideos(nodes[j]);
+                if (nodes[j].id === 'hanwe-reel-touch' ||
+                    (nodes[j].querySelector &&
+                      nodes[j].querySelector('#hanwe-reel-touch'))) {
+                  hanKillTouchShield(nodes[j]);
+                }
+              }
             }
           }).observe(document.documentElement, { childList: true, subtree: true });
         }

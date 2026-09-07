@@ -2,6 +2,9 @@
 class DomVideoTouchPolicy {
   const DomVideoTouchPolicy._();
 
+  /// Выключен: щит с preventDefault глушил все кнопки в iPhone PWA.
+  static const bool enableTouchShield = false;
+
   /// Пока ролик неактивен, не крутить post-frame sync каждый кадр.
   static bool shouldKeepFrameLoop({
     required bool active,

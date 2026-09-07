@@ -55,6 +55,7 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
     }
     if (kIsWeb) {
       WebAppUpdateService.start();
+      WebDomVideoLayer.releaseStuckTouchShield();
     }
   }
 
