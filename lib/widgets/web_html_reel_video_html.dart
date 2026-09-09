@@ -54,7 +54,8 @@ class _HtmlReelVideoState extends State<_HtmlReelVideo> {
         ..style.objectFit = 'cover'
         ..style.width = '100%'
         ..style.height = '100%'
-        ..style.backgroundColor = '#000';
+        ..style.backgroundColor = '#000'
+        ..style.pointerEvents = 'none';
       video.setAttribute('playsinline', 'true');
       video.setAttribute('webkit-playsinline', 'true');
       if (widget.muted) {

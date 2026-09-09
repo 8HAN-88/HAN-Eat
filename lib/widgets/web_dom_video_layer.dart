@@ -4,9 +4,8 @@ import 'package:flutter/material.dart';
 import 'web_dom_video_layer_stub.dart'
     if (dart.library.html) 'web_dom_video_layer_html.dart' as impl;
 
-/// Safari / iOS WebKit: `<video>` уходит в нативный слой и жрёт тапы.
-/// Ролик рисуем под canvas, поверх — прозрачный щит, который отдаёт
-/// жесты во Flutter (лайк, свайп, табы).
+/// Safari / iOS: ролик только картинка под UI, как в Instagram.
+/// Жесты (лайк, свайп, табы) всегда у Flutter, не у `<video>`.
 class WebDomVideoLayer extends StatelessWidget {
   const WebDomVideoLayer({
     super.key,
@@ -41,22 +40,24 @@ class WebDomVideoLayer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        if (behindCanvas && active) const CanvasPunchHole(),
-        impl.buildWebDomVideoLayer(
-          urls: urls,
-          active: active,
-          playing: playing,
-          muted: muted,
-          behindCanvas: behindCanvas,
-          fit: fit,
-          borderRadius: borderRadius,
-          revealInsets: revealInsets,
-          onFailed: onFailed,
-        ),
-      ],
+    return IgnorePointer(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (behindCanvas && active) const CanvasPunchHole(),
+          impl.buildWebDomVideoLayer(
+            urls: urls,
+            active: active,
+            playing: playing,
+            muted: muted,
+            behindCanvas: behindCanvas,
+            fit: fit,
+            borderRadius: borderRadius,
+            revealInsets: revealInsets,
+            onFailed: onFailed,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -67,9 +68,11 @@ class CanvasPunchHole extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const CustomPaint(
-      painter: _PunchHolePainter(),
-      size: Size.infinite,
+    return const IgnorePointer(
+      child: CustomPaint(
+        painter: _PunchHolePainter(),
+        size: Size.infinite,
+      ),
     );
   }
 }

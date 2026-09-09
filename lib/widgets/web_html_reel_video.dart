@@ -24,11 +24,13 @@ class WebHtmlReelVideo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return impl.buildWebHtmlReelVideo(
-      url: url,
-      muted: muted,
-      playing: playing,
-      onError: onError,
+    return IgnorePointer(
+      child: impl.buildWebHtmlReelVideo(
+        url: url,
+        muted: muted,
+        playing: playing,
+        onError: onError,
+      ),
     );
   }
 }

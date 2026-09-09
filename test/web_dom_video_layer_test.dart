@@ -14,6 +14,20 @@ void main() {
     expect(layer.revealInsets, EdgeInsets.zero);
   });
 
+  testWidgets('video layer is visual-only and does not take taps', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: SizedBox.expand(
+          child: WebDomVideoLayer(
+            urls: ['https://cdn.example/a.mp4'],
+            active: false,
+          ),
+        ),
+      ),
+    );
+    expect(find.byType(IgnorePointer), findsWidgets);
+  });
+
   testWidgets('CanvasPunchHole paints without throwing', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
