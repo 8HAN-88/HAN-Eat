@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../features/reels/application/dom_video_touch_policy.dart';
 import 'web_dom_video_layer_stub.dart'
     if (dart.library.html) 'web_dom_video_layer_html.dart' as impl;
 
@@ -17,6 +18,7 @@ class WebDomVideoLayer extends StatelessWidget {
     this.fit = BoxFit.cover,
     this.borderRadius = 0,
     this.revealInsets = EdgeInsets.zero,
+    this.immersive = false,
     this.onFailed,
   });
 
@@ -28,6 +30,10 @@ class WebDomVideoLayer extends StatelessWidget {
   final BoxFit fit;
   final double borderRadius;
   final EdgeInsets revealInsets;
+
+  /// Полноэкранные Reels. Карточки ленты остаются `false`, чтобы при
+  /// старте не вырезать canvas и не клеить `<video>` на весь экран.
+  final bool immersive;
   final VoidCallback? onFailed;
 
   static bool get isSupported => kIsWeb;
@@ -40,24 +46,39 @@ class WebDomVideoLayer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (behindCanvas && active) const CanvasPunchHole(),
-          impl.buildWebDomVideoLayer(
-            urls: urls,
-            active: active,
-            playing: playing,
-            muted: muted,
-            behindCanvas: behindCanvas,
-            fit: fit,
-            borderRadius: borderRadius,
-            revealInsets: revealInsets,
-            onFailed: onFailed,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final view = MediaQuery.sizeOf(context);
+        final allowed = active &&
+            DomVideoTouchPolicy.allowDomVideoAttach(
+              uiReady: DomVideoTouchPolicy.uiInteractive,
+              videoWidth: constraints.maxWidth,
+              videoHeight: constraints.maxHeight,
+              viewWidth: view.width,
+              viewHeight: view.height,
+              fullscreenSurface: immersive,
+            );
+        return IgnorePointer(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (behindCanvas && allowed) const CanvasPunchHole(),
+              impl.buildWebDomVideoLayer(
+                urls: urls,
+                active: active,
+                playing: playing,
+                muted: muted,
+                behindCanvas: behindCanvas,
+                fit: fit,
+                borderRadius: borderRadius,
+                revealInsets: revealInsets,
+                immersive: immersive,
+                onFailed: onFailed,
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

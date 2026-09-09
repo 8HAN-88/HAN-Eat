@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:han_eat/features/reels/application/dom_video_touch_policy.dart';
 import 'package:han_eat/widgets/web_dom_video_layer.dart';
 
 void main() {
+  tearDown(() {
+    DomVideoTouchPolicy.uiInteractive = false;
+  });
+
   test('DOM reel layer is not preferred on VM/mobile builds', () {
     expect(WebDomVideoLayer.isPreferred, isFalse);
     expect(WebDomVideoLayer.isSupported, isFalse);
@@ -63,5 +68,66 @@ void main() {
       ),
     );
     expect(find.byType(CanvasPunchHole), findsOneWidget);
+  });
+
+  testWidgets('active layer does not punch the canvas before UI is ready',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    DomVideoTouchPolicy.uiInteractive = false;
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: SizedBox.expand(
+          child: WebDomVideoLayer(
+            urls: ['https://cdn.example/a.mp4'],
+            active: true,
+            immersive: true,
+          ),
+        ),
+      ),
+    );
+    expect(find.byType(CanvasPunchHole), findsNothing);
+  });
+
+  testWidgets('immersive layer punches only after UI is ready', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    DomVideoTouchPolicy.uiInteractive = true;
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: SizedBox.expand(
+          child: WebDomVideoLayer(
+            urls: ['https://cdn.example/a.mp4'],
+            active: true,
+            immersive: true,
+          ),
+        ),
+      ),
+    );
+    expect(find.byType(CanvasPunchHole), findsOneWidget);
+  });
+
+  testWidgets('large feed card does not punch a launch-blocking hole',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    DomVideoTouchPolicy.uiInteractive = true;
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: SizedBox.expand(
+          child: WebDomVideoLayer(
+            urls: ['https://cdn.example/a.mp4'],
+            active: true,
+          ),
+        ),
+      ),
+    );
+    expect(find.byType(CanvasPunchHole), findsNothing);
   });
 }

@@ -97,4 +97,80 @@ void main() {
   test('stuck shield release is a no-op off web', () {
     expect(() => WebDomVideoLayer.releaseStuckTouchShield(), returnsNormally);
   });
+
+  test('DOM video does not attach before UI is interactive', () {
+    expect(
+      DomVideoTouchPolicy.allowDomVideoAttach(
+        uiReady: false,
+        videoWidth: 390,
+        videoHeight: 844,
+        viewWidth: 390,
+        viewHeight: 844,
+        fullscreenSurface: true,
+      ),
+      isFalse,
+    );
+  });
+
+  test('immersive Reels may attach after UI is ready', () {
+    expect(
+      DomVideoTouchPolicy.allowDomVideoAttach(
+        uiReady: true,
+        videoWidth: 390,
+        videoHeight: 844,
+        viewWidth: 390,
+        viewHeight: 844,
+        fullscreenSurface: true,
+      ),
+      isTrue,
+    );
+  });
+
+  test('typical 9:16 feed card must not cover the launch canvas', () {
+    // FeedVideoPlayer clamps height to ~56% of the viewport.
+    expect(
+      DomVideoTouchPolicy.allowDomVideoAttach(
+        uiReady: true,
+        videoWidth: 390,
+        videoHeight: 473,
+        viewWidth: 390,
+        viewHeight: 844,
+      ),
+      isFalse,
+    );
+    expect(
+      DomVideoTouchPolicy.allowDomVideoAttach(
+        uiReady: true,
+        videoWidth: 160,
+        videoHeight: 90,
+        viewWidth: 390,
+        viewHeight: 844,
+      ),
+      isTrue,
+    );
+  });
+
+  test('invalid sizes never attach a DOM video', () {
+    expect(
+      DomVideoTouchPolicy.allowDomVideoAttach(
+        uiReady: true,
+        videoWidth: 0,
+        videoHeight: 200,
+        viewWidth: 390,
+        viewHeight: 844,
+      ),
+      isFalse,
+    );
+    expect(
+      DomVideoTouchPolicy.allowDomVideoAttach(
+        uiReady: true,
+        videoWidth: double.infinity,
+        videoHeight: double.infinity,
+        viewWidth: 390,
+        viewHeight: 844,
+        fullscreenSurface: true,
+      ),
+      isFalse,
+    );
+  });
 }

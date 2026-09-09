@@ -66,9 +66,12 @@
     #auth-gate.is-hidden { display: none !important; }
     #auth-gate.is-visible { display: flex !important; }
     #boot-splash { background: var(--bg); }
+    #boot-splash.is-hiding,
+    #boot-splash.flutter-live {
+      pointer-events: none !important;
+    }
     #boot-splash.is-hiding {
       opacity: 0;
-      pointer-events: none;
       transition: opacity 220ms ease;
     }
     #boot-splash .spinner {
@@ -764,6 +767,10 @@
 
         window.addEventListener('flutter-first-frame', function () {
           firstFrame = true;
+          if (splash) {
+            splash.classList.add('flutter-live');
+            splash.style.pointerEvents = 'none';
+          }
           maybeHideSplash();
         });
         window.addEventListener('han-primary-ui-ready', function () {

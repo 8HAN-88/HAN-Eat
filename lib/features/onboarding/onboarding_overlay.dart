@@ -29,8 +29,14 @@ class _OnboardingOverlayState extends State<OnboardingOverlay> {
   }
 
   Future<void> _check() async {
-    final prefs = await SharedPreferences.getInstance();
-    final done = prefs.getBool(_keyOnboardingDone) ?? false;
+    var done = true;
+    try {
+      final prefs = await SharedPreferences.getInstance()
+          .timeout(const Duration(milliseconds: 800));
+      done = prefs.getBool(_keyOnboardingDone) ?? false;
+    } catch (_) {
+      done = true;
+    }
     if (mounted) {
       setState(() {
         _showOnboarding = !done;

@@ -13,6 +13,7 @@ import '../../settings/application/subscription_status_provider.dart';
 import '../../onboarding/onboarding_overlay.dart';
 import 'package:han_eat/services/account_session_service.dart';
 import 'package:han_eat/services/api_reachability_service.dart';
+import 'package:han_eat/widgets/connectivity_status_banner.dart';
 import 'package:han_eat/widgets/pwa_install_banner.dart';
 import 'package:han_eat/services/feed_sync_service.dart';
 import 'package:han_eat/services/chat_service.dart';
@@ -436,6 +437,7 @@ class _RootShellState extends ConsumerState<RootShell> {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      const ConnectivityStatusBanner(),
                       const PwaInstallBanner(),
                       _subscriptionStaleBanner(context),
                       Expanded(
