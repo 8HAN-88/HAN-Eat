@@ -3,8 +3,10 @@ import 'package:han_eat/features/reels/application/dom_video_touch_policy.dart';
 import 'package:han_eat/widgets/web_dom_video_layer.dart';
 
 void main() {
-  test('touch shield stays off so PWA buttons keep working', () {
+  test('Instagram-style: video is visual-only, Flutter owns gestures', () {
     expect(DomVideoTouchPolicy.enableTouchShield, isFalse);
+    expect(DomVideoTouchPolicy.videoIsVisualOnly, isTrue);
+    expect(DomVideoTouchPolicy.allowHtmlElementViewVideo, isFalse);
   });
 
   test('inactive or failed hosts stop the per-frame sync loop', () {

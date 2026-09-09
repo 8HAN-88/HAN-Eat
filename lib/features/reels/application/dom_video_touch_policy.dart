@@ -1,11 +1,17 @@
-/// Правила DOM-щита Safari: не жечь главный поток и не глотать тапы навсегда.
+/// Слой видео как в Instagram: ролик только рисуется, жесты — у UI сверху.
 class DomVideoTouchPolicy {
   const DomVideoTouchPolicy._();
 
-  /// Выключен: щит с preventDefault глушил все кнопки в iPhone PWA.
+  /// Как в IG: никакого DOM-щита с preventDefault над приложением.
   static const bool enableTouchShield = false;
 
-  /// Пока ролик неактивен или вкладка в IndexedStack скрыта — не крутить sync
+  /// Как в IG: плеер не участвует в hit-test — лайк, свайп и табы всегда живые.
+  static const bool videoIsVisualOnly = true;
+
+  /// HtmlElementView на iPhone перехватывает тапы даже под IgnorePointer.
+  static const bool allowHtmlElementViewVideo = false;
+
+  /// Пока ролик неактивен или вкладка скрыта — не крутить sync
   /// и не оставлять `<video>` в DOM (iOS иначе жрёт тапы на всех экранах).
   static bool shouldKeepFrameLoop({
     required bool active,
