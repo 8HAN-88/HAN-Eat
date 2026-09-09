@@ -14,6 +14,34 @@ void main() {
     expect(layer.revealInsets, EdgeInsets.zero);
   });
 
+  testWidgets('overlay button still receives taps through the video layer',
+      (tester) async {
+    var tapped = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Stack(
+          fit: StackFit.expand,
+          children: [
+            Center(
+              child: TextButton(
+                onPressed: () => tapped = true,
+                child: const Text('Like'),
+              ),
+            ),
+            const Positioned.fill(
+              child: WebDomVideoLayer(
+                urls: ['https://cdn.example/a.mp4'],
+                active: false,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.tap(find.text('Like'));
+    expect(tapped, isTrue);
+  });
+
   testWidgets('video layer is visual-only and does not take taps', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(

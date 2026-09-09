@@ -6,6 +6,7 @@ void main() {
   test('Instagram-style: video is visual-only, Flutter owns gestures', () {
     expect(DomVideoTouchPolicy.enableTouchShield, isFalse);
     expect(DomVideoTouchPolicy.videoIsVisualOnly, isTrue);
+    expect(DomVideoTouchPolicy.allowHtmlElementViewVideo, isFalse);
   });
 
   test('inactive or failed hosts stop the per-frame sync loop', () {

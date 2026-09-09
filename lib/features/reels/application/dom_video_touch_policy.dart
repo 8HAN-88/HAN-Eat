@@ -8,6 +8,9 @@ class DomVideoTouchPolicy {
   /// Как в IG: плеер не участвует в hit-test — лайк, свайп и табы всегда живые.
   static const bool videoIsVisualOnly = true;
 
+  /// HtmlElementView на iPhone перехватывает тапы даже под IgnorePointer.
+  static const bool allowHtmlElementViewVideo = false;
+
   /// Пока ролик неактивен или вкладка скрыта — не крутить sync
   /// и не оставлять `<video>` в DOM (iOS иначе жрёт тапы на всех экранах).
   static bool shouldKeepFrameLoop({
