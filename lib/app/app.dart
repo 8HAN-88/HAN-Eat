@@ -16,8 +16,9 @@ import '../services/account_session_service.dart';
 import '../services/auth_service.dart';
 import '../services/user_realtime_service.dart';
 import '../services/web_app_update_service.dart';
+import '../core/web/boot_ready_signal.dart';
+import '../features/reels/application/dom_video_touch_policy.dart';
 import '../features/settings/application/subscription_status_provider.dart';
-import '../widgets/connectivity_status_banner.dart';
 import '../widgets/web_dom_video_layer.dart';
 
 class HanEatApp extends ConsumerStatefulWidget {
@@ -56,6 +57,7 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
     if (kIsWeb) {
       WebAppUpdateService.start();
       WebDomVideoLayer.releaseStuckTouchShield();
+      killLaunchOverlays();
     }
   }
 
@@ -162,26 +164,10 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
               color: canvas,
               child: DefaultTextStyle(
                 style: defaultBody.copyWith(color: Colors.white),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const ConnectivityStatusBanner(),
-                    Expanded(
-                      child: ValueListenableBuilder<bool>(
-                        valueListenable: ConnectivityStatusBanner.occupiesTop,
-                        builder: (context, occupyTop, _) {
-                          final page =
-                              kIsWeb ? ClipRect(child: content) : content;
-                          if (!occupyTop) return page;
-                          return MediaQuery.removePadding(
-                            context: context,
-                            removeTop: true,
-                            child: page,
-                          );
-                        },
-                      ),
-                    ),
-                  ],
+                child: Listener(
+                  onPointerDown: (_) =>
+                      DomVideoTouchPolicy.markUserInteracted(),
+                  child: kIsWeb ? ClipRect(child: content) : content,
                 ),
               ),
             ),

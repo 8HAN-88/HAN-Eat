@@ -7,6 +7,7 @@ void main() {
     expect(DomVideoTouchPolicy.enableTouchShield, isFalse);
     expect(DomVideoTouchPolicy.videoIsVisualOnly, isTrue);
     expect(DomVideoTouchPolicy.allowHtmlElementViewVideo, isFalse);
+    expect(DomVideoTouchPolicy.allowCanvasPunch, isFalse);
   });
 
   test('inactive or failed hosts stop the per-frame sync loop', () {
@@ -96,5 +97,100 @@ void main() {
 
   test('stuck shield release is a no-op off web', () {
     expect(() => WebDomVideoLayer.releaseStuckTouchShield(), returnsNormally);
+  });
+
+  test('DOM video does not attach before UI is interactive', () {
+    expect(
+      DomVideoTouchPolicy.allowDomVideoAttach(
+        uiReady: false,
+        videoWidth: 390,
+        videoHeight: 844,
+        viewWidth: 390,
+        viewHeight: 844,
+        fullscreenSurface: true,
+        userInteracted: true,
+      ),
+      isFalse,
+    );
+  });
+
+  test('DOM video waits for the first user gesture', () {
+    expect(
+      DomVideoTouchPolicy.allowDomVideoAttach(
+        uiReady: true,
+        videoWidth: 390,
+        videoHeight: 844,
+        viewWidth: 390,
+        viewHeight: 844,
+        fullscreenSurface: true,
+        userInteracted: false,
+      ),
+      isFalse,
+    );
+  });
+
+  test('immersive Reels may attach after UI is ready and a tap', () {
+    expect(
+      DomVideoTouchPolicy.allowDomVideoAttach(
+        uiReady: true,
+        videoWidth: 390,
+        videoHeight: 844,
+        viewWidth: 390,
+        viewHeight: 844,
+        fullscreenSurface: true,
+        userInteracted: true,
+      ),
+      isTrue,
+    );
+  });
+
+  test('typical 9:16 feed card must not cover the launch canvas', () {
+    // FeedVideoPlayer clamps height to ~56% of the viewport.
+    expect(
+      DomVideoTouchPolicy.allowDomVideoAttach(
+        uiReady: true,
+        videoWidth: 390,
+        videoHeight: 473,
+        viewWidth: 390,
+        viewHeight: 844,
+        userInteracted: true,
+      ),
+      isFalse,
+    );
+    expect(
+      DomVideoTouchPolicy.allowDomVideoAttach(
+        uiReady: true,
+        videoWidth: 160,
+        videoHeight: 90,
+        viewWidth: 390,
+        viewHeight: 844,
+        userInteracted: true,
+      ),
+      isFalse,
+    );
+  });
+
+  test('invalid sizes never attach a DOM video', () {
+    expect(
+      DomVideoTouchPolicy.allowDomVideoAttach(
+        uiReady: true,
+        videoWidth: 0,
+        videoHeight: 200,
+        viewWidth: 390,
+        viewHeight: 844,
+      ),
+      isFalse,
+    );
+    expect(
+      DomVideoTouchPolicy.allowDomVideoAttach(
+        uiReady: true,
+        videoWidth: double.infinity,
+        videoHeight: double.infinity,
+        viewWidth: 390,
+        viewHeight: 844,
+        fullscreenSurface: true,
+      ),
+      isFalse,
+    );
   });
 }

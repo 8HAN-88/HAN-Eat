@@ -221,10 +221,7 @@ Widget _safeShellIndexedStack(
     children: List.generate(children.length, (i) {
       return TickerMode(
         enabled: i == idx,
-        child: Offstage(
-          offstage: i != idx,
-          child: children[i],
-        ),
+        child: children[i],
       );
     }),
   );

@@ -43,6 +43,7 @@ Widget buildWebDomVideoLayer({
   required BoxFit fit,
   required double borderRadius,
   required EdgeInsets revealInsets,
+  bool immersive = false,
   VoidCallback? onFailed,
 }) {
   return _DomReelHost(
@@ -54,6 +55,7 @@ Widget buildWebDomVideoLayer({
     fit: fit,
     borderRadius: borderRadius,
     revealInsets: EdgeInsets.zero,
+    immersive: immersive,
     onFailed: onFailed,
   );
 }
@@ -111,7 +113,7 @@ void _ensureFlutterAboveVideo() {
       ..setProperty('isolation', 'isolate')
       ..setProperty('transform', 'translateZ(0)')
       ..setProperty('pointer-events', 'auto')
-      ..setProperty('background-color', 'transparent');
+      ..setProperty('background-color', '#0F1319');
   }
   for (final canvas in html.document.querySelectorAll('canvas')) {
     canvas.style.setProperty('background-color', 'transparent');
@@ -416,7 +418,6 @@ html.VideoElement _createVideo({required String id}) {
     ..setProperty('touch-action', 'none')
     ..setProperty('background', '#000')
     ..setProperty('opacity', '0')
-    ..setProperty('-webkit-filter', 'opacity(0.999)')
     ..setProperty('margin', '0')
     ..setProperty('padding', '0')
     ..setProperty('border', 'none')
@@ -436,6 +437,7 @@ class _DomReelHost extends StatefulWidget {
     required this.fit,
     required this.borderRadius,
     required this.revealInsets,
+    this.immersive = false,
     this.onFailed,
   });
 
@@ -447,6 +449,7 @@ class _DomReelHost extends StatefulWidget {
   final BoxFit fit;
   final double borderRadius;
   final EdgeInsets revealInsets;
+  final bool immersive;
   final VoidCallback? onFailed;
 
   @override
@@ -607,6 +610,18 @@ class _DomReelHostState extends State<_DomReelHost> {
       _hide();
       return;
     }
+    if (!DomVideoTouchPolicy.allowDomVideoAttach(
+      uiReady: DomVideoTouchPolicy.uiInteractive,
+      videoWidth: size.width,
+      videoHeight: size.height,
+      viewWidth: viewW.toDouble(),
+      viewHeight: viewH.toDouble(),
+      fullscreenSurface: widget.immersive,
+      userInteracted: DomVideoTouchPolicy.userHasInteracted,
+    )) {
+      _hide();
+      return;
+    }
 
     _ensureFlutterAboveVideo();
     _holdShield(
@@ -646,8 +661,7 @@ class _DomReelHostState extends State<_DomReelHost> {
         widget.borderRadius > 0 ? '${widget.borderRadius}px' : '0',
       )
       ..setProperty('visibility', 'visible')
-      ..setProperty('display', 'block')
-      ..setProperty('-webkit-filter', 'opacity(0.999)');
+      ..setProperty('display', 'block');
 
     final url = widget.urls[_urlIndex.clamp(0, widget.urls.length - 1)];
     if (forceSrc || live.currentSrc.isEmpty || !_srcMatches(live, url)) {

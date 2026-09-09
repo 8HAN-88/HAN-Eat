@@ -66,9 +66,12 @@
     #auth-gate.is-hidden { display: none !important; }
     #auth-gate.is-visible { display: flex !important; }
     #boot-splash { background: var(--bg); }
+    #boot-splash.is-hiding,
+    #boot-splash.flutter-live {
+      pointer-events: none !important;
+    }
     #boot-splash.is-hiding {
       opacity: 0;
-      pointer-events: none;
       transition: opacity 220ms ease;
     }
     #boot-splash .spinner {
@@ -190,10 +193,7 @@
       text-align: center;
       line-height: 1.35;
     }
-    flt-scene-host, flt-glass-pane, flutter-view, flt-renderer, canvas {
-      /* Transparent: iOS CanvasKit cannot hole-punch HtmlElementView.
-         Dark fill stays on #app-underlay; reel <video> sits between them. */
-      background-color: transparent !important;
+    flt-scene-host, flt-renderer, canvas {
       overscroll-behavior: none;
       overscroll-behavior-x: none;
       width: 100% !important;
@@ -205,6 +205,9 @@
       isolation: isolate;
       transform: translateZ(0);
       pointer-events: auto !important;
+      /* Opaque: iOS Safari click-throughs a transparent flutter-view
+         to leftover splash / <video> and no buttons respond. */
+      background-color: #0F1319 !important;
     }
     video.hanwe-dom-reel {
       pointer-events: none !important;
@@ -247,6 +250,24 @@
             : document.getElementById('hanwe-reel-touch');
           if (node && node.parentNode) node.parentNode.removeChild(node);
         }
+        function hanKillLaunchOverlays() {
+          try {
+            var splash = document.getElementById('boot-splash');
+            if (splash && splash.parentNode) splash.parentNode.removeChild(splash);
+            document.querySelectorAll('video.hanwe-dom-reel, #hanwe-reel-touch')
+              .forEach(function (n) {
+                try { if (n.parentNode) n.parentNode.removeChild(n); } catch (err) {}
+              });
+            var flutter = document.querySelector('flutter-view') ||
+              document.querySelector('flt-glass-pane');
+            if (flutter) {
+              flutter.style.pointerEvents = 'auto';
+              flutter.style.backgroundColor = '#0F1319';
+              flutter.style.zIndex = '2';
+            }
+          } catch (err) {}
+        }
+        window.hanKillLaunchOverlays = hanKillLaunchOverlays;
         hanScanVideos(document);
         hanKillTouchShield();
         if (window.MutationObserver) {
@@ -690,20 +711,19 @@
         var scriptEl = null;
 
         function maybeHideSplash() {
-          // One splash only: keep HTML until Flutter has login/home, not the
-          // second branded spinner from StartupShell.
-          if (splashHidden || !firstFrame || !primaryUiReady) return;
+          // Remove splash as soon as Flutter paints. Waiting for a second
+          // event left a z-index:9999 layer that ate every iPhone tap.
+          if (splashHidden || !firstFrame) return;
           splashHidden = true;
           settled = true;
           markBootOk();
           ping('flutter_ok=1');
-          setTimeout(function () {
-            if (!splash) return;
-            splash.classList.add('is-hiding');
-            setTimeout(function () {
-              if (splash && splash.parentNode) splash.remove();
-            }, 260);
-          }, 200);
+          if (typeof window.hanKillLaunchOverlays === 'function') {
+            window.hanKillLaunchOverlays();
+          } else if (splash && splash.parentNode) {
+            splash.parentNode.removeChild(splash);
+          }
+          splash = null;
         }
 
         function wipeStaleFlutterCaches() {

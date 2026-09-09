@@ -1492,6 +1492,7 @@ class _ReelCardState extends ConsumerState<ReelCard>
             Positioned.fill(
               child: WebDomVideoLayer(
                 urls: _domUrls,
+                immersive: true,
                 active: widget.isCurrent && widget.playbackEnabled,
                 playing: widget.isCurrent &&
                     widget.playbackEnabled &&

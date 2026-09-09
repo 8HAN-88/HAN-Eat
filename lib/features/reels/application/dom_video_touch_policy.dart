@@ -11,6 +11,49 @@ class DomVideoTouchPolicy {
   /// HtmlElementView на iPhone перехватывает тапы даже под IgnorePointer.
   static const bool allowHtmlElementViewVideo = false;
 
+  /// Пока HTML-сплэш / первый кадр не отдали UI — не клеим DOM-видео.
+  static bool uiInteractive = false;
+
+  /// Первый жест пользователя. До него на iPhone нельзя клеить `<video>`:
+  /// композитор забирает тапы у всего Flutter, даже с pointer-events:none.
+  static bool userHasInteracted = false;
+
+  static void markUserInteracted() {
+    userHasInteracted = true;
+  }
+
+  /// BlendMode.clear на iPhone пробивает hit-test всего flutter-view.
+  static const bool allowCanvasPunch = false;
+
+  /// Вертикальная карточка ленты ~56% высоты. На iPhone даже такой
+  /// `<video>` + дырка в canvas забирает тапы у всего приложения.
+  static const double maxNonImmersiveCover = 0.40;
+
+  /// Карточка ленты не должна становиться полноэкранным слоем при старте.
+  static bool allowDomVideoAttach({
+    required bool uiReady,
+    required double videoWidth,
+    required double videoHeight,
+    required double viewWidth,
+    required double viewHeight,
+    bool fullscreenSurface = false,
+    bool userInteracted = false,
+  }) {
+    if (!uiReady) return false;
+    if (!userInteracted) return false;
+    if (!_finitePositive(videoWidth) || !_finitePositive(videoHeight)) {
+      return false;
+    }
+    if (!_finitePositive(viewWidth) || !_finitePositive(viewHeight)) {
+      return false;
+    }
+    if (!fullscreenSurface) return false;
+    return true;
+  }
+
+  static bool _finitePositive(double value) =>
+      value.isFinite && value >= 2;
+
   /// Пока ролик неактивен или вкладка скрыта — не крутить sync
   /// и не оставлять `<video>` в DOM (iOS иначе жрёт тапы на всех экранах).
   static bool shouldKeepFrameLoop({

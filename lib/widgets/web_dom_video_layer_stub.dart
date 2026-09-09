@@ -13,6 +13,7 @@ Widget buildWebDomVideoLayer({
   required BoxFit fit,
   required double borderRadius,
   required EdgeInsets revealInsets,
+  bool immersive = false,
   VoidCallback? onFailed,
 }) {
   return const SizedBox.expand();

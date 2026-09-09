@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../core/theme/color_schemes.dart';
-
-
 const _keyOnboardingDone = 'onboarding_done';
 
 class OnboardingOverlay extends StatefulWidget {
@@ -29,8 +26,14 @@ class _OnboardingOverlayState extends State<OnboardingOverlay> {
   }
 
   Future<void> _check() async {
-    final prefs = await SharedPreferences.getInstance();
-    final done = prefs.getBool(_keyOnboardingDone) ?? false;
+    var done = true;
+    try {
+      final prefs = await SharedPreferences.getInstance()
+          .timeout(const Duration(milliseconds: 800));
+      done = prefs.getBool(_keyOnboardingDone) ?? false;
+    } catch (_) {
+      done = true;
+    }
     if (mounted) {
       setState(() {
         _showOnboarding = !done;
@@ -49,27 +52,10 @@ class _OnboardingOverlayState extends State<OnboardingOverlay> {
 
   @override
   Widget build(BuildContext context) {
-    // Avoid a blank white flash while SharedPreferences resolves after login.
+    // Do not cover the shell with a spinner veil — on iPhone that layer
+    // eats every tap until SharedPreferences returns.
     if (!_checked) {
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          widget.child,
-          const ColoredBox(
-            color: Color(0xFF0F1319),
-            child: Center(
-              child: SizedBox(
-                width: 28,
-                height: 28,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  color: AppColors.primary,
-                ),
-              ),
-            ),
-          ),
-        ],
-      );
+      return widget.child;
     }
     if (!_showOnboarding) {
       return widget.child;
