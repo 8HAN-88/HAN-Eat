@@ -40,6 +40,15 @@ void main() {
       ),
       isFalse,
     );
+    expect(
+      DomVideoTouchPolicy.shouldKeepFrameLoop(
+        active: true,
+        failed: false,
+        hasUrls: true,
+        tickerEnabled: false,
+      ),
+      isFalse,
+    );
   });
 
   test('missing Flutter host or failed dispatch fail-opens the shield', () {

@@ -376,6 +376,21 @@ void _forceReleaseShield() {
   }
 }
 
+void _attachVideo(html.VideoElement video) {
+  final flutter = html.document.querySelector('flutter-view') ??
+      html.document.querySelector('flt-glass-pane');
+  if (flutter != null && flutter.parentNode != null) {
+    flutter.parentNode!.insertBefore(video, flutter);
+    return;
+  }
+  final body = html.document.body;
+  if (body != null && body.firstChild != null) {
+    body.insertBefore(video, body.firstChild);
+  } else {
+    body?.append(video);
+  }
+}
+
 html.VideoElement _createVideo({required String id}) {
   _reapOrphans();
   final video = html.VideoElement()
@@ -407,18 +422,7 @@ html.VideoElement _createVideo({required String id}) {
     ..setProperty('border', 'none')
     ..setProperty('clip-path', 'none');
 
-  final flutter = html.document.querySelector('flutter-view') ??
-      html.document.querySelector('flt-glass-pane');
-  if (flutter != null && flutter.parentNode != null) {
-    flutter.parentNode!.insertBefore(video, flutter);
-  } else {
-    final body = html.document.body;
-    if (body != null && body.firstChild != null) {
-      body.insertBefore(video, body.firstChild);
-    } else {
-      body?.append(video);
-    }
-  }
+  _attachVideo(video);
   return video;
 }
 
@@ -468,6 +472,7 @@ class _DomReelHostState extends State<_DomReelHost> {
       active: widget.active,
       failed: _failed,
       hasUrls: widget.urls.isNotEmpty,
+      tickerEnabled: true,
     )) {
       _armFrame();
     }
@@ -485,6 +490,7 @@ class _DomReelHostState extends State<_DomReelHost> {
       active: widget.active,
       failed: _failed,
       hasUrls: widget.urls.isNotEmpty,
+      tickerEnabled: TickerMode.of(context),
     )) {
       _armFrame();
       _sync(forceSrc: !_listEquals(oldWidget.urls, widget.urls));
@@ -511,6 +517,10 @@ class _DomReelHostState extends State<_DomReelHost> {
   }
 
   void _holdShield(_ShieldRect rect) {
+    if (!DomVideoTouchPolicy.enableTouchShield) {
+      _dropShield();
+      return;
+    }
     _holdingShield = true;
     _acquireTouchShield(_id, rect);
   }
@@ -536,6 +546,7 @@ class _DomReelHostState extends State<_DomReelHost> {
       active: widget.active,
       failed: _failed,
       hasUrls: widget.urls.isNotEmpty,
+      tickerEnabled: TickerMode.of(context),
     );
     if (!keep) {
       _frameArmed = false;
@@ -552,6 +563,7 @@ class _DomReelHostState extends State<_DomReelHost> {
           active: widget.active,
           failed: _failed,
           hasUrls: widget.urls.isNotEmpty,
+          tickerEnabled: TickerMode.of(context),
         )) {
       _frameArmed = false;
       return;
@@ -561,7 +573,14 @@ class _DomReelHostState extends State<_DomReelHost> {
 
   void _sync({bool forceSrc = false}) {
     final routeCurrent = ModalRoute.of(context)?.isCurrent ?? true;
-    if (!widget.active || !routeCurrent || widget.urls.isEmpty || _failed) {
+    final tickerEnabled = TickerMode.of(context);
+    if (!DomVideoTouchPolicy.shouldKeepFrameLoop(
+          active: widget.active,
+          failed: _failed,
+          hasUrls: widget.urls.isNotEmpty,
+          tickerEnabled: tickerEnabled,
+        ) ||
+        !routeCurrent) {
       _hide();
       return;
     }
@@ -594,12 +613,12 @@ class _DomReelHostState extends State<_DomReelHost> {
       _ShieldRect(offset.dx, offset.dy, size.width, size.height),
     );
     var live = _videos[_id];
-    if (live == null || live.parentNode == null) {
-      live?.remove();
+    if (live == null) {
       live = _createVideo(id: _id);
       _videos[_id] = live;
-    }
-    if (live.parentNode != null) {
+    } else if (live.parentNode == null) {
+      _attachVideo(live);
+    } else {
       final flutter = html.document.querySelector('flutter-view') ??
           html.document.querySelector('flt-glass-pane');
       if (flutter != null && flutter.parentNode != null) {
@@ -627,7 +646,8 @@ class _DomReelHostState extends State<_DomReelHost> {
         widget.borderRadius > 0 ? '${widget.borderRadius}px' : '0',
       )
       ..setProperty('visibility', 'visible')
-      ..setProperty('display', 'block');
+      ..setProperty('display', 'block')
+      ..setProperty('-webkit-filter', 'opacity(0.999)');
 
     final url = widget.urls[_urlIndex.clamp(0, widget.urls.length - 1)];
     if (forceSrc || live.currentSrc.isEmpty || !_srcMatches(live, url)) {
@@ -689,13 +709,19 @@ class _DomReelHostState extends State<_DomReelHost> {
     final video = _videos[_id];
     if (video == null) return;
     video.pause();
+    try {
+      video.style.removeProperty('-webkit-filter');
+    } catch (_) {}
     video.style
       ..setProperty('visibility', 'hidden')
       ..setProperty('display', 'none')
       ..setProperty('opacity', '0')
       ..setProperty('width', '0')
       ..setProperty('height', '0')
-      ..setProperty('left', '-9999px');
+      ..setProperty('left', '-9999px')
+      ..setProperty('pointer-events', 'none');
+    // Снять с DOM: на iOS композитный <video> жрёт тапы даже с pointer-events:none.
+    video.remove();
   }
 
   bool _listEquals(List<String> a, List<String> b) {
@@ -709,6 +735,23 @@ class _DomReelHostState extends State<_DomReelHost> {
 
   @override
   Widget build(BuildContext context) {
+    final keep = DomVideoTouchPolicy.shouldKeepFrameLoop(
+      active: widget.active,
+      failed: _failed,
+      hasUrls: widget.urls.isNotEmpty,
+      tickerEnabled: TickerMode.of(context),
+    );
+    if (keep) {
+      _armFrame();
+    } else {
+      _frameArmed = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (!TickerMode.of(context) || !widget.active) {
+          _hide();
+        }
+      });
+    }
     return const SizedBox.expand();
   }
 }

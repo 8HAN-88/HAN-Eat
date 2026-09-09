@@ -5,13 +5,15 @@ class DomVideoTouchPolicy {
   /// Выключен: щит с preventDefault глушил все кнопки в iPhone PWA.
   static const bool enableTouchShield = false;
 
-  /// Пока ролик неактивен, не крутить post-frame sync каждый кадр.
+  /// Пока ролик неактивен или вкладка в IndexedStack скрыта — не крутить sync
+  /// и не оставлять `<video>` в DOM (iOS иначе жрёт тапы на всех экранах).
   static bool shouldKeepFrameLoop({
     required bool active,
     required bool failed,
     required bool hasUrls,
+    bool tickerEnabled = true,
   }) {
-    return active && !failed && hasUrls;
+    return active && !failed && hasUrls && tickerEnabled;
   }
 
   /// Если Flutter-pane пропал или dispatch не прошёл — снять щит,
