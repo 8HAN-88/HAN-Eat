@@ -57,12 +57,16 @@ class WebDomVideoLayer extends StatelessWidget {
               viewWidth: view.width,
               viewHeight: view.height,
               fullscreenSurface: immersive,
+              userInteracted: DomVideoTouchPolicy.userHasInteracted,
             );
         return IgnorePointer(
           child: Stack(
             fit: StackFit.expand,
             children: [
-              if (behindCanvas && allowed) const CanvasPunchHole(),
+              if (behindCanvas &&
+                  allowed &&
+                  DomVideoTouchPolicy.allowCanvasPunch)
+                const CanvasPunchHole(),
               impl.buildWebDomVideoLayer(
                 urls: urls,
                 active: active,

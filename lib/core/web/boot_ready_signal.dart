@@ -7,3 +7,5 @@ void notifyPrimaryUiReady() {
   DomVideoTouchPolicy.uiInteractive = true;
   impl.notifyPrimaryUiReady();
 }
+
+void killLaunchOverlays() => impl.killLaunchOverlays();

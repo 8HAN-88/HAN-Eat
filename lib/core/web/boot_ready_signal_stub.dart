@@ -1,1 +1,3 @@
 void notifyPrimaryUiReady() {}
+
+void killLaunchOverlays() {}

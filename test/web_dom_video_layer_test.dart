@@ -6,6 +6,7 @@ import 'package:han_eat/widgets/web_dom_video_layer.dart';
 void main() {
   tearDown(() {
     DomVideoTouchPolicy.uiInteractive = false;
+    DomVideoTouchPolicy.userHasInteracted = false;
   });
 
   test('DOM reel layer is not preferred on VM/mobile builds', () {
@@ -91,12 +92,14 @@ void main() {
     expect(find.byType(CanvasPunchHole), findsNothing);
   });
 
-  testWidgets('immersive layer punches only after UI is ready', (tester) async {
+  testWidgets('immersive layer never punches the canvas on launch',
+      (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     DomVideoTouchPolicy.uiInteractive = true;
+    DomVideoTouchPolicy.userHasInteracted = true;
     await tester.pumpWidget(
       const MaterialApp(
         home: SizedBox.expand(
@@ -108,7 +111,7 @@ void main() {
         ),
       ),
     );
-    expect(find.byType(CanvasPunchHole), findsOneWidget);
+    expect(find.byType(CanvasPunchHole), findsNothing);
   });
 
   testWidgets('large feed card does not punch a launch-blocking hole',

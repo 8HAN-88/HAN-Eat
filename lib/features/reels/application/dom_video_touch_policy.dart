@@ -14,6 +14,17 @@ class DomVideoTouchPolicy {
   /// Пока HTML-сплэш / первый кадр не отдали UI — не клеим DOM-видео.
   static bool uiInteractive = false;
 
+  /// Первый жест пользователя. До него на iPhone нельзя клеить `<video>`:
+  /// композитор забирает тапы у всего Flutter, даже с pointer-events:none.
+  static bool userHasInteracted = false;
+
+  static void markUserInteracted() {
+    userHasInteracted = true;
+  }
+
+  /// BlendMode.clear на iPhone пробивает hit-test всего flutter-view.
+  static const bool allowCanvasPunch = false;
+
   /// Вертикальная карточка ленты ~56% высоты. На iPhone даже такой
   /// `<video>` + дырка в canvas забирает тапы у всего приложения.
   static const double maxNonImmersiveCover = 0.40;
@@ -26,17 +37,18 @@ class DomVideoTouchPolicy {
     required double viewWidth,
     required double viewHeight,
     bool fullscreenSurface = false,
+    bool userInteracted = false,
   }) {
     if (!uiReady) return false;
+    if (!userInteracted) return false;
     if (!_finitePositive(videoWidth) || !_finitePositive(videoHeight)) {
       return false;
     }
     if (!_finitePositive(viewWidth) || !_finitePositive(viewHeight)) {
       return false;
     }
-    if (fullscreenSurface) return true;
-    final cover = (videoWidth * videoHeight) / (viewWidth * viewHeight);
-    return cover <= maxNonImmersiveCover;
+    if (!fullscreenSurface) return false;
+    return true;
   }
 
   static bool _finitePositive(double value) =>

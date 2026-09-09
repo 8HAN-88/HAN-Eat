@@ -16,6 +16,8 @@ import '../services/account_session_service.dart';
 import '../services/auth_service.dart';
 import '../services/user_realtime_service.dart';
 import '../services/web_app_update_service.dart';
+import '../core/web/boot_ready_signal.dart';
+import '../features/reels/application/dom_video_touch_policy.dart';
 import '../features/settings/application/subscription_status_provider.dart';
 import '../widgets/web_dom_video_layer.dart';
 
@@ -55,6 +57,7 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
     if (kIsWeb) {
       WebAppUpdateService.start();
       WebDomVideoLayer.releaseStuckTouchShield();
+      killLaunchOverlays();
     }
   }
 
@@ -161,7 +164,11 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
               color: canvas,
               child: DefaultTextStyle(
                 style: defaultBody.copyWith(color: Colors.white),
-                child: kIsWeb ? ClipRect(child: content) : content,
+                child: Listener(
+                  onPointerDown: (_) =>
+                      DomVideoTouchPolicy.markUserInteracted(),
+                  child: kIsWeb ? ClipRect(child: content) : content,
+                ),
               ),
             ),
           );

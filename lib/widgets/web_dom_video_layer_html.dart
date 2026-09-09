@@ -113,7 +113,7 @@ void _ensureFlutterAboveVideo() {
       ..setProperty('isolation', 'isolate')
       ..setProperty('transform', 'translateZ(0)')
       ..setProperty('pointer-events', 'auto')
-      ..setProperty('background-color', 'transparent');
+      ..setProperty('background-color', '#0F1319');
   }
   for (final canvas in html.document.querySelectorAll('canvas')) {
     canvas.style.setProperty('background-color', 'transparent');
@@ -617,6 +617,7 @@ class _DomReelHostState extends State<_DomReelHost> {
       viewWidth: viewW.toDouble(),
       viewHeight: viewH.toDouble(),
       fullscreenSurface: widget.immersive,
+      userInteracted: DomVideoTouchPolicy.userHasInteracted,
     )) {
       _hide();
       return;

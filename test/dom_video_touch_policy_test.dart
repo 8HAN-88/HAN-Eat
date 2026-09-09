@@ -7,6 +7,7 @@ void main() {
     expect(DomVideoTouchPolicy.enableTouchShield, isFalse);
     expect(DomVideoTouchPolicy.videoIsVisualOnly, isTrue);
     expect(DomVideoTouchPolicy.allowHtmlElementViewVideo, isFalse);
+    expect(DomVideoTouchPolicy.allowCanvasPunch, isFalse);
   });
 
   test('inactive or failed hosts stop the per-frame sync loop', () {
@@ -107,12 +108,13 @@ void main() {
         viewWidth: 390,
         viewHeight: 844,
         fullscreenSurface: true,
+        userInteracted: true,
       ),
       isFalse,
     );
   });
 
-  test('immersive Reels may attach after UI is ready', () {
+  test('DOM video waits for the first user gesture', () {
     expect(
       DomVideoTouchPolicy.allowDomVideoAttach(
         uiReady: true,
@@ -121,6 +123,22 @@ void main() {
         viewWidth: 390,
         viewHeight: 844,
         fullscreenSurface: true,
+        userInteracted: false,
+      ),
+      isFalse,
+    );
+  });
+
+  test('immersive Reels may attach after UI is ready and a tap', () {
+    expect(
+      DomVideoTouchPolicy.allowDomVideoAttach(
+        uiReady: true,
+        videoWidth: 390,
+        videoHeight: 844,
+        viewWidth: 390,
+        viewHeight: 844,
+        fullscreenSurface: true,
+        userInteracted: true,
       ),
       isTrue,
     );
@@ -135,6 +153,7 @@ void main() {
         videoHeight: 473,
         viewWidth: 390,
         viewHeight: 844,
+        userInteracted: true,
       ),
       isFalse,
     );
@@ -145,8 +164,9 @@ void main() {
         videoHeight: 90,
         viewWidth: 390,
         viewHeight: 844,
+        userInteracted: true,
       ),
-      isTrue,
+      isFalse,
     );
   });
 
