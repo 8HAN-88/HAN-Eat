@@ -193,21 +193,11 @@
       text-align: center;
       line-height: 1.35;
     }
-    flt-scene-host, flt-renderer, canvas {
-      overscroll-behavior: none;
-      overscroll-behavior-x: none;
-      width: 100% !important;
-      max-width: 100% !important;
-    }
-    flutter-view, flt-glass-pane {
-      position: relative;
-      z-index: 2;
-      isolation: isolate;
-      transform: translateZ(0);
-      pointer-events: auto !important;
-      /* Opaque: iOS Safari click-throughs a transparent flutter-view
-         to leftover splash / <video> and no buttons respond. */
-      background-color: #0F1319 !important;
+    /* Do not force canvas/flutter-view size or transform — on iPhone that
+       paints the UI in one place and hit-tests in another (dead buttons). */
+    flt-semantics-host, flt-semantics {
+      left: 0 !important;
+      top: 0 !important;
     }
     video.hanwe-dom-reel {
       pointer-events: none !important;
@@ -258,13 +248,6 @@
               .forEach(function (n) {
                 try { if (n.parentNode) n.parentNode.removeChild(n); } catch (err) {}
               });
-            var flutter = document.querySelector('flutter-view') ||
-              document.querySelector('flt-glass-pane');
-            if (flutter) {
-              flutter.style.pointerEvents = 'auto';
-              flutter.style.backgroundColor = '#0F1319';
-              flutter.style.zIndex = '2';
-            }
           } catch (err) {}
         }
         window.hanKillLaunchOverlays = hanKillLaunchOverlays;
@@ -711,9 +694,10 @@
         var scriptEl = null;
 
         function maybeHideSplash() {
-          // Remove splash as soon as Flutter paints. Waiting for a second
-          // event left a z-index:9999 layer that ate every iPhone tap.
-          if (splashHidden || !firstFrame) return;
+          // Keep the one HTML splash until the real app (or login) is ready.
+          // Hiding on first-frame revealed the brown skeleton and left
+          // flutter-view CSS that broke iPhone hit-testing.
+          if (splashHidden || !firstFrame || !primaryUiReady) return;
           splashHidden = true;
           settled = true;
           markBootOk();

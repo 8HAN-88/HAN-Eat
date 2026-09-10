@@ -17,13 +17,5 @@ void killLaunchOverlays() {
     )) {
       node.remove();
     }
-    final flutter = html.document.querySelector('flutter-view') ??
-        html.document.querySelector('flt-glass-pane');
-    if (flutter != null) {
-      flutter.style
-        ..setProperty('pointer-events', 'auto')
-        ..setProperty('background-color', '#0F1319')
-        ..setProperty('z-index', '2');
-    }
   } catch (_) {}
 }
