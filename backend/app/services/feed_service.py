@@ -101,7 +101,7 @@ class FeedService:
 
         # Проверяем кэш (только если нет курсора, т.к. курсор означает новую страницу)
         cache_key = (
-            f"feed:v3:{user_id}:{feed_type}:include_recipes={include_recipes}:following_only={following_only}"
+            f"feed:v5:{user_id}:{feed_type}:include_recipes={include_recipes}:following_only={following_only}"
             f":sort={sort_by}:hide_promo={hide_promoted}:ai={ai_recommendations}"
         )
         cached_data = None
@@ -120,15 +120,27 @@ class FeedService:
                                 items = feed_data.get("items", [])
                                 # Не отдавать пустой кэш — всегда перезапрашивать, чтобы новые посты появились
                                 if items:
+                                    from app.services.ads_service import AdsService, strip_ad_items
+
+                                    posts_only = strip_ad_items(items)
                                     if dismissed_ids:
-                                        feed_data = {
-                                            **feed_data,
-                                            "items": [
-                                                it
-                                                for it in items
-                                                if it.get("id") not in dismissed_ids
-                                            ],
-                                        }
+                                        posts_only = [
+                                            it
+                                            for it in posts_only
+                                            if not isinstance(it, dict)
+                                            or it.get("id") not in dismissed_ids
+                                        ]
+                                    try:
+                                        posts_only = AdsService(self.db).insert_into_feed_items(
+                                            posts_only,
+                                            user_id,
+                                            following_only=following_only,
+                                            feed_type=feed_type,
+                                            cursor=cursor,
+                                        )
+                                    except Exception as exc:
+                                        logger.warning("Cached feed ad insert skipped: %s", exc)
+                                    feed_data = {**feed_data, "items": posts_only}
                                     logger.debug(f"Returning cached feed for user {user_id}, following_only={following_only}")
                                     return feed_data
                 except Exception as e:
@@ -187,6 +199,18 @@ class FeedService:
 
         window = ranked_posts[start_index : start_index + limit]
         enriched_posts = self._enrich_posts(window, user_id)
+        try:
+            from app.services.ads_service import AdsService
+
+            enriched_posts = AdsService(self.db).insert_into_feed_items(
+                enriched_posts,
+                user_id,
+                following_only=following_only,
+                feed_type=feed_type,
+                cursor=cursor,
+            )
+        except Exception as exc:
+            logger.warning("Feed ad insert skipped: %s", exc)
 
         has_more = len(ranked_posts) > start_index + limit
         # Курсор — последний отданный пост: клиент передаёт его id, мы начинаем со следующего индекса.
@@ -211,11 +235,16 @@ class FeedService:
             "watch_next": watch_next,
         }
         
-        # Кэшируем результат (только первую страницу и только непустой)
+        # Кэшируем только посты: рекламу вставляем на каждый ответ, иначе кэш прячет новую кампанию.
         if not cursor and feed_result.get("items"):
             try:
+                from app.services.ads_service import strip_ad_items
+
                 cache_data = {
-                    "feed": feed_result,
+                    "feed": {
+                        **feed_result,
+                        "items": strip_ad_items(feed_result.get("items") or []),
+                    },
                     "cache_time": datetime.utcnow().isoformat()
                 }
                 serialized = self._serialize_feed_cache(cache_data)
@@ -1968,6 +1997,7 @@ class FeedService:
                 }
 
             enriched.append({
+                "kind": "post",
                 "id": post.id,
                 "type": post.type,
                 "title": post.title,
@@ -2079,6 +2109,18 @@ class FeedService:
                                 f"feed:{user_id}:{ft}:following_only={following_only}"
                                 f":sort={sort_by}:hide_promo={hide_promo}"
                             )
+                            for include_recipes in (True, False):
+                                for ai in (True, False):
+                                    self.redis.delete(
+                                        f"feed:v4:{user_id}:{ft}:include_recipes={include_recipes}"
+                                        f":following_only={following_only}:sort={sort_by}"
+                                        f":hide_promo={hide_promo}:ai={ai}"
+                                    )
+                                    self.redis.delete(
+                                        f"feed:v5:{user_id}:{ft}:include_recipes={include_recipes}"
+                                        f":following_only={following_only}:sort={sort_by}"
+                                        f":hide_promo={hide_promo}:ai={ai}"
+                                    )
                         # legacy key (до sort в ключе)
                         self.redis.delete(
                             f"feed:{user_id}:{ft}:following_only={following_only}"

@@ -3,8 +3,10 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../core/network/haneat_http_client.dart';
+import '../features/ads/ads_order.dart';
 import '../models/post_model.dart';
 import '../models/post_types.dart';
+import 'ads_service.dart';
 import 'auth_service.dart';
 import 'server_config.dart';
 
@@ -245,6 +247,7 @@ class FeedWatchNextItem {
 
 class FeedResponse {
   final List<PostModel> items;
+  final List<FeedAdPlacement> ads;
   final String? nextCursor;
   final bool hasMore;
   final bool aiRecommendations;
@@ -252,6 +255,7 @@ class FeedResponse {
 
   FeedResponse({
     required this.items,
+    this.ads = const [],
     this.nextCursor,
     required this.hasMore,
     this.aiRecommendations = false,
@@ -261,10 +265,26 @@ class FeedResponse {
   factory FeedResponse.fromJson(Map<String, dynamic> json) {
     final itemsList = json['items'] as List<dynamic>? ?? [];
     final posts = <PostModel>[];
+    final ads = <FeedAdPlacement>[];
     for (final item in itemsList) {
       try {
-        if (item is Map<String, dynamic>) {
-          posts.add(PostModel.fromJson(item));
+        if (item is Map) {
+          final mapped = Map<String, dynamic>.from(item);
+          final kind = mapped['kind'] as String? ?? 'post';
+          if (kind == 'ad') {
+            final ad = FeedAdItem.fromJson(mapped);
+            if (ad.campaignId > 0) {
+              ads.add(
+                FeedAdPlacement(
+                  insertBeforePostIndex: posts.length,
+                  item: ad,
+                ),
+              );
+            }
+            continue;
+          }
+          if (kind != 'post') continue;
+          posts.add(PostModel.fromJson(mapped));
         }
       } catch (e) {
         if (kDebugMode) {
@@ -275,6 +295,7 @@ class FeedResponse {
     }
     return FeedResponse(
       items: posts,
+      ads: ads,
       nextCursor: json['next_cursor'] as String?,
       hasMore: json['has_more'] as bool? ?? false,
       aiRecommendations: json['ai_recommendations'] as bool? ?? false,
