@@ -357,8 +357,9 @@ class _StartupShellState extends State<StartupShell> {
       builder: (context, ready, _) {
         if (!ready) {
           if (_hasLocalSession) {
-            _signalHtmlSplashCanHide();
-            return const StartupHomePlaceholder();
+            // Web: keep the HTML splash. The brown skeleton looks like a
+            // second boot screen and is not tappable.
+            return kIsWeb ? _underHtmlSplash() : const StartupHomePlaceholder();
           }
           return kIsWeb ? _underHtmlSplash() : _loadingApp();
         }
@@ -373,8 +374,9 @@ class _StartupShellState extends State<StartupShell> {
             if (!_fullAppLibraryLoaded) {
               unawaited(_ensureFullAppLoaded());
               if (_hasLocalSession || AuthService.instance.currentUser != null) {
-                _signalHtmlSplashCanHide();
-                return const StartupHomePlaceholder();
+                return kIsWeb
+                    ? _underHtmlSplash()
+                    : const StartupHomePlaceholder();
               }
               return kIsWeb
                   ? _underHtmlSplash()

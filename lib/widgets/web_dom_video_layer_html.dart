@@ -104,20 +104,8 @@ void _ensureWatchdog() {
 }
 
 void _ensureFlutterAboveVideo() {
-  final flutter = html.document.querySelector('flutter-view') ??
-      html.document.querySelector('flt-glass-pane');
-  if (flutter != null) {
-    flutter.style
-      ..setProperty('position', 'relative')
-      ..setProperty('z-index', '2')
-      ..setProperty('isolation', 'isolate')
-      ..setProperty('transform', 'translateZ(0)')
-      ..setProperty('pointer-events', 'auto')
-      ..setProperty('background-color', '#0F1319');
-  }
-  for (final canvas in html.document.querySelectorAll('canvas')) {
-    canvas.style.setProperty('background-color', 'transparent');
-  }
+  // Do not restyle flutter-view / canvas. On iPhone, position/transform/
+  // width:100% desyncs the painted UI from hit-testing — no button works.
 }
 
 void _reapOrphans() {
