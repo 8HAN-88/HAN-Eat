@@ -158,6 +158,37 @@ class ChatThreadUiPrefs {
     }
   }
 
+  static const _openMessagePrefix = 'chat_thread_open_msg_v1_';
+  static final Map<int, int?> _openMessageMem = {};
+
+  static String _openMessageKey(int conversationId) =>
+      '$_openMessagePrefix$conversationId';
+
+  /// Sync peek after the value was read or written this session.
+  static int? peekOpenMessageId(int conversationId) =>
+      _openMessageMem[conversationId];
+
+  static Future<int?> getOpenMessageId(int conversationId) async {
+    if (_openMessageMem.containsKey(conversationId)) {
+      return _openMessageMem[conversationId];
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final id = prefs.getInt(_openMessageKey(conversationId));
+    _openMessageMem[conversationId] = id;
+    return id;
+  }
+
+  static Future<void> setOpenMessageId(int conversationId, int? messageId) async {
+    _openMessageMem[conversationId] = messageId;
+    final prefs = await SharedPreferences.getInstance();
+    final key = _openMessageKey(conversationId);
+    if (messageId == null || messageId <= 0) {
+      await prefs.remove(key);
+      return;
+    }
+    await prefs.setInt(key, messageId);
+  }
+
   static String _muteUntilKey(int conversationId) =>
       'chat_thread_mute_until_v1_$conversationId';
 
