@@ -561,6 +561,7 @@ class AuthService {
     required String name,
     String? username,
     required bool acceptLegal,
+    String? referralCode,
   }) async {
     final uri = Uri.parse('$baseUrl/auth/register');
     try {
@@ -576,6 +577,8 @@ class AuthService {
           'name': name,
           'accept_legal': acceptLegal,
           if (username != null) 'username': username,
+          if (referralCode != null && referralCode.trim().isNotEmpty)
+            'referral_code': referralCode.trim(),
         }),
       ).timeout(const Duration(seconds: 10));
       

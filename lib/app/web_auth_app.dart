@@ -43,7 +43,9 @@ final GoRouter _authRouter = GoRouter(
     ),
     GoRoute(
       path: AuthPaths.register,
-      builder: (context, state) => const RegisterScreen(),
+      builder: (context, state) => RegisterScreen(
+        initialReferralCode: state.uri.queryParameters['ref'],
+      ),
     ),
     GoRoute(
       path: AuthPaths.forgotPassword,

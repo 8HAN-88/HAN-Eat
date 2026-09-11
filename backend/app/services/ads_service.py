@@ -503,7 +503,13 @@ class AdsService:
         if surface not in SURFACES:
             return None
         try:
-            if SubscriptionService(self.db).has_entitlement(user_id, "ad_free"):
+            from app.services.revenue_share_service import RevenueShareService
+
+            extra_ads = RevenueShareService(self.db).extra_ads_enabled(user_id)
+            if (
+                not extra_ads
+                and SubscriptionService(self.db).has_entitlement(user_id, "ad_free")
+            ):
                 return None
         except Exception:
             pass
@@ -620,25 +626,33 @@ class AdsService:
             raise AdsError("Нет объявления", 404)
         key = (kind or "").strip().lower()
         if key == "impression":
-            self.db.add(
-                AdImpression(
-                    campaign_id=campaign.id,
-                    creative_id=creative.id,
-                    user_id=user_id,
-                    surface=surface if surface in SURFACES else "feed",
-                )
+            event = AdImpression(
+                campaign_id=campaign.id,
+                creative_id=creative.id,
+                user_id=user_id,
+                surface=surface if surface in SURFACES else "feed",
             )
         elif key == "click":
-            self.db.add(
-                AdClick(
-                    campaign_id=campaign.id,
-                    creative_id=creative.id,
-                    user_id=user_id,
-                    surface=surface if surface in SURFACES else "feed",
-                )
+            event = AdClick(
+                campaign_id=campaign.id,
+                creative_id=creative.id,
+                user_id=user_id,
+                surface=surface if surface in SURFACES else "feed",
             )
         else:
             raise AdsError("Неизвестное событие")
+        self.db.add(event)
+        self.db.flush()
+        try:
+            from app.services.revenue_share_service import RevenueShareService
+
+            RevenueShareService(self.db).accrue_ad_event(
+                viewer_id=user_id,
+                kind=key,
+                reference_id=int(event.id or 0),
+            )
+        except Exception:
+            pass
         self.db.commit()
         return {"ok": True}
 
@@ -675,15 +689,30 @@ class AdsService:
             surface = "feed"
         else:
             return out
-        if len(out) < 4:
+        extra_ads = False
+        try:
+            from app.services.revenue_share_service import RevenueShareService
+
+            extra_ads = RevenueShareService(self.db).extra_ads_enabled(user_id)
+        except Exception:
+            extra_ads = False
+        if len(out) < (2 if extra_ads else 4):
             return out
         ad = self.pick_live_for_surface(surface=surface, user_id=user_id)
         if not ad and surface == "reels":
             ad = self.pick_live_for_surface(surface="feed", user_id=user_id)
         if not ad:
             return out
-        index = min(8, len(out))
-        if index < 3:
-            index = 3
+        index = min(3 if extra_ads else 8, len(out))
+        if index < (2 if extra_ads else 3):
+            index = 2 if extra_ads else 3
         out.insert(index, ad)
+        if extra_ads and len(out) >= 9:
+            second = self.pick_live_for_surface(
+                surface=surface,
+                user_id=user_id,
+                exclude_campaign_ids={int(ad.get("campaign_id") or 0)},
+            )
+            if second:
+                out.insert(min(8, len(out)), second)
         return out

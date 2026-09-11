@@ -60,6 +60,7 @@ import '../features/creator/presentation/scheduled_posts_screen.dart';
 import '../features/creator/presentation/promoted_posts_screen.dart';
 import '../features/creator/presentation/creator_tools_screen.dart';
 import '../features/ads/presentation/advertiser_hub_screen.dart';
+import '../features/referral/presentation/partner_program_screen.dart';
 import '../features/ads/presentation/ad_campaign_editor_screen.dart';
 import '../features/ads/presentation/ads_review_screen.dart';
 import '../features/channels/presentation/channel_management_screen.dart';
@@ -487,6 +488,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             const MaterialPage(child: AdvertiserHubScreen()),
       ),
       GoRoute(
+        path: PartnerProgramRoute.path,
+        name: PartnerProgramRoute.name,
+        pageBuilder: (context, state) => const MaterialPage(
+          child: PartnerProgramScreen(),
+        ),
+      ),
+      GoRoute(
+        path: ExtraAdsRoute.path,
+        name: ExtraAdsRoute.name,
+        pageBuilder: (context, state) => const MaterialPage(
+          child: PartnerProgramScreen(focusExtraAds: true),
+        ),
+      ),
+      GoRoute(
         path: AdsCampaignEditorRoute.path,
         name: AdsCampaignEditorRoute.name,
         pageBuilder: (context, state) =>
@@ -727,8 +742,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RegisterRoute.path,
         name: RegisterRoute.name,
-        pageBuilder: (context, state) =>
-            const MaterialPage(child: RegisterScreen()),
+        pageBuilder: (context, state) => MaterialPage(
+          child: RegisterScreen(
+            initialReferralCode: state.uri.queryParameters['ref'],
+          ),
+        ),
       ),
       GoRoute(
         path: LegalConsentRoute.path,
@@ -1608,6 +1626,16 @@ class PromotedPostsRoute {
 class AdsHubRoute {
   static const path = '/ads';
   static const name = 'ads_hub';
+}
+
+class PartnerProgramRoute {
+  static const path = '/settings/referral';
+  static const name = 'partner_program';
+}
+
+class ExtraAdsRoute {
+  static const path = '/settings/extra-ads';
+  static const name = 'extra_ads';
 }
 
 class AdsCampaignEditorRoute {

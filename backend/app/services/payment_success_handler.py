@@ -138,6 +138,7 @@ def process_payment_succeeded(
             payment_provider,
             payment_id,
         )
+        _accrue_subscription_share(db, user_id, amount, payment_id)
         return
 
     amount = float(payment_info.get("amount") or 0)
@@ -186,6 +187,7 @@ def process_payment_succeeded(
                 user_id,
                 payment_provider,
             )
+            _accrue_subscription_share(db, user_id, amount, payment_id)
             return
         logger.warning(
             "%s renewal payment %s: subscription not found for user %s",
@@ -227,6 +229,33 @@ def process_payment_succeeded(
         payment_provider,
         subscription.id,
     )
+    _accrue_subscription_share(db, user_id, amount, payment_id)
+
+
+def _payment_ref_id(payment_id: str) -> int:
+    n = 0
+    for ch in payment_id or "x":
+        n = (n * 33 + ord(ch)) % 2147483647
+    return n or 1
+
+
+def _accrue_subscription_share(
+    db: Session,
+    user_id: int,
+    amount: float,
+    payment_id: str,
+) -> None:
+    try:
+        from app.services.revenue_share_service import RevenueShareService
+
+        RevenueShareService(db).accrue_subscription(
+            payer_id=user_id,
+            amount_rub=float(amount or 0),
+            reference_id=_payment_ref_id(payment_id),
+        )
+        db.commit()
+    except Exception:
+        logger.exception("revenue share subscription accrue failed")
 
 
 def _should_save_rebill(payment_provider: str) -> bool:

@@ -309,6 +309,20 @@ async def register(
     db.add(user)
     db.commit()
     db.refresh(user)
+    from app.services.revenue_share_service import (
+        RevenueShareError,
+        RevenueShareService,
+    )
+
+    share = RevenueShareService(db)
+    if request.referral_code:
+        try:
+            share.apply_code(user, request.referral_code)
+        except RevenueShareError:
+            pass
+    share.ensure_code(user)
+    db.commit()
+    db.refresh(user)
 
     # Убеждаемся, что is_private не None
     if user.is_private is None:

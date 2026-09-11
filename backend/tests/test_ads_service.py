@@ -137,6 +137,21 @@ def test_ad_free_skips_inventory(db_session, monkeypatch):
     assert svc.pick_live_for_surface(surface="feed", user_id=admin.id) is not None
 
 
+def test_extra_ads_overrides_ad_free(db_session, monkeypatch):
+    admin = _user(db_session, admin=True)
+    viewer = _user(db_session, user_id=2)
+    viewer.extra_ads_enabled = True
+    db_session.commit()
+    svc = AdsService(db_session)
+    created = svc.create(admin, _ready_payload())
+    svc.submit(created["id"], admin)
+    monkeypatch.setattr(
+        "app.services.ads_service.SubscriptionService.has_entitlement",
+        lambda self, user_id, slug: slug == "ad_free" and user_id == viewer.id,
+    )
+    assert svc.pick_live_for_surface(surface="feed", user_id=viewer.id) is not None
+
+
 def test_pause_resume_and_review(db_session):
     advertiser = _user(db_session)
     reviewer = _user(db_session, user_id=9, admin=True)

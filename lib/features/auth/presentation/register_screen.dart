@@ -14,7 +14,9 @@ import '../../../../widgets/server_connecting_hint.dart';
 import '../../../../widgets/legal_consent_checkbox.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
-  const RegisterScreen({super.key});
+  const RegisterScreen({super.key, this.initialReferralCode});
+
+  final String? initialReferralCode;
 
   static const routeName = '/register';
 
@@ -68,6 +70,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             ? null
             : _usernameController.text.trim(),
         acceptLegal: true,
+        referralCode: widget.initialReferralCode,
       );
 
       unawaited(() async {
