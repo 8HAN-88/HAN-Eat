@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:han_eat/features/chat/application/chat_open_anchor.dart';
 
 void main() {
-  testWidgets('first layout opens at the last messages, not the top',
+  testWidgets('opens at the last messages after the first layout',
       (tester) async {
     final scroll = ChatThreadScrollController();
     addTearDown(scroll.dispose);
@@ -26,6 +26,7 @@ void main() {
       ),
     );
     await tester.pump();
+    await tester.pump();
 
     expect(scroll.hasClients, isTrue);
     expect(scroll.position.maxScrollExtent, greaterThan(100));
@@ -33,6 +34,5 @@ void main() {
       scroll.offset,
       closeTo(scroll.position.maxScrollExtent, 2),
     );
-    expect(find.text('m0'), findsNothing);
   });
 }

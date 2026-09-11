@@ -86,19 +86,37 @@ class ChatThreadScrollPosition extends ScrollPositionWithSingleContext {
   });
 
   final ChatThreadScrollController controller;
+  bool _jumpScheduled = false;
+
+  double get _anchorPixels {
+    final t = controller.openFraction.clamp(0.0, 1.0);
+    return minScrollExtent + (maxScrollExtent - minScrollExtent) * t;
+  }
+
+  void _pinToAnchor() {
+    if (!controller.holdOpenAnchor || maxScrollExtent <= minScrollExtent) {
+      return;
+    }
+    final target = _anchorPixels;
+    if ((pixels - target).abs() <= 0.5) return;
+    correctPixels(target);
+    if (_jumpScheduled) return;
+    _jumpScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _jumpScheduled = false;
+      if (!hasPixels || !controller.holdOpenAnchor) return;
+      final next = _anchorPixels;
+      if ((pixels - next).abs() > 0.5) {
+        jumpTo(next);
+      }
+    });
+  }
 
   @override
   bool applyContentDimensions(double minScrollExtent, double maxScrollExtent) {
     final applied =
         super.applyContentDimensions(minScrollExtent, maxScrollExtent);
-    if (controller.holdOpenAnchor && maxScrollExtent > minScrollExtent) {
-      final t = controller.openFraction.clamp(0.0, 1.0);
-      final target =
-          minScrollExtent + (maxScrollExtent - minScrollExtent) * t;
-      if ((pixels - target).abs() > 0.5) {
-        correctPixels(target);
-      }
-    }
+    _pinToAnchor();
     return applied;
   }
 }

@@ -575,7 +575,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   /// Last open-anchor apply finished; user scroll or settle releases the pin.
   bool _openAnchorSettled = false;
   bool _applyingOpenAnchor = false;
+  /// Hide the list until it is already on last/unread (no flash of history top).
+  bool _openPaintReady = false;
   int? _savedOpenMessageId;
+  Timer? _openPaintFallback;
   final Set<int> _typingUserIds = <int>{};
   final Map<int, Timer> _typingUserTimers = <int, Timer>{};
   /// userId → `typing` | `recording`
@@ -722,6 +725,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         ChatThreadUiPrefs.peekOpenMessageId(widget.conversationId);
     _prepareOpenAnchor();
     unawaited(_hydrateSavedOpenMessage());
+    _openPaintFallback = Timer(const Duration(milliseconds: 360), () {
+      if (!mounted || _openPaintReady) return;
+      _releaseOpenAnchor();
+    });
     unawaited(_loadCachedMessages().then((_) async {
       await _restoreFailedTextSends();
       await _restoreReadyOutbox();
@@ -5178,6 +5185,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   void _releaseOpenAnchor() {
     _openAnchorSettled = true;
     _scroll.holdOpenAnchor = false;
+    _openPaintFallback?.cancel();
+    if (mounted && !_openPaintReady) {
+      setState(() => _openPaintReady = true);
+    } else {
+      _openPaintReady = true;
+    }
   }
 
   void _onUserBrokeOpenAnchor() {
@@ -6300,6 +6313,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _manualReadyRetryTimer?.cancel();
     _muteUnmuteTimer?.cancel();
     _keyboardFollowTimer?.cancel();
+    _openPaintFallback?.cancel();
     for (final t in _failedTextAutoRetryTimers.values) {
       t.cancel();
     }
@@ -15538,7 +15552,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                   textAlign: TextAlign.center,
                                 ),
                               )
-                            : NotificationListener<UserScrollNotification>(
+                            : Opacity(
+                                opacity: _openPaintReady ||
+                                        visibleMessages.isEmpty
+                                    ? 1
+                                    : 0,
+                                child: NotificationListener<
+                                    UserScrollNotification>(
                                 onNotification: (notification) {
                                   if (notification.direction !=
                                       ScrollDirection.idle) {
@@ -16035,6 +16055,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                   );
                                 },
                               ),
+                            ),
                             ),
                     if (_floatingDateVisible &&
                         (_floatingDateLabel?.isNotEmpty ?? false) &&
