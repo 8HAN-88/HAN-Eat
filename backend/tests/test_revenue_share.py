@@ -114,6 +114,16 @@ def test_reject_self_code(db_session):
         svc.apply_code(user, code)
 
 
+def test_apply_username_invite_ref(db_session):
+    referrer = _user(db_session, 8, created_at=datetime.utcnow())
+    viewer = _user(db_session, 9, created_at=datetime.utcnow())
+    svc = RevenueShareService(db_session)
+    svc.apply_code(viewer, referrer.username)
+    db_session.commit()
+    db_session.refresh(viewer)
+    assert viewer.referred_by_user_id == referrer.id
+
+
 def test_old_account_cannot_apply_code(db_session):
     referrer = _user(db_session, 4)
     old = _user(

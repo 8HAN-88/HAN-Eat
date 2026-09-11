@@ -99,11 +99,78 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
     );
   }
 
+  Widget _referralCard(RevenueShareSnapshot? snap) {
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Реферальный код',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+          ),
+          const SizedBox(height: 8),
+          SelectableText(
+            snap?.referralCode.isNotEmpty == true
+                ? snap!.referralCode
+                : '…',
+            style: const TextStyle(fontSize: 22, letterSpacing: 1.4),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Привели: ${snap?.referredCount ?? 0}. '
+            'Доля реферала — 17,5% нетто с рекламы и подписки '
+            'приведённого человека в течение года.',
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            children: [
+              FilledButton(
+                onPressed:
+                    snap == null ? null : () => _copy(snap.referralCode),
+                child: const Text('Код'),
+              ),
+              OutlinedButton(
+                onPressed: snap == null || snap.shareUrl.isEmpty
+                    ? null
+                    : () => _copy(snap.shareUrl),
+                child: const Text('Ссылка'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _extraAdsCard(RevenueShareSnapshot? snap) {
+    return _card(
+      child: SwitchListTile.adaptive(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Доп. реклама за долю'),
+        subtitle: const Text(
+          'Больше объявлений. 35% нетто с рекламы на вас. '
+          'Пока включено, «без рекламы» у подписки не действует.',
+        ),
+        value: snap?.extraAdsEnabled ?? false,
+        onChanged: _busy || snap == null ? null : _toggleExtra,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final snap = _snap;
+    final extraAdsCard = _extraAdsCard(snap);
+    final referralCard = _referralCard(snap);
     return Scaffold(
-      appBar: AppBar(title: const Text('Партнёрская программа')),
+      appBar: AppBar(
+        title: Text(
+          widget.focusExtraAds
+              ? 'Доп. реклама за долю'
+              : 'Партнёрская программа',
+        ),
+      ),
       body: RefreshIndicator(
         onRefresh: _load,
         child: ListView(
@@ -120,61 +187,15 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
               '(остаётся 70% нетто).',
             ),
             const SizedBox(height: 16),
-            _card(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Реферальный код',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
-                  ),
-                  const SizedBox(height: 8),
-                  SelectableText(
-                    snap?.referralCode.isNotEmpty == true
-                        ? snap!.referralCode
-                        : '…',
-                    style: const TextStyle(fontSize: 22, letterSpacing: 1.4),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Привели: ${snap?.referredCount ?? 0}. '
-                    'Доля реферала — 17,5% нетто с рекламы и подписки '
-                    'приведённого человека в течение года.',
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      FilledButton(
-                        onPressed: snap == null
-                            ? null
-                            : () => _copy(snap.referralCode),
-                        child: const Text('Код'),
-                      ),
-                      OutlinedButton(
-                        onPressed: snap == null || snap.shareUrl.isEmpty
-                            ? null
-                            : () => _copy(snap.shareUrl),
-                        child: const Text('Ссылка'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            _card(
-              child: SwitchListTile.adaptive(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Доп. реклама за долю'),
-                subtitle: const Text(
-                  'Больше объявлений. 35% нетто с рекламы на вас. '
-                  'Пока включено, «без рекламы» у подписки не действует.',
-                ),
-                value: snap?.extraAdsEnabled ?? false,
-                onChanged: _busy || snap == null ? null : _toggleExtra,
-              ),
-            ),
+            if (widget.focusExtraAds) ...[
+              extraAdsCard,
+              const SizedBox(height: 12),
+              referralCard,
+            ] else ...[
+              referralCard,
+              const SizedBox(height: 12),
+              extraAdsCard,
+            ],
             const SizedBox(height: 12),
             _card(
               child: Column(

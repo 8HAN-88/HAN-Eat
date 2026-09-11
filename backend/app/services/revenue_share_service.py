@@ -63,8 +63,35 @@ class RevenueShareService:
             return code
         raise RevenueShareError("Не удалось выдать реферальный код")
 
+    def _find_referrer(self, raw_code: str) -> Optional[User]:
+        code = raw_code.strip()
+        if not code:
+            return None
+        upper = code.upper()
+        referrer = (
+            self.db.query(User)
+            .filter(User.referral_code == upper, User.deleted_at.is_(None))
+            .first()
+        )
+        if referrer:
+            return referrer
+        referrer = (
+            self.db.query(User)
+            .filter(func.lower(User.username) == code.lower(), User.deleted_at.is_(None))
+            .first()
+        )
+        if referrer:
+            return referrer
+        if upper.startswith("U") and upper[1:].isdigit():
+            return (
+                self.db.query(User)
+                .filter(User.id == int(upper[1:]), User.deleted_at.is_(None))
+                .first()
+            )
+        return None
+
     def apply_code(self, user: User, raw_code: Optional[str]) -> User:
-        code = (raw_code or "").strip().upper()
+        code = (raw_code or "").strip()
         if not code:
             return user
         if user.referred_by_user_id:
@@ -74,11 +101,7 @@ class RevenueShareService:
             raise RevenueShareError(
                 "Код можно привязать только в первые 7 дней после регистрации"
             )
-        referrer = (
-            self.db.query(User)
-            .filter(User.referral_code == code, User.deleted_at.is_(None))
-            .first()
-        )
+        referrer = self._find_referrer(code)
         if not referrer or referrer.id == user.id:
             raise RevenueShareError("Реферальный код не найден")
         user.referred_by_user_id = referrer.id

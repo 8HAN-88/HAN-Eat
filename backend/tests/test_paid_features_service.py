@@ -81,6 +81,11 @@ def db_session():
                 totp_secret VARCHAR(64),
                 totp_enabled BOOLEAN DEFAULT 0,
                 totp_enabled_at DATETIME,
+                referral_code VARCHAR(16),
+                referred_by_user_id INTEGER,
+                referred_at DATETIME,
+                extra_ads_enabled BOOLEAN DEFAULT 0,
+                extra_ads_enabled_at DATETIME,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 deleted_at DATETIME

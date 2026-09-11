@@ -144,8 +144,7 @@ def test_extra_ads_overrides_ad_free(db_session, monkeypatch):
     db_session.commit()
     svc = AdsService(db_session)
     created = svc.create(admin, _ready_payload())
-    pending = svc.submit(created["id"], admin)
-    svc.approve(pending["id"], admin)
+    svc.submit(created["id"], admin)
     monkeypatch.setattr(
         "app.services.ads_service.SubscriptionService.has_entitlement",
         lambda self, user_id, slug: slug == "ad_free" and user_id == viewer.id,
