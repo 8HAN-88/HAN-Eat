@@ -179,7 +179,7 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: Text(userVisibleError(_error)),
+                child: Text(userVisibleError(_error!)),
               ),
             const Text(
               'Делим только чистую прибыль с рекламы и подписки. '
