@@ -89,12 +89,16 @@ class ChatThreadScrollPosition extends ScrollPositionWithSingleContext {
 
   @override
   bool applyContentDimensions(double minScrollExtent, double maxScrollExtent) {
+    final applied =
+        super.applyContentDimensions(minScrollExtent, maxScrollExtent);
     if (controller.holdOpenAnchor && maxScrollExtent > minScrollExtent) {
       final t = controller.openFraction.clamp(0.0, 1.0);
-      correctPixels(
-        minScrollExtent + (maxScrollExtent - minScrollExtent) * t,
-      );
+      final target =
+          minScrollExtent + (maxScrollExtent - minScrollExtent) * t;
+      if ((pixels - target).abs() > 0.5) {
+        correctPixels(target);
+      }
     }
-    return super.applyContentDimensions(minScrollExtent, maxScrollExtent);
+    return applied;
   }
 }

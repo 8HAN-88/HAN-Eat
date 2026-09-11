@@ -11,10 +11,16 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: ListView.builder(
-            controller: scroll,
-            itemCount: 80,
-            itemBuilder: (_, i) => SizedBox(height: 48, child: Text('m$i')),
+          body: SizedBox(
+            height: 400,
+            child: ListView.builder(
+              controller: scroll,
+              itemCount: 80,
+              itemBuilder: (_, i) => SizedBox(
+                height: 48,
+                child: Text('m$i'),
+              ),
+            ),
           ),
         ),
       ),
@@ -22,8 +28,11 @@ void main() {
     await tester.pump();
 
     expect(scroll.hasClients, isTrue);
-    expect(scroll.offset, greaterThan(scroll.position.maxScrollExtent - 8));
-    expect(find.text('m79'), findsOneWidget);
+    expect(scroll.position.maxScrollExtent, greaterThan(100));
+    expect(
+      scroll.offset,
+      closeTo(scroll.position.maxScrollExtent, 2),
+    );
     expect(find.text('m0'), findsNothing);
   });
 }
