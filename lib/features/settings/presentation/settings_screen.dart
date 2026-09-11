@@ -351,6 +351,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         onTap: () => context.push(AdsHubRoute.path),
       ),
       _SettingsItem(
+        title: 'Реферальная программа',
+        icon: Icons.group_add_outlined,
+        subtitle: '17,5% нетто с рекламы и подписки тех, кого привели',
+        onTap: () => context.push(PartnerProgramRoute.path),
+      ),
+      _SettingsItem(
+        title: 'Доп. реклама за долю',
+        icon: Icons.percent_outlined,
+        subtitle: 'Больше объявлений — 35% нетто с рекламы на вас',
+        onTap: () => context.push(ExtraAdsRoute.path),
+      ),
+      _SettingsItem(
         title: 'Поддержка и безопасность',
         icon: Icons.verified_user_outlined,
         subtitle: 'GDPR, модерация, жалобы, правила сообщества',

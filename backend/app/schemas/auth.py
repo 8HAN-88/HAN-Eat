@@ -13,6 +13,7 @@ class RegisterRequest(BaseModel):
         ...,
         description="Согласие с политикой конфиденциальности и пользовательским соглашением",
     )
+    referral_code: str | None = Field(None, max_length=16)
 
 
 class LoginRequest(BaseModel):
