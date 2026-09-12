@@ -795,7 +795,7 @@ class ChannelPostsListState extends State<ChannelPostsList> {
   void initState() {
     super.initState();
     _pageStorageKey = PageStorageKey(
-        'channel_posts_${widget.channelId}_${widget.postType ?? 'all'}');
+        'channel_posts_rev_${widget.channelId}_${widget.postType ?? 'all'}');
     final warm = ChannelCacheService.peekPosts(
       channelId: widget.channelId,
       postType: widget.postType,
@@ -1087,7 +1087,9 @@ class ChannelPostsListState extends State<ChannelPostsList> {
     return ListView.builder(
       key: _pageStorageKey,
       controller: _scrollController,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      reverse: true,
+      cacheExtent: 900,
+      padding: const EdgeInsets.fromLTRB(8, 10, 8, 12),
       itemCount: rows.length + (_hasMoreOld && _isLoadingMore ? 1 : 0),
       itemBuilder: (context, index) {
         if (index == rows.length) {

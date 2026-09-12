@@ -1577,8 +1577,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
   }
 
   Future<void> _openChannel(int channelId) async {
-    await ChannelCacheService.warmChannel(channelId);
-    final posts = await ChannelCacheService.warmPosts(channelId: channelId);
+    final memoryChannel = ChannelCacheService.peekChannel(channelId);
+    final memoryPosts = ChannelCacheService.peekPosts(channelId: channelId);
+    if (memoryChannel == null) {
+      await ChannelCacheService.warmChannel(channelId);
+    }
+    final posts = memoryPosts ??
+        await ChannelCacheService.warmPosts(channelId: channelId);
     if (posts.isNotEmpty) precacheChannelPostMedia(posts);
     if (!mounted) return;
     await context.push(ChannelDetailRoute.pathFor(channelId));

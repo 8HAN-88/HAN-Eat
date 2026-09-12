@@ -4942,7 +4942,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         break;
       }
     }
-    label ??= _chatDateSeparatorLabel(messages.first.createdAt);
+    label ??= _chatDateSeparatorLabel(messages.last.createdAt);
     final changed =
         label != _floatingDateLabel || !_floatingDateVisible;
     if (changed) {
@@ -10699,6 +10699,40 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           ],
         ),
       );
+    } else if (count == 5 || count == 6) {
+      Widget rowOf(List<int> idxs, {int? remaining}) {
+        return Expanded(
+          child: Row(
+            children: [
+              for (var i = 0; i < idxs.length; i++) ...[
+                if (i > 0) SizedBox(width: spacing),
+                Expanded(
+                  child: tile(
+                    displayItems[idxs[i]],
+                    index: idxs[i],
+                    remaining: i == idxs.length - 1 ? remaining : null,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      }
+
+      final remaining = items.length - count;
+      body = SizedBox(
+        height: 248,
+        child: Column(
+          children: [
+            rowOf(count == 5 ? const [0, 1] : const [0, 1, 2]),
+            SizedBox(height: spacing),
+            rowOf(
+              count == 5 ? const [2, 3, 4] : const [3, 4, 5],
+              remaining: remaining > 0 ? remaining : null,
+            ),
+          ],
+        ),
+      );
     } else {
       final remaining = items.length - 4;
       body = SizedBox(
@@ -11200,8 +11234,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final clusterOverflow = preLayout.menuTop + menuH - (targetBottom - 8);
     if (clusterOverflow > 0 && _scroll.hasClients) {
       await _scroll.animateTo(
-        (_scroll.offset + clusterOverflow)
-            .clamp(0.0, _scroll.position.maxScrollExtent),
+        chatOverlayScrollTarget(
+          offset: _scroll.offset,
+          maxScrollExtent: _scroll.position.maxScrollExtent,
+          delta: clusterOverflow,
+          reversed: true,
+        ),
         duration: const Duration(milliseconds: 160),
         curve: Curves.easeOut,
       );
@@ -11214,7 +11252,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     } else if (rect.bottom > targetBottom - 80 && _scroll.hasClients) {
       final delta = rect.bottom - (targetBottom - 80);
       await _scroll.animateTo(
-        (_scroll.offset + delta).clamp(0.0, _scroll.position.maxScrollExtent),
+        chatOverlayScrollTarget(
+          offset: _scroll.offset,
+          maxScrollExtent: _scroll.position.maxScrollExtent,
+          delta: delta,
+          reversed: true,
+        ),
         duration: const Duration(milliseconds: 160),
         curve: Curves.easeOut,
       );

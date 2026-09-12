@@ -1093,7 +1093,9 @@ class _ChannelPostCardState extends State<ChannelPostCard>
     final channelRepostOriginalId = _channelRepostOriginalPostId(post.body);
 
     final shell = PostCardContainer(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      margin: const EdgeInsets.fromLTRB(8, 4, 44, 4),
+      borderRadius: 16,
+      padding: EdgeInsets.zero,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1215,6 +1217,8 @@ class _ChannelPostCardState extends State<ChannelPostCard>
                                 height: 150,
                                 width: double.infinity,
                                 fit: BoxFit.cover,
+                                fadeInDuration: Duration.zero,
+                                fadeOutDuration: Duration.zero,
                               ),
                             ),
                           ),
@@ -1322,7 +1326,7 @@ class _ChannelPostCardState extends State<ChannelPostCard>
                         color: _isLiked
                             ? Theme.of(context).colorScheme.error
                             : Theme.of(context).colorScheme.onSurface,
-                        size: 28,
+                        size: 22,
                       ),
                       onPressed: _isLoading ? null : _toggleLike,
                       padding: EdgeInsets.zero,
@@ -1343,7 +1347,7 @@ class _ChannelPostCardState extends State<ChannelPostCard>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.comment_outlined, size: 28),
+                      icon: const Icon(Icons.comment_outlined, size: 22),
                       onPressed: () async {
                         if (widget.onCommentTap != null) {
                           await widget.onCommentTap!.call();
@@ -1379,7 +1383,7 @@ class _ChannelPostCardState extends State<ChannelPostCard>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.send_outlined, size: 28),
+                      icon: const Icon(Icons.send_outlined, size: 22),
                       onPressed: _isReposting ? null : _openShareSheet,
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
@@ -1449,11 +1453,13 @@ class _ChannelPostCardState extends State<ChannelPostCard>
       if (imageUrls.isNotEmpty) {
         final screenWidth = MediaQuery.of(context).size.width;
         return AspectRatio(
-          aspectRatio: 1,
+          aspectRatio: 4 / 3,
           child: TelegramPhotoGrid(
             imageUrls: imageUrls,
-            maxHeight: screenWidth,
+            maxHeight: screenWidth * 0.75,
+            singleAspectRatio: 4 / 3,
             enableFullscreen: true,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
           ),
         );
       }
@@ -1466,11 +1472,14 @@ class _ChannelPostCardState extends State<ChannelPostCard>
           (body['thumbnail_url'] is String
               ? ServerConfig.resolveMediaUrl(body['thumbnail_url'] as String)
               : null);
-      return InlineVideoPlayer(
-        videoUrl: videoUrl,
-        thumbnailUrl: thumbnailUrl,
-        aspectRatio: 1.0,
-        onTap: () => context.push(ReelsFullscreenRoute.path, extra: post),
+      return ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        child: InlineVideoPlayer(
+          videoUrl: videoUrl,
+          thumbnailUrl: thumbnailUrl,
+          aspectRatio: 16 / 9,
+          onTap: () => context.push(ReelsFullscreenRoute.path, extra: post),
+        ),
       );
     }
 

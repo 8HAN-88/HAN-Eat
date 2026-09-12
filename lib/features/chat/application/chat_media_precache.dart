@@ -7,6 +7,10 @@ import '../../../services/server_config.dart';
 
 /// Warm last photos so the thread/channel opens with pictures already there.
 void precacheChatMessageMedia(Iterable<ChatMessage> messages, {int limit = 16}) {
+  warmNetworkImages(chatMessageMediaUrls(messages, limit: limit));
+}
+
+List<String> chatMessageMediaUrls(Iterable<ChatMessage> messages, {int limit = 16}) {
   final urls = <String>[];
   for (final msg in messages.toList().reversed) {
     if (urls.length >= limit) break;
@@ -22,31 +26,40 @@ void precacheChatMessageMedia(Iterable<ChatMessage> messages, {int limit = 16}) 
     }
     urls.add(raw);
   }
-  warmNetworkImages(urls);
+  return urls;
 }
 
 void precacheChannelPostMedia(Iterable<PostModel> posts, {int limit = 12}) {
+  warmNetworkImages(channelPostMediaUrls(posts, limit: limit));
+}
+
+List<String> channelPostMediaUrls(Iterable<PostModel> posts, {int limit = 12}) {
   final urls = <String>[];
+  void add(String? raw) {
+    if (urls.length >= limit) return;
+    final value = raw?.trim() ?? '';
+    if (value.isEmpty || urls.contains(value)) return;
+    urls.add(value);
+  }
+
   for (final post in posts) {
     if (urls.length >= limit) break;
-    final thumb = post.videoThumbnail;
-    if (thumb != null && thumb.trim().isNotEmpty) {
-      urls.add(thumb);
-      continue;
-    }
+    add(post.videoThumbnail);
+    add(post.linkImage);
     final media = post.body?['media'];
     if (media is! List) continue;
     for (final item in media) {
       if (urls.length >= limit) break;
       if (item is! Map) continue;
-      final type = item['type'] as String? ?? '';
-      final url = item['url'] as String?;
-      if (type == 'image' && url != null && url.trim().isNotEmpty) {
-        urls.add(url);
+      final type = '${item['type'] ?? ''}';
+      add(item['url'] as String?);
+      if (type == 'video') {
+        add(item['thumbnail_url'] as String?);
+        add(item['thumbnail'] as String?);
       }
     }
   }
-  warmNetworkImages(urls);
+  return urls;
 }
 
 void warmNetworkImages(Iterable<String> rawUrls) {

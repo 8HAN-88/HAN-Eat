@@ -61,3 +61,17 @@ ChatBottomFabPolicy chatBottomFabPolicy({
   if (distance > showAbove) return ChatBottomFabPolicy.show;
   return ChatBottomFabPolicy.keep;
 }
+
+/// Scroll so a bubble moves [delta] px toward the top of the screen.
+/// Reverse lists move the other way (latest is offset 0).
+double chatOverlayScrollTarget({
+  required double offset,
+  required double maxScrollExtent,
+  required double delta,
+  bool reversed = false,
+}) {
+  final next = reversed ? offset - delta : offset + delta;
+  if (next < 0) return 0;
+  if (next > maxScrollExtent) return maxScrollExtent;
+  return next;
+}
