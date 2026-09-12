@@ -59,6 +59,44 @@ class ChannelCacheService {
     }
   }
 
+  static ChannelDetail? peekChannel(int channelId) {
+    return _channelCache[channelId];
+  }
+
+  /// Disk → memory so the channel page can paint on the first frame.
+  static Future<ChannelDetail?> warmChannel(int channelId) {
+    return loadCachedChannel(channelId);
+  }
+
+  static List<PostModel>? peekPosts({
+    required int channelId,
+    String? postType,
+    int offset = 0,
+  }) {
+    final cacheKey = postsCacheKey(
+      channelId: channelId,
+      postType: postType,
+      offset: offset,
+    );
+    final memory = _postsCache[cacheKey];
+    if (memory == null || memory.isEmpty) return null;
+    return List<PostModel>.from(memory);
+  }
+
+  /// Disk → memory so the channel wall can paint on the first frame.
+  static Future<List<PostModel>> warmPosts({
+    required int channelId,
+    String? postType,
+  }) async {
+    final memory = peekPosts(channelId: channelId, postType: postType);
+    if (memory != null && memory.isNotEmpty) return memory;
+    final disk = await loadCachedPosts(
+      channelId: channelId,
+      postType: postType,
+    );
+    return disk ?? const [];
+  }
+
   static Future<List<PostModel>?> loadCachedPosts({
     required int channelId,
     String? postType,

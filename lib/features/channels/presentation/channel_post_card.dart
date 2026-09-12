@@ -1462,9 +1462,10 @@ class _ChannelPostCardState extends State<ChannelPostCard>
     final videos = media.where((m) => m['type'] == 'video').toList();
     if (videos.isNotEmpty) {
       final videoUrl = ServerConfig.resolveMediaUrl(videos[0]['url'] as String);
-      final thumbnailUrl = body['thumbnail_url'] != null
-          ? ServerConfig.resolveMediaUrl(body['thumbnail_url'] as String)
-          : null;
+      final thumbnailUrl = post.videoThumbnail ??
+          (body['thumbnail_url'] is String
+              ? ServerConfig.resolveMediaUrl(body['thumbnail_url'] as String)
+              : null);
       return InlineVideoPlayer(
         videoUrl: videoUrl,
         thumbnailUrl: thumbnailUrl,

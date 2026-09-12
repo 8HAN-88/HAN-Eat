@@ -36,6 +36,44 @@ void main() {
     });
   });
 
+  group('chatUnreadIsBelowViewport', () {
+    test('reversed list: scrolled up means unread is toward latest', () {
+      expect(
+        chatUnreadIsBelowViewport(
+          offset: 400,
+          unreadApprox: 0,
+          reversed: true,
+        ),
+        isTrue,
+      );
+      expect(
+        chatUnreadIsBelowViewport(
+          offset: 0,
+          unreadApprox: 0,
+          reversed: true,
+        ),
+        isFalse,
+      );
+    });
+
+    test('forward list: unread below when offset is still above it', () {
+      expect(
+        chatUnreadIsBelowViewport(
+          offset: 40,
+          unreadApprox: 500,
+        ),
+        isTrue,
+      );
+      expect(
+        chatUnreadIsBelowViewport(
+          offset: 500,
+          unreadApprox: 500,
+        ),
+        isFalse,
+      );
+    });
+  });
+
   group('firstUnreadMessageId', () {
     test('skips own messages when counting unread', () {
       final id = firstUnreadMessageId(

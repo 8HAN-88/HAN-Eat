@@ -19,6 +19,19 @@ class ChatOpenTarget {
   }
 }
 
+/// True when the unread divider sits toward newer messages than the viewport.
+///
+/// [reversed] matches `ListView(reverse: true)` — latest is offset 0.
+bool chatUnreadIsBelowViewport({
+  required double offset,
+  required double unreadApprox,
+  double threshold = 160,
+  bool reversed = false,
+}) {
+  if (reversed) return offset > unreadApprox + threshold;
+  return offset + threshold < unreadApprox;
+}
+
 /// Deep-link > first unread > saved mid-history > last message.
 ChatOpenTarget resolveChatOpenTarget({
   int? jumpToMessageId,
@@ -57,7 +70,10 @@ int? firstUnreadMessageId({
 /// Pins the thread to [openFraction] during layout so the first frame is
 /// already on the last (or unread) messages — not the top of history.
 class ChatThreadScrollController extends ScrollController {
-  ChatThreadScrollController();
+  ChatThreadScrollController({this.reversed = true});
+
+  /// Telegram-style: latest messages sit at offset 0.
+  final bool reversed;
 
   double openFraction = 1;
   bool holdOpenAnchor = true;
@@ -90,7 +106,12 @@ class ChatThreadScrollPosition extends ScrollPositionWithSingleContext {
 
   double get _anchorPixels {
     final t = controller.openFraction.clamp(0.0, 1.0);
-    return minScrollExtent + (maxScrollExtent - minScrollExtent) * t;
+    final span = maxScrollExtent - minScrollExtent;
+    if (controller.reversed) {
+      // fraction 1 = latest = min (0).
+      return maxScrollExtent - span * t;
+    }
+    return minScrollExtent + span * t;
   }
 
   void _pinToAnchor() {

@@ -23,6 +23,7 @@ import 'channel_search_screen.dart';
 import 'channel_create_content_sheet.dart';
 
 import 'channel_post_card.dart';
+import '../../chat/application/chat_media_precache.dart';
 import '../../ads/ads_order.dart';
 import '../../ads/presentation/widgets/feed_ad_card.dart';
 import '../../comments/presentation/show_post_comments_sheet.dart';
@@ -80,16 +81,18 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
   @override
   void initState() {
     super.initState();
+    final warm = ChannelCacheService.peekChannel(widget.channelId);
+    if (warm != null) {
+      _channel = warm;
+      _isLoading = false;
+    }
     _loadChannel();
   }
 
   Future<void> _loadChannel({bool forceRefresh = false}) async {
-    setState(() {
-      _isLoading = true;
-      if (forceRefresh) {
-        _channelLoadError = null;
-      }
-    });
+    if (forceRefresh && mounted) {
+      setState(() => _channelLoadError = null);
+    }
 
     try {
       // Сначала пытаемся загрузить из кэша (быстро)
@@ -793,6 +796,15 @@ class ChannelPostsListState extends State<ChannelPostsList> {
     super.initState();
     _pageStorageKey = PageStorageKey(
         'channel_posts_${widget.channelId}_${widget.postType ?? 'all'}');
+    final warm = ChannelCacheService.peekPosts(
+      channelId: widget.channelId,
+      postType: widget.postType,
+    );
+    if (warm != null && warm.isNotEmpty) {
+      _posts = warm;
+      _isLoading = false;
+      precacheChannelPostMedia(warm);
+    }
     _loadPosts();
     _scrollController.addListener(_onScroll);
   }
@@ -849,6 +861,7 @@ class ChannelPostsListState extends State<ChannelPostsList> {
           _isLoading = false;
           _postsLoadError = null;
         });
+        precacheChannelPostMedia(cached);
       }
     }
 

@@ -20,12 +20,26 @@ double effectiveChatKeyboardInset({
 }
 
 /// True when the list is close enough to the latest messages.
+///
+/// [reversed] matches Flutter `ListView(reverse: true)` — latest is offset 0.
 bool chatScrollIsNearBottom({
   required double offset,
   required double maxScrollExtent,
   double threshold = 120,
+  bool reversed = false,
 }) {
+  if (reversed) return offset <= threshold;
   return maxScrollExtent - offset <= threshold;
+}
+
+/// Distance from the latest messages (0 = pinned to last).
+double chatDistanceFromLatest({
+  required double offset,
+  required double maxScrollExtent,
+  bool reversed = false,
+}) {
+  if (reversed) return offset;
+  return maxScrollExtent - offset;
 }
 
 /// Hysteresis so the jump-FAB does not blink while iOS bounces at the end.
@@ -36,8 +50,13 @@ ChatBottomFabPolicy chatBottomFabPolicy({
   required double maxScrollExtent,
   double hideBelow = 80,
   double showAbove = 180,
+  bool reversed = false,
 }) {
-  final distance = maxScrollExtent - offset;
+  final distance = chatDistanceFromLatest(
+    offset: offset,
+    maxScrollExtent: maxScrollExtent,
+    reversed: reversed,
+  );
   if (distance <= hideBelow) return ChatBottomFabPolicy.hide;
   if (distance > showAbove) return ChatBottomFabPolicy.show;
   return ChatBottomFabPolicy.keep;
