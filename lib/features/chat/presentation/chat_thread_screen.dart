@@ -7,6 +7,7 @@ import 'dart:ui' as ui;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -77,6 +78,7 @@ import '../application/chat_reaction_optimistic.dart';
 import '../application/chat_search_date.dart';
 import '../application/chat_message_integrate.dart';
 import '../application/chat_inbox_optimistic.dart';
+import '../application/chat_open_anchor.dart';
 import '../application/chat_open_direct.dart';
 import '../application/chat_ready_outgoing.dart';
 import '../application/chat_thread_prefetch.dart';
@@ -333,7 +335,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   final _inputFocusNode = FocusNode();
   final _threadSearchController = TextEditingController();
   final _threadSearchFocusNode = FocusNode();
-  final _scroll = ScrollController();
+  final _scroll = ChatThreadScrollController();
   final _messages = <ChatMessage>[];
   bool _loading = true;
   bool _loadingMore = false;
@@ -570,6 +572,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   bool _suppressMarkRead = false;
   /// Telegram-style unread divider shown above this message id.
   int? _unreadDividerBeforeId;
+  /// Last open-anchor apply finished; user scroll or settle releases the pin.
+  bool _openAnchorSettled = false;
+  bool _applyingOpenAnchor = false;
+  /// Hide the list until it is already on last/unread (no flash of history top).
+  bool _openPaintReady = false;
+  int? _savedOpenMessageId;
+  Timer? _openPaintFallback;
   final Set<int> _typingUserIds = <int>{};
   final Map<int, Timer> _typingUserTimers = <int, Timer>{};
   /// userId → `typing` | `recording`
@@ -712,6 +721,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _messages.addAll(warm);
       _loading = false;
     }
+    _savedOpenMessageId =
+        ChatThreadUiPrefs.peekOpenMessageId(widget.conversationId);
+    _prepareOpenAnchor();
+    unawaited(_hydrateSavedOpenMessage());
+    _openPaintFallback = Timer(const Duration(milliseconds: 360), () {
+      if (!mounted || _openPaintReady) return;
+      _releaseOpenAnchor();
+    });
     unawaited(_loadCachedMessages().then((_) async {
       await _restoreFailedTextSends();
       await _restoreReadyOutbox();
@@ -2261,6 +2278,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _loading = false;
     });
     _tryRestorePendingDraftReply();
+    if (!_openAnchorSettled) {
+      _prepareOpenAnchor();
+      _scrollAfterInitialLoad();
+    }
   }
 
   Future<void> _restoreFailedTextSends() async {
@@ -3785,25 +3806,36 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return text.isEmpty ? 'Сообщение' : text;
   }
 
-  void _scrollToMessage(int messageId) {
+  void _scrollToMessage(
+    int messageId, {
+    bool animated = true,
+    double alignment = 0.42,
+  }) {
     final idx = _messages.indexWhere((m) => m.id == messageId);
     if (idx < 0 || !_scroll.hasClients || _messages.isEmpty) return;
     final ctx = _messageItemKeys[messageId]?.currentContext;
     if (ctx != null) {
       Scrollable.ensureVisible(
         ctx,
-        duration: const Duration(milliseconds: 260),
+        duration: animated
+            ? const Duration(milliseconds: 260)
+            : Duration.zero,
         curve: Curves.easeOutCubic,
-        alignment: 0.42,
+        alignment: alignment,
       );
       return;
     }
     final fraction = idx / math.max(1, _messages.length - 1);
-    _scroll.animateTo(
-      _scroll.position.maxScrollExtent * fraction,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOut,
-    );
+    final target = _scroll.position.maxScrollExtent * fraction;
+    if (animated) {
+      _scroll.animateTo(
+        target,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    } else {
+      _scroll.jumpTo(target);
+    }
   }
 
   Future<void> _scrollToReplyMessage(int messageId) async {
@@ -5115,16 +5147,77 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   int? _firstUnreadMessageId() {
-    final unread = _conversation.unreadCount;
-    if (unread <= 0 || _messages.isEmpty) return null;
-    var remaining = unread;
-    for (var i = _messages.length - 1; i >= 0; i--) {
-      if (!_messages[i].isMine) {
-        remaining--;
-        if (remaining <= 0) return _messages[i].id;
-      }
+    return firstUnreadMessageId(
+      unreadCount: _conversation.unreadCount,
+      messagesOldestFirst: [
+        for (final m in _messages) (id: m.id, isMine: m.isMine),
+      ],
+    );
+  }
+
+  Future<void> _hydrateSavedOpenMessage() async {
+    final id = await ChatThreadUiPrefs.getOpenMessageId(widget.conversationId);
+    if (!mounted || _openAnchorSettled) return;
+    if (id == _savedOpenMessageId) return;
+    _savedOpenMessageId = id;
+    _prepareOpenAnchor();
+  }
+
+  void _prepareOpenAnchor() {
+    if (_openAnchorSettled) {
+      _scroll.holdOpenAnchor = false;
+      return;
     }
-    return _messages.first.id;
+    final target = resolveChatOpenTarget(
+      jumpToMessageId: _pendingInitialJumpMessageId,
+      firstUnreadId: _firstUnreadMessageId(),
+      savedMessageId: _savedOpenMessageId,
+    );
+    final id = target.messageId;
+    final idx = id == null ? null : _messages.indexWhere((m) => m.id == id);
+    _scroll.openFraction = target.fractionFor(
+      messageIndex: idx != null && idx >= 0 ? idx : null,
+      length: _messages.length,
+    );
+    _scroll.holdOpenAnchor = true;
+  }
+
+  void _releaseOpenAnchor() {
+    _openAnchorSettled = true;
+    _scroll.holdOpenAnchor = false;
+    _openPaintFallback?.cancel();
+    if (mounted && !_openPaintReady) {
+      setState(() => _openPaintReady = true);
+    } else {
+      _openPaintReady = true;
+    }
+  }
+
+  void _onUserBrokeOpenAnchor() {
+    if (_applyingOpenAnchor || _openAnchorSettled) return;
+    _releaseOpenAnchor();
+  }
+
+  int? _approxVisibleMessageId() {
+    if (_messages.isEmpty) return null;
+    if (!_scroll.hasClients) return _messages.last.id;
+    final max = _scroll.position.maxScrollExtent;
+    if (max <= 0) return _messages.last.id;
+    final frac = (_scroll.offset / max).clamp(0.0, 1.0);
+    final idx = (frac * (_messages.length - 1)).round();
+    return _messages[idx.clamp(0, _messages.length - 1)].id;
+  }
+
+  void _persistOpenPosition() {
+    final cid = widget.conversationId;
+    if (cid <= 0) return;
+    if (_isNearBottom()) {
+      unawaited(ChatThreadUiPrefs.setOpenMessageId(cid, null));
+      return;
+    }
+    unawaited(
+      ChatThreadUiPrefs.setOpenMessageId(cid, _approxVisibleMessageId()),
+    );
   }
 
   bool _messageMentionsMe(ChatMessage msg) {
@@ -5223,60 +5316,85 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   void _scrollAfterInitialLoad() {
+    _prepareOpenAnchor();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_scroll.hasClients) return;
-      if (_pendingInitialJumpMessageId != null) {
-        unawaited(_jumpToInitialMessageIfNeeded());
-        return;
-      }
-      final firstUnread = _firstUnreadMessageId();
-      if (firstUnread != null) {
-        _seedUnreadMentionQueue(fromMessageId: firstUnread);
-        if (_conversation.unreadReactionsCount > 0) {
-          _seedUnreadReactionQueue();
+      if (!mounted || !_scroll.hasClients || _openAnchorSettled) return;
+      _applyingOpenAnchor = true;
+      try {
+        if (_pendingInitialJumpMessageId != null) {
+          unawaited(_jumpToInitialMessageIfNeeded());
+          _releaseOpenAnchor();
+          return;
         }
-        final mentionId = _firstUnreadMentionMessageId();
-        final reactionId =
-            mentionId == null ? _firstUnreadReactionMessageId() : null;
-        // First mention/reaction is shown on open; next FAB tap advances further.
-        if (mentionId != null && _unreadMentionQueue.isNotEmpty) {
-          _unreadMentionCursor = 1;
-        } else if (reactionId != null && _unreadReactionQueue.isNotEmpty) {
-          _unreadReactionCursor = 1;
+        final firstUnread = _firstUnreadMessageId();
+        if (firstUnread != null) {
+          _seedUnreadMentionQueue(fromMessageId: firstUnread);
+          if (_conversation.unreadReactionsCount > 0) {
+            _seedUnreadReactionQueue();
+          }
+          final mentionId = _firstUnreadMentionMessageId();
+          final reactionId =
+              mentionId == null ? _firstUnreadReactionMessageId() : null;
+          // First mention/reaction is shown on open; next FAB tap advances further.
+          if (mentionId != null && _unreadMentionQueue.isNotEmpty) {
+            _unreadMentionCursor = 1;
+          } else if (reactionId != null && _unreadReactionQueue.isNotEmpty) {
+            _unreadReactionCursor = 1;
+          }
+          setState(() => _unreadDividerBeforeId = firstUnread);
+          _scrollToMessage(
+            mentionId ?? reactionId ?? firstUnread,
+            animated: false,
+            alignment: mentionId != null || reactionId != null ? 0.42 : 0.12,
+          );
+          final idx = _messages.indexWhere((m) => m.id == firstUnread);
+          final below = idx >= 0 ? _messages.length - idx - 1 : 0;
+          if (below > 0 ||
+              _hasMentionJumpTargets ||
+              _hasReactionJumpTargets) {
+            setState(() {
+              _newMessagesBelow = below;
+              _showJumpToBottom = true;
+              _jumpFabTargetsUnread = true;
+            });
+          }
+          _releaseOpenAnchor();
+          return;
         }
-        setState(() => _unreadDividerBeforeId = firstUnread);
-        _scrollToMessage(mentionId ?? reactionId ?? firstUnread);
-        final idx = _messages.indexWhere((m) => m.id == firstUnread);
-        final below = idx >= 0 ? _messages.length - idx - 1 : 0;
-        if (below > 0 ||
-            _hasMentionJumpTargets ||
-            _hasReactionJumpTargets) {
-          setState(() {
-            _newMessagesBelow = below;
-            _showJumpToBottom = true;
-            _jumpFabTargetsUnread = true;
-          });
-        }
-      } else {
         if (_conversation.unreadReactionsCount > 0) {
           _seedUnreadReactionQueue();
         }
         final reactionId = _firstUnreadReactionMessageId();
         if (reactionId != null) {
-          // First reaction is shown on open; next FAB tap advances further.
           if (_unreadReactionQueue.isNotEmpty) {
             _unreadReactionCursor = 1;
           }
-          _scrollToMessage(reactionId);
+          _scrollToMessage(reactionId, animated: false);
           _focusMessageTemporarily(reactionId);
           setState(() {
             _showJumpToBottom = true;
             _jumpFabTargetsUnread = _hasReactionJumpTargets;
           });
-        } else {
-          _scrollToBottom();
-          _scheduleMarkRead();
+          _releaseOpenAnchor();
+          return;
         }
+        final saved = _savedOpenMessageId;
+        if (saved != null &&
+            saved > 0 &&
+            _messages.any((m) => m.id == saved)) {
+          _scrollToMessage(saved, animated: false, alignment: 0.35);
+          setState(() {
+            _showJumpToBottom = true;
+            _jumpFabTargetsUnread = false;
+          });
+          _releaseOpenAnchor();
+          return;
+        }
+        _scrollToBottom(animated: false);
+        _scheduleMarkRead();
+        _releaseOpenAnchor();
+      } finally {
+        _applyingOpenAnchor = false;
       }
     });
   }
@@ -5299,7 +5417,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _pendingInitialJumpMessageId = null;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        _scrollToMessage(targetId);
+        _scrollToMessage(targetId, animated: false);
         _focusMessageTemporarily(targetId);
       });
       return;
@@ -5313,7 +5431,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _pendingInitialJumpMessageId = null;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
-          _scrollToMessage(targetId);
+          _scrollToMessage(targetId, animated: false);
           _focusMessageTemporarily(targetId);
         });
         return;
@@ -6195,6 +6313,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _manualReadyRetryTimer?.cancel();
     _muteUnmuteTimer?.cancel();
     _keyboardFollowTimer?.cancel();
+    _openPaintFallback?.cancel();
     for (final t in _failedTextAutoRetryTimers.values) {
       t.cancel();
     }
@@ -6214,6 +6333,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _controller.dispose();
     _threadSearchController.dispose();
     _threadSearchFocusNode.dispose();
+    _persistOpenPosition();
     _scroll.dispose();
     super.dispose();
   }
@@ -11734,7 +11854,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       // Acknowledge receipt even if the user is still above unread.
       _scheduleMarkDelivered();
       if (refresh) {
-        _scrollAfterInitialLoad();
+        if (!_openAnchorSettled) {
+          _scrollAfterInitialLoad();
+        } else if (_isNearBottom()) {
+          _scheduleMarkRead();
+        }
       } else if (_isNearBottom()) {
         // Pagination/background reload should not wipe unread while scrolled up.
         _scheduleMarkRead();
@@ -15428,7 +15552,21 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                   textAlign: TextAlign.center,
                                 ),
                               )
-                            : ListView.builder(
+                            : Opacity(
+                                opacity: _openPaintReady ||
+                                        visibleMessages.isEmpty
+                                    ? 1
+                                    : 0,
+                                child: NotificationListener<
+                                    UserScrollNotification>(
+                                onNotification: (notification) {
+                                  if (notification.direction !=
+                                      ScrollDirection.idle) {
+                                    _onUserBrokeOpenAnchor();
+                                  }
+                                  return false;
+                                },
+                                child: ListView.builder(
                                 controller: _scroll,
                                 physics: kIsWeb
                                     ? const ClampingScrollPhysics()
@@ -15917,6 +16055,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                   );
                                 },
                               ),
+                            ),
+                            ),
                     if (_floatingDateVisible &&
                         (_floatingDateLabel?.isNotEmpty ?? false) &&
                         !_selectionMode)
