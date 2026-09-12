@@ -1,4 +1,5 @@
 import 'guest_routes.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -967,6 +968,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/channel/:channelId',
         name: 'channel_page',
+        parentNavigatorKey: hanEatRootNavigatorKey,
         pageBuilder: (context, state) {
           final channelId =
               parseRoutePositiveId(state.pathParameters['channelId']);
@@ -975,7 +977,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               child: InvalidLinkScreen(title: 'Канал'),
             );
           }
-          return MaterialPage(child: ChannelDetailScreen(channelId: channelId));
+          return CupertinoPage<void>(
+            key: state.pageKey,
+            child: ChannelDetailScreen(channelId: channelId),
+          );
         },
       ),
       GoRoute(
@@ -1203,6 +1208,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '${ChatThreadRoute.path}/:conversationId',
         name: ChatThreadRoute.name,
+        parentNavigatorKey: hanEatRootNavigatorKey,
         pageBuilder: (context, state) {
           final id = int.tryParse(state.pathParameters['conversationId'] ?? '');
           final extra = state.extra;
@@ -1229,7 +1235,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           }
           final msgParam = state.uri.queryParameters['msg'];
           final jumpFromQuery = int.tryParse(msgParam ?? '');
-          return MaterialPage(
+          return CupertinoPage<void>(
+            key: state.pageKey,
             child: ChatThreadLoaderScreen(
               conversationId: id,
               initialConversation: initialConversation,

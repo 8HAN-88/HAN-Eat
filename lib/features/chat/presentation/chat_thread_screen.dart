@@ -78,6 +78,7 @@ import '../application/chat_reaction_optimistic.dart';
 import '../application/chat_search_date.dart';
 import '../application/chat_message_integrate.dart';
 import '../application/chat_inbox_optimistic.dart';
+import '../application/chat_media_precache.dart';
 import '../application/chat_open_anchor.dart';
 import '../application/chat_open_direct.dart';
 import '../application/chat_ready_outgoing.dart';
@@ -575,10 +576,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   /// Last open-anchor apply finished; user scroll or settle releases the pin.
   bool _openAnchorSettled = false;
   bool _applyingOpenAnchor = false;
-  /// Hide the list until it is already on last/unread (no flash of history top).
-  bool _openPaintReady = false;
   int? _savedOpenMessageId;
-  Timer? _openPaintFallback;
   final Set<int> _typingUserIds = <int>{};
   final Map<int, Timer> _typingUserTimers = <int, Timer>{};
   /// userId → `typing` | `recording`
@@ -720,15 +718,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (warm != null && warm.isNotEmpty) {
       _messages.addAll(warm);
       _loading = false;
+      precacheChatMessageMedia(warm);
     }
     _savedOpenMessageId =
         ChatThreadUiPrefs.peekOpenMessageId(widget.conversationId);
     _prepareOpenAnchor();
     unawaited(_hydrateSavedOpenMessage());
-    _openPaintFallback = Timer(const Duration(milliseconds: 360), () {
-      if (!mounted || _openPaintReady) return;
-      _releaseOpenAnchor();
-    });
     unawaited(_loadCachedMessages().then((_) async {
       await _restoreFailedTextSends();
       await _restoreReadyOutbox();
@@ -3826,7 +3821,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return;
     }
     final fraction = idx / math.max(1, _messages.length - 1);
-    final target = _scroll.position.maxScrollExtent * fraction;
+    final target = _scroll.position.maxScrollExtent * (1 - fraction);
     if (animated) {
       _scroll.animateTo(
         target,
@@ -4890,6 +4885,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final fabPolicy = chatBottomFabPolicy(
       offset: offset,
       maxScrollExtent: maxExtent,
+      reversed: true,
     );
     if (fabPolicy == ChatBottomFabPolicy.hide) {
       if (_showJumpToBottom ||
@@ -4921,7 +4917,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (_hasMore &&
         !_loadingMore &&
         !_loading &&
-        _scroll.position.pixels < 140) {
+        _scroll.position.pixels >
+            _scroll.position.maxScrollExtent - 160) {
       unawaited(_load(refresh: false));
     }
     _updateFloatingDateFromScroll();
@@ -4945,7 +4942,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         break;
       }
     }
-    label ??= _chatDateSeparatorLabel(messages.first.createdAt);
+    label ??= _chatDateSeparatorLabel(messages.last.createdAt);
     final changed =
         label != _floatingDateLabel || !_floatingDateVisible;
     if (changed) {
@@ -5143,6 +5140,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       offset: _scroll.offset,
       maxScrollExtent: _scroll.position.maxScrollExtent,
       threshold: threshold,
+      reversed: true,
     );
   }
 
@@ -5179,18 +5177,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       messageIndex: idx != null && idx >= 0 ? idx : null,
       length: _messages.length,
     );
-    _scroll.holdOpenAnchor = true;
+    _scroll.holdOpenAnchor = !target.isBottom;
   }
 
   void _releaseOpenAnchor() {
     _openAnchorSettled = true;
     _scroll.holdOpenAnchor = false;
-    _openPaintFallback?.cancel();
-    if (mounted && !_openPaintReady) {
-      setState(() => _openPaintReady = true);
-    } else {
-      _openPaintReady = true;
-    }
   }
 
   void _onUserBrokeOpenAnchor() {
@@ -5203,7 +5195,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (!_scroll.hasClients) return _messages.last.id;
     final max = _scroll.position.maxScrollExtent;
     if (max <= 0) return _messages.last.id;
-    final frac = (_scroll.offset / max).clamp(0.0, 1.0);
+    final frac = (1 - _scroll.offset / max).clamp(0.0, 1.0);
     final idx = (frac * (_messages.length - 1)).round();
     return _messages[idx.clamp(0, _messages.length - 1)].id;
   }
@@ -5390,7 +5382,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           _releaseOpenAnchor();
           return;
         }
-        _scrollToBottom(animated: false);
         _scheduleMarkRead();
         _releaseOpenAnchor();
       } finally {
@@ -5476,8 +5467,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final idx = _messages.indexWhere((m) => m.id == id);
     if (idx < 0) return false;
     final fraction = idx / (_messages.length - 1);
-    final unreadApprox = _scroll.position.maxScrollExtent * fraction;
-    return _scroll.offset + 160 < unreadApprox;
+    final unreadApprox =
+        _scroll.position.maxScrollExtent * (1 - fraction);
+    return chatUnreadIsBelowViewport(
+      offset: _scroll.offset,
+      unreadApprox: unreadApprox,
+      reversed: true,
+    );
   }
 
   void _onJumpFabTap() {
@@ -6313,7 +6309,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _manualReadyRetryTimer?.cancel();
     _muteUnmuteTimer?.cancel();
     _keyboardFollowTimer?.cancel();
-    _openPaintFallback?.cancel();
     for (final t in _failedTextAutoRetryTimers.values) {
       t.cancel();
     }
@@ -10704,6 +10699,40 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           ],
         ),
       );
+    } else if (count == 5 || count == 6) {
+      Widget rowOf(List<int> idxs, {int? remaining}) {
+        return Expanded(
+          child: Row(
+            children: [
+              for (var i = 0; i < idxs.length; i++) ...[
+                if (i > 0) SizedBox(width: spacing),
+                Expanded(
+                  child: tile(
+                    displayItems[idxs[i]],
+                    index: idxs[i],
+                    remaining: i == idxs.length - 1 ? remaining : null,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      }
+
+      final remaining = items.length - count;
+      body = SizedBox(
+        height: 248,
+        child: Column(
+          children: [
+            rowOf(count == 5 ? const [0, 1] : const [0, 1, 2]),
+            SizedBox(height: spacing),
+            rowOf(
+              count == 5 ? const [2, 3, 4] : const [3, 4, 5],
+              remaining: remaining > 0 ? remaining : null,
+            ),
+          ],
+        ),
+      );
     } else {
       final remaining = items.length - 4;
       body = SizedBox(
@@ -10768,6 +10797,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return CachedNetworkImage(
       imageUrl: resolved,
       fit: BoxFit.cover,
+      fadeInDuration: Duration.zero,
+      fadeOutDuration: Duration.zero,
       memCacheWidth: animated ? null : 720,
       memCacheHeight: animated ? null : 720,
       maxWidthDiskCache: animated ? null : 960,
@@ -11203,8 +11234,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final clusterOverflow = preLayout.menuTop + menuH - (targetBottom - 8);
     if (clusterOverflow > 0 && _scroll.hasClients) {
       await _scroll.animateTo(
-        (_scroll.offset + clusterOverflow)
-            .clamp(0.0, _scroll.position.maxScrollExtent),
+        chatOverlayScrollTarget(
+          offset: _scroll.offset,
+          maxScrollExtent: _scroll.position.maxScrollExtent,
+          delta: clusterOverflow,
+          reversed: true,
+        ),
         duration: const Duration(milliseconds: 160),
         curve: Curves.easeOut,
       );
@@ -11217,7 +11252,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     } else if (rect.bottom > targetBottom - 80 && _scroll.hasClients) {
       final delta = rect.bottom - (targetBottom - 80);
       await _scroll.animateTo(
-        (_scroll.offset + delta).clamp(0.0, _scroll.position.maxScrollExtent),
+        chatOverlayScrollTarget(
+          offset: _scroll.offset,
+          maxScrollExtent: _scroll.position.maxScrollExtent,
+          delta: delta,
+          reversed: true,
+        ),
         duration: const Duration(milliseconds: 160),
         curve: Curves.easeOut,
       );
@@ -11847,6 +11887,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _loadError = null;
       });
       unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
+      if (refresh) precacheChatMessageMedia(_messages);
       _tryRestorePendingDraftReply();
       if (refresh) {
         unawaited(_refreshScheduledPendingCount());
@@ -12007,7 +12048,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   void _scrollToBottom({bool animated = true}) {
     if (!_scroll.hasClients) return;
-    final target = _scroll.position.maxScrollExtent;
+    final target = _scroll.position.minScrollExtent;
     if ((target - _scroll.offset).abs() < 2) {
       if (_suppressMarkRead) {
         setState(() => _suppressMarkRead = false);
@@ -15552,13 +15593,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                   textAlign: TextAlign.center,
                                 ),
                               )
-                            : Opacity(
-                                opacity: _openPaintReady ||
-                                        visibleMessages.isEmpty
-                                    ? 1
-                                    : 0,
-                                child: NotificationListener<
-                                    UserScrollNotification>(
+                            : NotificationListener<UserScrollNotification>(
                                 onNotification: (notification) {
                                   if (notification.direction !=
                                       ScrollDirection.idle) {
@@ -15568,6 +15603,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                 },
                                 child: ListView.builder(
                                 controller: _scroll,
+                                reverse: true,
                                 physics: kIsWeb
                                     ? const ClampingScrollPhysics()
                                     : null,
@@ -15583,7 +15619,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                 itemCount:
                                     visibleMessages.length + (_hasMore ? 1 : 0),
                                 itemBuilder: (context, index) {
-                                  if (_hasMore && index == 0) {
+                                  if (_hasMore &&
+                                      index == visibleMessages.length) {
                                     return Padding(
                                       padding: const EdgeInsets.symmetric(
                                         vertical: 10,
@@ -15604,7 +15641,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                       ),
                                     );
                                   }
-                                  final msgIndex = index - (_hasMore ? 1 : 0);
+                                  final msgIndex =
+                                      visibleMessages.length - 1 - index;
                                   final msg = visibleMessages[msgIndex];
                                   final replyTarget = _replyTargetFor(msg);
                                   final replyQuote = replyTarget != null
@@ -16055,7 +16093,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                   );
                                 },
                               ),
-                            ),
                             ),
                     if (_floatingDateVisible &&
                         (_floatingDateLabel?.isNotEmpty ?? false) &&
@@ -18109,6 +18146,8 @@ class _Bubble extends StatelessWidget {
               final raw = CachedNetworkImage(
                 imageUrl: resolved,
                 fit: BoxFit.cover,
+                fadeInDuration: Duration.zero,
+                fadeOutDuration: Duration.zero,
                 memCacheWidth: animated ? null : 720,
                 memCacheHeight: animated ? null : 720,
                 maxWidthDiskCache: animated ? null : 960,

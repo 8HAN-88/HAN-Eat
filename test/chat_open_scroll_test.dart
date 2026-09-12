@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:han_eat/features/chat/application/chat_open_anchor.dart';
 
 void main() {
-  testWidgets('opens at the last messages after the first layout',
+  testWidgets('reversed list first frame is the latest messages',
       (tester) async {
     final scroll = ChatThreadScrollController();
     addTearDown(scroll.dispose);
@@ -15,6 +15,7 @@ void main() {
             height: 400,
             child: ListView.builder(
               controller: scroll,
+              reverse: true,
               itemCount: 80,
               itemBuilder: (_, i) => SizedBox(
                 height: 48,
@@ -26,13 +27,10 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.pump();
 
     expect(scroll.hasClients, isTrue);
-    expect(scroll.position.maxScrollExtent, greaterThan(100));
-    expect(
-      scroll.offset,
-      closeTo(scroll.position.maxScrollExtent, 2),
-    );
+    expect(scroll.offset, lessThan(8));
+    expect(find.text('m0'), findsOneWidget);
+    expect(find.text('m79'), findsNothing);
   });
 }

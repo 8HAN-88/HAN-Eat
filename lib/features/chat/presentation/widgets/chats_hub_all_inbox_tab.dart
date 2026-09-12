@@ -11,7 +11,9 @@ import '../../../../core/network/api_rate_limit_backoff.dart';
 import '../../../../core/network/feed_load_helper.dart';
 import '../../../../models/chat_models.dart';
 import '../../../../services/api_reachability_service.dart';
+import '../../../../services/channel_cache_service.dart';
 import '../../../../services/channel_service.dart';
+import '../../application/chat_media_precache.dart';
 import '../../../../services/channel_sheet_prefs.dart';
 import '../../../../services/chat_cache_service.dart';
 import '../../../../services/chat_folder_store.dart';
@@ -876,6 +878,15 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     return out;
   }
 
+  void _replaceChatEntriesKeepingChannels(List<ChatConversation> chats) {
+    final channels = _entries.whereType<ChannelInboxEntry>().toList();
+    _entries
+      ..clear()
+      ..addAll(chats.map(ChatInboxEntry.new))
+      ..addAll(channels);
+    _sortEntries();
+  }
+
   void _sortEntries() {
     _entries.sort((a, b) {
       final aFav = a is ChannelInboxEntry && a.isFavorite;
@@ -986,6 +997,19 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     }
   }
 
+  void _warmTopChannels(Iterable<int> channelIds, {int limit = 4}) {
+    var n = 0;
+    for (final id in channelIds) {
+      if (id <= 0) continue;
+      unawaited(() async {
+        await ChannelCacheService.warmChannel(id);
+        final posts = await ChannelCacheService.warmPosts(channelId: id);
+        if (posts.isNotEmpty) precacheChannelPostMedia(posts);
+      }());
+      if (++n >= limit) break;
+    }
+  }
+
   void _scheduleInboxRateLimitRetry() {
     if (_rateLimitRetryTimer != null) return;
     final wait = ApiRateLimitBackoff.remaining ?? const Duration(seconds: 12);
@@ -1024,9 +1048,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         final cachedRest = _activeInboxChats(cached, cachedSaved);
         setState(() {
           if (cachedSaved != null) _savedChat = cachedSaved;
-          _entries
-            ..clear()
-            ..addAll(cachedRest.map(ChatInboxEntry.new));
+          _replaceChatEntriesKeepingChannels(cachedRest);
           _loading = false;
           _error = null;
         });
@@ -1107,9 +1129,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     if (earlyChats.isNotEmpty || earlySaved != null) {
       setState(() {
         if (earlySaved != null) _savedChat = earlySaved;
-        _entries
-          ..clear()
-          ..addAll(earlyChats.map(ChatInboxEntry.new));
+        _replaceChatEntriesKeepingChannels(earlyChats);
         _error = null;
         _chatsPartialError = null;
         _loading = false;
@@ -1243,6 +1263,10 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       _warmTopThreads([
         for (final entry in entries)
           if (entry is ChatInboxEntry) entry.chat,
+      ]);
+      _warmTopChannels([
+        for (final entry in entries)
+          if (entry is ChannelInboxEntry) entry.channel.id,
       ]);
     }
 
@@ -1553,8 +1577,17 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
   }
 
   Future<void> _openChannel(int channelId) async {
+    final memoryChannel = ChannelCacheService.peekChannel(channelId);
+    final memoryPosts = ChannelCacheService.peekPosts(channelId: channelId);
+    if (memoryChannel == null) {
+      await ChannelCacheService.warmChannel(channelId);
+    }
+    final posts = memoryPosts ??
+        await ChannelCacheService.warmPosts(channelId: channelId);
+    if (posts.isNotEmpty) precacheChannelPostMedia(posts);
+    if (!mounted) return;
     await context.push(ChannelDetailRoute.pathFor(channelId));
-    if (mounted) _load();
+    if (mounted) unawaited(_load(silent: true));
   }
 
   Future<void> _archiveChannelFromHub(Channel channel) async {
@@ -2277,14 +2310,14 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     ref.listen<int>(channelsMainListRefreshProvider, (previous, next) {
       if (previous != null && previous != next) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _load();
+          if (mounted) unawaited(_load(silent: true));
         });
       }
     });
     ref.listen<int>(chatsHubRefreshProvider, (previous, next) {
       if (previous != null && previous != next) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _load();
+          if (mounted) unawaited(_load(silent: true));
         });
       }
     });
@@ -2542,7 +2575,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                         );
                         if (mounted) {
                           unawaited(_refreshDrafts());
-                          _load();
+                          unawaited(_load(silent: true));
                         }
                       },
                       onLongPress: () => _showChatHubActions(chat),

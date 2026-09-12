@@ -1,6 +1,7 @@
 import '../../../models/chat_models.dart';
 import '../../../services/chat_cache_service.dart';
 import '../../../services/chat_service.dart';
+import 'chat_media_precache.dart';
 import 'chat_message_integrate.dart';
 
 /// First page of a thread, kept briefly so open + `_load` share one fetch.
@@ -96,6 +97,9 @@ class ChatThreadPrefetch {
               isDuplicate: _isDuplicateOutgoing,
             );
       await ChatCacheService.saveThread(conversationId, merged);
+      try {
+        precacheChatMessageMedia(merged);
+      } catch (_) {}
       return fetched;
     } catch (_) {
       return takeFresh(conversationId);

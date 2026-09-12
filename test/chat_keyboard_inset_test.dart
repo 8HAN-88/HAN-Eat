@@ -59,5 +59,52 @@ void main() {
         ChatBottomFabPolicy.show,
       );
     });
+
+    test('reversed list treats offset 0 as the latest messages', () {
+      expect(
+        chatScrollIsNearBottom(
+          offset: 8,
+          maxScrollExtent: 1000,
+          reversed: true,
+        ),
+        isTrue,
+      );
+      expect(
+        chatBottomFabPolicy(
+          offset: 0,
+          maxScrollExtent: 1000,
+          reversed: true,
+        ),
+        ChatBottomFabPolicy.hide,
+      );
+      expect(
+        chatBottomFabPolicy(
+          offset: 220,
+          maxScrollExtent: 1000,
+          reversed: true,
+        ),
+        ChatBottomFabPolicy.show,
+      );
+    });
+
+    test('reversed overlay scroll moves a bubble up by decreasing offset', () {
+      expect(
+        chatOverlayScrollTarget(
+          offset: 200,
+          maxScrollExtent: 1000,
+          delta: 80,
+          reversed: true,
+        ),
+        120,
+      );
+      expect(
+        chatOverlayScrollTarget(
+          offset: 200,
+          maxScrollExtent: 1000,
+          delta: 80,
+        ),
+        280,
+      );
+    });
   });
 }
