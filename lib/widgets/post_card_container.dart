@@ -30,18 +30,15 @@ class PostCardContainer extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
     return AppElevatedCard(
-      margin: margin ?? const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+      margin:
+          margin ?? const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       padding: padding,
-      radius: borderRadius ?? 24,
+      radius: borderRadius ?? AppCardDecorations.feedRadius,
+      chrome: AppCardChrome.feed,
       color: backgroundColor ??
-          (dark
-              ? scheme.surfaceContainer.withValues(alpha: 0.72)
-              : scheme.surface),
-      borderColor: borderColor ??
-          (dark
-              ? Colors.white.withValues(alpha: 0.06)
-              : scheme.outlineVariant.withValues(alpha: 0.74)),
-      showShadow: false,
+          (dark ? scheme.surfaceContainerLow : scheme.surface),
+      borderColor: borderColor,
+      showShadow: showShadow,
       child: child,
     );
   }
@@ -71,18 +68,15 @@ class ChannelPostCardContainer extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
     return AppElevatedCard(
-      margin: margin ?? const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+      margin:
+          margin ?? const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       padding: padding,
-      radius: borderRadius ?? 24,
+      radius: borderRadius ?? AppCardDecorations.feedRadius,
+      chrome: AppCardChrome.feed,
       color: channelBackgroundColor ??
-          (dark
-              ? scheme.surfaceContainer.withValues(alpha: 0.72)
-              : scheme.surface),
-      borderColor: channelAccentColor?.withValues(alpha: 0.45) ??
-          (dark
-              ? Colors.white.withValues(alpha: 0.06)
-              : scheme.outlineVariant.withValues(alpha: 0.74)),
-      showShadow: false,
+          (dark ? scheme.surfaceContainerLow : scheme.surface),
+      borderColor: channelAccentColor?.withValues(alpha: 0.45),
+      showShadow: true,
       child: child,
     );
   }

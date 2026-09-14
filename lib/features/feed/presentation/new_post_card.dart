@@ -1136,7 +1136,7 @@ class _NewPostCardState extends State<NewPostCard>
         post.videoUrl != null && post.videoUrl!.trim().isNotEmpty;
 
     return PostCardContainer(
-      margin: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1248,14 +1248,14 @@ class _NewPostCardState extends State<NewPostCard>
             ),
           if (!widget.hideFeedHeader && !hasFeedVideo)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
               child: Row(
                 children: [
                   // Аватар (того, кто репостнул, или канала, или автора)
                   GestureDetector(
                     onTap: widget.onAuthorTap,
                     child: CircleAvatar(
-                      radius: 20,
+                      radius: 16,
                       backgroundImage: displayAvatar != null
                           ? ResizeImage(
                               CachedNetworkImageProvider(
@@ -1263,13 +1263,16 @@ class _NewPostCardState extends State<NewPostCard>
                                   displayAvatar,
                                 ),
                               ),
-                              width: 80,
+                              width: 64,
                             )
                           : null,
                       child: displayAvatar == null
                           ? Text(
                               displayInitial,
-                              style: const TextStyle(fontSize: 18),
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
                             )
                           : null,
                     ),
@@ -1291,9 +1294,9 @@ class _NewPostCardState extends State<NewPostCard>
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     color: scheme.onSurface,
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 14,
-                                    letterSpacing: -0.15,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13.5,
+                                    letterSpacing: -0.1,
                                   ),
                                 ),
                               ),
@@ -1590,7 +1593,7 @@ class _NewPostCardState extends State<NewPostCard>
           ],
           // Действия (Instagram-стиль: кнопки → лайки → подпись → комментарии)
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1976,7 +1979,7 @@ class _NewPostCardState extends State<NewPostCard>
           imageUrls: imageUrls,
           maxHeight: reelHeight,
           singleAspectRatio: 4 / 5,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.zero,
           onDoubleTap: _handleDoubleTapLike,
           enableFullscreen: true,
         );
@@ -2088,35 +2091,24 @@ class _ViewsBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: scheme.outlineVariant.withValues(alpha: 0.5),
-          width: 0.7,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          Icons.visibility_outlined,
+          size: 13,
+          color: scheme.onSurfaceVariant,
         ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.visibility_outlined,
-            size: 14,
-            color: scheme.onSurfaceVariant,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            count,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w700,
-                  height: 1,
-                ),
-          ),
-        ],
-      ),
+        const SizedBox(width: 3),
+        Text(
+          count,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+                height: 1,
+              ),
+        ),
+      ],
     );
   }
 }
@@ -2163,7 +2155,7 @@ class _FeedActionButton extends StatelessWidget {
                   : Icon(
                       icon,
                       key: const ValueKey('icon'),
-                      size: 27,
+                      size: 26,
                       color: onTap == null ? scheme.outline : fg,
                     ),
             ),
@@ -2204,7 +2196,7 @@ class _FeedIconButton extends StatelessWidget {
         padding: const EdgeInsets.all(4),
         child: Icon(
           icon,
-          size: 29,
+          size: 26,
           color: onTap == null ? scheme.outline : (color ?? scheme.onSurface),
         ),
       ),
