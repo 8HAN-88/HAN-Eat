@@ -72,4 +72,51 @@ void main() {
       );
     });
   });
+
+  group('PostFeedRoute.postIdFromUrl', () {
+    test('reads public, channel and native post links', () {
+      expect(PostFeedRoute.postIdFromUrl('https://haneat.app/post/28'), 28);
+      expect(PostFeedRoute.postIdFromUrl('https://haneat.app/app/post/28'), 28);
+      expect(
+        PostFeedRoute.postIdFromUrl('https://haneat.app/channel/5/post/99'),
+        99,
+      );
+      expect(PostFeedRoute.postIdFromUrl('haneat://post/28'), 28);
+    });
+
+    test('ignores reel and foreign links', () {
+      expect(PostFeedRoute.postIdFromUrl('https://haneat.app/reel/28'), isNull);
+      expect(PostFeedRoute.postIdFromUrl('https://yandex.ru/pogoda'), isNull);
+    });
+  });
+
+  group('ShareLinkService.sharedPostIdFromUrl', () {
+    test('accepts reel, post and channel post links', () {
+      expect(ShareLinkService.sharedPostIdFromUrl('https://haneat.app/reel/7'), 7);
+      expect(ShareLinkService.sharedPostIdFromUrl('https://haneat.app/post/8'), 8);
+      expect(
+        ShareLinkService.sharedPostIdFromUrl(
+          'https://haneat.app/channel/2/post/11',
+        ),
+        11,
+      );
+    });
+  });
+
+  group('ShareLinkService.visibleCaptionForSharedPost', () {
+    test('drops post and channel share urls', () {
+      expect(
+        ShareLinkService.visibleCaptionForSharedPost(
+          'смотри\n\nОткрыть в HanWe: https://haneat.app/post/28',
+        ),
+        'смотри',
+      );
+      expect(
+        ShareLinkService.visibleCaptionForSharedPost(
+          'Открыть в HanWe: https://haneat.app/channel/4/post/9',
+        ),
+        isEmpty,
+      );
+    });
+  });
 }
