@@ -27,6 +27,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/app_router.dart';
 import '../../../services/api_service.dart';
 import '../../../services/post_service.dart';
+import '../../../services/feed_api_cache.dart';
 import '../../../services/feed_cache_service.dart';
 import '../../../services/feed_analytics_service.dart';
 import '../../../services/paid_features_service.dart';
@@ -65,6 +66,9 @@ class NewPostCard extends StatefulWidget {
   /// После удаления поста (обновить список родителя).
   final VoidCallback? onPostDeleted;
 
+  /// Лайк / репост / сохранение — чтобы список не перетёр локальное состояние.
+  final ValueChanged<PostModel>? onPostUpdated;
+
   /// Без шапки (аватар, имя, ⋯ сверху) — как карточки в канале; меню переносится в нижний ряд.
   final bool hideFeedHeader;
 
@@ -74,6 +78,7 @@ class NewPostCard extends StatefulWidget {
     this.onCommentTap,
     this.onAuthorTap,
     this.onPostDeleted,
+    this.onPostUpdated,
     this.hideFeedHeader = false,
   });
 
@@ -225,18 +230,53 @@ class _NewPostCardState extends State<NewPostCard>
         widget.post,
       );
     }
+    if (oldWidget.post.id != widget.post.id) {
+      _syncEngagementFromPost(widget.post);
+    } else {
+      if (!_isLiking &&
+          (oldWidget.post.isLiked != widget.post.isLiked ||
+              oldWidget.post.likesCount != widget.post.likesCount)) {
+        _isLiked = _displayPost.isLiked;
+        _likesCount = _displayPost.likesCount;
+      }
+      if (!_isSaving && oldWidget.post.isSaved != widget.post.isSaved) {
+        _isSaved = _displayPost.isSaved ?? false;
+      }
+      if (!_isReposting &&
+          (oldWidget.post.isReposted != widget.post.isReposted ||
+              oldWidget.post.repostsCount != widget.post.repostsCount)) {
+        _isReposted = _displayPost.isReposted ?? false;
+        _repostsCount = _displayPost.repostsCount;
+      }
+      if (oldWidget.post.commentsCount != widget.post.commentsCount) {
+        _displayCommentsCount = widget.post.commentsCount;
+      }
+    }
+    _syncFeedChannelRepostFuture();
+  }
+
+  void _syncEngagementFromPost(PostModel post) {
     if (_likesViaPostApi) {
-      _isLiked = widget.post.isLiked;
-      _likesCount = widget.post.likesCount;
+      _isLiked = post.isLiked;
+      _likesCount = post.likesCount;
     } else {
       _isLiked = false;
       _likesCount = 0;
     }
-    _isSaved = widget.post.isSaved ?? false;
-    _isReposted = widget.post.isReposted ?? false;
-    _repostsCount = widget.post.repostsCount;
-    _displayCommentsCount = widget.post.commentsCount;
-    _syncFeedChannelRepostFuture();
+    _isSaved = post.isSaved ?? false;
+    _isReposted = post.isReposted ?? false;
+    _repostsCount = post.repostsCount;
+    _displayCommentsCount = post.commentsCount;
+  }
+
+  void _publishPostUpdate(PostModel post) {
+    widget.onPostUpdated?.call(post);
+    unawaited(FeedApiCache.patchPost(post));
+    unawaited(() async {
+      try {
+        await FeedCacheService.instance.upsertPostModelInCache(post);
+      } catch (_) {}
+    }());
   }
 
   Future<void> _loadCurrentUserId() async {
@@ -362,22 +402,41 @@ class _NewPostCardState extends State<NewPostCard>
       _isLiking = true;
       _isLiked = !_isLiked;
       _likesCount += _isLiked ? 1 : -1;
+      if (_likesCount < 0) _likesCount = 0;
+      _displayPost = _displayPost.copyWith(
+        isLiked: _isLiked,
+        likesCount: _likesCount,
+      );
     });
+    _publishPostUpdate(_displayPost);
 
     try {
       final response = _isLiked
           ? await LikeService.likePost(widget.post.id)
           : await LikeService.unlikePost(widget.post.id);
 
+      if (!mounted) return;
       setState(() {
+        _isLiked = response.liked;
         _likesCount = response.likesCount;
+        _displayPost = _displayPost.copyWith(
+          isLiked: response.liked,
+          likesCount: response.likesCount,
+        );
       });
+      _publishPostUpdate(_displayPost);
     } catch (e) {
       // Откатываем изменения при ошибке
       setState(() {
         _isLiked = !_isLiked;
         _likesCount += _isLiked ? 1 : -1;
+        if (_likesCount < 0) _likesCount = 0;
+        _displayPost = _displayPost.copyWith(
+          isLiked: _isLiked,
+          likesCount: _likesCount,
+        );
       });
+      _publishPostUpdate(_displayPost);
 
       if (mounted) {
         showErrorSnackBar(
@@ -400,7 +459,9 @@ class _NewPostCardState extends State<NewPostCard>
     setState(() {
       _isSaving = true;
       _isSaved = !_isSaved;
+      _displayPost = _displayPost.copyWith(isSaved: _isSaved);
     });
+    _publishPostUpdate(_displayPost);
 
     try {
       if (_isSaved) {
@@ -412,7 +473,9 @@ class _NewPostCardState extends State<NewPostCard>
       // Откатываем изменения при ошибке
       setState(() {
         _isSaved = !_isSaved;
+        _displayPost = _displayPost.copyWith(isSaved: _isSaved);
       });
+      _publishPostUpdate(_displayPost);
 
       if (mounted) {
         showErrorSnackBar(
@@ -438,7 +501,12 @@ class _NewPostCardState extends State<NewPostCard>
         _isReposting = true;
         _isReposted = false;
         _repostsCount = (_repostsCount - 1).clamp(0, double.infinity).toInt();
+        _displayPost = _displayPost.copyWith(
+          isReposted: false,
+          repostsCount: _repostsCount,
+        );
       });
+      _publishPostUpdate(_displayPost);
 
       try {
         await RepostService.deleteRepost(widget.post.id);
@@ -447,7 +515,12 @@ class _NewPostCardState extends State<NewPostCard>
         setState(() {
           _isReposted = true;
           _repostsCount += 1;
+          _displayPost = _displayPost.copyWith(
+            isReposted: true,
+            repostsCount: _repostsCount,
+          );
         });
+        _publishPostUpdate(_displayPost);
 
         if (mounted) {
           showErrorSnackBar(
@@ -479,7 +552,12 @@ class _NewPostCardState extends State<NewPostCard>
       _isReposting = true;
       _isReposted = true;
       _repostsCount += 1;
+      _displayPost = _displayPost.copyWith(
+        isReposted: true,
+        repostsCount: _repostsCount,
+      );
     });
+    _publishPostUpdate(_displayPost);
 
     try {
       await RepostService.createRepost(
@@ -491,7 +569,12 @@ class _NewPostCardState extends State<NewPostCard>
       setState(() {
         _isReposted = false;
         _repostsCount = (_repostsCount - 1).clamp(0, double.infinity).toInt();
+        _displayPost = _displayPost.copyWith(
+          isReposted: false,
+          repostsCount: _repostsCount,
+        );
       });
+      _publishPostUpdate(_displayPost);
 
       if (mounted) {
         showErrorSnackBar(

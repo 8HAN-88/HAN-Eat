@@ -509,7 +509,43 @@ PostModel applyIncomingPostPreservingLocalPoll(
   if (local.isPaid && local.purchased && !next.purchased) {
     next = next.copyWith(purchased: true);
   }
+  // Keep an optimistic like / save / repost when a stale feed payload
+  // still has the previous engagement flags.
+  if (local.isLiked && !next.isLiked) {
+    next = next.copyWith(
+      isLiked: true,
+      likesCount: local.likesCount > next.likesCount
+          ? local.likesCount
+          : next.likesCount,
+    );
+  }
+  if ((local.isSaved ?? false) && !(next.isSaved ?? false)) {
+    next = next.copyWith(isSaved: true);
+  }
+  if ((local.isReposted ?? false) && !(next.isReposted ?? false)) {
+    next = next.copyWith(
+      isReposted: true,
+      repostsCount: local.repostsCount > next.repostsCount
+          ? local.repostsCount
+          : next.repostsCount,
+    );
+  }
   return next;
+}
+
+/// Keep local likes / saves when the feed reloads a stale copy of the same posts.
+List<PostModel> mergeIncomingFeedPosts(
+  List<PostModel> local,
+  List<PostModel> incoming,
+) {
+  if (local.isEmpty) return incoming;
+  final byId = <int, PostModel>{
+    for (final post in local) post.id: post,
+  };
+  return [
+    for (final post in incoming)
+      applyIncomingPostPreservingLocalPoll(byId[post.id] ?? post, post),
+  ];
 }
 
 class PostAuthorModel {

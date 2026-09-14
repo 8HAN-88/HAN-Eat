@@ -89,6 +89,20 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
     await _loadFeed(refresh: true);
   }
 
+  void _onPostUpdated(PostModel updated) {
+    final i = _posts.indexWhere((p) => p.id == updated.id);
+    if (i == -1 || !mounted) return;
+    final cur = _posts[i];
+    if (cur.isLiked == updated.isLiked &&
+        cur.likesCount == updated.likesCount &&
+        cur.isSaved == updated.isSaved &&
+        cur.isReposted == updated.isReposted &&
+        cur.repostsCount == updated.repostsCount) {
+      return;
+    }
+    setState(() => _posts[i] = updated);
+  }
+
   String _cacheVariant([String? feedType, FeedSortMode? sortMode]) =>
       FeedCacheKeys.recommendations(
         feedType: feedType ?? _feedType,
@@ -196,7 +210,7 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
       if (requestId != _loadGeneration) return;
       if (cached.isNotEmpty) {
         setState(() {
-          _posts = cached;
+          _posts = mergeIncomingFeedPosts(_posts, cached);
           _nextCursor = null;
           _hasMore = true;
           _isLoading = true;
@@ -234,7 +248,7 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
       if (requestId != _loadGeneration) return;
       if (cached.isNotEmpty) {
         setState(() {
-          _posts = cached;
+          _posts = mergeIncomingFeedPosts(_posts, cached);
           _nextCursor = null;
           _hasMore = false;
           _lastLoadError = null;
@@ -256,8 +270,9 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
 
       if (!mounted) return;
       if (requestId != _loadGeneration) return;
-      final nextPosts =
-          refresh ? response.items : <PostModel>[..._posts, ...response.items];
+      final nextPosts = refresh
+          ? mergeIncomingFeedPosts(_posts, response.items)
+          : <PostModel>[..._posts, ...response.items];
       setState(() {
         _posts = nextPosts;
         _ads = refresh ? response.ads : _ads;
@@ -281,7 +296,7 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
         if (requestId != _loadGeneration) return;
         if (cached.isNotEmpty) {
           setState(() {
-            _posts = cached;
+            _posts = mergeIncomingFeedPosts(_posts, cached);
             _nextCursor = null;
             _hasMore = false;
             _lastLoadError = null;
@@ -525,6 +540,7 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
                           child: NewPostCard(
                             key: ValueKey('recommendations_post_${post.id}'),
                             post: post,
+                            onPostUpdated: _onPostUpdated,
                             onCommentTap: () {
                               FeedAnalyticsService.openDetail(
                                 post,
