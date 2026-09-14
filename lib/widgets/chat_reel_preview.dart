@@ -36,7 +36,7 @@ class _ReelPostCache {
   }
 }
 
-enum SharedPostCardPlace { chat, feed }
+enum SharedPostCardPlace { chat, feed, preview }
 
 /// Instagram DM shared-post card: media, author overlay, play, share/save.
 class SharedPostCard extends StatefulWidget {
@@ -250,11 +250,14 @@ class _SharedPostCardState extends State<SharedPostCard> {
 
   Widget _igCard(BuildContext context) {
     final feed = widget.place == SharedPostCardPlace.feed;
+    final preview = widget.place == SharedPostCardPlace.preview;
     final video = _isVideo;
     final screenW = MediaQuery.sizeOf(context).width;
     final width = feed
         ? double.infinity
-        : (screenW * (video ? 0.54 : 0.62)).clamp(176.0, video ? 228.0 : 268.0);
+        : preview
+            ? (video ? 148.0 : 164.0)
+            : (screenW * (video ? 0.54 : 0.62)).clamp(176.0, video ? 228.0 : 268.0);
     final aspect = video ? (9 / 16) : (4 / 5);
     final radius = feed ? 16.0 : 18.0;
     final post = _post;
