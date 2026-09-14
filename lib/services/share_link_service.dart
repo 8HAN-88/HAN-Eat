@@ -60,6 +60,13 @@ class ShareLinkService {
     return '$title\n\nОткрыть в HanWe: ${reelLink(reel.id)}';
   }
 
+  static String sharedPostShareText(PostModel post, {String? comment}) {
+    final body = post.type == 'reel' ? reelShareText(post) : postShareText(post);
+    final extra = comment?.trim() ?? '';
+    if (extra.isEmpty) return body;
+    return '$extra\n\n$body';
+  }
+
   /// Рилс, пост профиля или пост канала — один id для карточки репоста.
   static int? sharedPostIdFromUrl(String raw) {
     return ReelByIdRoute.postIdFromUrl(raw) ?? PostFeedRoute.postIdFromUrl(raw);

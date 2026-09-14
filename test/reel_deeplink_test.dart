@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:han_eat/app/app_router.dart';
+import 'package:han_eat/models/post_model.dart';
 import 'package:han_eat/services/share_link_service.dart';
 
 void main() {
@@ -99,6 +100,31 @@ void main() {
           'https://haneat.app/channel/2/post/11',
         ),
         11,
+      );
+    });
+  });
+
+  group('ShareLinkService.sharedPostShareText', () {
+    test('keeps reel link and prepends a comment', () {
+      final reel = PostModel.fromJson({
+        'id': 28,
+        'type': 'reel',
+        'status': 'published',
+        'created_at': '2026-01-01T00:00:00Z',
+        'user_id': 1,
+        'likes_count': 0,
+        'comments_count': 0,
+        'reposts_count': 0,
+        'views_count': 0,
+        'title': 'салют',
+      });
+      expect(
+        ShareLinkService.sharedPostShareText(reel),
+        'салют\n\nОткрыть в HanWe: https://haneat.app/reel/28',
+      );
+      expect(
+        ShareLinkService.sharedPostShareText(reel, comment: 'это я'),
+        'это я\n\nсалют\n\nОткрыть в HanWe: https://haneat.app/reel/28',
       );
     });
   });
