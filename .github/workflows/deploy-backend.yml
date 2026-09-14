@@ -97,9 +97,12 @@ jobs:
             bash "$APP_DIR/scripts/patch_nginx_realtime_sse.sh" || true
           fi
           systemctl daemon-reload
+          systemctl start nginx || true
+          nginx -t && (systemctl reload nginx || systemctl restart nginx) || systemctl restart nginx || true
           systemctl restart haneat-api
           systemctl restart haneat-video-worker 2>/dev/null || true
           sleep 2
+          systemctl is-active nginx || true
           systemctl is-active haneat-api
           REMOTE
 

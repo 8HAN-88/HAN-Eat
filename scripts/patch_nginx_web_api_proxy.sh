@@ -292,8 +292,9 @@ else:
     print("ok: config already up to date")
 PY
 
+systemctl start nginx || true
 nginx -t
-systemctl reload nginx
+systemctl reload nginx || systemctl restart nginx
 
 echo "Verifying HTTPS /health returns JSON..."
 for host in haneat.app www.haneat.app; do
