@@ -1,10 +1,11 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
-import '../../../../services/server_config.dart';
 import '../../../../utils/video_player_helper.dart';
+import '../../../../widgets/cover_network_video.dart';
 import '../../application/chat_voice_playback_coordinator.dart';
 
 /// Telegram-style circular video note (кружок).
@@ -13,7 +14,7 @@ class ChatVideoNoteBubble extends StatefulWidget {
     super.key,
     required this.mediaUrl,
     this.durationSec,
-    this.size = 196,
+    this.size = 208,
     this.accentColor,
   });
 
@@ -32,6 +33,8 @@ class _ChatVideoNoteBubbleState extends State<ChatVideoNoteBubble> {
   bool _ready = false;
   bool _failed = false;
   bool _playing = false;
+  bool _muted = true;
+  double _progress = 0;
 
   ChatVoicePlaybackCoordinator get _coord =>
       ChatVoicePlaybackCoordinator.instance;
@@ -51,6 +54,7 @@ class _ChatVideoNoteBubbleState extends State<ChatVideoNoteBubble> {
   }
 
   Future<void> _reinit() async {
+    _controller?.removeListener(_onTick);
     await _controller?.dispose();
     _controller = null;
     if (mounted) {
@@ -58,24 +62,51 @@ class _ChatVideoNoteBubbleState extends State<ChatVideoNoteBubble> {
         _ready = false;
         _failed = false;
         _playing = false;
+        _muted = true;
+        _progress = 0;
       });
     }
     await _init();
   }
 
   Future<void> _init() async {
-    final url = ServerConfig.resolveMediaUrl(widget.mediaUrl);
-    final controller = VideoPlayerController.networkUrl(Uri.parse(url));
+    final controller = VideoPlayerHelper.networkController(widget.mediaUrl);
     _controller = controller;
     try {
-      await controller.initialize();
-      await controller.setLooping(true);
+      await VideoPlayerHelper.prepareForPlayback(
+        controller,
+        loop: true,
+        muted: true,
+        autoPlay: true,
+      );
+      controller.addListener(_onTick);
       if (!mounted) return;
-      setState(() => _ready = true);
+      setState(() {
+        _ready = true;
+        _playing = controller.value.isPlaying;
+        _muted = true;
+      });
     } catch (_) {
       if (!mounted) return;
       setState(() => _failed = true);
     }
+  }
+
+  void _onTick() {
+    final c = _controller;
+    if (!mounted || c == null || !c.value.isInitialized) return;
+    final total = c.value.duration.inMilliseconds;
+    final pos = c.value.position.inMilliseconds;
+    final nextProgress =
+        total <= 0 ? 0.0 : (pos / total).clamp(0.0, 1.0).toDouble();
+    final playing = c.value.isPlaying;
+    if ((nextProgress - _progress).abs() < 0.008 && playing == _playing) {
+      return;
+    }
+    setState(() {
+      _progress = nextProgress;
+      _playing = playing;
+    });
   }
 
   Future<void> _stopFromCoordinator() async {
@@ -83,8 +114,14 @@ class _ChatVideoNoteBubbleState extends State<ChatVideoNoteBubble> {
     if (c == null || !_playing) return;
     try {
       await c.pause();
+      await c.setVolume(0);
     } catch (_) {}
-    if (mounted) setState(() => _playing = false);
+    if (mounted) {
+      setState(() {
+        _playing = false;
+        _muted = true;
+      });
+    }
   }
 
   Future<void> _toggle() async {
@@ -100,6 +137,10 @@ class _ChatVideoNoteBubbleState extends State<ChatVideoNoteBubble> {
       _playbackToken,
       onStolen: () => unawaited(_stopFromCoordinator()),
     );
+    try {
+      await c.setVolume(1);
+      _muted = false;
+    } catch (_) {}
     await VideoPlayerHelper.ensurePlaying(c, shouldContinue: () => mounted);
     if (mounted) setState(() => _playing = true);
   }
@@ -107,6 +148,7 @@ class _ChatVideoNoteBubbleState extends State<ChatVideoNoteBubble> {
   @override
   void dispose() {
     _coord.release(_playbackToken);
+    _controller?.removeListener(_onTick);
     _controller?.dispose();
     super.dispose();
   }
@@ -114,7 +156,11 @@ class _ChatVideoNoteBubbleState extends State<ChatVideoNoteBubble> {
   String _durationLabel() {
     final fromMsg = widget.durationSec;
     final c = _controller;
-    final secs = fromMsg ??
+    final remaining = c != null && c.value.isInitialized && _playing
+        ? math.max(0, c.value.duration.inSeconds - c.value.position.inSeconds)
+        : null;
+    final secs = remaining ??
+        fromMsg ??
         (c != null && c.value.isInitialized
             ? c.value.duration.inSeconds
             : null);
@@ -129,77 +175,147 @@ class _ChatVideoNoteBubbleState extends State<ChatVideoNoteBubble> {
     final scheme = Theme.of(context).colorScheme;
     final accent = widget.accentColor ?? scheme.primary;
     final label = _durationLabel();
+    final inner = widget.size - 10;
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        GestureDetector(
-          onTap: _toggle,
-          child: SizedBox(
-            width: widget.size,
-            height: widget.size,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: accent.withValues(alpha: 0.55), width: 2.5),
+    return SizedBox(
+      width: widget.size,
+      height: widget.size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          CustomPaint(
+            size: Size.square(widget.size),
+            painter: ChatVideoNoteRingPainter(
+              progress: _playing ? _progress : 0,
+              trackColor: Colors.white.withValues(alpha: 0.22),
+              progressColor: accent,
+            ),
+          ),
+          SizedBox(
+            width: inner,
+            height: inner,
+            child: Material(
+              color: Colors.black,
+              shape: const CircleBorder(),
+              clipBehavior: Clip.antiAliasWithSaveLayer,
+              child: _failed
+                  ? Icon(
+                      Icons.videocam_off_outlined,
+                      color: scheme.onSurfaceVariant,
+                    )
+                  : !_ready || _controller == null
+                      ? const Center(
+                          child: SizedBox(
+                            width: 28,
+                            height: 28,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.4,
+                              color: Colors.white70,
+                            ),
+                          ),
+                        )
+                      : CoverNetworkVideo(controller: _controller!),
+            ),
+          ),
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _toggle,
+              child: const SizedBox.expand(),
+            ),
+          ),
+          if (_ready && !_playing)
+            IgnorePointer(
+              child: Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.42),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.play_arrow_rounded,
+                  color: Colors.white,
+                  size: 36,
+                ),
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(3),
-                child: ClipOval(
-                  child: ColoredBox(
-                    color: scheme.surfaceContainerHighest,
-                    child: _failed
-                        ? Icon(Icons.videocam_off_outlined, color: scheme.onSurfaceVariant)
-                        : !_ready
-                            ? const Center(
-                                child: SizedBox(
-                                  width: 28,
-                                  height: 28,
-                                  child: CircularProgressIndicator(strokeWidth: 2.4),
-                                ),
-                              )
-                            : Stack(
-                                fit: StackFit.expand,
-                                children: [
-                                  FittedBox(
-                                    fit: BoxFit.cover,
-                                    child: SizedBox(
-                                      width: _controller!.value.size.width,
-                                      height: _controller!.value.size.height,
-                                      child: VideoPlayer(_controller!),
-                                    ),
-                                  ),
-                                  if (!_playing)
-                                    Container(
-                                      color: Colors.black26,
-                                      alignment: Alignment.center,
-                                      child: const Icon(
-                                        Icons.play_arrow_rounded,
-                                        color: Colors.white,
-                                        size: 46,
-                                      ),
-                                    ),
-                                ],
-                              ),
+            ),
+          if (label.isNotEmpty)
+            Positioned(
+              left: 18,
+              bottom: 16,
+              child: IgnorePointer(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    shadows: [
+                      Shadow(color: Colors.black54, blurRadius: 6),
+                    ],
                   ),
                 ),
               ),
             ),
-          ),
-        ),
-        if (label.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: scheme.onSurfaceVariant,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
+          Positioned(
+            right: 16,
+            bottom: 14,
+            child: IgnorePointer(
+              child: Icon(
+                _muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                color: Colors.white,
+                size: 16,
+              ),
             ),
           ),
         ],
-      ],
+      ),
     );
+  }
+}
+
+class ChatVideoNoteRingPainter extends CustomPainter {
+  ChatVideoNoteRingPainter({
+    required this.progress,
+    required this.trackColor,
+    required this.progressColor,
+  });
+
+  final double progress;
+  final Color trackColor;
+  final Color progressColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (math.min(size.width, size.height) / 2) - 2;
+    final track = Paint()
+      ..color = trackColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round;
+    canvas.drawCircle(center, radius, track);
+    if (progress <= 0) return;
+    final sweep = (progress.clamp(0.0, 1.0) * 2 * math.pi).toDouble();
+    final active = Paint()
+      ..color = progressColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -math.pi / 2,
+      sweep,
+      false,
+      active,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant ChatVideoNoteRingPainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.trackColor != trackColor ||
+        oldDelegate.progressColor != progressColor;
   }
 }

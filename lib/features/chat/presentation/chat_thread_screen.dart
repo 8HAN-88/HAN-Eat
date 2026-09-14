@@ -1875,6 +1875,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _PendingMediaKind.video => 'Загрузка видео…',
       _PendingMediaKind.file => 'Загрузка файла…',
       _PendingMediaKind.voice => 'Загрузка голосового…',
+      _PendingMediaKind.videoNote => 'Загрузка кружка…',
     };
   }
 
@@ -1895,6 +1896,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _PendingMediaKind.video => 'видео',
       _PendingMediaKind.file => 'файла',
       _PendingMediaKind.voice => 'голосового',
+      _PendingMediaKind.videoNote => 'кружка',
     };
     return 'Загрузка $noun ${sentMb.toStringAsFixed(1)} / ${totalMb.toStringAsFixed(1)} МБ…';
   }
@@ -1925,10 +1927,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _PendingMediaKind.video => 'video',
         _PendingMediaKind.file => 'file',
         _PendingMediaKind.voice => 'voice',
+        _PendingMediaKind.videoNote => 'video_note',
       },
       content: switch (pending.kind) {
         _PendingMediaKind.file => pending.fileName ?? 'Файл',
         _PendingMediaKind.voice => '${pending.voiceDurationSec ?? 1}',
+        _PendingMediaKind.videoNote => '${pending.voiceDurationSec ?? 1}',
         _ => pending.caption,
       },
       createdAt: DateTime.now(),
@@ -2080,6 +2084,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               _PendingMediaKind.video => 'Не удалось отправить видео',
               _PendingMediaKind.file => 'Не удалось отправить файл',
               _PendingMediaKind.voice => 'Не удалось отправить голосовое',
+              _PendingMediaKind.videoNote => 'Не удалось отправить кружок',
             };
             if (isStarsRequiredError(e)) {
               await showStarsRequiredSnack(
@@ -2119,12 +2124,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           _PendingMediaKind.video => 'video',
           _PendingMediaKind.file => 'document',
           _PendingMediaKind.voice => 'audio',
+          _PendingMediaKind.videoNote => 'video',
         };
         final uploadFuture = MediaUploadService.uploadMediaFile(
           file: pending.file,
           fileType: fileType,
           clientUploadId: pending.clientMessageId,
-          waitForProcessing: pending.kind != _PendingMediaKind.video,
+          waitForProcessing: pending.kind != _PendingMediaKind.video &&
+              pending.kind != _PendingMediaKind.videoNote,
           onProgress: (p) {
             if (!mounted) return;
             final clamped = p.clamp(0.0, 1.0).toDouble();
@@ -2209,6 +2216,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           );
         case _PendingMediaKind.voice:
           msg = await ChatService.sendVoice(
+            conversationId: widget.conversationId,
+            mediaUrl: mediaUrl,
+            durationSec: pending.voiceDurationSec ?? 1,
+            replyToMessageId: reply,
+            clientMessageId: pending.clientMessageId,
+            silent: pending.silent,
+            topicId: pending.topicId,
+            anonymous: pending.anonymous,
+          );
+        case _PendingMediaKind.videoNote:
+          msg = await ChatService.sendVideoNote(
             conversationId: widget.conversationId,
             mediaUrl: mediaUrl,
             durationSec: pending.voiceDurationSec ?? 1,
@@ -4611,6 +4629,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _PendingMediaKind.video => 'video/mp4',
         _PendingMediaKind.voice => 'audio/m4a',
         _PendingMediaKind.file => 'application/octet-stream',
+        _PendingMediaKind.videoNote => 'video/mp4',
       };
       final file = XFile.fromData(
         bytes,
@@ -4651,10 +4670,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               _PendingMediaKind.video => 'video',
               _PendingMediaKind.file => 'file',
               _PendingMediaKind.voice => 'voice',
+              _PendingMediaKind.videoNote => 'video_note',
             },
             content: switch (kind) {
               _PendingMediaKind.file => fileName ?? 'Файл',
               _PendingMediaKind.voice => '${pending.voiceDurationSec ?? 1}',
+              _PendingMediaKind.videoNote => '${pending.voiceDurationSec ?? 1}',
               _ => '',
             },
             replyToMessageId: pending.replyToMessageId,
@@ -4701,6 +4722,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _PendingMediaKind.video => 'видео',
       _PendingMediaKind.file => 'файл',
       _PendingMediaKind.voice => 'голосовое',
+      _PendingMediaKind.videoNote => 'кружок',
     };
     return _compactComposerStrip(
       icon: Icons.error_outline_rounded,
@@ -10975,12 +10997,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _PendingMediaKind.video => 210.0,
       _PendingMediaKind.file => 220.0,
       _PendingMediaKind.voice => 210.0,
+      _PendingMediaKind.videoNote => 208.0,
     };
     final height = switch (pending.kind) {
       _PendingMediaKind.image => 220.0,
       _PendingMediaKind.video => 220.0,
       _PendingMediaKind.file => 80.0,
       _PendingMediaKind.voice => 76.0,
+      _PendingMediaKind.videoNote => 208.0,
     };
 
     Widget content;
@@ -10992,14 +11016,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         height: height,
         fit: BoxFit.cover,
       );
-    } else if (pending.kind == _PendingMediaKind.video) {
+    } else if (pending.kind == _PendingMediaKind.video ||
+        pending.kind == _PendingMediaKind.videoNote) {
       content = ColoredBox(
         color: Colors.black.withValues(alpha: 0.25),
         child: SizedBox(
           width: width,
           height: height,
           child: const Center(
-            child: Icon(Icons.movie_creation_outlined, color: Colors.white70),
+            child: Icon(Icons.videocam_rounded, color: Colors.white70),
           ),
         ),
       );
@@ -11059,7 +11084,56 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
     }
 
-    final bubble = ClipRRect(
+    final bubble = pending.kind == _PendingMediaKind.videoNote
+        ? SizedBox(
+            width: width,
+            height: height,
+            child: Material(
+              color: Colors.black,
+              shape: const CircleBorder(),
+              clipBehavior: Clip.antiAliasWithSaveLayer,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  content,
+                  if (!isFailed)
+                    Container(color: Colors.black.withValues(alpha: 0.22))
+                  else
+                    Container(color: scheme.error.withValues(alpha: 0.18)),
+                  Center(
+                    child: SizedBox(
+                      width: 36,
+                      height: 36,
+                      child: CircularProgressIndicator(
+                        value: isFailed ? null : progress.clamp(0.05, 1.0),
+                        strokeWidth: 2.6,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    right: 10,
+                    top: 10,
+                    child: Material(
+                      color: Colors.black.withValues(alpha: 0.45),
+                      shape: const CircleBorder(),
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: () =>
+                            _cancelPendingMediaUploadByTempId(msg.id),
+                        child: const SizedBox(
+                          width: 30,
+                          height: 30,
+                          child: Icon(Icons.close, color: Colors.white, size: 18),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+        : ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: Container(
         width: width,
@@ -13900,6 +13974,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       XFile? file = await picker.pickVideo(
         source: kIsWeb ? ImageSource.gallery : ImageSource.camera,
         maxDuration: const Duration(seconds: 60),
+        preferredCameraDevice: CameraDevice.front,
       );
       if (file == null && !kIsWeb && mounted) {
         file = await picker.pickVideo(
@@ -13908,58 +13983,35 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         );
       }
       if (file == null || !mounted) return;
-
-      _setUploadProgress(0.05, status: 'Загрузка…');
       final prepared = await _normalizeVideoFileForUpload(file);
       if (!mounted) return;
       final durationSec = await _probeVideoDurationSec(prepared);
       if (!mounted) return;
-      final uploaded = await MediaUploadService.uploadMediaFile(
+      int? totalBytes;
+      try {
+        totalBytes = await prepared.length();
+      } catch (_) {
+        totalBytes = null;
+      }
+      _enqueueMediaSend(_PendingMediaSend(
+        tempId: _newLocalTempId(),
+        kind: _PendingMediaKind.videoNote,
         file: prepared,
-        fileType: 'video',
-        waitForProcessing: false,
-        onProgress: (p) {
-          if (!mounted) return;
-          _setUploadProgress(0.05 + p * 0.85, status: 'Загрузка…');
-        },
-      );
-      final url = uploaded.url;
-      if (url == null || url.isEmpty) {
-        throw Exception('Не удалось загрузить видео');
-      }
-      if (mounted) {
-        setState(() {
-          _sending = false;
-          _uploadProgress = null;
-        });
-      }
-      _enqueueReadyOutgoing(
-        ChatReadyOutgoing(
-          tempId: _newLocalTempId(),
-          clientMessageId: const Uuid().v4(),
-          type: 'video_note',
-          content: '${durationSec < 1 ? 1 : durationSec}',
-          mediaUrl: ServerConfig.resolveMediaUrl(url),
-          replyToMessageId: _replyTo?.id,
-          topicId: _activeTopicIdForSend,
-          anonymous: _effectiveSendAnonymous,
-          durationSec: durationSec,
-        ),
-      );
+        clientMessageId: const Uuid().v4(),
+        voiceDurationSec: durationSec < 1 ? 1 : durationSec,
+        replyToMessageId: _replyTo?.id,
+        totalBytes: totalBytes,
+        topicId: _activeTopicIdForSend,
+        anonymous: _effectiveSendAnonymous,
+      ));
     } catch (e) {
       if (!mounted) return;
       showErrorSnackBar(
         context,
         e,
+        fallback: 'Не удалось отправить кружок',
         onRetry: () => unawaited(_recordAndSendVideoNote()),
       );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _sending = false;
-          _uploadProgress = null;
-        });
-      }
     }
   }
 
@@ -17072,7 +17124,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 }
 
-enum _PendingMediaKind { image, video, file, voice }
+enum _PendingMediaKind { image, video, file, voice, videoNote }
 
 class _MentionCandidate {
   const _MentionCandidate({
@@ -18083,6 +18135,7 @@ class _Bubble extends StatelessWidget {
       mainContent = _withBottomMeta(
         fg: fg,
         mine: mine,
+        onMedia: true,
         child: ChatVideoNoteBubble(
           mediaUrl: message.mediaUrl!,
           durationSec: message.voiceDurationSec,
