@@ -1591,12 +1591,26 @@ class _NewPostCardState extends State<NewPostCard>
                 onPollUpdated: _onPollUpdated,
               ),
           ],
-          // Действия (Instagram-стиль: кнопки → лайки → подпись → комментарии)
+          // Instagram: фото → текст поста, затем лайки / комментарии / репосты
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (resolvePostDisplayTitle(title: post.title, body: post.body) !=
+                        null ||
+                    (post.description != null &&
+                        post.description!.trim().isNotEmpty)) ...[
+                  _buildInstagramCaption(
+                    authorName: displayName,
+                    title: resolvePostDisplayTitle(
+                      title: post.title,
+                      body: post.body,
+                    ),
+                    description: post.description,
+                  ),
+                  const SizedBox(height: 10),
+                ],
                 Row(
                   children: [
                     _FeedActionButton(
@@ -1659,20 +1673,6 @@ class _NewPostCardState extends State<NewPostCard>
                               ),
                             ),
                     child: _buildLikedByLine(scheme),
-                  ),
-                ],
-                if (resolvePostDisplayTitle(title: post.title, body: post.body) !=
-                        null ||
-                    (post.description != null &&
-                        post.description!.trim().isNotEmpty)) ...[
-                  const SizedBox(height: 6),
-                  _buildInstagramCaption(
-                    authorName: displayName,
-                    title: resolvePostDisplayTitle(
-                      title: post.title,
-                      body: post.body,
-                    ),
-                    description: post.description,
                   ),
                 ],
                 if (widget.post.previewComments.isNotEmpty) ...[
