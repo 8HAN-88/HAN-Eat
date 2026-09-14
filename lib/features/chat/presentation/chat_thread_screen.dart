@@ -85,6 +85,7 @@ import '../application/chat_ready_outgoing.dart';
 import '../application/chat_thread_prefetch.dart';
 import '../application/chat_private_reply.dart';
 import '../application/chat_realtime_signals.dart';
+import '../application/chat_voice_hold.dart';
 import '../application/chat_voice_playback_coordinator.dart';
 import '../application/chats_hub_refresh_provider.dart';
 import '../../../services/media_upload_service.dart';
@@ -403,6 +404,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   bool _sendingPaidReaction = false;
   final Set<int> _giftActionMessageIds = {};
   bool _holdActive = false;
+  final ChatVoiceHoldSession _voiceHold = ChatVoiceHoldSession();
   bool _recordCancelled = false;
   bool _voiceLocked = false;
   /// Empty-composer mode: false = voice hold, true = video note (tap).
@@ -9026,7 +9028,33 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
+  String _voiceMimeForPath(String path) {
+    final lower = path.toLowerCase();
+    if (lower.endsWith('.m4a') ||
+        lower.endsWith('.mp4') ||
+        lower.endsWith('.aac')) {
+      return 'audio/mp4';
+    }
+    if (lower.endsWith('.ogg') || lower.endsWith('.opus')) {
+      return 'audio/ogg';
+    }
+    return 'audio/webm';
+  }
+
+  String _voiceFileNameForPath(String path) {
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    final lower = path.toLowerCase();
+    if (lower.endsWith('.m4a') || lower.endsWith('.mp4')) {
+      return 'voice_$stamp.m4a';
+    }
+    if (lower.endsWith('.ogg') || lower.endsWith('.opus')) {
+      return 'voice_$stamp.ogg';
+    }
+    return 'voice_$stamp.webm';
+  }
+
   void _onHoldStart() {
+    _voiceHold.beginHold();
     _holdActive = true;
     _voiceLocked = false;
     unawaited(_startRecording());
@@ -9041,6 +9069,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _recordCancelled = false;
         _holdActive = false;
       });
+      _voiceHold.holdActive = false;
       AppHaptics.medium();
       return;
     }
@@ -9051,19 +9080,25 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   void _onHoldEnd() {
-    // Locked mode continues until Send / Delete.
-    if (_voiceLocked) {
-      _holdActive = false;
-      return;
-    }
-    _holdActive = false;
-    if (!_recording) return;
-    if (_recordCancelled) {
+    final action = _voiceHold.release(
+      cancelled: _recordCancelled,
+      locked: _voiceLocked,
+    );
+    _holdActive = _voiceHold.holdActive;
+    if (action == ChatVoiceHoldAction.cancel) {
       unawaited(_cancelRecording());
-    } else {
+    } else if (action == ChatVoiceHoldAction.send) {
       unawaited(_stopAndSendVoice());
     }
     if (mounted) setState(() => _recordCancelled = false);
+  }
+
+  void _applyVoiceHoldAction(ChatVoiceHoldAction action) {
+    if (action == ChatVoiceHoldAction.cancel) {
+      unawaited(_cancelRecording());
+    } else if (action == ChatVoiceHoldAction.send) {
+      unawaited(_stopAndSendVoice());
+    }
   }
 
   Future<void> _stopRecorderSilently() async {
@@ -9075,14 +9110,58 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     } catch (_) {}
   }
 
+  Future<void> _startVoiceRecorder(String? path) async {
+    if (kIsWeb) {
+      Object? lastError;
+      for (final cfg in const [
+        RecordConfig(
+          encoder: AudioEncoder.opus,
+          bitRate: 96000,
+          sampleRate: 48000,
+        ),
+        RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          bitRate: 128000,
+          sampleRate: 44100,
+        ),
+      ]) {
+        try {
+          final fileName = cfg.encoder == AudioEncoder.aacLc
+              ? 'voice.m4a'
+              : 'voice.webm';
+          await _audioRecorder.start(cfg, path: fileName);
+          return;
+        } catch (e) {
+          lastError = e;
+        }
+      }
+      throw lastError ?? Exception('Не удалось начать запись');
+    }
+    await _audioRecorder.start(
+      const RecordConfig(
+        encoder: AudioEncoder.aacLc,
+        bitRate: 128000,
+        sampleRate: 44100,
+      ),
+      path: path!,
+    );
+  }
+
   Future<void> _startRecording() async {
     if (_sending || _recording) return;
     final ok = await _audioRecorder.hasPermission();
-    if (!_holdActive || !mounted) return;
+    if (!mounted) return;
     if (!ok) {
+      _voiceHold.reset();
+      _holdActive = false;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Разрешите доступ к микрофону')),
       );
+      return;
+    }
+    if (!_voiceHold.shouldStartAfterPermission) {
+      _voiceHold.reset();
+      _holdActive = false;
       return;
     }
     final dir = kIsWeb ? null : await getTemporaryDirectory();
@@ -9090,27 +9169,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         ? null
         : '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
     try {
-      if (kIsWeb) {
-        await _audioRecorder.start(
-          const RecordConfig(
-            encoder: AudioEncoder.opus,
-            bitRate: 96000,
-            sampleRate: 48000,
-          ),
-          path: 'voice.webm',
-        );
-      } else {
-        await _audioRecorder.start(
-          const RecordConfig(
-            encoder: AudioEncoder.aacLc,
-            bitRate: 128000,
-            sampleRate: 44100,
-          ),
-          path: path!,
-        );
-      }
+      await _startVoiceRecorder(path);
     } catch (e) {
       if (!mounted) return;
+      _voiceHold.reset();
+      _holdActive = false;
       showErrorSnackBar(
         context,
         e,
@@ -9118,8 +9181,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
       return;
     }
-    if (!_holdActive || !mounted) {
+    if (!mounted) {
       await _stopRecorderSilently();
+      return;
+    }
+    final startedAction = _voiceHold.onRecorderStarted();
+    _holdActive = _voiceHold.holdActive;
+    _recording = true;
+    if (startedAction != ChatVoiceHoldAction.none) {
+      _applyVoiceHoldAction(startedAction);
       return;
     }
     _amplitudeSub?.cancel();
@@ -9159,6 +9229,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       await _audioRecorder.stop();
     } catch (_) {}
     if (!mounted) return;
+    _voiceHold.reset();
+    _holdActive = false;
     setState(() {
       _recording = false;
       _voiceLocked = false;
@@ -9185,6 +9257,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       } catch (_) {}
       final durationSec = math.max(1, _recordDuration.inSeconds);
       if (!mounted) return;
+      _voiceHold.reset();
+      _holdActive = false;
       setState(() {
         _recording = false;
         _voiceLocked = false;
@@ -9204,24 +9278,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         if (bytes.isEmpty) throw Exception('Пустая запись');
         file = XFile.fromData(
           bytes,
-          name: 'voice_${DateTime.now().millisecondsSinceEpoch}.webm',
-          mimeType: 'audio/webm',
+          name: _voiceFileNameForPath(path),
+          mimeType: _voiceMimeForPath(path),
         );
       } else {
         file = XFile(path!);
       }
       if (!mounted) return;
-      final mode = await _askSendOrSchedule();
-      if (mode == null || !mounted) return;
-      if (_isScheduleMode(mode)) {
-        await _scheduleVoiceFile(
-          file,
-          durationSec: durationSec,
-          clientMessageId: clientMessageId,
-          silent: _scheduleSilent(mode),
-        );
-        return;
-      }
       int? totalBytes;
       try {
         totalBytes = await file.length();
@@ -9236,10 +9299,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         voiceDurationSec: durationSec,
         replyToMessageId: _replyTo?.id,
         totalBytes: totalBytes,
-        silent: mode == 'silent',
         topicId: _activeTopicIdForSend,
         anonymous: _effectiveSendAnonymous,
       ));
+    } catch (e) {
+      if (mounted) {
+        showErrorSnackBar(
+          context,
+          e,
+          fallback: 'Не удалось отправить голосовое',
+        );
+      }
     } finally {
       _voiceSending = false;
     }
