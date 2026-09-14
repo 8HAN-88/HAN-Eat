@@ -21,8 +21,9 @@ import '../../../utils/number_formatter.dart';
 import '../../../utils/post_display_title.dart';
 import '../../../widgets/post_card_container.dart';
 import '../../../widgets/share_action_sheet.dart';
+import '../../../widgets/chat_reel_preview.dart';
+import '../../../services/share_link_service.dart';
 import '../../../widgets/post_poll_section.dart';
-import '../../../widgets/app_avatar.dart';
 import '../../../services/channel_service.dart';
 import '../../../services/api_service.dart';
 import '../../../app/app_router.dart';
@@ -920,117 +921,34 @@ class _ChannelPostCardState extends State<ChannelPostCard>
         final loading =
             snap.connectionState == ConnectionState.waiting && !snap.hasData;
 
-        String? sourceAvatarUrl() {
-          if (orig == null) return null;
-          final u = orig.channel?.avatarUrl ?? orig.author?.avatarUrl;
-          if (u == null || u.isEmpty) return null;
-          return u;
-        }
-
-        String sourceName() {
-          if (orig == null) return '';
-          return orig.channel?.name ?? orig.author?.name ?? 'Пост';
-        }
-
-        void openSource() {
-          if (orig == null) return;
-          if (orig.channel != null) {
-            context.push(ChannelDetailRoute.pathFor(orig.channel!.id));
-          } else {
-            context.push(ProfileRoute.withUserId(orig.userId));
-          }
-        }
-
-        final avatarUrl = sourceAvatarUrl();
-        final name = sourceName();
-        final initial =
-            name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?';
-
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Icon(Icons.repeat, size: 18, color: scheme.primary),
+                  Icon(Icons.repeat, size: 16, color: scheme.primary),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Репост',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
-                  const SizedBox(width: 8),
-                  if (loading)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 4),
-                      child: SizedBox(
-                        width: 36,
-                        height: 36,
-                        child: Center(
-                          child: SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: scheme.primary,
-                            ),
-                          ),
-                        ),
-                      ),
-                    )
-                  else if (orig != null) ...[
-                    GestureDetector(
-                      onTap: openSource,
-                      child: CircleAvatar(
-                        radius: 18,
-                        backgroundColor: scheme.surfaceContainerHighest,
-                        backgroundImage: resolvedAvatarImage(
-                          avatarUrl,
-                          decodeWidth: 72,
-                        ),
-                        child: resolvedAvatarImage(avatarUrl) == null
-                            ? Text(
-                                initial,
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              )
-                            : null,
+                  if (loading) ...[
+                    const SizedBox(width: 10),
+                    SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: scheme.primary,
                       ),
                     ),
-                    const SizedBox(width: 8),
                   ],
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Репост',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: scheme.onSurfaceVariant,
-                          ),
-                        ),
-                        if (!loading && orig != null) ...[
-                          const SizedBox(height: 2),
-                          GestureDetector(
-                            onTap: openSource,
-                            child: Text(
-                              name,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: scheme.onSurface,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -1058,29 +976,15 @@ class _ChannelPostCardState extends State<ChannelPostCard>
                   },
                 ),
               )
-            else if (orig != null) ...[
-              _buildMedia(orig),
-              if (resolvePostDisplayTitle(title: orig.title, body: orig.body) != null)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                  child: Text(
-                    displayTitleForPost(orig),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              if (orig.description != null &&
-                  orig.description!.trim().isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-                  child: Text(
-                    orig.description!,
-                    style: const TextStyle(fontSize: 14),
-                  ),
-                ),
-            ],
+            else if (orig != null)
+              SharedPostCard(
+                postId: orig.id,
+                url: orig.type == 'reel'
+                    ? ShareLinkService.reelLink(orig.id)
+                    : ShareLinkService.postLink(orig.id),
+                place: SharedPostCardPlace.feed,
+                initialPost: orig,
+              ),
           ],
         );
       },

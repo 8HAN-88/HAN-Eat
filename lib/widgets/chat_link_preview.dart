@@ -4,11 +4,11 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../app/app_router.dart';
 import '../app/open_app_link.dart';
 import '../core/network/haneat_http_client.dart';
 import '../services/auth_service.dart';
 import '../services/server_config.dart';
+import '../services/share_link_service.dart';
 import 'chat_reel_preview.dart';
 
 class LinkPreview {
@@ -243,11 +243,11 @@ class _ChatLinkPreviewState extends State<ChatLinkPreview> {
     final openUrl = (_preview?.url.trim().isNotEmpty ?? false)
         ? _preview!.url.trim()
         : widget.url.trim();
-    final reelId = ReelByIdRoute.postIdFromUrl(openUrl) ??
-        ReelByIdRoute.postIdFromUrl(widget.url);
-    if (reelId != null) {
-      return ChatReelPreview(
-        postId: reelId,
+    final sharedId = ShareLinkService.sharedPostIdFromUrl(openUrl) ??
+        ShareLinkService.sharedPostIdFromUrl(widget.url);
+    if (sharedId != null) {
+      return SharedPostCard(
+        postId: sharedId,
         url: openUrl,
         mine: widget.mine,
         compact: widget.compact,

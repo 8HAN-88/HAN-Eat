@@ -17866,10 +17866,10 @@ class _Bubble extends StatelessWidget {
         : extractFirstHttpUrl(message.content);
     final reelShareId = reelShareUrl == null
         ? null
-        : ReelByIdRoute.postIdFromUrl(reelShareUrl);
+        : ShareLinkService.sharedPostIdFromUrl(reelShareUrl);
     final reelCaption = reelShareId == null
         ? ''
-        : ShareLinkService.visibleCaptionForReelShare(message.content);
+        : ShareLinkService.visibleCaptionForSharedPost(message.content);
     final isReelShare = reelShareId != null;
     final isFullBleedMedia =
         ((isImage || isVideo) && !hasCaption) ||
@@ -17892,6 +17892,7 @@ class _Bubble extends StatelessWidget {
     final activeBorderColor = scheme.primary.withValues(alpha: 0.75);
     final activeShadowColor = scheme.primary.withValues(alpha: 0.28);
 
+    Widget? sharedPostCardBelow;
     Widget mainContent;
     if (isLockedPaid) {
       mainContent = _withBottomMeta(
@@ -18506,25 +18507,36 @@ class _Bubble extends StatelessWidget {
               onUrlTap: (url) => unawaited(openAppOrExternalLink(context, url)),
             );
       if (hasLinkPreview) {
-        mainContent = _withBottomMeta(
-          fg: fg,
+        final preview = ChatLinkPreview(
+          url: previewUrl,
+          foregroundColor: fg,
+          accentColor: linkColor,
+          backgroundColor: quoteBg,
           mine: mine,
-          onMedia: reelId != null && visibleText.isEmpty,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (textChild != null) textChild,
-              ChatLinkPreview(
-                url: previewUrl,
-                foregroundColor: fg,
-                accentColor: linkColor,
-                backgroundColor: quoteBg,
-                mine: mine,
-              ),
-            ],
-          ),
         );
+        if (reelId != null && textChild != null) {
+          // Instagram: comment stays in the bubble, shared card sits below it.
+          mainContent = _withBottomMeta(
+            fg: fg,
+            mine: mine,
+            child: textChild,
+          );
+          sharedPostCardBelow = preview;
+        } else {
+          mainContent = _withBottomMeta(
+            fg: fg,
+            mine: mine,
+            onMedia: reelId != null && visibleText.isEmpty,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (textChild != null) textChild,
+                preview,
+              ],
+            ),
+          );
+        }
       } else {
         mainContent = _withBottomMeta(
           fg: fg,
@@ -18665,10 +18677,23 @@ class _Bubble extends StatelessWidget {
           )
         : bubbleCore;
 
-    if (!wrapWithAlign) return bubble;
+    final withSharedCard = sharedPostCardBelow == null
+        ? bubble
+        : Column(
+            crossAxisAlignment:
+                mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              bubble,
+              const SizedBox(height: 6),
+              sharedPostCardBelow,
+            ],
+          );
+
+    if (!wrapWithAlign) return withSharedCard;
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-      child: bubble,
+      child: withSharedCard,
     );
   }
 }

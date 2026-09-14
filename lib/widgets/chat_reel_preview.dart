@@ -10,6 +10,7 @@ import '../services/saved_posts_service.dart';
 import '../services/server_config.dart';
 import '../utils/post_publisher_display.dart';
 import '../utils/session_snackbar.dart';
+import '../utils/shared_post_media.dart';
 import 'app_avatar.dart';
 import 'share_action_sheet.dart';
 
@@ -29,17 +30,26 @@ class _ReelPostCache {
       return post;
     }).whenComplete(() => inflight.remove(id));
   }
+
+  static void remember(PostModel post) {
+    posts[post.id] = post;
+  }
 }
 
-/// Instagram-style reel card in chat: 9:16 poster, play, author, share/save.
-class ChatReelPreview extends StatefulWidget {
-  const ChatReelPreview({
+enum SharedPostCardPlace { chat, feed }
+
+/// Instagram DM shared-post card: media, author overlay, play, share/save.
+class SharedPostCard extends StatefulWidget {
+  const SharedPostCard({
     super.key,
     required this.postId,
     required this.url,
     this.mine = true,
     this.compact = false,
     this.showActions = true,
+    this.place = SharedPostCardPlace.chat,
+    this.initialPost,
+    this.onDoubleTap,
   });
 
   final int postId;
@@ -47,12 +57,27 @@ class ChatReelPreview extends StatefulWidget {
   final bool mine;
   final bool compact;
   final bool showActions;
+  final SharedPostCardPlace place;
+  final PostModel? initialPost;
+  final VoidCallback? onDoubleTap;
 
   @override
-  State<ChatReelPreview> createState() => _ChatReelPreviewState();
+  State<SharedPostCard> createState() => _SharedPostCardState();
 }
 
-class _ChatReelPreviewState extends State<ChatReelPreview> {
+/// Backward-compatible alias used by older chat call sites.
+class ChatReelPreview extends SharedPostCard {
+  const ChatReelPreview({
+    super.key,
+    required super.postId,
+    required super.url,
+    super.mine = true,
+    super.compact = false,
+    super.showActions = true,
+  });
+}
+
+class _SharedPostCardState extends State<SharedPostCard> {
   PostModel? _post;
   bool _loading = true;
   bool _loadFailed = false;
@@ -62,22 +87,35 @@ class _ChatReelPreviewState extends State<ChatReelPreview> {
   @override
   void initState() {
     super.initState();
+    final seeded = widget.initialPost;
+    if (seeded != null && seeded.id == widget.postId) {
+      _ReelPostCache.remember(seeded);
+    }
     unawaited(_load());
   }
 
   @override
-  void didUpdateWidget(covariant ChatReelPreview oldWidget) {
+  void didUpdateWidget(covariant SharedPostCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.postId != widget.postId) {
       unawaited(_load());
+      return;
+    }
+    final seeded = widget.initialPost;
+    if (seeded != null && seeded.id == widget.postId && !identical(seeded, _post)) {
+      _ReelPostCache.remember(seeded);
+      setState(() => _post = seeded);
     }
   }
 
   Future<void> _load() async {
+    final seeded = widget.initialPost;
+    final cached = _ReelPostCache.posts[widget.postId] ??
+        (seeded != null && seeded.id == widget.postId ? seeded : null);
     setState(() {
-      _loading = true;
+      _loading = cached == null;
       _loadFailed = false;
-      _post = _ReelPostCache.posts[widget.postId];
+      _post = cached;
     });
     try {
       final post = await _ReelPostCache.fetch(widget.postId);
@@ -89,10 +127,10 @@ class _ChatReelPreviewState extends State<ChatReelPreview> {
       }
       if (!mounted || widget.postId != (post?.id ?? widget.postId)) return;
       setState(() {
-        _post = post;
+        _post = post ?? cached;
         _saved = saved;
         _loading = false;
-        _loadFailed = post == null;
+        _loadFailed = post == null && cached == null;
       });
     } catch (_) {
       if (!mounted) return;
@@ -110,7 +148,11 @@ class _ChatReelPreviewState extends State<ChatReelPreview> {
   Future<void> _share() async {
     final post = _post;
     if (post == null) return;
-    await ShareActionSheet.showForReel(context, reel: post);
+    if (post.type == 'reel' || SharedPostMedia.isVideo(post)) {
+      await ShareActionSheet.showForReel(context, reel: post);
+    } else {
+      await ShareActionSheet.showForPost(context, post: post);
+    }
   }
 
   Future<void> _toggleSave() async {
@@ -140,80 +182,24 @@ class _ChatReelPreviewState extends State<ChatReelPreview> {
     }
   }
 
+  bool get _isVideo {
+    final post = _post;
+    if (post == null) return widget.url.contains('/reel/');
+    return SharedPostMedia.isVideo(post);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.compact) {
       return _compactCard(context);
     }
-    final card = _tallCard(context);
-    if (!widget.showActions) return card;
-    final actions = _sideActions(context);
-    return Padding(
-      padding: const EdgeInsets.only(top: 6),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          if (widget.mine) ...[
-            actions,
-            const SizedBox(width: 8),
-          ],
-          card,
-          if (!widget.mine) ...[
-            const SizedBox(width: 8),
-            actions,
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _sideActions(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _circleAction(
-          icon: Icons.send_rounded,
-          tooltip: 'Поделиться',
-          onTap: _post == null ? null : _share,
-        ),
-        const SizedBox(height: 10),
-        _circleAction(
-          icon: _saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-          tooltip: _saved ? 'Убрать из сохранённых' : 'Сохранить',
-          onTap: _post == null ? null : _toggleSave,
-        ),
-      ],
-    );
-  }
-
-  Widget _circleAction({
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback? onTap,
-  }) {
-    return Material(
-      color: Colors.white.withValues(alpha: 0.12),
-      shape: const CircleBorder(),
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: onTap,
-        child: Tooltip(
-          message: tooltip,
-          child: SizedBox(
-            width: 36,
-            height: 36,
-            child: Icon(icon, size: 18, color: Colors.white),
-          ),
-        ),
-      ),
-    );
+    return _igCard(context);
   }
 
   Widget _compactCard(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final post = _post;
-    final name = post == null ? 'Рилс' : PostPublisherDisplay.label(post);
+    final name = post == null ? 'Пост' : PostPublisherDisplay.label(post);
     return Material(
       color: scheme.surfaceContainerHighest.withValues(alpha: 0.55),
       borderRadius: BorderRadius.circular(12),
@@ -226,7 +212,7 @@ class _ChatReelPreviewState extends State<ChatReelPreview> {
             children: [
               AspectRatio(
                 aspectRatio: 9 / 12,
-                child: _poster(borderRadius: 0),
+                child: _poster(),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -242,7 +228,7 @@ class _ChatReelPreviewState extends State<ChatReelPreview> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Рилс',
+                      _isVideo ? 'Рилс' : 'Пост',
                       style: TextStyle(
                         color: scheme.onSurfaceVariant,
                         fontSize: 12,
@@ -262,109 +248,229 @@ class _ChatReelPreviewState extends State<ChatReelPreview> {
     );
   }
 
-  Widget _tallCard(BuildContext context) {
-    final width = (MediaQuery.sizeOf(context).width * 0.52).clamp(168.0, 216.0);
-    final height = width * 16 / 9;
+  Widget _igCard(BuildContext context) {
+    final feed = widget.place == SharedPostCardPlace.feed;
+    final video = _isVideo;
+    final screenW = MediaQuery.sizeOf(context).width;
+    final width = feed
+        ? double.infinity
+        : (screenW * (video ? 0.54 : 0.62)).clamp(176.0, video ? 228.0 : 268.0);
+    final aspect = video ? (9 / 16) : (4 / 5);
+    final radius = feed ? 16.0 : 18.0;
     final post = _post;
     final name = post == null ? 'HanWe' : PostPublisherDisplay.label(post);
     final avatar = post == null ? null : PostPublisherDisplay.avatarUrl(post);
+    final caption = post == null ? null : SharedPostMedia.caption(post);
+    final showFooter = !video &&
+        widget.place == SharedPostCardPlace.chat &&
+        (name.isNotEmpty || (caption != null && caption.isNotEmpty));
 
-    return Material(
-      color: Colors.black,
-      borderRadius: BorderRadius.circular(18),
+    final media = _mediaStack(
+      name: name,
+      avatar: avatar,
+      video: video,
+    );
+
+    final card = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AspectRatio(aspectRatio: aspect, child: media),
+        if (showFooter) _photoFooter(name: name, caption: caption),
+      ],
+    );
+
+    final clipped = Material(
+      color: const Color(0xFF111111),
+      borderRadius: BorderRadius.circular(radius),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: _open,
-        child: SizedBox(
-          width: width,
-          height: height,
-          child: Stack(
-            fit: StackFit.expand,
+        onDoubleTap: widget.onDoubleTap,
+        child: card,
+      ),
+    );
+
+    if (feed) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+        child: clipped,
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: SizedBox(width: width, child: clipped),
+    );
+  }
+
+  Widget _mediaStack({
+    required String name,
+    required String? avatar,
+    required bool video,
+  }) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        _poster(),
+        const DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.center,
+              colors: [Color(0x99000000), Color(0x00000000)],
+            ),
+          ),
+        ),
+        if (_loading)
+          const Center(
+            child: SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white70,
+              ),
+            ),
+          )
+        else if (_loadFailed)
+          Center(
+            child: TextButton(
+              onPressed: () => unawaited(_load()),
+              child: const Text(
+                'Повторить',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          )
+        else if (video)
+          Center(
+            child: Container(
+              width: 54,
+              height: 54,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.94),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.play_arrow_rounded,
+                color: Colors.black,
+                size: 36,
+              ),
+            ),
+          ),
+        Positioned(
+          top: 10,
+          left: 10,
+          right: 36,
+          child: Row(
             children: [
-              _poster(borderRadius: 0),
-              const DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.center,
-                    colors: [Color(0x99000000), Color(0x00000000)],
-                  ),
-                ),
+              AppUserAvatar(
+                imageUrl: avatar,
+                displayName: name,
+                radius: 11,
+                onTap: _post == null
+                    ? null
+                    : () => PostPublisherDisplay.open(context, _post!),
               ),
-              const DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.center,
-                    colors: [Color(0x66000000), Color(0x00000000)],
-                  ),
-                ),
-              ),
-              if (_loading)
-                const Center(
-                  child: SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white70,
-                    ),
-                  ),
-                )
-              else if (_loadFailed)
-                Center(
-                  child: TextButton(
-                    onPressed: () => unawaited(_load()),
-                    child: const Text(
-                      'Повторить',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
-                )
-              else
-                const Center(
-                  child: Icon(
-                    Icons.play_circle_fill_rounded,
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
                     color: Colors.white,
-                    size: 64,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    height: 1.15,
+                    shadows: [
+                      Shadow(color: Color(0x88000000), blurRadius: 6),
+                    ],
                   ),
                 ),
-              Positioned(
-                top: 10,
-                left: 10,
-                right: 10,
-                child: Row(
-                  children: [
-                    AppUserAvatar(
-                      imageUrl: avatar,
-                      displayName: name,
-                      radius: 12,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
               ),
-              const Positioned(
-                left: 10,
-                bottom: 10,
-                child: Icon(
-                  Icons.smart_display_rounded,
+            ],
+          ),
+        ),
+        if (widget.showActions)
+          Positioned(
+            left: widget.mine ? 8 : null,
+            right: widget.mine ? null : 8,
+            top: 0,
+            bottom: 0,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _overlayAction(
+                  icon: Icons.send_outlined,
+                  tooltip: 'Поделиться',
+                  onTap: _post == null ? null : _share,
+                ),
+                const SizedBox(height: 16),
+                _overlayAction(
+                  icon: _saved
+                      ? Icons.bookmark_rounded
+                      : Icons.bookmark_border_rounded,
+                  tooltip: _saved ? 'Убрать из сохранённых' : 'Сохранить',
+                  onTap: _post == null ? null : _toggleSave,
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _photoFooter({required String name, required String? caption}) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+      child: Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: name,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
+            ),
+            if (caption != null && caption.isNotEmpty)
+              TextSpan(
+                text: ' $caption',
+                style: const TextStyle(
                   color: Colors.white,
-                  size: 20,
+                  fontWeight: FontWeight.w400,
+                  fontSize: 13,
                 ),
               ),
+          ],
+        ),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+
+  Widget _overlayAction({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback? onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Icon(
+            icon,
+            size: 22,
+            color: Colors.white,
+            shadows: const [
+              Shadow(color: Color(0xAA000000), blurRadius: 8),
             ],
           ),
         ),
@@ -372,30 +478,26 @@ class _ChatReelPreviewState extends State<ChatReelPreview> {
     );
   }
 
-  Widget _poster({required double borderRadius}) {
-    final thumb = _post?.videoThumbnail;
-    final resolved = thumb != null && thumb.isNotEmpty
-        ? ServerConfig.resolveMediaUrl(thumb)
+  Widget _poster() {
+    final post = _post;
+    final raw = post == null ? null : SharedPostMedia.posterUrl(post);
+    final resolved = raw != null && raw.isNotEmpty
+        ? ServerConfig.resolveMediaUrl(raw)
         : null;
-    final image = resolved == null
-        ? const ColoredBox(
-            color: Color(0xFF1A1A1A),
-            child: SizedBox.expand(),
-          )
-        : CachedNetworkImage(
-            imageUrl: resolved,
-            fit: BoxFit.cover,
-            width: double.infinity,
-            height: double.infinity,
-            memCacheWidth: 640,
-            placeholder: (_, __) => const ColoredBox(color: Color(0xFF1A1A1A)),
-            errorWidget: (_, __, ___) =>
-                const ColoredBox(color: Color(0xFF1A1A1A)),
-          );
-    if (borderRadius <= 0) return image;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(borderRadius),
-      child: image,
+    if (resolved == null) {
+      return const ColoredBox(
+        color: Color(0xFF1A1A1A),
+        child: SizedBox.expand(),
+      );
+    }
+    return CachedNetworkImage(
+      imageUrl: resolved,
+      fit: BoxFit.cover,
+      width: double.infinity,
+      height: double.infinity,
+      memCacheWidth: 720,
+      placeholder: (_, __) => const ColoredBox(color: Color(0xFF1A1A1A)),
+      errorWidget: (_, __, ___) => const ColoredBox(color: Color(0xFF1A1A1A)),
     );
   }
 }

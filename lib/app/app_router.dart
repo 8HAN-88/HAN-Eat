@@ -1967,6 +1967,18 @@ class ChannelDetailRoute {
 /// Пост по id (GoRoute `post_by_id`).
 class PostFeedRoute {
   static String pathFor(int postId) => '/post/$postId';
+
+  /// `https://haneat.app/post/28`, `/channel/5/post/28`, `haneat://post/28`.
+  static int? postIdFromUrl(String raw) {
+    final path = parseDeepLinkToGoPath(raw.trim());
+    if (path == null) return null;
+    final clean = path.split('?').first;
+    final post = RegExp(r'^/post/(\d+)$').firstMatch(clean);
+    if (post != null) return int.tryParse(post.group(1)!);
+    final channel = RegExp(r'^/channel/\d+/post/(\d+)$').firstMatch(clean);
+    if (channel != null) return int.tryParse(channel.group(1)!);
+    return null;
+  }
 }
 
 /// Экран аналитики (GoRoute `analytics`).

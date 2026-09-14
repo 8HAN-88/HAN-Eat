@@ -22,6 +22,8 @@ import '../../../widgets/feed_video_player.dart';
 import '../../../services/server_config.dart';
 import '../../../models/video_quality_preference.dart';
 import '../../../widgets/share_action_sheet.dart';
+import '../../../widgets/chat_reel_preview.dart';
+import '../../../services/share_link_service.dart';
 import '../../../widgets/post_poll_section.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/app_router.dart';
@@ -877,118 +879,31 @@ class _NewPostCardState extends State<NewPostCard>
         final loading =
             snap.connectionState == ConnectionState.waiting && !snap.hasData;
 
-        String sourceName(PostModel? o) {
-          if (o == null) return '';
-          return o.channel?.name ?? o.author?.name ?? 'Пост';
-        }
-
-        String? sourceAvatar(PostModel? o) {
-          if (o == null) return null;
-          final u = o.channel?.avatarUrl ?? o.author?.avatarUrl;
-          if (u == null || u.isEmpty) return null;
-          return u;
-        }
-
-        void openSource(PostModel? o) {
-          if (o == null) return;
-          if (o.channel != null) {
-            context.push('/channel/${o.channel!.id}');
-          } else {
-            context.push('/profile?userId=${o.userId}');
-          }
-        }
-
-        final name = sourceName(orig);
-        final url = sourceAvatar(orig);
-        final initial =
-            name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?';
-
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Icon(Icons.repeat, size: 18, color: scheme.primary),
-                  ),
-                  const SizedBox(width: 8),
-                  if (loading)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 4),
-                      child: SizedBox(
-                        width: 32,
-                        height: 32,
-                        child: Center(
-                          child: SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        ),
-                      ),
-                    )
-                  else if (orig != null) ...[
-                    GestureDetector(
-                      onTap: () => openSource(orig),
-                      child: CircleAvatar(
-                        radius: 16,
-                        backgroundColor: scheme.surfaceContainerHighest,
-                        backgroundImage: url != null
-                            ? ResizeImage(
-                                CachedNetworkImageProvider(
-                                  ServerConfig.resolvePublisherAvatarUrl(url),
-                                ),
-                                width: 64,
-                              )
-                            : null,
-                        child: url == null
-                            ? Text(
-                                initial,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              )
-                            : null,
-                      ),
+                  Icon(Icons.repeat, size: 16, color: scheme.primary),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Репост',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: scheme.onSurfaceVariant,
                     ),
-                    const SizedBox(width: 8),
+                  ),
+                  if (loading) ...[
+                    const SizedBox(width: 10),
+                    const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
                   ],
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Репост',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: scheme.onSurfaceVariant,
-                          ),
-                        ),
-                        if (!loading && orig != null) ...[
-                          const SizedBox(height: 2),
-                          GestureDetector(
-                            onTap: () => openSource(orig),
-                            child: Text(
-                              name,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: scheme.onSurface,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -1023,29 +938,16 @@ class _NewPostCardState extends State<NewPostCard>
                   },
                 ),
               )
-            else if (orig != null) ...[
-              _withDoubleTapLikeOverlay(_buildMedia(orig)),
-              if (resolvePostDisplayTitle(title: orig.title, body: orig.body) != null)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                  child: Text(
-                    displayTitleForPost(orig),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              if (orig.description != null &&
-                  orig.description!.trim().isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-                  child: Text(
-                    orig.description!,
-                    style: const TextStyle(fontSize: 14),
-                  ),
-                ),
-            ],
+            else if (orig != null)
+              SharedPostCard(
+                postId: orig.id,
+                url: orig.type == 'reel'
+                    ? ShareLinkService.reelLink(orig.id)
+                    : ShareLinkService.postLink(orig.id),
+                place: SharedPostCardPlace.feed,
+                initialPost: orig,
+                onDoubleTap: _handleDoubleTapLike,
+              ),
           ],
         );
       },
@@ -1086,30 +988,13 @@ class _NewPostCardState extends State<NewPostCard>
     final channel = post.channel;
 
     // Логика отображения автора:
-    // 1. Если пост репостнут - в шапке показываем того, кто репостнул, ниже - оригинального автора
+    // 1. Если пост репостнут — в шапке тот, кто репостнул; оригинал в SharedPostCard
     // 2. Если пост из канала (channelId != null) - показываем канал
     // 3. Иначе - показываем автора поста
     final isRepost = repostedBy != null;
     final isFromChannel = post.channelId != null || post.communityId != null;
     final isFeedChannelRepostWrapper =
         _repostOriginalPostIdFromBody(post.body) != null;
-
-    // Определяем оригинального автора поста (канал или пользователь)
-    String? originalAuthorName;
-    String? originalAuthorAvatar;
-    bool originalAuthorIsChannel = false;
-
-    if (isFromChannel) {
-      // Оригинальный автор - канал
-      originalAuthorName = channel?.name ?? 'Канал';
-      originalAuthorAvatar = channel?.avatarUrl;
-      originalAuthorIsChannel = true;
-    } else {
-      // Оригинальный автор - пользователь
-      originalAuthorName = author?.name ?? post.author?.name;
-      originalAuthorAvatar = author?.avatarUrl ?? post.author?.avatarUrl;
-      originalAuthorIsChannel = false;
-    }
 
     // Имя и аватар для шапки
     String displayName;
@@ -1148,101 +1033,53 @@ class _NewPostCardState extends State<NewPostCard>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Icon(
-                          Icons.repeat,
-                          size: 18,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
+                      Icon(
+                        Icons.repeat,
+                        size: 16,
+                        color: Theme.of(context).colorScheme.primary,
                       ),
-                      const SizedBox(width: 8),
-                      GestureDetector(
-                        onTap: () {
-                          if (originalAuthorIsChannel &&
-                              post.channelId != null) {
-                            context.push('/channel/${post.channelId}');
-                          } else {
-                            context.push('/profile?userId=${post.userId}');
-                          }
-                        },
-                        child: CircleAvatar(
-                          radius: 16,
-                          backgroundImage: originalAuthorAvatar != null &&
-                                  originalAuthorAvatar.isNotEmpty
-                              ? ResizeImage(
-                                  CachedNetworkImageProvider(
-                                    ServerConfig.resolvePublisherAvatarUrl(
-                                      originalAuthorAvatar,
-                                    ),
-                                  ),
-                                  width: 64,
-                                )
-                              : null,
-                          child: originalAuthorAvatar == null ||
-                                  originalAuthorAvatar.isEmpty
-                              ? Text(
-                                  (originalAuthorName != null &&
-                                          originalAuthorName.isNotEmpty)
-                                      ? originalAuthorName[0].toUpperCase()
-                                      : '?',
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            context.push('/profile?userId=${repostedBy.id}');
+                          },
+                          child: Text.rich(
+                            TextSpan(
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
+                              children: [
+                                const TextSpan(text: 'Репост · '),
+                                TextSpan(
+                                  text: repostedBy.name,
                                   style: const TextStyle(
-                                    fontSize: 14,
                                     fontWeight: FontWeight.w600,
                                   ),
-                                )
-                              : null,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            GestureDetector(
-                              onTap: () {
-                                context
-                                    .push('/profile?userId=${repostedBy.id}');
-                              },
-                              child: Text.rich(
-                                TextSpan(
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
-                                  ),
-                                  children: [
-                                    const TextSpan(text: 'Репост · '),
-                                    TextSpan(
-                                      text: repostedBy.name,
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w600),
-                                    ),
-                                  ],
                                 ),
-                              ),
+                              ],
                             ),
-                            if (repostedBy.comment != null &&
-                                repostedBy.comment!.trim().isNotEmpty) ...[
-                              const SizedBox(height: 6),
-                              Text(
-                                repostedBy.comment!.trim(),
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  height: 1.35,
-                                  color:
-                                      Theme.of(context).colorScheme.onSurface,
-                                ),
-                              ),
-                            ],
-                          ],
+                          ),
                         ),
                       ),
                     ],
                   ),
+                  if (repostedBy.comment != null &&
+                      repostedBy.comment!.trim().isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      repostedBy.comment!.trim(),
+                      style: TextStyle(
+                        fontSize: 14,
+                        height: 1.35,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -1333,113 +1170,18 @@ class _NewPostCardState extends State<NewPostCard>
                             ],
                           ],
                         ),
-                        // Если репост, показываем оригинального автора со стрелочкой
-                        if (isRepost && originalAuthorName != null) ...[
+                        if (isRepost &&
+                            repostedBy.comment != null &&
+                            repostedBy.comment!.trim().isNotEmpty) ...[
                           const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              // Стрелочка вниз
-                              Icon(
-                                Icons.arrow_downward,
-                                size: 14,
-                                color: scheme.onSurfaceVariant,
-                              ),
-                              const SizedBox(width: 4),
-                              // Аватар оригинального автора (кликабельный)
-                              GestureDetector(
-                                onTap: () {
-                                  // Если оригинальный автор - канал, открываем канал
-                                  if (originalAuthorIsChannel &&
-                                      post.channelId != null) {
-                                    context.push('/channel/${post.channelId}');
-                                  } else if (!originalAuthorIsChannel) {
-                                    // Если оригинальный автор - пользователь, открываем профиль
-                                    context
-                                        .push('/profile?userId=${post.userId}');
-                                  }
-                                },
-                                child: originalAuthorAvatar != null
-                                    ? CircleAvatar(
-                                        radius: 10,
-                                        backgroundImage: ResizeImage(
-                                          CachedNetworkImageProvider(
-                                            ServerConfig
-                                                .resolvePublisherAvatarUrl(
-                                              originalAuthorAvatar,
-                                            ),
-                                          ),
-                                          width: 40,
-                                        ),
-                                      )
-                                    : CircleAvatar(
-                                        radius: 10,
-                                        backgroundColor: Colors.grey[400],
-                                        child: Text(
-                                          originalAuthorName[0].toUpperCase(),
-                                          style: const TextStyle(
-                                            fontSize: 10,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      ),
-                              ),
-                              const SizedBox(width: 6),
-                              // Имя оригинального автора (кликабельное)
-                              GestureDetector(
-                                onTap: () {
-                                  // Если оригинальный автор - канал, открываем канал
-                                  if (originalAuthorIsChannel &&
-                                      post.channelId != null) {
-                                    context.push('/channel/${post.channelId}');
-                                  } else if (!originalAuthorIsChannel) {
-                                    // Если оригинальный автор - пользователь, открываем профиль
-                                    context
-                                        .push('/profile?userId=${post.userId}');
-                                  }
-                                },
-                                child: Text(
-                                  originalAuthorName,
-                                  style: TextStyle(
-                                    color: scheme.onSurfaceVariant,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                              if (originalAuthorIsChannel) ...[
-                                const SizedBox(width: 4),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 4, vertical: 1),
-                                  decoration: BoxDecoration(
-                                    color:
-                                        scheme.primary.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(3),
-                                  ),
-                                  child: Text(
-                                    'Канал',
-                                    style: TextStyle(
-                                      fontSize: 9,
-                                      color: scheme.primary,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                          if (repostedBy.comment != null &&
-                              repostedBy.comment!.trim().isNotEmpty) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              repostedBy.comment!.trim(),
-                              style: TextStyle(
-                                fontSize: 14,
-                                height: 1.35,
-                                color: Theme.of(context).colorScheme.onSurface,
-                              ),
+                          Text(
+                            repostedBy.comment!.trim(),
+                            style: TextStyle(
+                              fontSize: 14,
+                              height: 1.35,
+                              color: Theme.of(context).colorScheme.onSurface,
                             ),
-                          ],
+                          ),
                         ]
                         // Для постов из каналов показываем описание канала или "Канал"
                         else if (isFromChannel && !isFeedChannelRepostWrapper)
@@ -1480,27 +1222,38 @@ class _NewPostCardState extends State<NewPostCard>
           else if (post.isPaid && !post.purchased)
             _buildPaidContentPaywall(post)
           else ...[
-            _withDoubleTapLikeOverlay(
-              _buildMedia(
-                post,
-                feedVideoAuthor: hasFeedVideo
-                    ? FeedVideoAuthorInfo(
-                        name: displayName,
-                        avatarUrl: displayAvatar,
-                        metaText:
-                            _formatDate(post.publishedAt ?? post.createdAt),
-                        viewsText: _formatCount(post.viewsCount),
-                        subtitle: isFromChannel && !isRepost
-                            ? (channel?.description ?? 'Канал')
-                            : (author?.username != null
-                                ? '@${author!.username}'
-                                : null),
-                        isChannel: isFromChannel && !isRepost,
-                        onTap: widget.onAuthorTap,
-                      )
-                    : null,
+            if (isRepost)
+              SharedPostCard(
+                postId: post.id,
+                url: post.type == 'reel'
+                    ? ShareLinkService.reelLink(post.id)
+                    : ShareLinkService.postLink(post.id),
+                place: SharedPostCardPlace.feed,
+                initialPost: post,
+                onDoubleTap: _handleDoubleTapLike,
+              )
+            else
+              _withDoubleTapLikeOverlay(
+                _buildMedia(
+                  post,
+                  feedVideoAuthor: hasFeedVideo
+                      ? FeedVideoAuthorInfo(
+                          name: displayName,
+                          avatarUrl: displayAvatar,
+                          metaText:
+                              _formatDate(post.publishedAt ?? post.createdAt),
+                          viewsText: _formatCount(post.viewsCount),
+                          subtitle: isFromChannel
+                              ? (channel?.description ?? 'Канал')
+                              : (author?.username != null
+                                  ? '@${author!.username}'
+                                  : null),
+                          isChannel: isFromChannel,
+                          onTap: widget.onAuthorTap,
+                        )
+                      : null,
+                ),
               ),
-            ),
             if (post.linkUrl != null && post.linkUrl!.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
@@ -1602,7 +1355,12 @@ class _NewPostCardState extends State<NewPostCard>
                     (post.description != null &&
                         post.description!.trim().isNotEmpty)) ...[
                   _buildInstagramCaption(
-                    authorName: displayName,
+                    authorName: isRepost
+                        ? (channel?.name ??
+                            author?.username ??
+                            author?.name ??
+                            displayName)
+                        : displayName,
                     title: resolvePostDisplayTitle(
                       title: post.title,
                       body: post.body,

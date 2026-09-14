@@ -1,3 +1,4 @@
+import '../app/app_router.dart';
 import '../models/post_model.dart';
 
 class ShareLinkService {
@@ -59,8 +60,13 @@ class ShareLinkService {
     return '$title\n\nОткрыть в HanWe: ${reelLink(reel.id)}';
   }
 
-  /// Текст поверх карточки рилса: убираем шаблон шаринга и сам URL.
-  static String visibleCaptionForReelShare(String text) {
+  /// Рилс, пост профиля или пост канала — один id для карточки репоста.
+  static int? sharedPostIdFromUrl(String raw) {
+    return ReelByIdRoute.postIdFromUrl(raw) ?? PostFeedRoute.postIdFromUrl(raw);
+  }
+
+  /// Текст поверх карточки репоста: убираем шаблон шаринга и сам URL.
+  static String visibleCaptionForSharedPost(String text) {
     var t = text;
     t = t.replaceAll(
       RegExp(r'Открыть в HanWe:\s*https?://\S+', caseSensitive: false),
@@ -68,12 +74,29 @@ class ShareLinkService {
     );
     t = t.replaceAll(
       RegExp(
-        r'https?://(?:www\.)?haneat\.app(?:/app)?/reel/\d+\S*',
+        r'https?://(?:www\.)?haneat\.app(?:/app)?/(?:reel|post)/\d+\S*',
         caseSensitive: false,
       ),
       '',
     );
-    t = t.replaceAll(RegExp(r'haneat://reel/\d+', caseSensitive: false), '');
-    return t.replaceAll(RegExp(r'[ \t]+\n'), '\n').replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
+    t = t.replaceAll(
+      RegExp(
+        r'https?://(?:www\.)?haneat\.app(?:/app)?/channel/\d+/post/\d+\S*',
+        caseSensitive: false,
+      ),
+      '',
+    );
+    t = t.replaceAll(
+      RegExp(r'haneat://(?:reel|post)/\d+', caseSensitive: false),
+      '',
+    );
+    return t
+        .replaceAll(RegExp(r'[ \t]+\n'), '\n')
+        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+        .trim();
   }
+
+  /// Текст поверх карточки рилса: убираем шаблон шаринга и сам URL.
+  static String visibleCaptionForReelShare(String text) =>
+      visibleCaptionForSharedPost(text);
 }
