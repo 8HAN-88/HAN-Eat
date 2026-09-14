@@ -9,6 +9,7 @@ class AppRadius {
   static const double md = 14;
   static const double input = 16;
   static const double card = 18;
+  static const double feedCard = 20;
   static const double sheet = 22;
   static const double nav = 24;
   static const double telegramBubble = 18;

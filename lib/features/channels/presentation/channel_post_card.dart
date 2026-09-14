@@ -1096,6 +1096,7 @@ class _ChannelPostCardState extends State<ChannelPostCard>
       margin: const EdgeInsets.fromLTRB(8, 4, 44, 4),
       borderRadius: 16,
       padding: EdgeInsets.zero,
+      showShadow: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

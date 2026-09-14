@@ -17,6 +17,8 @@ class PostCardSkeleton extends StatelessWidget {
     return AppElevatedCard(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       padding: EdgeInsets.zero,
+      radius: AppCardDecorations.feedRadius,
+      chrome: AppCardChrome.feed,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -30,7 +32,7 @@ class PostCardSkeleton extends StatelessWidget {
                   baseColor: base,
                   highlightColor: highlight,
                   child: CircleAvatar(
-                    radius: 20,
+                    radius: 16,
                     backgroundColor: fill,
                   ),
                 ),
