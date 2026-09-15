@@ -199,6 +199,7 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
               ],
               const SizedBox(height: 8),
               TextField(
+                textCapitalization: TextCapitalization.sentences,
                 controller: noteController,
                 maxLines: 2,
                 decoration: const InputDecoration(

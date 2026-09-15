@@ -259,6 +259,7 @@ class _ChannelSettingsScreenState extends ConsumerState<ChannelSettingsScreen> {
                 children: [
                   // Название
                   TextFormField(
+                    textCapitalization: TextCapitalization.sentences,
                     controller: _nameController,
                     decoration: const InputDecoration(
                       labelText: 'Название канала',
@@ -274,6 +275,7 @@ class _ChannelSettingsScreenState extends ConsumerState<ChannelSettingsScreen> {
 
                   // Описание
                   TextFormField(
+                    textCapitalization: TextCapitalization.sentences,
                     controller: _descriptionController,
                     decoration: const InputDecoration(
                       labelText: 'Описание',
@@ -284,6 +286,7 @@ class _ChannelSettingsScreenState extends ConsumerState<ChannelSettingsScreen> {
 
                   // Категория
                   TextFormField(
+                    textCapitalization: TextCapitalization.sentences,
                     controller: _categoryController,
                     decoration: const InputDecoration(
                       labelText: 'Категория',

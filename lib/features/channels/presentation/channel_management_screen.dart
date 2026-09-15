@@ -748,6 +748,7 @@ class _ChannelManagementScreenState
 
         // Название
         TextFormField(
+          textCapitalization: TextCapitalization.sentences,
           controller: _nameController,
           decoration: const InputDecoration(
             labelText: 'Название канала',
@@ -783,6 +784,7 @@ class _ChannelManagementScreenState
 
         // Описание
         TextFormField(
+          textCapitalization: TextCapitalization.sentences,
           controller: _descriptionController,
           decoration: const InputDecoration(
             labelText: 'Описание',
@@ -795,6 +797,7 @@ class _ChannelManagementScreenState
 
         // Правила канала
         TextFormField(
+          textCapitalization: TextCapitalization.sentences,
           controller: _rulesController,
           decoration: const InputDecoration(
             labelText: 'Правила канала',
@@ -806,6 +809,7 @@ class _ChannelManagementScreenState
 
         // Теги
         TextFormField(
+          textCapitalization: TextCapitalization.sentences,
           controller: _tagsController,
           decoration: const InputDecoration(
             labelText: 'Теги (через запятую)',

@@ -67,10 +67,25 @@ class _AdminFlexFeaturesScreenState extends State<AdminFlexFeaturesScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(controller: title, decoration: const InputDecoration(labelText: 'Название')),
-                TextField(controller: slug, decoration: const InputDecoration(labelText: 'slug')),
-                TextField(controller: description, decoration: const InputDecoration(labelText: 'Описание')),
-                TextField(controller: icon, decoration: const InputDecoration(labelText: 'Иконка')),
+                TextField(
+                  textCapitalization: TextCapitalization.sentences,
+                  controller: title,
+                  decoration: const InputDecoration(labelText: 'Название'),
+                ),
+                TextField(
+                  controller: slug,
+                  decoration: const InputDecoration(labelText: 'slug'),
+                ),
+                TextField(
+                  textCapitalization: TextCapitalization.sentences,
+                  controller: description,
+                  decoration: const InputDecoration(labelText: 'Описание'),
+                ),
+                TextField(
+                  textCapitalization: TextCapitalization.sentences,
+                  controller: icon,
+                  decoration: const InputDecoration(labelText: 'Иконка'),
+                ),
                 DropdownButtonFormField<String>(
                   value: type,
                   decoration: const InputDecoration(labelText: 'Тип'),

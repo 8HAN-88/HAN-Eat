@@ -322,6 +322,7 @@ class _PollTextField extends StatelessWidget {
         children: [
           Expanded(
             child: TextField(
+              textCapitalization: TextCapitalization.sentences,
               controller: controller,
               onChanged: (v) => onChanged?.call(v),
               decoration: InputDecoration(

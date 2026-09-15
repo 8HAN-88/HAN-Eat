@@ -289,6 +289,7 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                 child: TextField(
+                  textCapitalization: TextCapitalization.sentences,
                   controller: _controller,
                   autofocus: true,
                   decoration: const InputDecoration(

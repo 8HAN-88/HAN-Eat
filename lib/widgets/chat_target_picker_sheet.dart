@@ -160,6 +160,7 @@ class _ChatTargetPickerSheetState extends State<_ChatTargetPickerSheet> {
             ],
             const SizedBox(height: 10),
             TextField(
+              textCapitalization: TextCapitalization.sentences,
               controller: _searchCtrl,
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(

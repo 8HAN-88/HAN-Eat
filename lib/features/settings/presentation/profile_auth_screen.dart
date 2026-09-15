@@ -289,6 +289,7 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
                   ),
                   const SizedBox(height: 12),
                   TextField(
+                    textCapitalization: TextCapitalization.words,
                     controller: _nameCtl,
                     decoration: const InputDecoration(
                       hintText: 'Введите ваше имя',
@@ -302,6 +303,7 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
                   ),
                   const SizedBox(height: 8),
                   TextField(
+                    textCapitalization: TextCapitalization.sentences,
                     controller: _bioCtl,
                     decoration: const InputDecoration(
                       hintText: 'Краткое описание профиля',

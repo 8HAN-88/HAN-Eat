@@ -391,6 +391,7 @@ class _EditProfilePostScreenState extends ConsumerState<EditProfilePostScreen> {
           ],
           if (!_isLink && !_isPoll) ...[
             TextFormField(
+              textCapitalization: TextCapitalization.sentences,
               controller: _titleController,
               decoration: const InputDecoration(
                 labelText: 'Заголовок',
@@ -399,6 +400,7 @@ class _EditProfilePostScreenState extends ConsumerState<EditProfilePostScreen> {
             const SizedBox(height: 12),
           ],
           TextFormField(
+            textCapitalization: TextCapitalization.sentences,
             controller: _descriptionController,
             decoration: InputDecoration(
               labelText: _isLink
@@ -423,6 +425,7 @@ class _EditProfilePostScreenState extends ConsumerState<EditProfilePostScreen> {
             ),
             const SizedBox(height: 8),
             TextFormField(
+              textCapitalization: TextCapitalization.sentences,
               controller: _linkPreviewController,
               decoration: const InputDecoration(labelText: 'Заголовок превью'),
             ),

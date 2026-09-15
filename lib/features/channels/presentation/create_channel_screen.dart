@@ -288,6 +288,7 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
                   const SizedBox(height: 16),
                   // Название
                   TextFormField(
+                    textCapitalization: TextCapitalization.sentences,
                     controller: _nameController,
                     decoration: const InputDecoration(
                       labelText: 'Название канала',
@@ -328,6 +329,7 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
                   const SizedBox(height: 16),
                   // Описание
                   TextFormField(
+                    textCapitalization: TextCapitalization.sentences,
                     controller: _descriptionController,
                     decoration: const InputDecoration(
                       labelText: 'Описание (опционально)',
@@ -358,6 +360,7 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
                         _categoryController.text = controller.text;
                       });
                       return TextFormField(
+                        textCapitalization: TextCapitalization.sentences,
                         controller: controller,
                         focusNode: focusNode,
                         decoration: const InputDecoration(

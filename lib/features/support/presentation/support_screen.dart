@@ -239,6 +239,7 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
               const SizedBox(height: 16),
               // Тема
               TextFormField(
+                textCapitalization: TextCapitalization.sentences,
                 controller: _subjectController,
                 decoration: const InputDecoration(
                   labelText: 'Тема',
@@ -255,6 +256,7 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
               const SizedBox(height: 16),
               // Сообщение
               TextFormField(
+                textCapitalization: TextCapitalization.sentences,
                 controller: _messageController,
                 decoration: const InputDecoration(
                   labelText: 'Сообщение',

@@ -253,6 +253,7 @@ class _ChatsNeoHeader extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             TextField(
+              textCapitalization: TextCapitalization.sentences,
               controller: searchController,
               onChanged: onSearchChanged,
               textInputAction: TextInputAction.search,

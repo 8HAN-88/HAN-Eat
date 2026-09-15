@@ -147,6 +147,7 @@ class _ChatPeopleSearchScreenState extends State<ChatPeopleSearchScreen> {
           Padding(
             padding: const EdgeInsets.all(12),
             child: TextField(
+              textCapitalization: TextCapitalization.sentences,
               controller: _query,
               autofocus: true,
               decoration: InputDecoration(

@@ -3422,6 +3422,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       builder: (ctx) => AlertDialog(
         title: const Text('Новая тема'),
         content: TextField(
+          textCapitalization: TextCapitalization.sentences,
           controller: controller,
           autofocus: true,
           maxLength: 128,
@@ -3489,6 +3490,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       builder: (ctx) => AlertDialog(
         title: const Text('Переименовать тему'),
         content: TextField(
+          textCapitalization: TextCapitalization.sentences,
           controller: controller,
           autofocus: true,
           maxLength: 128,
@@ -13113,6 +13115,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       builder: (ctx) => AlertDialog(
         title: Text(isCaption ? 'Подпись' : 'Изменить отложенное'),
         content: TextField(
+          textCapitalization: TextCapitalization.sentences,
           controller: controller,
           autofocus: true,
           maxLines: 6,
@@ -14464,6 +14467,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         builder: (ctx) => AlertDialog(
           title: const Text('Новый вариант'),
           content: TextField(
+            textCapitalization: TextCapitalization.sentences,
             controller: controller,
             autofocus: true,
             maxLength: 120,
@@ -15245,6 +15249,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                       return KeyEventResult.ignored;
                                     },
                                     child: TextField(
+                                      textCapitalization: TextCapitalization.sentences,
                                       focusNode: _threadSearchFocusNode,
                                       controller: _threadSearchController,
                                       autofocus: true,
@@ -16825,6 +16830,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                 BorderRadius.circular(22),
                                           ),
                                           child: TextField(
+                                            textCapitalization: TextCapitalization.sentences,
                                             controller: _controller,
                                             focusNode: _inputFocusNode,
                                             enabled: canCompose,

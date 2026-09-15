@@ -718,6 +718,7 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
       builder: (ctx) => AlertDialog(
         title: const Text('Новый стикерпак'),
         content: TextField(
+          textCapitalization: TextCapitalization.sentences,
           controller: controller,
           autofocus: true,
           maxLength: 120,
@@ -1170,6 +1171,7 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
                         key: const ValueKey('attach-search-visible'),
                         padding: const EdgeInsets.fromLTRB(14, 2, 14, 10),
                         child: TextField(
+                          textCapitalization: TextCapitalization.sentences,
                           controller: _searchController,
                           autofocus: true,
                           decoration: InputDecoration(
@@ -1556,6 +1558,7 @@ class _GifPickPanelState extends State<_GifPickPanel> {
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
       children: [
         TextField(
+          textCapitalization: TextCapitalization.sentences,
           controller: _searchController,
           enabled: _catalogConfigured,
           textInputAction: TextInputAction.search,

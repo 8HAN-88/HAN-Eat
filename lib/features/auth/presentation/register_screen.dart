@@ -156,6 +156,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   const SizedBox(height: 16),
                   // Имя
                   TextFormField(
+                    textCapitalization: TextCapitalization.words,
                     controller: _nameController,
                     decoration: const InputDecoration(
                       labelText: 'Имя',

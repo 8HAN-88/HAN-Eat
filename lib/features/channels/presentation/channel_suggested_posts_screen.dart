@@ -102,6 +102,7 @@ class _ChannelSuggestedPostsScreenState
                   ),
                   const SizedBox(height: 12),
                   TextField(
+                    textCapitalization: TextCapitalization.sentences,
                     controller: textController,
                     minLines: 3,
                     maxLines: 6,

@@ -264,6 +264,7 @@ class _SubscriptionCancelSurveySheetState
                             if (_selectedReasonId == 'other') ...[
                               const SizedBox(height: 8),
                               TextField(
+                                textCapitalization: TextCapitalization.sentences,
                                 controller: _otherReasonController,
                                 decoration: const InputDecoration(
                                   labelText: 'Уточните причину',
@@ -283,6 +284,7 @@ class _SubscriptionCancelSurveySheetState
                         subtitle: 'Необязательно — ваш отзыв поможет улучшить HanWe',
                         icon: Icons.edit_note_outlined,
                         child: TextField(
+                          textCapitalization: TextCapitalization.sentences,
                           controller: _improvementController,
                           decoration: const InputDecoration(
                             hintText:

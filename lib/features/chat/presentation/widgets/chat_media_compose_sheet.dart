@@ -328,6 +328,7 @@ class _ChatMediaComposeSheetState extends State<_ChatMediaComposeSheet> {
                     children: [
                       Expanded(
                         child: TextField(
+                          textCapitalization: TextCapitalization.sentences,
                           controller: _caption,
                           minLines: 1,
                           maxLines: 4,

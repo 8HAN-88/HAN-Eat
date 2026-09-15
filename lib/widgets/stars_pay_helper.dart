@@ -258,6 +258,7 @@ Future<StarsTipDraft?> pickStarsTipDraft(
             ),
             const SizedBox(height: 8),
             TextField(
+              textCapitalization: TextCapitalization.sentences,
               controller: messageController,
               maxLines: 2,
               decoration: const InputDecoration(

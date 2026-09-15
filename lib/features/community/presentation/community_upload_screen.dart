@@ -254,6 +254,7 @@ class _CommunityUploadScreenState
             ),
             const SizedBox(height: 16),
             TextFormField(
+              textCapitalization: TextCapitalization.sentences,
               controller: _titleCtrl,
               decoration: const InputDecoration(
                 labelText: 'Название',
@@ -264,6 +265,7 @@ class _CommunityUploadScreenState
             ),
             const SizedBox(height: 12),
             TextFormField(
+              textCapitalization: TextCapitalization.sentences,
               controller: _authorCtrl,
               readOnly: true,
               decoration: InputDecoration(
@@ -275,6 +277,7 @@ class _CommunityUploadScreenState
             ),
             const SizedBox(height: 12),
             TextFormField(
+              textCapitalization: TextCapitalization.sentences,
               controller: _descriptionCtrl,
               maxLines: 4,
               decoration: const InputDecoration(
@@ -284,6 +287,7 @@ class _CommunityUploadScreenState
             ),
             const SizedBox(height: 12),
             TextFormField(
+              textCapitalization: TextCapitalization.sentences,
               controller: _tagsCtrl,
               decoration: const InputDecoration(
                 labelText: 'Теги',

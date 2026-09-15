@@ -74,6 +74,7 @@ class _ReportContentDialogState extends State<_ReportContentDialog> {
               ),
             ),
             TextField(
+              textCapitalization: TextCapitalization.sentences,
               controller: _comment,
               decoration: const InputDecoration(
                 labelText: 'Комментарий (необязательно)',

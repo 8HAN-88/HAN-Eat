@@ -522,6 +522,7 @@ class _AdCampaignEditorScreenState extends State<AdCampaignEditorScreen> {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       children: [
         TextField(
+          textCapitalization: TextCapitalization.sentences,
           controller: _advertiserName,
           enabled: _editable,
           decoration: const InputDecoration(
@@ -552,6 +553,7 @@ class _AdCampaignEditorScreenState extends State<AdCampaignEditorScreen> {
           ),
         ),
         TextField(
+          textCapitalization: TextCapitalization.sentences,
           controller: _cta,
           enabled: _editable,
           maxLength: 32,

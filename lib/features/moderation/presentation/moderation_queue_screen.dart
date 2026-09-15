@@ -932,6 +932,7 @@ class _ModeratorMessageDialogState extends State<_ModeratorMessageDialog> {
     return AlertDialog(
       title: Text(widget.title),
       content: TextField(
+        textCapitalization: TextCapitalization.sentences,
         controller: _controller,
         decoration: InputDecoration(
           hintText: widget.hint,
@@ -1032,6 +1033,7 @@ class _RejectDialogState extends State<_RejectDialog> {
               ),
               const SizedBox(height: 16),
               TextField(
+                textCapitalization: TextCapitalization.sentences,
                 controller: _commentController,
                 decoration: const InputDecoration(
                   labelText: 'Комментарий (опционально)',
