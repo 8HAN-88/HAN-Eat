@@ -1019,6 +1019,11 @@ class _NewPostCardState extends State<NewPostCard>
 
     final hasFeedVideo =
         post.videoUrl != null && post.videoUrl!.trim().isNotEmpty;
+    final captionText = resolveFeedCaptionText(
+      title: resolvePostDisplayTitle(title: post.title, body: post.body),
+      description: post.description,
+      authorName: displayName,
+    );
 
     return PostCardContainer(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1350,23 +1355,8 @@ class _NewPostCardState extends State<NewPostCard>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (resolvePostDisplayTitle(title: post.title, body: post.body) !=
-                        null ||
-                    (post.description != null &&
-                        post.description!.trim().isNotEmpty)) ...[
-                  _buildInstagramCaption(
-                    authorName: isRepost
-                        ? (channel?.name ??
-                            author?.username ??
-                            author?.name ??
-                            displayName)
-                        : displayName,
-                    title: resolvePostDisplayTitle(
-                      title: post.title,
-                      body: post.body,
-                    ),
-                    description: post.description,
-                  ),
+                if (captionText != null) ...[
+                  _buildFeedCaption(text: captionText),
                   const SizedBox(height: 10),
                 ],
                 Row(
@@ -1572,25 +1562,15 @@ class _NewPostCardState extends State<NewPostCard>
     return Text(line, style: style);
   }
 
-  Widget _buildInstagramCaption({
-    required String authorName,
-    String? title,
-    String? description,
-  }) {
+  Widget _buildFeedCaption({required String text}) {
     final scheme = Theme.of(context).colorScheme;
-    final parts = <String>[
-      if (title != null && title.trim().isNotEmpty) title.trim(),
-      if (description != null && description.trim().isNotEmpty)
-        description.trim(),
-    ];
-    final full = parts.join('\n');
-    if (full.isEmpty) return const SizedBox.shrink();
+    if (text.isEmpty) return const SizedBox.shrink();
 
     const previewLimit = 120;
-    final needsMore = full.length > previewLimit;
+    final needsMore = text.length > previewLimit;
     final shown = !_captionExpanded && needsMore
-        ? '${full.substring(0, previewLimit).trimRight()}…'
-        : full;
+        ? '${text.substring(0, previewLimit).trimRight()}…'
+        : text;
 
     return RichText(
       text: TextSpan(
@@ -1600,10 +1580,6 @@ class _NewPostCardState extends State<NewPostCard>
           color: scheme.onSurface,
         ),
         children: [
-          TextSpan(
-            text: '$authorName ',
-            style: const TextStyle(fontWeight: FontWeight.w800),
-          ),
           TextSpan(text: shown),
           if (needsMore && !_captionExpanded)
             WidgetSpan(
