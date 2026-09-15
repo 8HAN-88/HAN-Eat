@@ -46,4 +46,31 @@ void main() {
     );
     expect(displayTitleForPost(post), 'Пост');
   });
+
+  test('resolveFeedCaptionText does not prefix author or channel name', () {
+    expect(
+      resolveFeedCaptionText(
+        title: 'HANNAN',
+        description: 'Тестим как выглядит всё это',
+        authorName: 'HANNAN',
+      ),
+      'Тестим как выглядит всё это',
+    );
+    expect(
+      resolveFeedCaptionText(
+        title: 'Pre-launch',
+        description: 'Automated check',
+        authorName: 'Launchh Smoke',
+      ),
+      'Pre-launch\nAutomated check',
+    );
+    expect(
+      resolveFeedCaptionText(
+        title: 'Один текст',
+        description: 'Один текст',
+        authorName: 'Канал',
+      ),
+      'Один текст',
+    );
+  });
 }

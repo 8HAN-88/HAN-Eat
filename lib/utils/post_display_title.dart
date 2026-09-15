@@ -37,6 +37,28 @@ String displayTitleForPost(PostModel post, {String fallback = 'Пост'}) {
       fallback;
 }
 
+/// Текст под фото в ленте: без имени автора/канала (оно уже в шапке).
+String? resolveFeedCaptionText({
+  String? title,
+  String? description,
+  String? authorName,
+}) {
+  final rawTitle = title?.trim() ?? '';
+  final rawDesc = description?.trim() ?? '';
+  final author = authorName?.trim() ?? '';
+  final titleIsAuthor = rawTitle.isNotEmpty &&
+      author.isNotEmpty &&
+      rawTitle.toLowerCase() == author.toLowerCase();
+  final useTitle = rawTitle.isNotEmpty && !titleIsAuthor;
+  if (useTitle && rawDesc.isNotEmpty) {
+    if (rawTitle == rawDesc) return rawTitle;
+    return '$rawTitle\n$rawDesc';
+  }
+  if (useTitle) return rawTitle;
+  if (rawDesc.isNotEmpty) return rawDesc;
+  return null;
+}
+
 String? extractLegacyBodyImageUrl(Map<String, dynamic>? body) {
   if (body == null) return null;
   for (final key in ['image', 'source_image']) {
