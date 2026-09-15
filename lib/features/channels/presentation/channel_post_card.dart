@@ -175,13 +175,31 @@ class _ChannelPostCardState extends State<ChannelPostCard>
         widget.post,
       );
     }
-    if (oldWidget.post.id == widget.post.id && oldWidget.post != widget.post) {
+    if (oldWidget.post.id != widget.post.id) {
       _isLiked = widget.post.isLiked;
       _likesCount = widget.post.likesCount;
       _isSaved = widget.post.isSaved ?? false;
       _isReposted = widget.post.isReposted ?? false;
       _repostsCount = widget.post.repostsCount;
       _displayCommentsCount = widget.post.commentsCount;
+    } else {
+      if (!_isLoading &&
+          (oldWidget.post.isLiked != widget.post.isLiked ||
+              oldWidget.post.likesCount != widget.post.likesCount)) {
+        _isLiked = _displayPost.isLiked;
+        _likesCount = _displayPost.likesCount;
+      }
+      if (oldWidget.post.isSaved != widget.post.isSaved) {
+        _isSaved = _displayPost.isSaved ?? false;
+      }
+      if (oldWidget.post.isReposted != widget.post.isReposted ||
+          oldWidget.post.repostsCount != widget.post.repostsCount) {
+        _isReposted = _displayPost.isReposted ?? false;
+        _repostsCount = _displayPost.repostsCount;
+      }
+      if (oldWidget.post.commentsCount != widget.post.commentsCount) {
+        _displayCommentsCount = widget.post.commentsCount;
+      }
     }
     _syncChannelRepostFuture();
   }
