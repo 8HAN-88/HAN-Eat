@@ -26,6 +26,7 @@ import '../../navigation/application/shell_tab_visibility.dart';
 import 'package:han_eat/core/layout/floating_bottom_padding.dart';
 import 'package:han_eat/widgets/app_empty_state.dart';
 import 'package:han_eat/widgets/app_gradient_background.dart';
+import 'package:han_eat/widgets/telegram_connection_chrome.dart';
 import 'package:han_eat/widgets/telegram_ui.dart';
 import '../../content/create_content_actions.dart';
 import '../../chat/presentation/widgets/star_gift_picker_sheet.dart';
@@ -592,7 +593,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Профиль')),
+        appBar: AppBar(
+          title: widget.userId == null
+              ? const TelegramConnectionAwareTitle(fallback: 'Профиль')
+              : const Text('Профиль'),
+        ),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -649,7 +654,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         });
       });
       return Scaffold(
-        appBar: AppBar(title: const Text('Профиль')),
+        appBar: AppBar(
+          title: const TelegramConnectionAwareTitle(fallback: 'Профиль'),
+        ),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -674,7 +681,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
-        title: Text(user.name),
+        title: isOwnProfile
+            ? TelegramConnectionAwareTitle(fallback: user.name)
+            : Text(user.name),
         actions: isOwnProfile
             ? [
                 NeoCircleAction(

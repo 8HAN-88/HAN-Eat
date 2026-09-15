@@ -13,9 +13,7 @@ import '../../settings/application/subscription_status_provider.dart';
 import '../../onboarding/onboarding_overlay.dart';
 import 'package:han_eat/services/account_session_service.dart';
 import 'package:han_eat/services/api_reachability_service.dart';
-import 'package:han_eat/widgets/connectivity_status_banner.dart';
 import 'package:han_eat/widgets/pwa_install_banner.dart';
-import 'package:han_eat/services/feed_sync_service.dart';
 import 'package:han_eat/services/chat_service.dart';
 import 'package:han_eat/services/presence_service.dart';
 import 'package:han_eat/services/auth_service.dart';
@@ -68,7 +66,6 @@ class _RootShellState extends ConsumerState<RootShell> {
   int _unreadDmCount = 0;
   int _unreadChannelCount = 0;
   bool _shellIndexFixScheduled = false;
-  late final Listenable _connectivityListenable;
 
   static int _clampShellIndex(int index) =>
       index.clamp(0, RootShell._destinations.length - 1);
@@ -112,11 +109,6 @@ class _RootShellState extends ConsumerState<RootShell> {
   @override
   void initState() {
     super.initState();
-    _connectivityListenable = Listenable.merge([
-      FeedSyncService.onlineListenable,
-      ApiReachabilityService.instance.isApiReachable,
-      ApiReachabilityService.instance.isApiConnecting,
-    ]);
     AppBootstrapState.primaryUiReady.value = true;
     notifyPrimaryUiReady();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -286,27 +278,18 @@ class _RootShellState extends ConsumerState<RootShell> {
     );
   }
 
-  Widget _navigationContent(BuildContext context, {required bool online}) {
-    final child = OnboardingOverlay(
-      child: ValueListenableBuilder<int>(
-        valueListenable: AccountSessionService.epoch,
-        builder: (context, sessionEpoch, _) {
-          return KeyedSubtree(
-            key: ValueKey('main_shell_session_$sessionEpoch'),
-            child: widget.navigationShell,
-          );
-        },
-      ),
-    );
-
-    if (online) {
-      return ShellScrollChromeListener(child: child);
-    }
+  Widget _navigationContent(BuildContext context) {
     return ShellScrollChromeListener(
-      child: MediaQuery.removePadding(
-        context: context,
-        removeTop: true,
-        child: child,
+      child: OnboardingOverlay(
+        child: ValueListenableBuilder<int>(
+          valueListenable: AccountSessionService.epoch,
+          builder: (context, sessionEpoch, _) {
+            return KeyedSubtree(
+              key: ValueKey('main_shell_session_$sessionEpoch'),
+              child: widget.navigationShell,
+            );
+          },
+        ),
       ),
     );
   }
@@ -430,22 +413,15 @@ class _RootShellState extends ConsumerState<RootShell> {
             return Scaffold(
               backgroundColor: pageBg,
               extendBody: true,
-              body: ListenableBuilder(
-                listenable: _connectivityListenable,
-                builder: (context, _) {
-                  final online = FeedSyncService.onlineListenable.value;
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const ConnectivityStatusBanner(),
-                      const PwaInstallBanner(),
-                      _subscriptionStaleBanner(context),
-                      Expanded(
-                        child: _navigationContent(context, online: online),
-                      ),
-                    ],
-                  );
-                },
+              body: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const PwaInstallBanner(),
+                  _subscriptionStaleBanner(context),
+                  Expanded(
+                    child: _navigationContent(context),
+                  ),
+                ],
               ),
               bottomNavigationBar: hideBottomNav
                   ? null

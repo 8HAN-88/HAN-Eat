@@ -6,7 +6,7 @@ enum TelegramConnectionPhase {
   updating,
 }
 
-/// Общая лестница для баннера, заголовка чатов и подзаголовка треда.
+/// Общая лестница для заголовков главных разделов и подзаголовка треда.
 class TelegramConnectionStatus {
   const TelegramConnectionStatus._();
 

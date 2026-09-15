@@ -10,6 +10,7 @@ import '../../../utils/api_error_parser.dart';
 import '../../../utils/session_snackbar.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/app_gradient_background.dart';
+import '../../../widgets/telegram_connection_chrome.dart';
 import '../../../widgets/telegram_ui.dart';
 import '../../bots/data/bot_models.dart';
 import '../../bots/presentation/bot_detail_screen.dart';
@@ -499,8 +500,8 @@ class _MiniAppsNeoHeader extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: Text(
-                    'Мини-приложения',
+                  child: TelegramConnectionAwareTitle(
+                    fallback: 'Мини-приложения',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                           fontWeight: FontWeight.w900,
                           letterSpacing: -0.8,
