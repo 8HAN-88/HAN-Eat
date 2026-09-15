@@ -2,17 +2,21 @@ import '../models/post_model.dart';
 import '../services/server_config.dart';
 import 'post_display_title.dart';
 
+enum SharedPostKind { video, photo, text }
+
 /// Медиа и подпись для Instagram-карточки репоста.
 class SharedPostMedia {
   SharedPostMedia._();
 
-  static bool isVideo(PostModel post) {
-    if (post.type == 'reel') return true;
-    final url = post.videoUrl?.trim() ?? '';
-    if (url.isNotEmpty) return true;
-    final thumb = post.videoThumbnail?.trim() ?? '';
-    return thumb.isNotEmpty;
+  static SharedPostKind kind(PostModel post) {
+    if (post.type == 'reel') return SharedPostKind.video;
+    final video = post.videoUrl?.trim() ?? '';
+    if (video.isNotEmpty) return SharedPostKind.video;
+    if (firstImageUrl(post) != null) return SharedPostKind.photo;
+    return SharedPostKind.text;
   }
+
+  static bool isVideo(PostModel post) => kind(post) == SharedPostKind.video;
 
   static String? firstImageUrl(PostModel post) {
     final body = post.body;

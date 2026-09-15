@@ -105,7 +105,7 @@ void main() {
   });
 
   group('ShareLinkService.sharedPostShareText', () {
-    test('keeps reel link and prepends a comment', () {
+    test('sends only the link so the card can own the original text', () {
       final reel = PostModel.fromJson({
         'id': 28,
         'type': 'reel',
@@ -120,11 +120,47 @@ void main() {
       });
       expect(
         ShareLinkService.sharedPostShareText(reel),
-        'салют\n\nОткрыть в HanWe: https://haneat.app/reel/28',
+        'https://haneat.app/reel/28',
       );
       expect(
         ShareLinkService.sharedPostShareText(reel, comment: 'это я'),
-        'это я\n\nсалют\n\nОткрыть в HanWe: https://haneat.app/reel/28',
+        'это я\n\nhttps://haneat.app/reel/28',
+      );
+    });
+  });
+
+  group('ShareLinkService.userCommentForShare', () {
+    final channelPost = PostModel.fromJson({
+      'id': 9,
+      'type': 'text',
+      'status': 'published',
+      'created_at': '2026-01-01T00:00:00Z',
+      'user_id': 1,
+      'likes_count': 0,
+      'comments_count': 0,
+      'reposts_count': 0,
+      'views_count': 0,
+      'title': 'Евро резко упало до 96 рублей.',
+      'description': 'Евро резко упало до 96 рублей.',
+    });
+
+    test('drops the original channel text copied into the share message', () {
+      expect(
+        ShareLinkService.userCommentForShare(
+          'Евро резко упало до 96 рублей.\n\nОткрыть в HanWe: https://haneat.app/post/9',
+          channelPost,
+        ),
+        isEmpty,
+      );
+    });
+
+    test('keeps a real sender note', () {
+      expect(
+        ShareLinkService.userCommentForShare(
+          'это я\n\nhttps://haneat.app/post/9',
+          channelPost,
+        ),
+        'это я',
       );
     });
   });

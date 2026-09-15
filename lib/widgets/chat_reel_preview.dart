@@ -8,6 +8,7 @@ import '../models/post_model.dart';
 import '../services/api_service.dart';
 import '../services/saved_posts_service.dart';
 import '../services/server_config.dart';
+import '../services/share_link_service.dart';
 import '../utils/post_publisher_display.dart';
 import '../utils/session_snackbar.dart';
 import '../utils/shared_post_media.dart';
@@ -49,6 +50,7 @@ class SharedPostCard extends StatefulWidget {
     this.showActions = true,
     this.place = SharedPostCardPlace.chat,
     this.initialPost,
+    this.shareText,
     this.onDoubleTap,
   });
 
@@ -59,6 +61,7 @@ class SharedPostCard extends StatefulWidget {
   final bool showActions;
   final SharedPostCardPlace place;
   final PostModel? initialPost;
+  final String? shareText;
   final VoidCallback? onDoubleTap;
 
   @override
@@ -182,11 +185,17 @@ class _SharedPostCardState extends State<SharedPostCard> {
     }
   }
 
-  bool get _isVideo {
+  SharedPostKind get _kind {
     final post = _post;
-    if (post == null) return widget.url.contains('/reel/');
-    return SharedPostMedia.isVideo(post);
+    if (post == null) {
+      return widget.url.contains('/reel/')
+          ? SharedPostKind.video
+          : SharedPostKind.photo;
+    }
+    return SharedPostMedia.kind(post);
   }
+
+  bool get _isVideo => _kind == SharedPostKind.video;
 
   @override
   Widget build(BuildContext context) {
@@ -251,59 +260,226 @@ class _SharedPostCardState extends State<SharedPostCard> {
   Widget _igCard(BuildContext context) {
     final feed = widget.place == SharedPostCardPlace.feed;
     final preview = widget.place == SharedPostCardPlace.preview;
-    final video = _isVideo;
+    final kind = _kind;
     final screenW = MediaQuery.sizeOf(context).width;
+    final widthFactor = switch (kind) {
+      SharedPostKind.video => 0.54,
+      SharedPostKind.photo => 0.62,
+      SharedPostKind.text => 0.72,
+    };
     final width = feed
         ? double.infinity
         : preview
-            ? (video ? 148.0 : 164.0)
-            : (screenW * (video ? 0.54 : 0.62)).clamp(176.0, video ? 228.0 : 268.0);
-    final aspect = video ? (9 / 16) : (4 / 5);
+            ? switch (kind) {
+                SharedPostKind.video => 148.0,
+                SharedPostKind.photo => 164.0,
+                SharedPostKind.text => 188.0,
+              }
+            : (screenW * widthFactor).clamp(
+                176.0,
+                switch (kind) {
+                  SharedPostKind.video => 228.0,
+                  SharedPostKind.photo => 268.0,
+                  SharedPostKind.text => 300.0,
+                },
+              );
     final radius = feed ? 16.0 : 18.0;
     final post = _post;
     final name = post == null ? 'HanWe' : PostPublisherDisplay.label(post);
     final avatar = post == null ? null : PostPublisherDisplay.avatarUrl(post);
     final caption = post == null ? null : SharedPostMedia.caption(post);
-    final showFooter = !video &&
-        widget.place == SharedPostCardPlace.chat &&
-        (name.isNotEmpty || (caption != null && caption.isNotEmpty));
+    final comment = widget.place == SharedPostCardPlace.chat
+        ? ShareLinkService.userCommentForShare(widget.shareText ?? '', post)
+        : '';
 
-    final media = _mediaStack(
-      name: name,
-      avatar: avatar,
-      video: video,
-    );
+    final Widget card;
+    if (kind == SharedPostKind.text) {
+      final textCard = _textCard(
+        name: name,
+        avatar: avatar,
+        caption: caption,
+        radius: radius,
+      );
+      card = widget.showActions
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                if (widget.mine) ...[
+                  _sideActions(onMedia: false),
+                  const SizedBox(width: 8),
+                ],
+                Expanded(child: textCard),
+                if (!widget.mine) ...[
+                  const SizedBox(width: 8),
+                  _sideActions(onMedia: false),
+                ],
+              ],
+            )
+          : textCard;
+    } else {
+      final video = kind == SharedPostKind.video;
+      final showFooter = !video &&
+          widget.place != SharedPostCardPlace.preview &&
+          (name.isNotEmpty || (caption != null && caption.isNotEmpty));
+      card = Material(
+        color: const Color(0xFF111111),
+        borderRadius: BorderRadius.circular(radius),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: _open,
+          onDoubleTap: widget.onDoubleTap,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AspectRatio(
+                aspectRatio: video ? (9 / 16) : (4 / 5),
+                child: _mediaStack(
+                  name: name,
+                  avatar: avatar,
+                  video: video,
+                ),
+              ),
+              if (showFooter) _photoFooter(name: name, caption: caption),
+            ],
+          ),
+        ),
+      );
+    }
 
-    final card = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        AspectRatio(aspectRatio: aspect, child: media),
-        if (showFooter) _photoFooter(name: name, caption: caption),
-      ],
-    );
-
-    final clipped = Material(
-      color: const Color(0xFF111111),
-      borderRadius: BorderRadius.circular(radius),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: _open,
-        onDoubleTap: widget.onDoubleTap,
-        child: card,
-      ),
-    );
+    Widget body = card;
+    if (comment.isNotEmpty) {
+      body = Column(
+        crossAxisAlignment:
+            widget.mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _userCommentBubble(context, comment),
+          const SizedBox(height: 6),
+          card,
+        ],
+      );
+    }
 
     if (feed) {
       return Padding(
         padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-        child: clipped,
+        child: body,
       );
     }
 
     return Padding(
       padding: const EdgeInsets.only(top: 2),
-      child: SizedBox(width: width, child: clipped),
+      child: SizedBox(width: width, child: body),
+    );
+  }
+
+  Widget _userCommentBubble(BuildContext context, String comment) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 7),
+      decoration: BoxDecoration(
+        color: widget.mine
+            ? scheme.primary
+            : scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Text(
+        comment,
+        style: TextStyle(
+          color: widget.mine ? scheme.onPrimary : scheme.onSurface,
+          fontSize: 15,
+          height: 1.25,
+        ),
+      ),
+    );
+  }
+
+  Widget _textCard({
+    required String name,
+    required String? avatar,
+    required String? caption,
+    required double radius,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(radius),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: _open,
+        onDoubleTap: widget.onDoubleTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  AppUserAvatar(
+                    imageUrl: avatar,
+                    displayName: name,
+                    radius: 12,
+                    onTap: _post == null
+                        ? null
+                        : () => PostPublisherDisplay.open(context, _post!),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: scheme.onSurface,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (caption != null && caption.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  caption,
+                  maxLines:
+                      widget.place == SharedPostCardPlace.preview ? 4 : 8,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: scheme.onSurface,
+                    fontSize: 14.5,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sideActions({required bool onMedia}) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _overlayAction(
+          icon: Icons.send_outlined,
+          tooltip: 'Поделиться',
+          onTap: _post == null ? null : _share,
+          onMedia: onMedia,
+        ),
+        const SizedBox(height: 14),
+        _overlayAction(
+          icon: _saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+          tooltip: _saved ? 'Убрать из сохранённых' : 'Сохранить',
+          onTap: _post == null ? null : _toggleSave,
+          onMedia: onMedia,
+        ),
+      ],
     );
   }
 
@@ -450,7 +626,7 @@ class _SharedPostCardState extends State<SharedPostCard> {
               ),
           ],
         ),
-        maxLines: 2,
+        maxLines: 4,
         overflow: TextOverflow.ellipsis,
       ),
     );
@@ -460,7 +636,9 @@ class _SharedPostCardState extends State<SharedPostCard> {
     required IconData icon,
     required String tooltip,
     required VoidCallback? onTap,
+    bool onMedia = true,
   }) {
+    final scheme = Theme.of(context).colorScheme;
     return Tooltip(
       message: tooltip,
       child: GestureDetector(
@@ -471,10 +649,12 @@ class _SharedPostCardState extends State<SharedPostCard> {
           child: Icon(
             icon,
             size: 22,
-            color: Colors.white,
-            shadows: const [
-              Shadow(color: Color(0xAA000000), blurRadius: 8),
-            ],
+            color: onMedia ? Colors.white : scheme.onSurfaceVariant,
+            shadows: onMedia
+                ? const [
+                    Shadow(color: Color(0xAA000000), blurRadius: 8),
+                  ]
+                : null,
           ),
         ),
       ),

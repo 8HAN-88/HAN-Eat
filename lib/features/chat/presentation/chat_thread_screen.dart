@@ -17867,13 +17867,9 @@ class _Bubble extends StatelessWidget {
     final reelShareId = reelShareUrl == null
         ? null
         : ShareLinkService.sharedPostIdFromUrl(reelShareUrl);
-    final reelCaption = reelShareId == null
-        ? ''
-        : ShareLinkService.visibleCaptionForSharedPost(message.content);
     final isReelShare = reelShareId != null;
     final isFullBleedMedia =
-        ((isImage || isVideo) && !hasCaption) ||
-            (isReelShare && reelCaption.isEmpty);
+        ((isImage || isVideo) && !hasCaption) || isReelShare;
     final bubbleRadius = _bubbleRadius(mine);
     final contentPadding = (isSticker || isVideoNote)
         ? const EdgeInsets.fromLTRB(2, 2, 2, 0)
@@ -18488,7 +18484,8 @@ class _Bubble extends StatelessWidget {
     } else if (message.content.isNotEmpty && message.type != 'voice') {
       final previewUrl = reelShareUrl;
       final reelId = reelShareId;
-      final visibleText = isReelShare ? reelCaption : message.content;
+      // Original post text lives on the card; the bubble keeps only a user note.
+      final visibleText = isReelShare ? '' : message.content;
       final hasLinkPreview = previewUrl != null;
       final textStyle = TextStyle(color: fg, height: 1.22, fontSize: 15.5);
       final textChild = visibleText.isEmpty
@@ -18513,6 +18510,7 @@ class _Bubble extends StatelessWidget {
           accentColor: linkColor,
           backgroundColor: quoteBg,
           mine: mine,
+          shareText: message.content,
         );
         if (reelId != null && textChild != null) {
           // Instagram: comment stays in the bubble, shared card sits below it.

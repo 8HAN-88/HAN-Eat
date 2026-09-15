@@ -114,6 +114,7 @@ class ChatLinkPreview extends StatefulWidget {
     this.mine = true,
     this.compact = false,
     this.showActions = true,
+    this.shareText,
   });
 
   final String url;
@@ -123,6 +124,7 @@ class ChatLinkPreview extends StatefulWidget {
   final bool mine;
   final bool compact;
   final bool showActions;
+  final String? shareText;
 
   @override
   State<ChatLinkPreview> createState() => _ChatLinkPreviewState();
@@ -252,6 +254,7 @@ class _ChatLinkPreviewState extends State<ChatLinkPreview> {
         mine: widget.mine,
         compact: widget.compact,
         showActions: widget.showActions,
+        shareText: widget.shareText,
       );
     }
 

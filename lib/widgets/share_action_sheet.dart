@@ -148,7 +148,9 @@ class _PostShareSheetState extends State<_PostShareSheet> {
   }
 
   Future<void> _shareViaSystem(BuildContext context) async {
-    final text = ShareLinkService.sharedPostShareText(widget.post);
+    final text = widget.post.type == 'reel'
+        ? ShareLinkService.reelShareText(widget.post)
+        : ShareLinkService.postShareText(widget.post);
     Navigator.pop(context);
     await ShareActionSheet._shareAfterSheetClosed(
       this.context,
