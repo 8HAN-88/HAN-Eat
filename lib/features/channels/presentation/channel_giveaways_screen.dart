@@ -104,6 +104,7 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
                   ),
                   const SizedBox(height: 12),
                   TextField(
+                    textCapitalization: TextCapitalization.sentences,
                     controller: titleController,
                     decoration: const InputDecoration(
                       labelText: 'Название (необязательно)',

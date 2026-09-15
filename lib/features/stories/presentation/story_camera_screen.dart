@@ -148,6 +148,7 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
+                  textCapitalization: TextCapitalization.sentences,
                   controller: _captionController,
                   enabled: !_isPublishing,
                   maxLength: 500,

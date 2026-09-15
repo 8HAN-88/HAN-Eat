@@ -786,6 +786,7 @@ class _GiftTransferUserPickerState extends State<_GiftTransferUserPicker> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                 child: TextField(
+                  textCapitalization: TextCapitalization.sentences,
                   controller: _controller,
                   autofocus: true,
                   decoration: const InputDecoration(

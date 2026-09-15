@@ -414,6 +414,7 @@ class _PostShareSheetState extends State<_PostShareSheet> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: TextField(
+                  textCapitalization: TextCapitalization.sentences,
                   controller: _searchCtrl,
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
@@ -435,6 +436,7 @@ class _PostShareSheetState extends State<_PostShareSheet> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
                 child: TextField(
+                  textCapitalization: TextCapitalization.sentences,
                   controller: _messageCtrl,
                   minLines: 1,
                   maxLines: 3,
@@ -669,6 +671,7 @@ class _ChannelRepostCommentDialogState
       title: Text('Репост в «${widget.channelName}»'),
       content: SingleChildScrollView(
         child: TextField(
+          textCapitalization: TextCapitalization.sentences,
           controller: _controller,
           decoration: InputDecoration(
             labelText: 'Комментарий (опционально)',

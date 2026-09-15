@@ -355,6 +355,7 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
             ),
             const SizedBox(height: 10),
             TextField(
+              textCapitalization: TextCapitalization.sentences,
               controller: _aboutController,
               maxLength: 120,
               decoration: const InputDecoration(
@@ -363,6 +364,7 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
               ),
             ),
             TextField(
+              textCapitalization: TextCapitalization.sentences,
               controller: _descController,
               maxLines: 3,
               decoration: const InputDecoration(

@@ -135,6 +135,7 @@ class _ChannelSearchScreenState extends ConsumerState<ChannelSearchScreen> {
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: TextField(
+          textCapitalization: TextCapitalization.sentences,
           controller: _searchController,
           autofocus: true,
           decoration: InputDecoration(

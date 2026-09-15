@@ -69,6 +69,7 @@ class _AdsReviewScreenState extends State<AdsReviewScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('Отклонить рекламу'),
         content: TextField(
+          textCapitalization: TextCapitalization.sentences,
           controller: controller,
           autofocus: true,
           maxLength: 400,

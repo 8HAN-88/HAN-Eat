@@ -167,6 +167,7 @@ class _DonationScreenState extends State<DonationScreen> {
             const SizedBox(height: 8),
 
             TextField(
+              textCapitalization: TextCapitalization.sentences,
               controller: _messageController,
               maxLines: 3,
               maxLength: 500,

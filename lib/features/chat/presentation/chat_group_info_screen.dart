@@ -169,6 +169,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('Название группы'),
         content: TextField(
+          textCapitalization: TextCapitalization.sentences,
           controller: controller,
           autofocus: true,
           maxLength: 120,
@@ -1066,6 +1067,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                       },
                     ),
                   TextField(
+                    textCapitalization: TextCapitalization.sentences,
                     controller: reasonController,
                     maxLength: 240,
                     decoration: const InputDecoration(
@@ -1192,6 +1194,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                     },
                   ),
                 TextField(
+                  textCapitalization: TextCapitalization.sentences,
                   controller: reasonController,
                   maxLength: 240,
                   decoration: const InputDecoration(

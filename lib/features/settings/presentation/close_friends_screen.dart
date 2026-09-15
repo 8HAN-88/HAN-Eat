@@ -180,6 +180,7 @@ class _CloseFriendsScreenState extends State<CloseFriendsScreen> {
                     ),
                     const SizedBox(height: 12),
                     TextField(
+                      textCapitalization: TextCapitalization.sentences,
                       controller: _searchController,
                       focusNode: _searchFocus,
                       enabled: !_busy,

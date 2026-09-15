@@ -372,6 +372,7 @@ class _ModerationNoteDialogState extends State<_ModerationNoteDialog> {
           ),
           const SizedBox(height: 10),
           TextField(
+            textCapitalization: TextCapitalization.sentences,
             controller: _controller,
             maxLines: 3,
             decoration: const InputDecoration(

@@ -512,6 +512,7 @@ class _ManagementHeader extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               child: TextField(
+                textCapitalization: TextCapitalization.sentences,
                 controller: searchController,
                 textInputAction: TextInputAction.search,
                 decoration: InputDecoration(

@@ -571,6 +571,7 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
             children: [
               Expanded(
                 child: TextField(
+                  textCapitalization: TextCapitalization.sentences,
                   controller: _commentController,
                   focusNode: _commentFocusNode,
                   minLines: 1,

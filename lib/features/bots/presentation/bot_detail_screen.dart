@@ -621,6 +621,7 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
+                textCapitalization: TextCapitalization.sentences,
                 controller: titleController,
                 decoration: const InputDecoration(labelText: 'Название'),
               ),
@@ -630,6 +631,7 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
                 decoration: const InputDecoration(labelText: 'Сумма ★'),
               ),
               TextField(
+                textCapitalization: TextCapitalization.sentences,
                 controller: descController,
                 decoration: const InputDecoration(labelText: 'Описание'),
               ),
@@ -1127,11 +1129,13 @@ class _EditBotProfileDialogState extends State<_EditBotProfileDialog> {
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
+              textCapitalization: TextCapitalization.sentences,
               controller: _name,
               decoration: const InputDecoration(labelText: 'Name'),
             ),
             const SizedBox(height: 10),
             TextField(
+              textCapitalization: TextCapitalization.sentences,
               controller: _about,
               maxLength: 120,
               decoration: const InputDecoration(
@@ -1140,6 +1144,7 @@ class _EditBotProfileDialogState extends State<_EditBotProfileDialog> {
               ),
             ),
             TextField(
+              textCapitalization: TextCapitalization.sentences,
               controller: _desc,
               maxLines: 4,
               decoration: const InputDecoration(
@@ -1703,6 +1708,7 @@ class _MiniAppFormDialogState extends State<_MiniAppFormDialog> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   TextField(
+                    textCapitalization: TextCapitalization.sentences,
                     controller: _name,
                     textInputAction: TextInputAction.next,
                     decoration: const InputDecoration(
@@ -1736,6 +1742,7 @@ class _MiniAppFormDialogState extends State<_MiniAppFormDialog> {
                   ),
                   fieldGap,
                   TextField(
+                    textCapitalization: TextCapitalization.sentences,
                     controller: _desc,
                     maxLines: 3,
                     textInputAction: TextInputAction.newline,
@@ -2228,10 +2235,12 @@ class _AddCommandDialogState extends State<_AddCommandDialog> {
               readOnly: widget.isEdit,
             ),
             TextField(
+              textCapitalization: TextCapitalization.sentences,
               controller: _descController,
               decoration: const InputDecoration(labelText: 'Описание'),
             ),
             TextField(
+              textCapitalization: TextCapitalization.sentences,
               controller: _responseController,
               decoration: const InputDecoration(
                 labelText: 'Ответ бота (опционально)',
@@ -2240,6 +2249,7 @@ class _AddCommandDialogState extends State<_AddCommandDialog> {
               maxLines: 4,
             ),
             TextField(
+              textCapitalization: TextCapitalization.sentences,
               controller: _buttonsController,
               decoration: const InputDecoration(
                 labelText: 'Inline-кнопки (строки через пустую строку)',
@@ -2262,6 +2272,7 @@ class _AddCommandDialogState extends State<_AddCommandDialog> {
               ),
             const SizedBox(height: 8),
             TextField(
+              textCapitalization: TextCapitalization.sentences,
               controller: _replyButtonsController,
               decoration: const InputDecoration(
                 labelText: 'Reply-клавиатура (над полем ввода)',

@@ -75,6 +75,7 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
+                textCapitalization: TextCapitalization.sentences,
                 controller: titleCtrl,
                 maxLength: 120,
                 decoration: const InputDecoration(labelText: 'Название'),

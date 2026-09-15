@@ -601,6 +601,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                           children: [
                             Expanded(
                               child: TextField(
+                                textCapitalization: TextCapitalization.sentences,
                                 controller: _replyController,
                                 focusNode: _replyFocus,
                                 enabled: !_replySending,

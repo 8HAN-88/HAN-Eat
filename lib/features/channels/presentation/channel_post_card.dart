@@ -1417,6 +1417,7 @@ class _RepostDialogState extends State<_RepostDialog> {
         mainAxisSize: MainAxisSize.min,
         children: [
           TextField(
+            textCapitalization: TextCapitalization.sentences,
             controller: _commentController,
             decoration: const InputDecoration(
               labelText: 'Комментарий (опционально)',

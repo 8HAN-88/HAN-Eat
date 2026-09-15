@@ -482,6 +482,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   child: Column(
                     children: [
                       TextField(
+                        textCapitalization: TextCapitalization.sentences,
                         controller: _searchController,
                         decoration: InputDecoration(
                           hintText: _searchHint,

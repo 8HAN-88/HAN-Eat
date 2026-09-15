@@ -52,6 +52,7 @@ Future<StarGiftSendDraft?> showStarGiftSendFlow(BuildContext context) async {
                 ),
               ),
             TextField(
+              textCapitalization: TextCapitalization.sentences,
               controller: noteController,
               maxLines: 2,
               decoration: const InputDecoration(

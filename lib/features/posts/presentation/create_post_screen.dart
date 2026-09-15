@@ -791,6 +791,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
+                      textCapitalization: TextCapitalization.sentences,
                       controller: _linkPreviewController,
                       decoration: const InputDecoration(
                         labelText: 'Подпись к ссылке (необязательно)',
@@ -882,6 +883,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                   // Теги
                   const SizedBox(height: 16),
                   TextFormField(
+                    textCapitalization: TextCapitalization.sentences,
                     controller: _tagsController,
                     decoration: const InputDecoration(
                       labelText: 'Теги (через запятую)',
@@ -1000,6 +1002,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   TextFormField(
+                    textCapitalization: TextCapitalization.sentences,
                     controller: _descriptionController,
                     autofocus: !isStructured,
                     decoration: InputDecoration(

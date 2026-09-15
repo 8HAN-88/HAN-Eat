@@ -27,6 +27,7 @@ class CreatePollFormSection extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         TextField(
+          textCapitalization: TextCapitalization.sentences,
           controller: questionController,
           decoration: const InputDecoration(
             labelText: 'Вопрос',
@@ -50,6 +51,7 @@ class CreatePollFormSection extends StatelessWidget {
               children: [
                 Expanded(
                   child: TextField(
+                    textCapitalization: TextCapitalization.sentences,
                     controller: ctrl,
                     decoration: InputDecoration(
                       labelText: 'Вариант ${i + 1}',

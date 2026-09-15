@@ -367,6 +367,7 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
                 ),
                 const SizedBox(height: 12),
                 TextField(
+                  textCapitalization: TextCapitalization.sentences,
                   controller: _iconController,
                   decoration: const InputDecoration(
                     labelText: 'Эмодзи (необязательно)',
@@ -502,6 +503,7 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
                 ),
                 const SizedBox(height: 8),
                 TextField(
+                  textCapitalization: TextCapitalization.sentences,
                   controller: _searchController,
                   decoration: InputDecoration(
                     hintText: 'Поиск чатов и каналов',

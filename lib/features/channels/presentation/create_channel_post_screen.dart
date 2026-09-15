@@ -1195,6 +1195,7 @@ class _CreateChannelPostScreenState
             if (!_isPlainComposerMode) ...[
               const SizedBox(height: 16),
               TextFormField(
+                textCapitalization: TextCapitalization.sentences,
                 controller: _titleController,
                 decoration: const InputDecoration(
                   labelText: 'Заголовок (необязательно)',
@@ -1255,6 +1256,7 @@ class _CreateChannelPostScreenState
               ),
               const SizedBox(height: 12),
               TextFormField(
+                textCapitalization: TextCapitalization.sentences,
                 controller: _linkPreviewController,
                 decoration: const InputDecoration(
                   labelText: 'Подпись к ссылке (необязательно)',
@@ -1268,6 +1270,7 @@ class _CreateChannelPostScreenState
             if (!_isPollMode) ...[
               const SizedBox(height: 16),
               TextFormField(
+                textCapitalization: TextCapitalization.sentences,
                 controller: _tagsController,
                 decoration: const InputDecoration(
                   hintText: 'Теги (необязательно)',
