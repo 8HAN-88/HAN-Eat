@@ -72,4 +72,27 @@ void main() {
     expect(layout.reactionTop, lessThan(layout.messageTop));
     expect(layout.messageTop + messageH, lessThan(layout.menuTop));
   });
+
+  test('tall message keeps every menu row on screen', () {
+    const menuItemCount = 12;
+    final layout = ChatMessageOverlayLayout.compute(
+      messageRect: const Rect.fromLTWH(80, 80, 240, 560),
+      screenSize: screen,
+      padding: padding,
+      menuItemCount: menuItemCount,
+      hasDivider: true,
+      reactionCount: 7,
+      isOutgoing: true,
+      bottomComposerReserve: 88,
+    );
+
+    final maxMenuBottom = screen.height - padding.bottom - 88;
+    expect(layout.messageMaxHeight, lessThan(560));
+    expect(layout.menuMaxHeight, greaterThanOrEqualTo(46.0 * 3));
+    expect(
+      layout.menuTop + layout.menuMaxHeight,
+      lessThanOrEqualTo(maxMenuBottom + 1),
+    );
+    expect(layout.clusterTop, greaterThanOrEqualTo(padding.top));
+  });
 }
