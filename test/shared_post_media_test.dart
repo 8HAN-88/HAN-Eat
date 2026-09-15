@@ -27,6 +27,24 @@ PostModel _post({
 
 void main() {
   group('SharedPostMedia', () {
+    test('classifies text, photo and reel', () {
+      expect(SharedPostMedia.kind(_post(type: 'text')), SharedPostKind.text);
+      expect(
+        SharedPostMedia.kind(
+          _post(
+            type: 'photo',
+            body: {
+              'media': [
+                {'type': 'image', 'url': 'https://cdn/a.jpg'},
+              ],
+            },
+          ),
+        ),
+        SharedPostKind.photo,
+      );
+      expect(SharedPostMedia.kind(_post(type: 'reel')), SharedPostKind.video);
+    });
+
     test('treats reels and video media as video', () {
       expect(SharedPostMedia.isVideo(_post(type: 'reel')), isTrue);
       expect(

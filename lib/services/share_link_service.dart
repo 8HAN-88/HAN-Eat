@@ -1,5 +1,6 @@
 import '../app/app_router.dart';
 import '../models/post_model.dart';
+import '../utils/post_display_title.dart';
 
 class ShareLinkService {
   static const webOrigin = 'https://haneat.app';
@@ -61,10 +62,41 @@ class ShareLinkService {
   }
 
   static String sharedPostShareText(PostModel post, {String? comment}) {
-    final body = post.type == 'reel' ? reelShareText(post) : postShareText(post);
+    final link = post.type == 'reel' ? reelLink(post.id) : postLink(post.id);
     final extra = comment?.trim() ?? '';
-    if (extra.isEmpty) return body;
-    return '$extra\n\n$body';
+    if (extra.isEmpty) return link;
+    return '$extra\n\n$link';
+  }
+
+  static String _normShareText(String value) {
+    return value.replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();
+  }
+
+  /// Комментарий отправителя, без текста самого поста (он на карточке).
+  static String userCommentForShare(String raw, PostModel? post) {
+    final visible = visibleCaptionForSharedPost(raw);
+    if (visible.isEmpty) return '';
+    if (post == null) return '';
+    final title = resolvePostDisplayTitle(title: post.title, body: post.body);
+    final candidates = <String>[
+      if (title != null) title,
+      post.title ?? '',
+      post.description ?? '',
+    ];
+    final visibleNorm = _normShareText(visible);
+    for (final rawCandidate in candidates) {
+      final candidate = rawCandidate.trim();
+      if (candidate.isEmpty) continue;
+      if (visibleNorm == _normShareText(candidate)) return '';
+    }
+    final titleText = (post.title ?? '').trim();
+    final descText = (post.description ?? '').trim();
+    if (titleText.isNotEmpty &&
+        descText.isNotEmpty &&
+        visibleNorm == _normShareText('$titleText $descText')) {
+      return '';
+    }
+    return visible;
   }
 
   /// Рилс, пост профиля или пост канала — один id для карточки репоста.

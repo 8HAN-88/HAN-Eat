@@ -91,6 +91,44 @@ void main() {
     expect(find.byIcon(Icons.bookmark_border_rounded), findsOneWidget);
   });
 
+  testWidgets('text share shows author and body without a play button',
+      (tester) async {
+    final post = PostModel(
+      id: 30,
+      type: 'text',
+      title: 'Евро резко упало до 96 рублей.',
+      description: 'Евро резко упало до 96 рублей.',
+      status: 'published',
+      createdAt: DateTime(2026),
+      userId: 2,
+      communityId: 4,
+      likesCount: 0,
+      commentsCount: 0,
+      repostsCount: 0,
+      viewsCount: 0,
+      isLiked: false,
+      channel: ChannelModel(
+        id: 4,
+        name: 'Баррель черной икры',
+        slug: 'oil',
+      ),
+    );
+    await _pumpCard(
+      tester,
+      SharedPostCard(
+        postId: 30,
+        url: 'https://haneat.app/post/30',
+        initialPost: post,
+        shareText:
+            'Евро резко упало до 96 рублей.\n\nОткрыть в HanWe: https://haneat.app/post/30',
+      ),
+    );
+
+    expect(find.text('Баррель черной икры'), findsOneWidget);
+    expect(find.text('Евро резко упало до 96 рублей.'), findsOneWidget);
+    expect(find.byIcon(Icons.play_arrow_rounded), findsNothing);
+  });
+
   testWidgets('photo share shows author caption under the frame', (tester) async {
     await _pumpCard(
       tester,
