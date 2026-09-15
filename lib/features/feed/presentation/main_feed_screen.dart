@@ -14,6 +14,7 @@ import '../../reels/presentation/reels_feed_screen.dart';
 import 'new_feed_screen.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/notification_bell_button.dart';
+import '../../../widgets/telegram_connection_chrome.dart';
 import '../../../widgets/telegram_ui.dart';
 import 'feed_section_tabs.dart';
 import '../../navigation/application/feed_scroll_chrome.dart';
@@ -121,7 +122,19 @@ class _MainFeedScreenState extends ConsumerState<MainFeedScreen>
               padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
               child: Row(
                 children: [
-                  const Spacer(),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 10),
+                      child: TelegramConnectionAwareTitle(
+                        fallback: '',
+                        style:
+                            Theme.of(context).textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.6,
+                                ),
+                      ),
+                    ),
+                  ),
                   NeoCircleAction(
                     tooltip: 'Моменты',
                     icon: Icons.auto_stories_outlined,

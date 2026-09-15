@@ -79,6 +79,9 @@ class _TelegramConnectionAwareTitleState
       listenable: _listenable,
       builder: (context, _) {
         final label = TelegramConnectionChrome.label() ?? widget.fallback;
+        if (label.isEmpty) {
+          return const SizedBox.shrink();
+        }
         final connecting = TelegramConnectionStatus.isConnectionLabel(label);
         return AnimatedSwitcher(
           duration: const Duration(milliseconds: 180),
