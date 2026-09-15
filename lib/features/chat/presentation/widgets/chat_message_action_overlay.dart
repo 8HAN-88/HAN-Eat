@@ -17,6 +17,8 @@ class ChatMessageOverlayLayout {
     required this.messageTop,
     required this.menuTop,
     required this.menuLeft,
+    required this.messageMaxHeight,
+    required this.menuMaxHeight,
   });
 
   final double clusterTop;
@@ -28,6 +30,8 @@ class ChatMessageOverlayLayout {
   final double messageTop;
   final double menuTop;
   final double menuLeft;
+  final double messageMaxHeight;
+  final double menuMaxHeight;
 
   static ChatMessageOverlayLayout compute({
     required Rect messageRect,
@@ -44,15 +48,32 @@ class ChatMessageOverlayLayout {
     double bottomComposerReserve = 88,
   }) {
     const horizontalMargin = 12.0;
+    const minMessageH = 72.0;
     final safeTop = padding.top + 8;
     final safeLeft = padding.left + horizontalMargin;
     final safeRight = screenSize.width - padding.right - horizontalMargin;
     final maxMenuBottom =
         screenSize.height - padding.bottom - bottomComposerReserve;
+    final available = math.max(160.0, maxMenuBottom - safeTop);
 
-    final messageH = messageRect.height;
     final menuH = menuItemCount * menuRowHeight + (hasDivider ? 8 : 0);
-    final clusterH = reactionRowHeight + gap + messageH + gap + menuH;
+    final chromeH = reactionRowHeight + gap + gap;
+    final rest = math.max(80.0, available - chromeH);
+    final rawMessageH = math.max(0.0, messageRect.height);
+    late final double messageH;
+    late final double menuMaxHeight;
+    if (rawMessageH + menuH <= rest) {
+      messageH = rawMessageH;
+      menuMaxHeight = menuH;
+    } else if (menuH + minMessageH <= rest) {
+      menuMaxHeight = menuH;
+      messageH = rest - menuH;
+    } else {
+      messageH = math.min(rawMessageH, minMessageH);
+      menuMaxHeight = math.max(menuRowHeight * 3, rest - messageH);
+    }
+
+    final clusterH = chromeH + messageH + menuMaxHeight;
 
     const emojiSlot = 40.0;
     const expandSlot = 36.0;
@@ -107,6 +128,8 @@ class ChatMessageOverlayLayout {
       messageTop: messageTop,
       menuTop: menuTop,
       menuLeft: menuLeft,
+      messageMaxHeight: messageH,
+      menuMaxHeight: menuMaxHeight,
     );
   }
 }
@@ -260,6 +283,22 @@ class _ChatMessageActionOverlayState extends State<ChatMessageActionOverlay>
   void dispose() {
     _scaleCtrl.dispose();
     super.dispose();
+  }
+
+  Widget _clippedPreview({
+    required double maxHeight,
+    required Widget child,
+  }) {
+    final rawH = widget.messageRect.height;
+    if (rawH <= maxHeight + 0.5) return child;
+    final factor = (maxHeight / rawH).clamp(0.05, 1.0);
+    return ClipRect(
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        heightFactor: factor,
+        child: child,
+      ),
+    );
   }
 
   @override
@@ -436,11 +475,14 @@ class _ChatMessageActionOverlayState extends State<ChatMessageActionOverlay>
                   const SizedBox(height: gap),
                   SizedBox(
                     width: layout.messageWidth,
-                    child: widget.messagePreview,
+                    child: _clippedPreview(
+                      maxHeight: layout.messageMaxHeight,
+                      child: widget.messagePreview,
+                    ),
                   ),
                   const SizedBox(height: gap),
-                  SizedBox(
-                    width: menuWidth,
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: layout.menuMaxHeight),
                     child: _ActionMenu(
                       items: menuItems,
                       onAction: widget.onAction,
@@ -558,9 +600,10 @@ class _ActionMenu extends StatelessWidget {
       shadowColor: Colors.black.withValues(alpha: 0.25),
       borderRadius: BorderRadius.circular(14),
       clipBehavior: Clip.antiAlias,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
           for (var i = 0; i < items.length; i++) ...[
             if (items[i].showDividerBefore)
               Divider(
@@ -597,6 +640,7 @@ class _ActionMenu extends StatelessWidget {
             ),
           ],
         ],
+        ),
       ),
     );
   }
