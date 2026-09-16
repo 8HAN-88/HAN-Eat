@@ -9,23 +9,22 @@ void main() {
     html = File('web/index.html').readAsStringSync();
   });
 
-  test('HTML register has a visible referral field', () {
-    expect(html.contains('id="ref-wrap"'), isTrue);
-    expect(html.contains('id="referral"'), isTrue);
-    expect(html.contains('Код приглашения'), isTrue);
+  test('HTML register has no typed referral-code field', () {
+    expect(html.contains('id="ref-wrap"'), isFalse);
+    expect(html.contains('id="referral"'), isFalse);
+    expect(html.contains('Код приглашения'), isFalse);
   });
 
-  test('HTML register sends referral_code and remembers ?ref=', () {
+  test('HTML register binds the invite link silently', () {
     expect(html.contains('body.referral_code = referral'), isTrue);
     expect(html.contains("prefSet('pending_referral', code)"), isTrue);
     expect(html.contains('function capturePendingReferral'), isTrue);
-    expect(html.contains('function extractReferral'), isTrue);
-    expect(html.contains("getElementById('ref-wrap').hidden = !isReg"), isTrue);
+    expect(html.contains('extractReferral(prefGet(\'pending_referral\'))'), isTrue);
   });
 
-  test('invite links open HTML signup, not only Flutter', () {
+  test('invite links open HTML signup from the unique URL', () {
     expect(html.contains("pendingRef && !hasSession()"), isTrue);
     expect(html.contains("setMode('register')"), isTrue);
-    expect(html.contains('Вас пригласили в HanWe'), isTrue);
+    expect(html.contains('аккаунт привяжется к ссылке друга'), isTrue);
   });
 }

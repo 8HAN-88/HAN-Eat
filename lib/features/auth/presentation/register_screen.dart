@@ -33,9 +33,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _usernameController = TextEditingController();
-  final _referralController = TextEditingController();
   bool _isLoading = false;
-  bool _referralFromInvite = false;
+  bool _invited = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _legalAccepted = false;
@@ -51,14 +50,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     if (fromQuery != null) {
       await PendingReferralStore.remember(fromQuery);
       if (!mounted) return;
-      _referralController.text = fromQuery;
-      setState(() => _referralFromInvite = true);
+      setState(() => _invited = true);
       return;
     }
     final stored = await PendingReferralStore.peek();
     if (!mounted || stored == null) return;
-    _referralController.text = stored;
-    setState(() => _referralFromInvite = true);
+    setState(() => _invited = true);
   }
 
   @override
@@ -68,7 +65,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     _usernameController.dispose();
-    _referralController.dispose();
     super.dispose();
   }
 
@@ -96,8 +92,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             ? null
             : _usernameController.text.trim(),
         acceptLegal: true,
-        referralCode: PendingReferral.extract(_referralController.text) ??
-            widget.initialReferralCode,
+        referralCode: PendingReferral.extract(widget.initialReferralCode) ??
+            await PendingReferralStore.peek(),
       );
       await PendingReferralStore.clear();
 
@@ -288,19 +284,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       return null;
                     },
                   ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _referralController,
-                    textCapitalization: TextCapitalization.characters,
-                    decoration: InputDecoration(
-                      labelText: 'Код приглашения (необязательно)',
-                      hintText: 'Код друга или ссылка',
-                      prefixIcon: const Icon(Icons.group_add_outlined),
-                      helperText: _referralFromInvite
-                          ? 'Подставили из приглашения'
-                          : 'Если друг прислал ссылку — вставьте её сюда',
+                  if (_invited) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Вас пригласили в HanWe — аккаунт привяжется к ссылке друга.',
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
-                  ),
+                  ],
                   LegalConsentCheckbox(
                     value: _legalAccepted,
                     onChanged: _isLoading

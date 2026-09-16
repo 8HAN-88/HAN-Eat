@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import '../../../services/app_invite_service.dart';
 import '../../../services/pending_referral_store.dart';
 import '../../../services/revenue_share_service.dart';
-import '../pending_referral.dart';
 import '../../../utils/api_error_parser.dart';
 
 class PartnerProgramScreen extends StatefulWidget {
@@ -22,25 +21,11 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
   RevenueShareSnapshot? _snap;
   Object? _error;
   bool _busy = false;
-  final _codeCtrl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    unawaited(_hydratePending());
     _load();
-  }
-
-  Future<void> _hydratePending() async {
-    final pending = await PendingReferralStore.peek();
-    if (!mounted || pending == null || _codeCtrl.text.isNotEmpty) return;
-    _codeCtrl.text = pending;
-  }
-
-  @override
-  void dispose() {
-    _codeCtrl.dispose();
-    super.dispose();
   }
 
   Future<void> _load() async {
@@ -49,7 +34,17 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
       _error = null;
     });
     try {
-      final snap = await RevenueShareApi.me();
+      var snap = await RevenueShareApi.me();
+      if (snap.referredByName == null) {
+        final pending = await PendingReferralStore.peek();
+        if (pending != null) {
+          try {
+            snap = await RevenueShareApi.applyCode(pending);
+          } on Object {
+            // Ссылка просрочена, своя или уже недействительна — оставляем снимок.
+          }
+        }
+      }
       if (!mounted) return;
       setState(() {
         _snap = snap;
@@ -82,32 +77,11 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
     }
   }
 
-  Future<void> _apply() async {
-    final code = PendingReferral.extract(_codeCtrl.text);
-    if (code == null) return;
-    setState(() => _busy = true);
-    try {
-      final snap = await RevenueShareApi.applyCode(code);
-      if (!mounted) return;
-      _codeCtrl.clear();
-      setState(() {
-        _snap = snap;
-        _busy = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
-    }
-  }
-
   Future<void> _copy(String text) async {
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Скопировано')),
+      const SnackBar(content: Text('Ссылка скопирована')),
     );
   }
 
@@ -124,27 +98,33 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
     );
   }
 
+  String _link(RevenueShareSnapshot? snap) {
+    if (snap == null) return '…';
+    if (snap.shareUrl.isNotEmpty) return snap.shareUrl;
+    if (snap.referralCode.isEmpty) return '…';
+    return AppInviteService.webInviteUrl(ref: snap.referralCode);
+  }
+
   Widget _referralCard(RevenueShareSnapshot? snap) {
+    final link = _link(snap);
     return _card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Реферальный код',
+            'Ваша ссылка',
             style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
           ),
           const SizedBox(height: 8),
           SelectableText(
-            snap?.referralCode.isNotEmpty == true
-                ? snap!.referralCode
-                : '…',
-            style: const TextStyle(fontSize: 22, letterSpacing: 1.4),
+            link,
+            style: const TextStyle(fontSize: 15, height: 1.35),
           ),
           const SizedBox(height: 8),
           Text(
+            'Только по этой ссылке видно, что человек пришёл от вас. '
             'Привели: ${snap?.referredCount ?? 0}. '
-            'Доля реферала — 17,5% нетто с рекламы и подписки '
-            'приведённого человека в течение года.',
+            'Доля — 17,5% нетто с рекламы и подписки в течение года.',
           ),
           const SizedBox(height: 12),
           Wrap(
@@ -156,16 +136,11 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
                 icon: const Icon(Icons.ios_share, size: 18),
                 label: const Text('Поделиться'),
               ),
-              FilledButton.tonal(
-                onPressed:
-                    snap == null ? null : () => _copy(snap.referralCode),
-                child: const Text('Код'),
-              ),
               OutlinedButton(
-                onPressed: snap == null || snap.shareUrl.isEmpty
+                onPressed: snap == null || link == '…'
                     ? null
-                    : () => _copy(snap.shareUrl),
-                child: const Text('Ссылка'),
+                    : () => _copy(link),
+                child: const Text('Скопировать'),
               ),
             ],
           ),
@@ -213,10 +188,11 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
                 child: Text(userVisibleError(_error!)),
               ),
             const Text(
-              'Пригласите друзей по своей ссылке: они регистрируются с вашим '
-              'кодом, и вы получаете долю с их рекламы и подписки. '
-              'Делим только чистую прибыль. Звёзды, подарки и TON не входят. '
-              'Сначала вычитаются расходы (остаётся 70% нетто).',
+              'У каждого своя ссылка. Друг открывает её, регистрируется — '
+              'и мы точно знаем, что он пришёл от вас. '
+              'Делим только чистую прибыль с рекламы и подписки. '
+              'Звёзды, подарки и TON не входят. Сначала вычитаются расходы '
+              '(остаётся 70% нетто).',
             ),
             const SizedBox(height: 16),
             if (widget.focusExtraAds) ...[
@@ -245,31 +221,10 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 12),
-            if (snap?.referredByName != null)
-              Text('Вас пригласил: ${snap!.referredByName}')
-            else
-              _card(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Есть код друга? Можно привязать 7 дней после регистрации.',
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _codeCtrl,
-                      textCapitalization: TextCapitalization.characters,
-                      decoration: const InputDecoration(hintText: 'Код'),
-                    ),
-                    const SizedBox(height: 8),
-                    FilledButton(
-                      onPressed: _busy ? null : _apply,
-                      child: const Text('Привязать'),
-                    ),
-                  ],
-                ),
-              ),
+            if (snap?.referredByName != null) ...[
+              const SizedBox(height: 12),
+              Text('Вас пригласил: ${snap!.referredByName}'),
+            ],
             if (_busy && snap == null)
               const Padding(
                 padding: EdgeInsets.only(top: 24),

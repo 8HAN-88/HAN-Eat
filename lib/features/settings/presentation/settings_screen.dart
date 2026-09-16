@@ -335,7 +335,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       _SettingsItem(
         title: 'Реферальная программа',
         icon: Icons.group_add_outlined,
-        subtitle: 'Пригласите друзей — 17,5% нетто с их рекламы и подписки',
+        subtitle: 'Ваша ссылка — 17,5% нетто с тех, кто по ней зарегистрировался',
         onTap: () => context.push(PartnerProgramRoute.path),
       ),
       _SettingsItem(

@@ -329,10 +329,6 @@
           <label for="name">Имя</label>
           <input id="name" name="name" type="text" autocomplete="name" autocapitalize="words" placeholder="Как к вам обращаться">
         </div>
-        <div id="ref-wrap" hidden>
-          <label for="referral">Код приглашения (необязательно)</label>
-          <input id="referral" name="referral" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Код друга или ссылка">
-        </div>
         <label class="legal" id="legal-wrap">
           <input id="legal" type="checkbox">
           <span>Принимаю <a href="/privacy" target="_blank" rel="noopener">политику конфиденциальности</a> и <a href="/terms" target="_blank" rel="noopener">пользовательское соглашение</a></span>
@@ -534,14 +530,12 @@
         var isReg = mode === 'register';
         document.getElementById('name-wrap').hidden = !isReg;
         document.getElementById('name').required = isReg;
-        document.getElementById('ref-wrap').hidden = !isReg;
         document.getElementById('legal-wrap').classList.toggle('is-visible', isReg);
         document.getElementById('auth-submit').textContent = isReg ? 'Создать аккаунт' : 'Войти';
-        var pending = extractReferral(document.getElementById('referral').value) ||
-          extractReferral(prefGet('pending_referral'));
+        var pending = extractReferral(prefGet('pending_referral'));
         document.getElementById('auth-subtitle').textContent = isReg
           ? (pending
-            ? 'Вас пригласили в HanWe — код уже подставлен'
+            ? 'Вас пригласили в HanWe — аккаунт привяжется к ссылке друга'
             : 'Создайте аккаунт — дальше откроется приложение')
           : 'Войдите, чтобы открыть чаты и ленту';
         document.getElementById('switch-text').textContent = isReg ? 'Уже есть аккаунт?' : 'Нет аккаунта?';
@@ -940,7 +934,7 @@
         btn.textContent = mode === 'register' ? 'Создаём…' : 'Входим…';
         try {
           var path = mode === 'register' ? '/auth/register' : '/auth/login';
-          var referral = extractReferral(document.getElementById('referral').value);
+          var referral = extractReferral(prefGet('pending_referral'));
           var body = mode === 'register'
             ? {
                 email: email,
@@ -975,8 +969,6 @@
       });
 
       var pendingRef = capturePendingReferral();
-      var referralInput = document.getElementById('referral');
-      if (referralInput && pendingRef) referralInput.value = pendingRef;
       if (pendingRef && !hasSession()) {
         setMode('register');
       }
