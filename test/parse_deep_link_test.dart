@@ -31,6 +31,17 @@ void main() {
     );
   });
 
+  test('invite links keep the referral code', () {
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/invite?ref=ABC12XYZ'),
+      '/invite?ref=ABC12XYZ',
+    );
+    expect(
+      parseDeepLinkToGoPath('haneat://invite?ref=ABC12XYZ'),
+      '/register?ref=ABC12XYZ',
+    );
+  });
+
   test('reel share links open /reel/:id', () {
     expect(parseDeepLinkToGoPath('https://haneat.app/reel/28'), '/reel/28');
     expect(parseDeepLinkToGoPath('https://haneat.app/app/reel/28'), '/reel/28');

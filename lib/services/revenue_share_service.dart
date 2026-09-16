@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
 import '../utils/api_error_parser.dart';
 import 'api_service.dart';
+import 'app_invite_service.dart';
 import 'auth_service.dart';
+import 'pending_referral_store.dart';
 
 class RevenueShareSnapshot {
   const RevenueShareSnapshot({
@@ -78,9 +81,21 @@ class RevenueShareApi {
         fallback: 'Не удалось загрузить программу',
       );
     }
+    return _cache(_decode(response.body));
+  }
+
+  static RevenueShareSnapshot _decode(String body) {
     return RevenueShareSnapshot.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
+      jsonDecode(body) as Map<String, dynamic>,
     );
+  }
+
+  static RevenueShareSnapshot _cache(RevenueShareSnapshot snap) {
+    if (snap.referralCode.isNotEmpty) {
+      AppInviteService.rememberOfficialCode(snap.referralCode);
+      unawaited(PendingReferralStore.rememberOfficial(snap.referralCode));
+    }
+    return snap;
   }
 
   static Future<RevenueShareSnapshot> setExtraAds(bool enabled) async {
@@ -96,9 +111,7 @@ class RevenueShareApi {
         fallback: 'Не удалось сохранить настройку',
       );
     }
-    return RevenueShareSnapshot.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return _cache(_decode(response.body));
   }
 
   static Future<RevenueShareSnapshot> applyCode(String code) async {
@@ -114,8 +127,10 @@ class RevenueShareApi {
         fallback: 'Код не принят',
       );
     }
-    return RevenueShareSnapshot.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    final snap = _cache(_decode(response.body));
+    if (snap.referredByName != null) {
+      unawaited(PendingReferralStore.clear());
+    }
+    return snap;
   }
 }

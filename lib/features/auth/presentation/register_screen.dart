@@ -6,7 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../app/auth_navigation.dart';
 import '../../../../app/auth_route_paths.dart';
+import '../../../../features/referral/pending_referral.dart';
 import '../../../../services/auth_service.dart';
+import '../../../../services/pending_referral_store.dart';
 import '../../../../services/push_notification_service.dart' deferred as push_svc;
 import '../../../../utils/api_error_parser.dart';
 import '../../../../widgets/app_gradient_background.dart';
@@ -31,10 +33,33 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _usernameController = TextEditingController();
+  final _referralController = TextEditingController();
   bool _isLoading = false;
+  bool _referralFromInvite = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _legalAccepted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_hydrateReferral());
+  }
+
+  Future<void> _hydrateReferral() async {
+    final fromQuery = PendingReferral.extract(widget.initialReferralCode);
+    if (fromQuery != null) {
+      await PendingReferralStore.remember(fromQuery);
+      if (!mounted) return;
+      _referralController.text = fromQuery;
+      setState(() => _referralFromInvite = true);
+      return;
+    }
+    final stored = await PendingReferralStore.peek();
+    if (!mounted || stored == null) return;
+    _referralController.text = stored;
+    setState(() => _referralFromInvite = true);
+  }
 
   @override
   void dispose() {
@@ -43,6 +68,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     _usernameController.dispose();
+    _referralController.dispose();
     super.dispose();
   }
 
@@ -70,8 +96,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             ? null
             : _usernameController.text.trim(),
         acceptLegal: true,
-        referralCode: widget.initialReferralCode,
+        referralCode: PendingReferral.extract(_referralController.text) ??
+            widget.initialReferralCode,
       );
+      await PendingReferralStore.clear();
 
       unawaited(() async {
         try {
@@ -259,6 +287,19 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       }
                       return null;
                     },
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _referralController,
+                    textCapitalization: TextCapitalization.characters,
+                    decoration: InputDecoration(
+                      labelText: 'Код приглашения (необязательно)',
+                      hintText: 'Код друга или ссылка',
+                      prefixIcon: const Icon(Icons.group_add_outlined),
+                      helperText: _referralFromInvite
+                          ? 'Подставили из приглашения'
+                          : 'Если друг прислал ссылку — вставьте её сюда',
+                    ),
                   ),
                   LegalConsentCheckbox(
                     value: _legalAccepted,

@@ -318,7 +318,7 @@ class RevenueShareService:
                 }
         return {
             "referral_code": user.referral_code,
-            "share_url": f"https://haneat.app/register?ref={user.referral_code}",
+            "share_url": f"https://haneat.app/invite?ref={user.referral_code}",
             "extra_ads_enabled": bool(user.extra_ads_enabled),
             "referred_by": referrer,
             "referred_count": int(referred_count),

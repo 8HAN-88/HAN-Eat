@@ -1,7 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../services/app_invite_service.dart';
+import '../../../services/pending_referral_store.dart';
 import '../../../services/revenue_share_service.dart';
+import '../pending_referral.dart';
 import '../../../utils/api_error_parser.dart';
 
 class PartnerProgramScreen extends StatefulWidget {
@@ -22,7 +27,14 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
   @override
   void initState() {
     super.initState();
+    unawaited(_hydratePending());
     _load();
+  }
+
+  Future<void> _hydratePending() async {
+    final pending = await PendingReferralStore.peek();
+    if (!mounted || pending == null || _codeCtrl.text.isNotEmpty) return;
+    _codeCtrl.text = pending;
   }
 
   @override
@@ -71,8 +83,8 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
   }
 
   Future<void> _apply() async {
-    final code = _codeCtrl.text.trim();
-    if (code.isEmpty) return;
+    final code = PendingReferral.extract(_codeCtrl.text);
+    if (code == null) return;
     setState(() => _busy = true);
     try {
       final snap = await RevenueShareApi.applyCode(code);
@@ -96,6 +108,19 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Скопировано')),
+    );
+  }
+
+  Future<void> _share() async {
+    final snap = _snap;
+    if (snap == null) return;
+    final box = context.findRenderObject() as RenderBox?;
+    await AppInviteService.shareInvite(
+      context,
+      ref: snap.referralCode,
+      shareOrigin: box == null
+          ? null
+          : box.localToGlobal(Offset.zero) & box.size,
     );
   }
 
@@ -124,8 +149,14 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
+            runSpacing: 8,
             children: [
-              FilledButton(
+              FilledButton.icon(
+                onPressed: snap == null ? null : _share,
+                icon: const Icon(Icons.ios_share, size: 18),
+                label: const Text('Поделиться'),
+              ),
+              FilledButton.tonal(
                 onPressed:
                     snap == null ? null : () => _copy(snap.referralCode),
                 child: const Text('Код'),
@@ -182,9 +213,10 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
                 child: Text(userVisibleError(_error!)),
               ),
             const Text(
-              'Делим только чистую прибыль с рекламы и подписки. '
-              'Звёзды, подарки и TON не входят. Сначала вычитаются расходы '
-              '(остаётся 70% нетто).',
+              'Пригласите друзей по своей ссылке: они регистрируются с вашим '
+              'кодом, и вы получаете долю с их рекламы и подписки. '
+              'Делим только чистую прибыль. Звёзды, подарки и TON не входят. '
+              'Сначала вычитаются расходы (остаётся 70% нетто).',
             ),
             const SizedBox(height: 16),
             if (widget.focusExtraAds) ...[
