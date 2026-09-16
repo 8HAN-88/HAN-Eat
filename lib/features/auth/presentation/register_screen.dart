@@ -6,7 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../app/auth_navigation.dart';
 import '../../../../app/auth_route_paths.dart';
+import '../../../../features/referral/pending_referral.dart';
 import '../../../../services/auth_service.dart';
+import '../../../../services/pending_referral_store.dart';
 import '../../../../services/push_notification_service.dart' deferred as push_svc;
 import '../../../../utils/api_error_parser.dart';
 import '../../../../widgets/app_gradient_background.dart';
@@ -32,9 +34,29 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _confirmPasswordController = TextEditingController();
   final _usernameController = TextEditingController();
   bool _isLoading = false;
+  bool _invited = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _legalAccepted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_hydrateReferral());
+  }
+
+  Future<void> _hydrateReferral() async {
+    final fromQuery = PendingReferral.extract(widget.initialReferralCode);
+    if (fromQuery != null) {
+      await PendingReferralStore.remember(fromQuery);
+      if (!mounted) return;
+      setState(() => _invited = true);
+      return;
+    }
+    final stored = await PendingReferralStore.peek();
+    if (!mounted || stored == null) return;
+    setState(() => _invited = true);
+  }
 
   @override
   void dispose() {
@@ -70,8 +92,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             ? null
             : _usernameController.text.trim(),
         acceptLegal: true,
-        referralCode: widget.initialReferralCode,
+        referralCode: PendingReferral.extract(widget.initialReferralCode) ??
+            await PendingReferralStore.peek(),
       );
+      await PendingReferralStore.clear();
 
       unawaited(() async {
         try {
@@ -260,6 +284,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       return null;
                     },
                   ),
+                  if (_invited) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Вас пригласили в HanWe — аккаунт привяжется к ссылке друга.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
                   LegalConsentCheckbox(
                     value: _legalAccepted,
                     onChanged: _isLoading

@@ -1003,6 +1003,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
+              if (isOwnProfile) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => context.push(PartnerProgramRoute.path),
+                    icon: const Icon(Icons.group_add_outlined, size: 18),
+                    label: const Text('Пригласить друзей'),
+                  ),
+                ),
+              ],
               if (!isOwnProfile) ...[
                 Row(
                   children: [

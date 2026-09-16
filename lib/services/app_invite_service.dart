@@ -5,15 +5,31 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/share/system_share.dart';
+import '../features/referral/pending_referral.dart';
 import 'auth_service.dart';
+import 'pending_referral_store.dart';
 
 /// Приглашение друзей в HanWe (ссылка + SMS / системный шаринг).
 class AppInviteService {
   AppInviteService._();
 
-  static const webBase = 'https://haneat.app/invite';
+  static const webBase = PendingReferral.webInviteBase;
+  static String? _officialCode;
+
+  static void rememberOfficialCode(String? code) {
+    final normalized = PendingReferral.extract(code);
+    if (normalized == null) return;
+    _officialCode = normalized;
+  }
+
+  @visibleForTesting
+  static void debugResetOfficialCode() {
+    _officialCode = null;
+  }
 
   static String inviteRef([User? user]) {
+    final official = _officialCode?.trim();
+    if (official != null && official.isNotEmpty) return official;
     final u = user ?? AuthService.instance.currentUser;
     final username = u?.username?.trim();
     if (username != null && username.isNotEmpty) return username;
@@ -21,14 +37,27 @@ class AppInviteService {
     return '';
   }
 
+  static Future<String> resolvedRef({String? ref, User? user}) async {
+    final explicit = PendingReferral.extract(ref);
+    if (explicit != null) {
+      rememberOfficialCode(explicit);
+      return explicit;
+    }
+    if (_officialCode == null || _officialCode!.isEmpty) {
+      final stored = await PendingReferralStore.officialCode();
+      if (stored != null) rememberOfficialCode(stored);
+    }
+    return inviteRef(user);
+  }
+
   static String webInviteUrl({String? ref}) {
-    final r = (ref ?? inviteRef()).trim();
+    final r = PendingReferral.extract(ref) ?? inviteRef();
     if (r.isEmpty) return webBase;
-    return '$webBase?ref=${Uri.encodeComponent(r)}';
+    return PendingReferral.shareUrl(r);
   }
 
   static String deepInviteUrl({String? ref}) {
-    final r = (ref ?? inviteRef()).trim();
+    final r = PendingReferral.extract(ref) ?? inviteRef();
     if (r.isEmpty) return 'haneat://invite';
     return 'haneat://invite?ref=${Uri.encodeComponent(r)}';
   }
@@ -62,17 +91,21 @@ class AppInviteService {
   static Future<void> shareInvite(
     BuildContext context, {
     String? contactName,
+    String? ref,
     Rect? shareOrigin,
   }) async {
     final user = AuthService.instance.currentUser;
+    final resolved = await resolvedRef(ref: ref, user: user);
     await SystemShare.shareText(
       context,
       text: inviteMessage(
         contactName: contactName,
         inviterName: user?.name,
+        ref: resolved,
       ),
       subject: 'Приглашение в HanWe',
       sharePositionOrigin: shareOrigin,
+      webSnackBarText: 'Ссылка скопирована',
     );
   }
 
@@ -97,9 +130,11 @@ class AppInviteService {
     required String phoneE164,
   }) async {
     final user = AuthService.instance.currentUser;
+    final resolved = await resolvedRef(user: user);
     final message = inviteMessage(
       contactName: displayName,
       inviterName: user?.name,
+      ref: resolved,
     );
 
     final choice = await showModalBottomSheet<String>(

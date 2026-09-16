@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'guest_routes.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
@@ -87,6 +89,7 @@ import '../features/bots/presentation/bot_detail_screen.dart';
 import '../features/bots/presentation/my_bots_screen.dart';
 import '../models/chat_models.dart';
 import '../services/auth_service.dart';
+import '../services/pending_referral_store.dart';
 import 'app_bootstrap_state.dart';
 import 'auth_route_paths.dart';
 import 'boot_screen.dart';
@@ -311,6 +314,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         if (isAuth &&
             user.emailVerified &&
             (loc == LoginRoute.path || loc == RegisterRoute.path)) {
+          final ref = state.uri.queryParameters['ref'];
+          if (ref != null && ref.isNotEmpty) {
+            unawaited(PendingReferralStore.remember(ref));
+            return PartnerProgramRoute.path;
+          }
           return stableHomePath;
         }
         if (isAuth) return null;
@@ -706,6 +714,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'invite',
         redirect: (context, state) {
           final ref = state.uri.queryParameters['ref'];
+          if (ref != null && ref.isNotEmpty) {
+            unawaited(PendingReferralStore.remember(ref));
+          }
+          if (AuthService.instance.currentUser != null) {
+            return PartnerProgramRoute.path;
+          }
           if (ref != null && ref.isNotEmpty) {
             return '${RegisterRoute.path}?ref=${Uri.encodeComponent(ref)}';
           }

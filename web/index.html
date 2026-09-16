@@ -500,6 +500,31 @@
         return 'Ошибка ' + status;
       }
 
+      function extractReferral(raw) {
+        var value = (raw || '').trim();
+        if (!value) return '';
+        try {
+          var uri = new URL(value, location.origin);
+          var ref = (uri.searchParams.get('ref') || '').trim();
+          if (ref) value = ref;
+        } catch (e) {}
+        if (value.charAt(0) === '@') value = value.slice(1).trim();
+        if (!value || value.length > 100) return '';
+        return value;
+      }
+
+      function capturePendingReferral() {
+        var code = extractReferral(params.get('ref'));
+        if (!code) {
+          var stored = prefGet('pending_referral');
+          if (typeof stored === 'string') code = extractReferral(stored);
+        }
+        if (code) {
+          try { prefSet('pending_referral', code); } catch (e) {}
+        }
+        return code;
+      }
+
       function setMode(next) {
         mode = next;
         var isReg = mode === 'register';
@@ -507,8 +532,11 @@
         document.getElementById('name').required = isReg;
         document.getElementById('legal-wrap').classList.toggle('is-visible', isReg);
         document.getElementById('auth-submit').textContent = isReg ? 'Создать аккаунт' : 'Войти';
+        var pending = extractReferral(prefGet('pending_referral'));
         document.getElementById('auth-subtitle').textContent = isReg
-          ? 'Создайте аккаунт — дальше откроется приложение'
+          ? (pending
+            ? 'Вас пригласили в HanWe — аккаунт привяжется к ссылке друга'
+            : 'Создайте аккаунт — дальше откроется приложение')
           : 'Войдите, чтобы открыть чаты и ленту';
         document.getElementById('switch-text').textContent = isReg ? 'Уже есть аккаунт?' : 'Нет аккаунта?';
         document.getElementById('switch-mode').textContent = isReg ? 'Войти' : 'Зарегистрироваться';
@@ -906,6 +934,7 @@
         btn.textContent = mode === 'register' ? 'Создаём…' : 'Входим…';
         try {
           var path = mode === 'register' ? '/auth/register' : '/auth/login';
+          var referral = extractReferral(prefGet('pending_referral'));
           var body = mode === 'register'
             ? {
                 email: email,
@@ -914,6 +943,7 @@
                 accept_legal: true
               }
             : { email: email, password: password };
+          if (mode === 'register' && referral) body.referral_code = referral;
           var res = await fetch(apiUrl(path), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
@@ -926,6 +956,9 @@
             throw new Error(humanAuthError(data, res.status));
           }
           saveSession(data);
+          if (mode === 'register') {
+            try { localStorage.removeItem(PREFIX + 'pending_referral'); } catch (err) {}
+          }
           ping('authed=1');
           startFlutterAtApp();
         } catch (err) {
@@ -934,6 +967,11 @@
           btn.textContent = mode === 'register' ? 'Создать аккаунт' : 'Войти';
         }
       });
+
+      var pendingRef = capturePendingReferral();
+      if (pendingRef && !hasSession()) {
+        setMode('register');
+      }
 
       // Boot decision
       // Root / and /app/ share this HTML. With a session we start Flutter

@@ -124,6 +124,15 @@ def test_apply_username_invite_ref(db_session):
     assert viewer.referred_by_user_id == referrer.id
 
 
+def test_snapshot_uses_invite_share_url(db_session):
+    user = _user(db_session, 6)
+    svc = RevenueShareService(db_session)
+    code = svc.ensure_code(user)
+    snap = svc.snapshot(user)
+    assert snap["share_url"] == f"https://haneat.app/invite?ref={code}"
+    assert snap["referral_code"] == code
+
+
 def test_old_account_cannot_apply_code(db_session):
     referrer = _user(db_session, 4)
     old = _user(

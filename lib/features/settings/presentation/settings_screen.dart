@@ -333,6 +333,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         onTap: () => context.push(FlexSubscriptionRoute.path),
       ),
       _SettingsItem(
+        title: 'Реферальная программа',
+        icon: Icons.group_add_outlined,
+        subtitle: 'Ваша ссылка — 17,5% нетто с тех, кто по ней зарегистрировался',
+        onTap: () => context.push(PartnerProgramRoute.path),
+      ),
+      _SettingsItem(
         title: 'Звёзды и кошелёк',
         icon: Icons.stars_rounded,
         subtitle: 'Баланс, донаты, покупки контента и бусты',
@@ -349,12 +355,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         icon: Icons.campaign_outlined,
         subtitle: 'Заявка: объявление в ленте, рилсах или каналах',
         onTap: () => context.push(AdsHubRoute.path),
-      ),
-      _SettingsItem(
-        title: 'Реферальная программа',
-        icon: Icons.group_add_outlined,
-        subtitle: '17,5% нетто с рекламы и подписки тех, кого привели',
-        onTap: () => context.push(PartnerProgramRoute.path),
       ),
       _SettingsItem(
         title: 'Доп. реклама за долю',
