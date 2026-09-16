@@ -20,6 +20,12 @@ void main() {
     );
   });
 
+  test('web reads fail over to cache instead of retrying for a minute', () {
+    expect(WeakNetPolicy.webReadTimeout.inSeconds, lessThanOrEqualTo(6));
+    expect(WeakNetPolicy.webReadRetries, lessThanOrEqualTo(1));
+    expect(WeakNetPolicy.webSharedAttempts, lessThanOrEqualTo(2));
+  });
+
   test('remaining slice shrinks as time passes', () {
     expect(
       WeakNetPolicy.mediaRateLimitDelay(

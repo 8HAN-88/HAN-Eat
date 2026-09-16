@@ -6,6 +6,14 @@ class WeakNetPolicy {
 
   static const int webFailuresBeforeDown = 2;
 
+  /// Чтения ленты/инбокса на web: лучше быстро упасть в кэш, чем крутить минуту.
+  static const Duration webReadTimeout = Duration(seconds: 6);
+
+  static const int webReadRetries = 1;
+
+  /// Shared HTTP: на web не крутить 4 круга по 6–12 с.
+  static const int webSharedAttempts = 2;
+
   static Duration mediaRateLimitDelay({
     required Duration remaining,
     required Duration elapsed,

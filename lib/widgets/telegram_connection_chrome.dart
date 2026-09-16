@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/network/cold_start_policy.dart';
 import '../core/network/telegram_connection_status.dart';
 import '../services/api_reachability_service.dart';
 import '../services/auth_service.dart';
@@ -11,6 +12,7 @@ class TelegramConnectionChrome {
   const TelegramConnectionChrome._();
 
   static Listenable? _cached;
+  static DateTime? _updatingSince;
 
   static Listenable listenable() {
     if (_cached != null) return _cached!;
@@ -33,13 +35,31 @@ class TelegramConnectionChrome {
   }
 
   static TelegramConnectionPhase phase() {
-    return TelegramConnectionStatus.resolve(
+    final realtimeConnected = UserRealtimeService.instance.connected.value;
+    final raw = TelegramConnectionStatus.resolve(
       deviceOnline: FeedSyncService.onlineListenable.value,
       apiReachable: ApiReachabilityService.instance.isApiReachable.value,
       apiConnecting: ApiReachabilityService.instance.isApiConnecting.value,
-      realtimeConnected: UserRealtimeService.instance.connected.value,
+      realtimeConnected: realtimeConnected,
       signedIn: AuthService.instance.currentUser != null,
     );
+    if (raw == TelegramConnectionPhase.updating) {
+      _updatingSince ??= DateTime.now();
+      final waited = DateTime.now().difference(_updatingSince!);
+      if (waited >= ColdStartPolicy.updatingChromeMax) {
+        return TelegramConnectionStatus.resolve(
+          deviceOnline: FeedSyncService.onlineListenable.value,
+          apiReachable: ApiReachabilityService.instance.isApiReachable.value,
+          apiConnecting: ApiReachabilityService.instance.isApiConnecting.value,
+          realtimeConnected: realtimeConnected,
+          signedIn: AuthService.instance.currentUser != null,
+          realtimeWaitExpired: true,
+        );
+      }
+    } else {
+      _updatingSince = null;
+    }
+    return raw;
   }
 
   static String? label() => TelegramConnectionStatus.labelFor(phase());

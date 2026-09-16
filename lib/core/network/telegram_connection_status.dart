@@ -20,6 +20,7 @@ class TelegramConnectionStatus {
     required bool apiConnecting,
     required bool realtimeConnected,
     bool signedIn = true,
+    bool realtimeWaitExpired = false,
   }) {
     if (!deviceOnline) {
       return TelegramConnectionPhase.waitingNetwork;
@@ -27,7 +28,7 @@ class TelegramConnectionStatus {
     if (!apiReachable || apiConnecting) {
       return TelegramConnectionPhase.connecting;
     }
-    if (signedIn && !realtimeConnected) {
+    if (signedIn && !realtimeConnected && !realtimeWaitExpired) {
       return TelegramConnectionPhase.updating;
     }
     return TelegramConnectionPhase.ok;

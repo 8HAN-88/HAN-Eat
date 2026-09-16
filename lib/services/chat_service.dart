@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../core/network/api_endpoint_resolver.dart';
 import '../core/network/api_rate_limit_backoff.dart';
 import '../core/network/haneat_http_client.dart';
+import '../core/network/weak_net_policy.dart';
 import '../models/chat_models.dart';
 import '../utils/api_error_parser.dart';
 import 'auth_service.dart';
@@ -152,10 +154,17 @@ class ChatService {
     return response;
   }
 
+  static Duration get _readTimeout =>
+      kIsWeb ? WeakNetPolicy.webReadTimeout : _requestTimeout;
+
+  static int get _readRetries => kIsWeb ? WeakNetPolicy.webReadRetries : 3;
+
   static Future<http.Response> _get(Uri uri) => _request(
         (client, headers) => client.get(uri, headers: headers),
         // Reads must not fail because an unrelated POST hit 429.
         bypassRateLimitGate: true,
+        retries: _readRetries,
+        timeout: _readTimeout,
       );
 
   static Future<http.Response> _post(

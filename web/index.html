@@ -730,9 +730,10 @@
           try { if (scriptEl) scriptEl.remove(); } catch (e) {}
 
           // One in-place retry on /app/ — never location.replace (Safari white-screen).
-          // Wipe Cache API first: stale main.dart.js_*.part.js after deploy → white screen.
+          // Do NOT wipe Cache API here: on 3G that deletes the only copy of
+          // main.dart.js and the user never gets in.
           if (!bootRetry && hasSession()) {
-            sub.textContent = 'Повторная загрузка…';
+            sub.textContent = 'Слабая связь — ещё загружаем…';
             bootRetry = true;
             flutterStarted = false;
             firstFrame = false;
@@ -749,11 +750,9 @@
               history.replaceState(null, '', u.pathname + u.search + u.hash);
               params = u.searchParams;
             } catch (e) {}
-            wipeStaleFlutterCaches().finally(function () {
-              setTimeout(function () {
-                if (!firstFrame) startFlutter();
-              }, 350);
-            });
+            setTimeout(function () {
+              if (!firstFrame) startFlutter();
+            }, 350);
             return;
           }
 
@@ -804,7 +803,7 @@
             primaryUiReady = true;
             maybeHideSplash();
           }
-        }, 8000);
+        }, 2500);
 
         setTimeout(function () {
           if (!firstFrame && sub) {
@@ -812,9 +811,12 @@
           }
         }, 8000);
 
+        // Session: keep waiting. Wiping/failing at 30s on 3G leaves people
+        // on «Не получилось открыть» even though JS is still downloading.
+        var firstFrameLimit = hasSession() ? 90000 : (isIOS ? 45000 : 40000);
         setTimeout(function () {
           if (!firstFrame) failBoot('timeout');
-        }, isIOS ? 35000 : 30000);
+        }, firstFrameLimit);
       }
 
       function startFlutterAtApp() {

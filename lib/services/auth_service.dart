@@ -989,6 +989,18 @@ class AuthService {
       }
     }
     if (!_accessTokenLooksExpired(token)) return token;
+    // Weak net: don't block the first paint on /auth/refresh (10s).
+    // Requests that get 401 retry with the in-flight refresh.
+    if (kIsWeb) {
+      unawaited(() async {
+        try {
+          await refreshToken();
+        } catch (e) {
+          debugPrint('⚠️ getAccessTokenForApi background refresh: $e');
+        }
+      }());
+      return token;
+    }
     try {
       final prefs = await SharedPreferences.getInstance();
       if (prefs.getString(_refreshTokenKey) == null) {

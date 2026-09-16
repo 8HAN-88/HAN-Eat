@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/network/cold_start_policy.dart';
 import '../core/web/boot_ready_signal.dart';
 import '../services/auth_service.dart';
 import '../services/feed_api_cache.dart';
@@ -101,7 +102,13 @@ class _StartupShellState extends State<StartupShell> {
     if (_fullAppLibraryLoaded || _fullAppLoadStarted) return;
     _fullAppLoadStarted = true;
     try {
-      await full_app.loadLibrary();
+      if (kIsWeb) {
+        await full_app.loadLibrary().timeout(
+              ColdStartPolicy.webFullAppLibraryTimeout,
+            );
+      } else {
+        await full_app.loadLibrary();
+      }
       if (!mounted) return;
       setState(() {
         _fullAppLibraryLoaded = true;
@@ -116,8 +123,17 @@ class _StartupShellState extends State<StartupShell> {
       if (!mounted) return;
       setState(() {
         _fullAppLoadStarted = false;
-        _fullAppLoadError = e;
+        // Web: keep the disk shell and retry. An error screen here
+        // is how people get stuck on 3G.
+        if (!kIsWeb) _fullAppLoadError = e;
       });
+      if (kIsWeb) {
+        Future<void>.delayed(const Duration(seconds: 2), () {
+          if (mounted && !_fullAppLibraryLoaded) {
+            unawaited(_ensureFullAppLoaded());
+          }
+        });
+      }
     }
   }
 
@@ -357,9 +373,10 @@ class _StartupShellState extends State<StartupShell> {
       builder: (context, ready, _) {
         if (!ready) {
           if (_hasLocalSession) {
-            // Web: keep the HTML splash. The brown skeleton looks like a
-            // second boot screen and is not tappable.
-            return kIsWeb ? _underHtmlSplash() : const StartupHomePlaceholder();
+            // HTML splash stays until we signal ready. Show the disk shell
+            // so 3G is not a blank brown page.
+            if (kIsWeb) _signalHtmlSplashCanHide();
+            return const StartupHomePlaceholder();
           }
           return kIsWeb ? _underHtmlSplash() : _loadingApp();
         }
@@ -374,9 +391,8 @@ class _StartupShellState extends State<StartupShell> {
             if (!_fullAppLibraryLoaded) {
               unawaited(_ensureFullAppLoaded());
               if (_hasLocalSession || AuthService.instance.currentUser != null) {
-                return kIsWeb
-                    ? _underHtmlSplash()
-                    : const StartupHomePlaceholder();
+                _signalHtmlSplashCanHide();
+                return const StartupHomePlaceholder();
               }
               return kIsWeb
                   ? _underHtmlSplash()
