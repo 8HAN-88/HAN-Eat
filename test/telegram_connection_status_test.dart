@@ -48,6 +48,19 @@ void main() {
     );
   });
 
+  test('API up but realtime wait expired is ok', () {
+    expect(
+      TelegramConnectionStatus.resolve(
+        deviceOnline: true,
+        apiReachable: true,
+        apiConnecting: false,
+        realtimeConnected: false,
+        realtimeWaitExpired: true,
+      ),
+      TelegramConnectionPhase.ok,
+    );
+  });
+
   test('API up but realtime catching up is updating', () {
     expect(
       TelegramConnectionStatus.resolve(

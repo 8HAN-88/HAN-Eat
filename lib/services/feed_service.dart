@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../core/network/haneat_http_client.dart';
+import '../core/network/weak_net_policy.dart';
 import '../features/ads/ads_order.dart';
 import '../models/post_model.dart';
 import '../models/post_types.dart';
@@ -68,7 +69,8 @@ class FeedService {
         'Content-Type': 'application/json',
       };
 
-      const timeout = Duration(seconds: 12);
+      final timeout =
+          kIsWeb ? WeakNetPolicy.webReadTimeout : const Duration(seconds: 12);
 
       var response =
           await HanEatHttpClient.shared.get(uri, headers: headers).timeout(

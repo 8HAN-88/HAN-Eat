@@ -1075,7 +1075,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
 
     final channelsFuture = () async {
       try {
-        await ChannelSheetPrefs.syncFromServer();
+        unawaited(ChannelSheetPrefs.syncFromServer());
         favoriteIds = (await ChannelSheetPrefs.listFavoriteIds()).toSet();
         mutedChannelIds = await ChannelSheetPrefs.listMutedIds();
         archivedChannelIds = await ChannelSheetPrefs.listArchivedIds();
@@ -1101,27 +1101,34 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     }();
 
     List<ChatConversation> archivedChats = const [];
-    try {
-      chats = await ChatService.listConversations();
-      final expired = await _expireTimedMutes(chats);
-      if (expired > 0) {
+    final chatsFuture = () async {
+      try {
         chats = await ChatService.listConversations();
+        final expired = await _expireTimedMutes(chats);
+        if (expired > 0) {
+          chats = await ChatService.listConversations();
+        }
+      } catch (e) {
+        chatsError = e;
+        if (kDebugMode) debugPrint('Chats load failed: $e');
       }
-    } catch (e) {
-      chatsError = e;
-      if (kDebugMode) debugPrint('Chats load failed: $e');
-    }
-    try {
-      archivedChats = await ChatService.listConversations(archived: true);
-    } catch (e) {
-      if (kDebugMode) debugPrint('Archived chats load failed: $e');
-    }
-    try {
-      joinInbox = await ChatService.listJoinRequestsInbox(limit: 50);
-    } catch (e) {
-      joinInboxError = e;
-      if (kDebugMode) debugPrint('Join inbox load failed: $e');
-    }
+    }();
+    final archivedFuture = () async {
+      try {
+        archivedChats = await ChatService.listConversations(archived: true);
+      } catch (e) {
+        if (kDebugMode) debugPrint('Archived chats load failed: $e');
+      }
+    }();
+    final joinFuture = () async {
+      try {
+        joinInbox = await ChatService.listJoinRequestsInbox(limit: 50);
+      } catch (e) {
+        joinInboxError = e;
+        if (kDebugMode) debugPrint('Join inbox load failed: $e');
+      }
+    }();
+    await Future.wait<void>([chatsFuture, archivedFuture, joinFuture]);
     if (!mounted || seq != _loadSeq) return;
 
     final earlySaved = _extractSavedChat(chats) ?? _savedChat;
