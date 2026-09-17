@@ -27,6 +27,16 @@ void main() {
     );
     expect(PendingReferral.extract(''), isNull);
     expect(PendingReferral.extract(null), isNull);
+    expect(PendingReferral.extract('https://haneat.app/app/'), isNull);
+    expect(PendingReferral.extract('https://haneat.app/'), isNull);
+    expect(
+      PendingReferral.queryRef(Uri.parse('https://haneat.app/app/')),
+      isNull,
+    );
+    expect(
+      PendingReferral.queryRef(Uri.parse('https://haneat.app/app/?go=1')),
+      isNull,
+    );
     expect(
       PendingReferral.extract(
         'https://l.facebook.com/l.php?u=${Uri.encodeComponent('https://haneat.app/invite?ref=ABC12XYZ')}',

@@ -253,6 +253,9 @@ def test_extract_referral_unwraps_share_wrappers():
         extract_referral("https://haneat.app/app/#/invite?REF=ABC12XYZ")
         == "ABC12XYZ"
     )
+    assert extract_referral("https://haneat.app/app/") is None
+    assert extract_referral("https://haneat.app/") is None
+    assert extract_referral("https://haneat.app/invite") is None
 
 
 def test_apply_invite_url_and_whatsapp_wrap(db_session):

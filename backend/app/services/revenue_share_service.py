@@ -86,17 +86,18 @@ def extract_referral(raw: Optional[str], depth: int = 0) -> Optional[str]:
         nested = _first(key)
         if not nested:
             continue
-        if "haneat.app" in nested or "ref=" in nested:
+        if "haneat.app" in nested.lower() or "ref=" in nested.lower():
             inner = extract_referral(nested, depth + 1)
             if inner:
                 return inner
 
     if "://" in value or "haneat.app" in value.lower():
         match = _EMBEDDED_INVITE.search(value)
-        if match:
+        if match and match.group(0) != value:
             inner = extract_referral(match.group(0), depth + 1)
             if inner:
                 return inner
+        return None
 
     return _normalize_referral(value)
 

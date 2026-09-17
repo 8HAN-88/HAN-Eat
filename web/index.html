@@ -561,6 +561,9 @@
         }
         if (value.charAt(0) === '@') value = value.slice(1).trim();
         if (!value || value.length > 100) return '';
+        if (value.indexOf('://') !== -1 || value.toLowerCase().indexOf('haneat.app') !== -1) {
+          return '';
+        }
         return value;
       }
 

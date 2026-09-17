@@ -29,7 +29,23 @@ class PendingReferral {
   /// Код из `?ref=` / `?REF=` / `?referral=` у уже разобранного URI.
   static String? queryRef(Uri? uri) {
     if (uri == null) return null;
-    return extract(uri.toString());
+    final fromQuery = _queryValue(uri, const ['ref', 'referral']);
+    if (fromQuery != null) {
+      return extract(fromQuery);
+    }
+    final frag = uri.fragment;
+    if (frag.toLowerCase().contains('ref=')) {
+      final fragUri = Uri.tryParse(
+        frag.startsWith('/')
+            ? 'https://haneat.app$frag'
+            : 'https://haneat.app/$frag',
+      );
+      final href = fragUri == null
+          ? null
+          : _queryValue(fragUri, const ['ref', 'referral']);
+      if (href != null) return extract(href);
+    }
+    return null;
   }
 
   /// Достаёт код из сырого ввода: `ABC12XYZ`, `@alice`, `u12`,
@@ -64,7 +80,8 @@ class PendingReferral {
       for (final key in const ['u', 'url', 'q', 'to', 'link', 'text']) {
         final nested = uri.queryParameters[key]?.trim();
         if (nested == null || nested.isEmpty) continue;
-        if (nested.contains('haneat.app') || nested.contains('ref=')) {
+        if (nested.toLowerCase().contains('haneat.app') ||
+            nested.toLowerCase().contains('ref=')) {
           final inner = extract(nested, depth: depth + 1);
           if (inner != null) return inner;
         }
@@ -74,9 +91,13 @@ class PendingReferral {
       r'https?://(?:www\.)?haneat\.app[^\s<>]+',
       caseSensitive: false,
     ).firstMatch(value);
-    if (embedded != null) {
+    if (embedded != null && embedded.group(0) != value) {
       final inner = extract(embedded.group(0), depth: depth + 1);
       if (inner != null) return inner;
+    }
+    // Ссылка без ?ref= — это не код. Иначе /app/ становится «инвайтом».
+    if (value.contains('://') || value.toLowerCase().contains('haneat.app')) {
+      return null;
     }
     return normalize(value);
   }

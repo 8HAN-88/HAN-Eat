@@ -27,6 +27,10 @@ void main() {
     expect(html.contains('function applyPendingAfterAuth'), isTrue);
     expect(html.contains('function queryRefParam'), isTrue);
     expect(html.contains("key === 'ref' || key === 'referral'"), isTrue);
+    expect(
+      html.contains("value.toLowerCase().indexOf('haneat.app') !== -1"),
+      isTrue,
+    );
     expect(html.contains("apiUrl('/revenue-share/apply-code')"), isTrue);
     expect(html.contains('pendingRef && hasSession()'), isTrue);
     expect(html.contains('extractReferral(prefGet(\'pending_referral\'))'), isTrue);
