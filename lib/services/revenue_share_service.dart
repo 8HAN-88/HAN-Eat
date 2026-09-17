@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../features/referral/pending_referral.dart';
@@ -183,10 +184,22 @@ class RevenueShareSnapshot {
 }
 
 class RevenueShareApi {
-  static String get _base => '${ApiService.baseUrl}/api/v1/revenue-share';
+  @visibleForTesting
+  static String? debugBaseUrl;
+
+  @visibleForTesting
+  static Future<String?> Function()? debugAccessToken;
+
+  @visibleForTesting
+  static http.Client? debugClient;
+
+  static String get _base =>
+      '${debugBaseUrl ?? ApiService.baseUrl}/api/v1/revenue-share';
 
   static Future<Map<String, String>> _headers() async {
-    final token = await AuthService.getAccessTokenForApi();
+    final token = debugAccessToken != null
+        ? await debugAccessToken!()
+        : await AuthService.getAccessTokenForApi();
     if (token == null) throw Exception('Not authenticated');
     return {
       'Authorization': 'Bearer $token',
@@ -194,8 +207,26 @@ class RevenueShareApi {
     };
   }
 
+  static Future<http.Response> _get(Uri uri, Map<String, String> headers) {
+    final client = debugClient;
+    if (client != null) return client.get(uri, headers: headers);
+    return http.get(uri, headers: headers);
+  }
+
+  static Future<http.Response> _post(
+    Uri uri,
+    Map<String, String> headers,
+    Object? body,
+  ) {
+    final client = debugClient;
+    if (client != null) {
+      return client.post(uri, headers: headers, body: body);
+    }
+    return http.post(uri, headers: headers, body: body);
+  }
+
   static Future<RevenueShareSnapshot> me() async {
-    final response = await http.get(Uri.parse('$_base/me'), headers: await _headers());
+    final response = await _get(Uri.parse('$_base/me'), await _headers());
     if (response.statusCode != 200) {
       throw apiExceptionFromHttpResponse(
         response.statusCode,
@@ -221,10 +252,10 @@ class RevenueShareApi {
   }
 
   static Future<RevenueShareSnapshot> setExtraAds(bool enabled) async {
-    final response = await http.post(
+    final response = await _post(
       Uri.parse('$_base/extra-ads'),
-      headers: await _headers(),
-      body: jsonEncode({'enabled': enabled}),
+      await _headers(),
+      jsonEncode({'enabled': enabled}),
     );
     if (response.statusCode != 200) {
       throw apiExceptionFromHttpResponse(
@@ -238,10 +269,10 @@ class RevenueShareApi {
 
   static Future<RevenueShareSnapshot> applyCode(String code) async {
     final extracted = PendingReferral.extract(code) ?? code.trim();
-    final response = await http.post(
+    final response = await _post(
       Uri.parse('$_base/apply-code'),
-      headers: await _headers(),
-      body: jsonEncode({'code': extracted}),
+      await _headers(),
+      jsonEncode({'code': extracted}),
     );
     if (response.statusCode != 200) {
       throw apiExceptionFromHttpResponse(
@@ -263,10 +294,10 @@ class RevenueShareApi {
   }
 
   static Future<RevenueShareSnapshot> convertToStars({int? amountKopecks}) async {
-    final response = await http.post(
+    final response = await _post(
       Uri.parse('$_base/payouts/stars'),
-      headers: await _headers(),
-      body: jsonEncode({
+      await _headers(),
+      jsonEncode({
         if (amountKopecks != null) 'amount_kopecks': amountKopecks,
       }),
     );
@@ -286,10 +317,10 @@ class RevenueShareApi {
     required String recipientName,
     String? note,
   }) async {
-    final response = await http.post(
+    final response = await _post(
       Uri.parse('$_base/payouts/card'),
-      headers: await _headers(),
-      body: jsonEncode({
+      await _headers(),
+      jsonEncode({
         if (amountKopecks != null) 'amount_kopecks': amountKopecks,
         'phone': phone,
         'recipient_name': recipientName,
@@ -307,9 +338,9 @@ class RevenueShareApi {
   }
 
   static Future<List<PartnerPayout>> adminQueue({String status = 'pending'}) async {
-    final response = await http.get(
+    final response = await _get(
       Uri.parse('$_base/payouts/queue?status=$status'),
-      headers: await _headers(),
+      await _headers(),
     );
     if (response.statusCode != 200) {
       throw apiExceptionFromHttpResponse(
@@ -331,10 +362,10 @@ class RevenueShareApi {
     required bool approve,
     String? note,
   }) async {
-    final response = await http.post(
+    final response = await _post(
       Uri.parse('$_base/payouts/$payoutId/review'),
-      headers: await _headers(),
-      body: jsonEncode({
+      await _headers(),
+      jsonEncode({
         'approve': approve,
         if (note != null && note.isNotEmpty) 'note': note,
       }),

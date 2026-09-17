@@ -21,11 +21,20 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
   RevenueShareSnapshot? _snap;
   Object? _error;
   bool _busy = false;
+  final _cardPhone = TextEditingController();
+  final _cardName = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _cardPhone.dispose();
+    _cardName.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -133,9 +142,9 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
         _busy = false;
       });
       final credited = next.lastPayout?.amountStars ?? stars;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Зачислено $credited ★')),
-      );
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('Зачислено $credited ★')));
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
@@ -148,8 +157,8 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
   Future<void> _requestCard() async {
     final snap = _snap;
     if (snap == null || !snap.canRequestCard || _busy) return;
-    final phoneController = TextEditingController();
-    final nameController = TextEditingController();
+    _cardPhone.clear();
+    _cardName.clear();
     var packet = snap.minCardKopecks;
     final all = snap.availableKopecks;
     final packets = <int>{
@@ -158,105 +167,100 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
       all,
     }.toList()
       ..sort();
-    try {
-      final payload = await showDialog<({int? amount, String phone, String name})>(
-        context: context,
-        builder: (ctx) => StatefulBuilder(
-          builder: (ctx, setLocal) => AlertDialog(
-            title: const Text('На карту / СБП'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'От ${RevenueShareSnapshot.rub(snap.minCardKopecks)}. '
-                    'Заявка в очередь, деньги сразу в холде.',
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final value in packets)
-                        ChoiceChip(
-                          selected: packet == value,
-                          label: Text(
-                            value == all && value != snap.minCardKopecks && value != 100000
-                                ? 'Всё ${RevenueShareSnapshot.rub(value)}'
-                                : RevenueShareSnapshot.rub(value),
-                          ),
-                          onSelected: (_) => setLocal(() => packet = value),
+    final payload = await showDialog<({int? amount, String phone, String name})>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('На карту / СБП'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'От ${RevenueShareSnapshot.rub(snap.minCardKopecks)}. '
+                  'Заявка в очередь, деньги сразу в холде.',
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final value in packets)
+                      ChoiceChip(
+                        selected: packet == value,
+                        label: Text(
+                          value == all && value != snap.minCardKopecks && value != 100000
+                              ? 'Всё ${RevenueShareSnapshot.rub(value)}'
+                              : RevenueShareSnapshot.rub(value),
                         ),
-                    ],
+                        onSelected: (_) => setLocal(() => packet = value),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _cardPhone,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: 'Телефон СБП',
+                    hintText: '+7 900 000-00-00',
                   ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: phoneController,
-                    keyboardType: TextInputType.phone,
-                    decoration: const InputDecoration(
-                      labelText: 'Телефон СБП',
-                      hintText: '+7 900 000-00-00',
-                    ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _cardName,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    labelText: 'Имя получателя',
                   ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: nameController,
-                    textCapitalization: TextCapitalization.words,
-                    decoration: const InputDecoration(
-                      labelText: 'Имя получателя',
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Отмена'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  final phone = phoneController.text.trim();
-                  final name = nameController.text.trim();
-                  if (phone.length < 10 || name.length < 2) return;
-                  Navigator.pop(
-                    ctx,
-                    (amount: packet, phone: phone, name: name),
-                  );
-                },
-                child: const Text('Отправить'),
-              ),
-            ],
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final phone = _cardPhone.text.trim();
+                final name = _cardName.text.trim();
+                if (phone.length < 10 || name.length < 2) return;
+                Navigator.pop(
+                  ctx,
+                  (amount: packet, phone: phone, name: name),
+                );
+              },
+              child: const Text('Отправить'),
+            ),
+          ],
         ),
+      ),
+    );
+    if (payload == null || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      final next = await RevenueShareApi.requestCardPayout(
+        amountKopecks: payload.amount,
+        phone: payload.phone,
+        recipientName: payload.name,
       );
-      if (payload == null || !mounted) return;
-      setState(() => _busy = true);
-      try {
-        final next = await RevenueShareApi.requestCardPayout(
-          amountKopecks: payload.amount,
-          phone: payload.phone,
-          recipientName: payload.name,
-        );
-        if (!mounted) return;
-        setState(() {
-          _snap = next;
-          _busy = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Заявка отправлена')),
-        );
-      } catch (e) {
-        if (!mounted) return;
-        setState(() => _busy = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e))),
-        );
-      }
-    } finally {
-      phoneController.dispose();
-      nameController.dispose();
+      if (!mounted) return;
+      setState(() {
+        _snap = next;
+        _busy = false;
+      });
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('Заявка отправлена')));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
     }
   }
 
