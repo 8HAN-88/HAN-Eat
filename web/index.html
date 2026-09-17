@@ -508,6 +508,7 @@
           var step;
           while (!(step = it.next()).done) {
             var key = String(step.value[0] || '').toLowerCase();
+            if (key.indexOf('amp;') === 0) key = key.slice(4);
             if (key === 'ref' || key === 'referral') {
               var val = String(step.value[1] || '').trim();
               if (val) return val;
@@ -517,8 +518,16 @@
         return (searchParams.get('ref') || searchParams.get('referral') || '').trim();
       }
 
+      function sanitizeReferral(raw) {
+        var value = String(raw || '');
+        value = value.replace(/[\u200b\u200c\u200d\ufeff\u00ad]/g, '');
+        value = value.replace(/\u00a0/g, ' ');
+        value = value.replace(/&amp;/ig, '&').replace(/&#38;/g, '&');
+        return value.trim();
+      }
+
       function extractReferral(raw, depth) {
-        var value = (raw || '').trim();
+        var value = sanitizeReferral(raw);
         if (!value || (depth || 0) > 3) return '';
         try {
           var uri = new URL(value, location.origin);
@@ -560,6 +569,7 @@
           if (fromEmbed) return fromEmbed;
         }
         if (value.charAt(0) === '@') value = value.slice(1).trim();
+        value = value.replace(/[.,;:!?\)\]\}'"…/]+$/g, '');
         if (!value || value.length > 100) return '';
         if (value.indexOf('://') !== -1 || value.toLowerCase().indexOf('haneat.app') !== -1) {
           return '';
@@ -940,10 +950,12 @@
           if (!isAppPath()) {
             // Already-installed iOS icons still open /. A second document
             // load to /app/ was the «Открываем…» hop. Only rewrite the URL.
+            var pending = extractReferral(prefGet('pending_referral'));
+            var extra = pending ? '&ref=' + encodeURIComponent(pending) : '';
             history.replaceState(
               null,
               '',
-              '/app/?go=1&v=' + encodeURIComponent(BUILD)
+              '/app/?go=1&v=' + encodeURIComponent(BUILD) + extra
             );
           }
         } catch (e) {}

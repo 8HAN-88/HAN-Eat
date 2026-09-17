@@ -26,7 +26,9 @@ void main() {
     expect(html.contains("'text'"), isTrue);
     expect(html.contains('function applyPendingAfterAuth'), isTrue);
     expect(html.contains('function queryRefParam'), isTrue);
+    expect(html.contains('function sanitizeReferral'), isTrue);
     expect(html.contains("key === 'ref' || key === 'referral'"), isTrue);
+    expect(html.contains("&ref=' + encodeURIComponent(pending)"), isTrue);
     expect(
       html.contains("value.toLowerCase().indexOf('haneat.app') !== -1"),
       isTrue,

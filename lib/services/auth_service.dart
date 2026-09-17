@@ -10,6 +10,7 @@ import '../core/phone/phone_hash.dart';
 import '../core/network/haneat_http_client.dart';
 import '../core/network/api_endpoint_resolver.dart';
 import '../core/network/cold_start_policy.dart';
+import '../features/referral/pending_referral.dart';
 import 'account_session_service.dart';
 import 'pending_referral_store.dart';
 import 'server_config.dart';
@@ -569,10 +570,8 @@ class AuthService {
   }) async {
     final uri = Uri.parse('$baseUrl/auth/register');
     try {
-      final resolvedReferral = (referralCode != null &&
-              referralCode.trim().isNotEmpty)
-          ? referralCode.trim()
-          : await PendingReferralStore.peek();
+      final resolvedReferral = PendingReferral.extract(referralCode) ??
+          await PendingReferralStore.peek();
       final response = await http.post(
         uri,
         headers: {

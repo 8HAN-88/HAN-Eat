@@ -34,10 +34,24 @@ _EMBEDDED_INVITE = re.compile(
 )
 
 
+_ZW = re.compile(r"[\u200b\u200c\u200d\ufeff\u00ad]")
+_TRAIL_PUNCT = re.compile(r"""[.,;:!?\)\]\}'"…/]+$""")
+
+
+def _sanitize_referral_input(raw: str) -> str:
+    value = _ZW.sub("", raw or "")
+    value = value.replace("\u00a0", " ")
+    value = (
+        value.replace("&amp;", "&").replace("&AMP;", "&").replace("&#38;", "&")
+    )
+    return value.strip()
+
+
 def _normalize_referral(raw: Optional[str]) -> Optional[str]:
-    value = (raw or "").strip()
+    value = _sanitize_referral_input(raw or "")
     if value.startswith("@"):
         value = value[1:].strip()
+    value = _TRAIL_PUNCT.sub("", value)
     if not value or len(value) > 100:
         return None
     return value
@@ -46,7 +60,10 @@ def _normalize_referral(raw: Optional[str]) -> Optional[str]:
 def _query_ci(query: dict[str, list[str]], *names: str) -> str:
     wanted = {name.lower() for name in names}
     for key, items in query.items():
-        if (key or "").lower() not in wanted:
+        lowered = (key or "").lower()
+        if lowered.startswith("amp;"):
+            lowered = lowered[4:]
+        if lowered not in wanted:
             continue
         value = unquote(((items[0] if items else "") or "").strip())
         if value:
@@ -56,7 +73,7 @@ def _query_ci(query: dict[str, list[str]], *names: str) -> str:
 
 def extract_referral(raw: Optional[str], depth: int = 0) -> Optional[str]:
     """Достаёт код из сырого ввода, полной ссылки или обёртки мессенджера."""
-    value = (raw or "").strip()
+    value = _sanitize_referral_input(raw or "")
     if not value or depth > 3:
         return None
     parsed = urlparse(value)

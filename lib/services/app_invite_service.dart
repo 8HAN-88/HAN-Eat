@@ -8,6 +8,7 @@ import '../core/share/system_share.dart';
 import '../features/referral/pending_referral.dart';
 import 'auth_service.dart';
 import 'pending_referral_store.dart';
+import 'revenue_share_service.dart';
 
 /// Приглашение друзей в HanWe (ссылка + SMS / системный шаринг).
 class AppInviteService {
@@ -49,6 +50,13 @@ class AppInviteService {
         PendingReferralStore.officialMemory!.isEmpty) {
       final stored = await PendingReferralStore.officialCode();
       if (stored != null) rememberOfficialCode(stored);
+    }
+    if ((PendingReferralStore.officialMemory == null ||
+            PendingReferralStore.officialMemory!.isEmpty) &&
+        AuthService.instance.currentUser != null) {
+      try {
+        await RevenueShareApi.me();
+      } catch (_) {}
     }
     return inviteRef(user);
   }

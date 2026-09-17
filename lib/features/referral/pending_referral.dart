@@ -6,12 +6,26 @@ class PendingReferral {
   static const officialCodeKey = 'referral_code';
   static const webInviteBase = 'https://haneat.app/invite';
 
+  static final _zw = RegExp(r'[\u200b\u200c\u200d\ufeff\u00ad]');
+  static final _trailPunct = RegExp(r'''[.,;:!?\)\]\}'"…/]+$''');
+
+  static String _sanitize(String raw) {
+    var value = raw.replaceAll(_zw, '');
+    value = value.replaceAll('\u00a0', ' ');
+    value = value
+        .replaceAll('&amp;', '&')
+        .replaceAll('&AMP;', '&')
+        .replaceAll('&#38;', '&');
+    return value.trim();
+  }
+
   static String? normalize(String? raw) {
-    var value = raw?.trim() ?? '';
+    var value = _sanitize(raw ?? '');
     if (value.isEmpty || value.length > 100) return null;
     if (value.startsWith('@')) {
       value = value.substring(1).trim();
     }
+    value = value.replaceAll(_trailPunct, '');
     if (value.isEmpty || value.length > 100) return null;
     return value;
   }
@@ -19,7 +33,9 @@ class PendingReferral {
   static String? _queryValue(Uri uri, List<String> names) {
     final wanted = {for (final name in names) name.toLowerCase()};
     for (final entry in uri.queryParameters.entries) {
-      if (!wanted.contains(entry.key.toLowerCase())) continue;
+      var key = entry.key.toLowerCase();
+      if (key.startsWith('amp;')) key = key.substring(4);
+      if (!wanted.contains(key)) continue;
       final value = entry.value.trim();
       if (value.isNotEmpty) return value;
     }
@@ -29,29 +45,13 @@ class PendingReferral {
   /// Код из `?ref=` / `?REF=` / `?referral=` у уже разобранного URI.
   static String? queryRef(Uri? uri) {
     if (uri == null) return null;
-    final fromQuery = _queryValue(uri, const ['ref', 'referral']);
-    if (fromQuery != null) {
-      return extract(fromQuery);
-    }
-    final frag = uri.fragment;
-    if (frag.toLowerCase().contains('ref=')) {
-      final fragUri = Uri.tryParse(
-        frag.startsWith('/')
-            ? 'https://haneat.app$frag'
-            : 'https://haneat.app/$frag',
-      );
-      final href = fragUri == null
-          ? null
-          : _queryValue(fragUri, const ['ref', 'referral']);
-      if (href != null) return extract(href);
-    }
-    return null;
+    return extract(uri.toString());
   }
 
   /// Достаёт код из сырого ввода: `ABC12XYZ`, `@alice`, `u12`,
   /// `https://haneat.app/invite?ref=ABC12XYZ`, обёрток `?u=` / `?url=`.
   static String? extract(String? raw, {int depth = 0}) {
-    final value = raw?.trim() ?? '';
+    final value = _sanitize(raw ?? '');
     if (value.isEmpty || depth > 3) return null;
     final uri = Uri.tryParse(value);
     if (uri != null) {

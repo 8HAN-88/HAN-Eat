@@ -61,6 +61,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       final stillAuth = await AuthService.isAuthenticated();
       if (!mounted) return;
       if (stillAuth) {
+        unawaited(PendingReferralBinder.applyIfNeeded());
         navigateAfterAuth(context, AuthPaths.feed);
       } else {
         context.go(AuthPaths.login);

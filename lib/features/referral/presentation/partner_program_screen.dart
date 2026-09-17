@@ -35,7 +35,7 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
     });
     try {
       var snap = await RevenueShareApi.me();
-      if (snap.referredByName == null) {
+      if (snap.referredById == null) {
         final pending = await PendingReferralStore.peek();
         if (pending != null) {
           try {
@@ -96,6 +96,15 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
           ? null
           : box.localToGlobal(Offset.zero) & box.size,
     );
+  }
+
+  String? _invitedBy(RevenueShareSnapshot? snap) {
+    if (snap == null) return null;
+    final name = snap.referredByName?.trim();
+    if (name != null && name.isNotEmpty) return name;
+    final username = snap.referredByUsername?.trim();
+    if (username != null && username.isNotEmpty) return '@$username';
+    return null;
   }
 
   String _link(RevenueShareSnapshot? snap) {
@@ -221,9 +230,9 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
                 ],
               ),
             ),
-            if (snap?.referredByName != null) ...[
+            if (_invitedBy(snap) != null) ...[
               const SizedBox(height: 12),
-              Text('Вас пригласил: ${snap!.referredByName}'),
+              Text('Вас пригласил: ${_invitedBy(snap)}'),
             ],
             if (_busy && snap == null)
               const Padding(
