@@ -262,6 +262,10 @@ def test_extract_referral_unwraps_share_wrappers():
     )
     assert extract_referral("https://haneat.app/invite?ref=ABC12XYZ.") == "ABC12XYZ"
     assert extract_referral("ABC\u200b12XYZ") == "ABC12XYZ"
+    assert extract_referral("https://haneat.app/invite/ABC12XYZ") == "ABC12XYZ"
+    assert (
+        extract_referral("https://haneat.app/app/invite/ABC12XYZ") == "ABC12XYZ"
+    )
 
 
 def test_apply_invite_url_and_whatsapp_wrap(db_session):
@@ -274,6 +278,30 @@ def test_apply_invite_url_and_whatsapp_wrap(db_session):
     db_session.commit()
     db_session.refresh(viewer)
     assert viewer.referred_by_user_id == referrer.id
+
+
+def test_reject_bot_viewer_apply(db_session):
+    referrer = _user(db_session, 44, created_at=datetime.utcnow())
+    bot = _user(db_session, 45, is_bot=True, created_at=datetime.utcnow())
+    svc = RevenueShareService(db_session)
+    code = svc.ensure_code(referrer)
+    db_session.commit()
+    with pytest.raises(RevenueShareError):
+        svc.apply_code(bot, code)
+
+
+def test_referred_count_skips_bots(db_session):
+    referrer = _user(db_session, 46, created_at=datetime.utcnow())
+    human = _user(db_session, 47, created_at=datetime.utcnow())
+    bot = _user(db_session, 48, is_bot=True, created_at=datetime.utcnow())
+    svc = RevenueShareService(db_session)
+    code = svc.ensure_code(referrer)
+    db_session.commit()
+    svc.apply_code(human, code)
+    bot.referred_by_user_id = referrer.id
+    db_session.commit()
+    snap = svc.snapshot(referrer)
+    assert snap["referred_count"] == 1
 
 
 def test_reject_bot_referrer(db_session):

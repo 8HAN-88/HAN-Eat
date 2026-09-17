@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -35,9 +36,34 @@ class WebAuthApp extends ConsumerWidget {
   }
 }
 
+/// Лёгкий шелл должен сразу открыть регистрацию, если в URL есть инвайт.
+@visibleForTesting
+String webAuthInitialLocation([Uri? uri]) {
+  final target = uri ?? Uri.base;
+  final ref = PendingReferral.queryRef(target);
+  if (ref != null) {
+    return AuthPaths.registerWithRef(ref);
+  }
+  final path = target.path.toLowerCase();
+  if (path.contains('/invite') || path.contains('/register')) {
+    return AuthPaths.register;
+  }
+  return AuthPaths.login;
+}
+
 final GoRouter _authRouter = GoRouter(
-  initialLocation: AuthPaths.login,
+  initialLocation: webAuthInitialLocation(),
   routes: [
+    GoRoute(
+      path: '/invite',
+      redirect: (context, state) {
+        final ref = PendingReferral.queryRef(state.uri);
+        if (ref != null) {
+          return AuthPaths.registerWithRef(ref);
+        }
+        return AuthPaths.register;
+      },
+    ),
     GoRoute(
       path: AuthPaths.login,
       builder: (context, state) => const LoginScreen(),

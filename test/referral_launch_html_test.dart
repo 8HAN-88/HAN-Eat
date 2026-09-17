@@ -27,6 +27,7 @@ void main() {
     expect(html.contains('function applyPendingAfterAuth'), isTrue);
     expect(html.contains('function queryRefParam'), isTrue);
     expect(html.contains('function sanitizeReferral'), isTrue);
+    expect(html.contains('function refFromPath'), isTrue);
     expect(html.contains("key === 'ref' || key === 'referral'"), isTrue);
     expect(html.contains("&ref=' + encodeURIComponent(pending)"), isTrue);
     expect(

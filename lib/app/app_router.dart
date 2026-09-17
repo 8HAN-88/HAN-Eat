@@ -127,6 +127,20 @@ String? parseDeepLinkToGoPath(String raw) {
             return UsernameDeepLinkRoute.pathFor(handle);
           }
         }
+        if (path == '/invite' || path.startsWith('/invite/')) {
+          final fromQuery = PendingReferral.queryRef(uri);
+          if (fromQuery != null) {
+            return '/invite?ref=${Uri.encodeComponent(fromQuery)}';
+          }
+          if (path.startsWith('/invite/')) {
+            final code = path.substring('/invite/'.length).split('/').first;
+            final extracted = PendingReferral.extract(code);
+            if (extracted != null) {
+              return '/invite?ref=${Uri.encodeComponent(extracted)}';
+            }
+          }
+          return query == null ? '/invite' : '/invite?$query';
+        }
         if (path.isNotEmpty && path != '/') {
           final reelPath = ReelByIdRoute.goPathFromBrowserPath(path);
           if (reelPath != null) {

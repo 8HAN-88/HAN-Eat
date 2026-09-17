@@ -89,6 +89,14 @@ void main() {
       PendingReferral.extract('ABC\u200b12XYZ'),
       'ABC12XYZ',
     );
+    expect(
+      PendingReferral.extract('https://haneat.app/invite/ABC12XYZ'),
+      'ABC12XYZ',
+    );
+    expect(
+      PendingReferral.extract('https://haneat.app/app/invite/ABC12XYZ'),
+      'ABC12XYZ',
+    );
   });
 
   test('pending is bound only to that referrer', () {

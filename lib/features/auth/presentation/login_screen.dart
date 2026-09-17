@@ -10,8 +10,10 @@ import '../../../../app/auth_navigation.dart';
 import '../../../../app/auth_route_paths.dart';
 import '../../../../core/theme/color_schemes.dart';
 import '../../../../core/web/boot_ready_signal.dart';
+import '../../../features/referral/pending_referral.dart';
 import '../../../features/referral/pending_referral_binder.dart';
 import '../../../../services/auth_service.dart';
+import '../../../../services/pending_referral_store.dart';
 import '../../../../services/push_notification_service.dart' deferred as push_svc;
 import '../../../../utils/api_error_parser.dart';
 import '../../../../widgets/app_brand_logo.dart';
@@ -34,6 +36,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _invited = false;
   Timer? _postLoginFallbackTimer;
 
   @override
@@ -41,6 +44,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.initState();
     AppBootstrapState.primaryUiReady.value = true;
     notifyPrimaryUiReady();
+    unawaited(_hydrateInvite());
+  }
+
+  Future<void> _hydrateInvite() async {
+    final fromUrl = PendingReferral.queryRef(Uri.base);
+    final pending = fromUrl ?? await PendingReferralStore.peek();
+    if (pending == null || !mounted) return;
+    await PendingReferralStore.remember(pending);
+    if (!mounted) return;
+    setState(() => _invited = true);
+  }
+
+  Future<void> _openRegister() async {
+    final pending = PendingReferral.queryRef(Uri.base) ??
+        await PendingReferralStore.peek();
+    if (!mounted) return;
+    context.push(
+      pending == null
+          ? AuthPaths.register
+          : AuthPaths.registerWithRef(pending),
+    );
   }
 
   @override
@@ -258,7 +282,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       child: const Text('Забыли пароль?'),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  if (_invited) ...[
+                    Text(
+                      'Вас пригласили в HanWe. Войдите, если аккаунт уже есть, '
+                      'или создайте новый — он привяжется к ссылке друга.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   FilledButton(
                     onPressed: _isLoading ? null : _handleLogin,
                     child: _isLoading
@@ -281,7 +312,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       TextButton(
                         onPressed: _isLoading
                             ? null
-                            : () => context.push(AuthPaths.register),
+                            : () => unawaited(_openRegister()),
                         child: const Text('Зарегистрироваться'),
                       ),
                     ],

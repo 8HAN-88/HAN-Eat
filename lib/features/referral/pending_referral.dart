@@ -30,6 +30,15 @@ class PendingReferral {
     return value;
   }
 
+  static String? _pathInvite(Uri uri) {
+    final parts = uri.pathSegments.where((part) => part.isNotEmpty).toList();
+    final inviteAt = parts.lastIndexWhere((part) => part.toLowerCase() == 'invite');
+    if (inviteAt < 0 || inviteAt + 1 >= parts.length) return null;
+    final token = parts[inviteAt + 1];
+    if (token.isEmpty || token.toLowerCase() == 'index.html') return null;
+    return extract(token) ?? normalize(token);
+  }
+
   static String? _queryValue(Uri uri, List<String> names) {
     final wanted = {for (final name in names) name.toLowerCase()};
     for (final entry in uri.queryParameters.entries) {
@@ -86,6 +95,8 @@ class PendingReferral {
           if (inner != null) return inner;
         }
       }
+      final fromPath = _pathInvite(uri);
+      if (fromPath != null) return fromPath;
     }
     final embedded = RegExp(
       r'https?://(?:www\.)?haneat\.app[^\s<>]+',

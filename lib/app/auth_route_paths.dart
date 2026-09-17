@@ -13,6 +13,9 @@ abstract final class AuthPaths {
   static const feed = '/feed';
   static const menu = '/';
 
+  static String registerWithRef(String ref) =>
+      '$register?ref=${Uri.encodeComponent(ref)}';
+
   static String forgotPasswordWithEmail(String email) =>
       '$forgotPassword?email=${Uri.encodeComponent(email)}';
 

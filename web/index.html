@@ -550,7 +550,7 @@
                 value = href;
               }
             }
-            if (value === (raw || '').trim()) {
+            if (value === (raw || '').trim() || value === sanitizeReferral(raw)) {
               var keys = ['u', 'url', 'q', 'to', 'link', 'text'];
               for (var i = 0; i < keys.length; i++) {
                 var nested = (uri.searchParams.get(keys[i]) || '').trim();
@@ -560,6 +560,8 @@
                   if (unwrapped) return unwrapped;
                 }
               }
+              var fromPath = refFromPath(uri.pathname);
+              if (fromPath) return fromPath;
             }
           }
         } catch (e) {}
@@ -577,6 +579,21 @@
         return value;
       }
 
+      function refFromPath(pathname) {
+        var parts = String(pathname || '').split('/').filter(Boolean);
+        var i = -1;
+        for (var n = 0; n < parts.length; n++) {
+          if (parts[n].toLowerCase() === 'invite') i = n;
+        }
+        if (i >= 0 && parts[i + 1]) {
+          var token = parts[i + 1];
+          if (token && token.toLowerCase() !== 'index.html') {
+            return extractReferral(token);
+          }
+        }
+        return '';
+      }
+
       function refFromPage() {
         var fromSearch = extractReferral(queryRefParam(params));
         if (fromSearch) return fromSearch;
@@ -585,10 +602,11 @@
           var q = hash.indexOf('?');
           if (q >= 0) {
             var hp = new URLSearchParams(hash.slice(q + 1));
-            return extractReferral(queryRefParam(hp));
+            var fromHash = extractReferral(queryRefParam(hp));
+            if (fromHash) return fromHash;
           }
         } catch (e) {}
-        return '';
+        return refFromPath(location.pathname);
       }
 
       function capturePendingReferral() {

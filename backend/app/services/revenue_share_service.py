@@ -108,6 +108,18 @@ def extract_referral(raw: Optional[str], depth: int = 0) -> Optional[str]:
             if inner:
                 return inner
 
+    parts = [item for item in (parsed.path or "").split("/") if item]
+    invite_at = next(
+        (i for i, item in enumerate(parts) if item.lower() == "invite"),
+        -1,
+    )
+    if invite_at >= 0 and invite_at + 1 < len(parts):
+        token = parts[invite_at + 1]
+        if token.lower() not in {"index.html", "app"}:
+            inner = extract_referral(token, depth + 1) or _normalize_referral(token)
+            if inner:
+                return inner
+
     if "://" in value or "haneat.app" in value.lower():
         match = _EMBEDDED_INVITE.search(value)
         if match and match.group(0) != value:
@@ -155,6 +167,8 @@ class RevenueShareService:
                 .first()
             )
             if taken:
+                continue
+            if code.startswith("U") and code[1:].isdigit():
                 continue
             user.referral_code = code
             self.db.add(user)
@@ -211,6 +225,8 @@ class RevenueShareService:
             return user
         if user.referred_by_user_id:
             return user
+        if bool(getattr(user, "is_bot", False)):
+            raise RevenueShareError("Реферальный код не найден")
         created = _as_naive_utc(user.created_at or _now())
         if (_as_naive_utc(_now()) - created) > timedelta(days=APPLY_CODE_MAX_AGE_DAYS):
             raise RevenueShareError(
@@ -462,6 +478,7 @@ class RevenueShareService:
                 User.referred_by_user_id == user.id,
                 User.deleted_at.is_(None),
                 User.banned_at.is_(None),
+                User.is_bot.is_(False),
             )
             .scalar()
             or 0
