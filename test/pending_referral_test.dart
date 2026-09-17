@@ -21,6 +21,10 @@ void main() {
       PendingReferral.extract('https://haneat.app/app/invite?ref=ABC12XYZ'),
       'ABC12XYZ',
     );
+    expect(
+      PendingReferral.extract('https://haneat.app/app/#/invite?ref=ABC12XYZ'),
+      'ABC12XYZ',
+    );
     expect(PendingReferral.extract(''), isNull);
     expect(PendingReferral.extract(null), isNull);
   });

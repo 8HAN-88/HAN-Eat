@@ -95,7 +95,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         referralCode: PendingReferral.extract(widget.initialReferralCode) ??
             await PendingReferralStore.peek(),
       );
-      await PendingReferralStore.clear();
 
       unawaited(() async {
         try {

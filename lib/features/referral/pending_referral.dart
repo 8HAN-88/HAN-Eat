@@ -27,6 +27,18 @@ class PendingReferral {
       if (ref != null && ref.isNotEmpty) {
         return normalize(ref);
       }
+      final frag = uri.fragment;
+      if (frag.contains('ref=')) {
+        final fragUri = Uri.tryParse(
+          frag.startsWith('/')
+              ? 'https://haneat.app$frag'
+              : 'https://haneat.app/$frag',
+        );
+        final href = fragUri?.queryParameters['ref']?.trim();
+        if (href != null && href.isNotEmpty) {
+          return normalize(href);
+        }
+      }
     }
     return normalize(value);
   }

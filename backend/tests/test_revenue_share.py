@@ -133,6 +133,29 @@ def test_snapshot_uses_invite_share_url(db_session):
     assert snap["referral_code"] == code
 
 
+def test_attach_after_signup_binds_and_issues_code(db_session):
+    referrer = _user(db_session, 14)
+    viewer = _user(db_session, 15, created_at=datetime.utcnow())
+    svc = RevenueShareService(db_session)
+    code = svc.ensure_code(referrer)
+    db_session.commit()
+    svc.attach_after_signup(viewer, code)
+    db_session.commit()
+    db_session.refresh(viewer)
+    assert viewer.referred_by_user_id == referrer.id
+    assert (viewer.referral_code or "").strip()
+
+
+def test_attach_after_signup_invalid_code_still_issues_own(db_session):
+    viewer = _user(db_session, 16, created_at=datetime.utcnow())
+    svc = RevenueShareService(db_session)
+    svc.attach_after_signup(viewer, "NOPECODE")
+    db_session.commit()
+    db_session.refresh(viewer)
+    assert viewer.referred_by_user_id is None
+    assert (viewer.referral_code or "").strip()
+
+
 def test_apply_code_accepts_aware_created_at(db_session):
     referrer = _user(db_session, 10)
     viewer = _user(

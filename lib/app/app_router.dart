@@ -109,9 +109,15 @@ String? parseDeepLinkToGoPath(String raw) {
       if (host == 'haneat.app' || host == 'www.haneat.app') {
         // PWA живёт на /app/ — это HTML-шелл, не маршрут GoRouter.
         var path = browserPathToGoPath(uri.path) ?? '';
+        var query = routerQueryFromUri(uri);
         // Hash-стратегия: https://haneat.app/app/#/stories
+        // и invite: https://haneat.app/app/#/invite?ref=ABC
         if (path.isEmpty && uri.fragment.isNotEmpty) {
-          path = hashFragmentToGoPath(uri.fragment) ?? '';
+          final frag = uri.fragment.trim();
+          final fragPath = frag.startsWith('/') ? frag : '/$frag';
+          final fragUri = Uri.parse('https://haneat.app$fragPath');
+          path = browserPathToGoPath(fragUri.path) ?? '';
+          query = routerQueryFromUri(fragUri) ?? query;
         }
         // https://haneat.app/@username → /u/username
         if (path.startsWith('/@') && path.length > 2) {
@@ -125,8 +131,7 @@ String? parseDeepLinkToGoPath(String raw) {
           if (reelPath != null) {
             return reelPath;
           }
-          final q = routerQueryFromUri(uri);
-          return q == null ? path : '$path?$q';
+          return query == null ? path : '$path?$query';
         }
         if (uri.queryParameters.containsKey('ref')) {
           final ref = uri.queryParameters['ref'];

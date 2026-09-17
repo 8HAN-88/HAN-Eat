@@ -11,6 +11,7 @@ import '../core/network/haneat_http_client.dart';
 import '../core/network/api_endpoint_resolver.dart';
 import '../core/network/cold_start_policy.dart';
 import 'account_session_service.dart';
+import 'pending_referral_store.dart';
 import 'server_config.dart';
 
 bool _apiUnreachable(Object e) {
@@ -481,6 +482,7 @@ class AuthService {
   }) async {
     final uri = Uri.parse('$baseUrl/auth/google');
     try {
+      final pending = await PendingReferralStore.peek();
       final response = await http.post(
         uri,
         headers: {
@@ -490,6 +492,7 @@ class AuthService {
         body: jsonEncode({
           'id_token': idToken,
           'accept_legal': acceptLegal,
+          if (pending != null && pending.isNotEmpty) 'referral_code': pending,
         }),
       ).timeout(const Duration(seconds: 10));
       
@@ -565,6 +568,10 @@ class AuthService {
   }) async {
     final uri = Uri.parse('$baseUrl/auth/register');
     try {
+      final resolvedReferral = (referralCode != null &&
+              referralCode.trim().isNotEmpty)
+          ? referralCode.trim()
+          : await PendingReferralStore.peek();
       final response = await http.post(
         uri,
         headers: {
@@ -577,8 +584,8 @@ class AuthService {
           'name': name,
           'accept_legal': acceptLegal,
           if (username != null) 'username': username,
-          if (referralCode != null && referralCode.trim().isNotEmpty)
-            'referral_code': referralCode.trim(),
+          if (resolvedReferral != null && resolvedReferral.isNotEmpty)
+            'referral_code': resolvedReferral,
         }),
       ).timeout(const Duration(seconds: 10));
       

@@ -19,7 +19,13 @@ void main() {
     expect(html.contains('body.referral_code = referral'), isTrue);
     expect(html.contains("prefSet('pending_referral', code)"), isTrue);
     expect(html.contains('function capturePendingReferral'), isTrue);
+    expect(html.contains('function refFromPage'), isTrue);
+    expect(html.contains("location.hash"), isTrue);
     expect(html.contains('extractReferral(prefGet(\'pending_referral\'))'), isTrue);
+    expect(
+      html.contains("localStorage.removeItem(PREFIX + 'pending_referral')"),
+      isFalse,
+    );
   });
 
   test('invite links open HTML signup from the unique URL', () {

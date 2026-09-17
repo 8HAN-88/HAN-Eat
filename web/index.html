@@ -513,8 +513,22 @@
         return value;
       }
 
+      function refFromPage() {
+        var fromSearch = extractReferral(params.get('ref'));
+        if (fromSearch) return fromSearch;
+        try {
+          var hash = location.hash || '';
+          var q = hash.indexOf('?');
+          if (q >= 0) {
+            var hp = new URLSearchParams(hash.slice(q + 1));
+            return extractReferral(hp.get('ref'));
+          }
+        } catch (e) {}
+        return '';
+      }
+
       function capturePendingReferral() {
-        var code = extractReferral(params.get('ref'));
+        var code = refFromPage();
         if (!code) {
           var stored = prefGet('pending_referral');
           if (typeof stored === 'string') code = extractReferral(stored);
@@ -956,9 +970,6 @@
             throw new Error(humanAuthError(data, res.status));
           }
           saveSession(data);
-          if (mode === 'register') {
-            try { localStorage.removeItem(PREFIX + 'pending_referral'); } catch (err) {}
-          }
           ping('authed=1');
           startFlutterAtApp();
         } catch (err) {

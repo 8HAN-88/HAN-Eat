@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/auth_navigation.dart';
 import '../../../app/auth_route_paths.dart';
+import '../../../features/referral/pending_referral_binder.dart';
 import '../../../services/auth_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
@@ -27,6 +28,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
   @override
   void initState() {
     super.initState();
+    unawaited(PendingReferralBinder.applyIfNeeded());
     if (widget.initialToken != null && widget.initialToken!.isNotEmpty) {
       _tokenController.text = widget.initialToken!;
       WidgetsBinding.instance.addPostFrameCallback((_) => _verifyWithToken());

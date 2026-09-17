@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
 import '../../auth/sign_out_helper.dart';
+import '../../../features/referral/pending_referral_binder.dart';
 import '../../../services/legal_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../utils/session_snackbar.dart';
@@ -30,6 +31,7 @@ class _LegalConsentScreenState extends State<LegalConsentScreen> {
   @override
   void initState() {
     super.initState();
+    unawaited(PendingReferralBinder.applyIfNeeded());
     _load();
   }
 

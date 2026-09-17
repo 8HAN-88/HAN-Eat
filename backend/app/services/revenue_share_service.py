@@ -96,6 +96,18 @@ class RevenueShareService:
             )
         return None
 
+    def attach_after_signup(self, user: User, raw_code: Optional[str]) -> None:
+        """Привязка ссылки и выдача своего кода. Ошибки не роняют регистрацию."""
+        if raw_code:
+            try:
+                self.apply_code(user, raw_code)
+            except Exception:
+                pass
+        try:
+            self.ensure_code(user)
+        except Exception:
+            pass
+
     def apply_code(self, user: User, raw_code: Optional[str]) -> User:
         code = (raw_code or "").strip()
         if not code:

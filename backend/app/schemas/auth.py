@@ -105,12 +105,14 @@ class TotpVerifyLoginRequest(BaseModel):
 class GoogleAuthRequest(BaseModel):
     id_token: str
     accept_legal: bool = False
+    referral_code: str | None = Field(None, max_length=100)
 
 
 class YandexAuthRequest(BaseModel):
     code: str
     redirect_uri: str
     accept_legal: bool = False
+    referral_code: str | None = Field(None, max_length=100)
 
 
 class LegalAcceptRequest(BaseModel):

@@ -312,16 +312,7 @@ async def register(
     from app.services.revenue_share_service import RevenueShareService
 
     share = RevenueShareService(db)
-    if request.referral_code:
-        try:
-            share.apply_code(user, request.referral_code)
-        except Exception:
-            # Невалидная ссылка или сбой привязки не должны ронять регистрацию.
-            pass
-    try:
-        share.ensure_code(user)
-    except Exception:
-        pass
+    share.attach_after_signup(user, request.referral_code)
     db.commit()
     db.refresh(user)
 
@@ -626,6 +617,12 @@ async def google_auth(request: GoogleAuthRequest, http_request: Request, db: Ses
             user.is_private = False
             db.commit()
 
+        from app.services.revenue_share_service import RevenueShareService
+
+        RevenueShareService(db).attach_after_signup(user, request.referral_code)
+        db.commit()
+        db.refresh(user)
+
         access_token, refresh_token, session_id = _issue_auth_tokens(db, user, http_request)
 
         if not is_email_verified(user):
@@ -725,6 +722,12 @@ async def yandex_auth(request: YandexAuthRequest, http_request: Request, db: Ses
         if user.is_private is None:
             user.is_private = False
             db.commit()
+
+        from app.services.revenue_share_service import RevenueShareService
+
+        RevenueShareService(db).attach_after_signup(user, request.referral_code)
+        db.commit()
+        db.refresh(user)
 
         access_token, refresh_token, session_id = _issue_auth_tokens(db, user, http_request)
 
