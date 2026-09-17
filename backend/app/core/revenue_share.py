@@ -57,3 +57,11 @@ def rub_to_kopecks(amount: float) -> int:
     if amount <= 0:
         return 0
     return int(round(float(amount) * 100))
+
+
+def payment_reference_id(payment_id: str) -> int:
+    """Стабильный int для ledger.reference_id из id платежа провайдера."""
+    n = 0
+    for ch in payment_id or "x":
+        n = (n * 33 + ord(ch)) % 2147483647
+    return n or 1

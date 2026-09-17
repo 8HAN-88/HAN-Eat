@@ -43,7 +43,6 @@ class AppInviteService {
   static Future<String> resolvedRef({String? ref, User? user}) async {
     final explicit = PendingReferral.extract(ref);
     if (explicit != null) {
-      rememberOfficialCode(explicit);
       return explicit;
     }
     if (PendingReferralStore.officialMemory == null ||

@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.core.revenue_share import split_kopecks
+from app.core.revenue_share import payment_reference_id, split_kopecks
 from app.models.revenue_share import RevenueShareLedger
 from app.models.user import User
 from app.services.revenue_share_service import (
@@ -317,6 +317,54 @@ def test_snapshot_omits_empty_share_url(db_session, monkeypatch):
     snap = svc.snapshot(user)
     assert snap["share_url"] == ""
     assert snap["referral_code"] in (None, "")
+
+
+def test_void_subscription_share_after_refund(db_session):
+    referrer = _user(db_session, 34)
+    payer = _user(db_session, 35, created_at=datetime.utcnow())
+    svc = RevenueShareService(db_session)
+    code = svc.ensure_code(referrer)
+    db_session.commit()
+    svc.apply_code(payer, code)
+    db_session.commit()
+    svc.accrue_subscription(payer_id=35, amount_rub=100, reference_id=payment_reference_id("pay_1"))
+    db_session.commit()
+    assert db_session.query(RevenueShareLedger).count() == 1
+    cleared = svc.void_subscription_share("pay_1")
+    db_session.commit()
+    assert cleared == 1
+    row = db_session.query(RevenueShareLedger).one()
+    assert row.status == "void"
+    snap = svc.snapshot(referrer)
+    assert snap["pending_kopecks"] == 0
+    assert snap["available_kopecks"] == 0
+
+
+def test_release_ready_accepts_aware_available_at(db_session):
+    user = _user(db_session, 36)
+    svc = RevenueShareService(db_session)
+    svc.ensure_code(user)
+    db_session.add(
+        RevenueShareLedger(
+            beneficiary_user_id=user.id,
+            role="referrer",
+            source="subscription",
+            subject_user_id=user.id,
+            referrer_user_id=user.id,
+            extra_ads=False,
+            gross_kopecks=10000,
+            net_kopecks=7000,
+            share_kopecks=1750,
+            status="pending",
+            available_at=datetime.now(timezone.utc) - timedelta(days=1),
+            reference_type="subscription",
+            reference_id=7,
+        )
+    )
+    db_session.commit()
+    snap = svc.snapshot(user)
+    assert snap["available_kopecks"] == 1750
+    assert snap["pending_kopecks"] == 0
 
 
 def test_old_account_cannot_apply_code(db_session):

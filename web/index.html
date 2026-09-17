@@ -1011,7 +1011,7 @@
                 accept_legal: true
               }
             : { email: email, password: password };
-          if (mode === 'register' && referral) body.referral_code = referral;
+          if (referral) body.referral_code = referral;
           var res = await fetch(apiUrl(path), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },

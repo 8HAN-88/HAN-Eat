@@ -80,6 +80,13 @@ void main() {
     );
   });
 
+  test('resolvedRef does not cache a one-off share ref as official', () async {
+    AppInviteService.rememberOfficialCode('ABC12XYZ');
+    final resolved = await AppInviteService.resolvedRef(ref: 'OTHERCD1');
+    expect(resolved, 'OTHERCD1');
+    expect(AppInviteService.inviteRef(), 'ABC12XYZ');
+  });
+
   test('invite service prefers the official 8-char code', () {
     expect(AppInviteService.inviteRef(), '');
     AppInviteService.rememberOfficialCode('ABC12XYZ');

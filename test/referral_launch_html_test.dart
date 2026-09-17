@@ -16,7 +16,7 @@ void main() {
   });
 
   test('HTML register binds the invite link silently', () {
-    expect(html.contains('body.referral_code = referral'), isTrue);
+    expect(html.contains('if (referral) body.referral_code = referral'), isTrue);
     expect(html.contains("prefSet('pending_referral', code)"), isTrue);
     expect(html.contains('function capturePendingReferral'), isTrue);
     expect(html.contains('function refFromPage'), isTrue);

@@ -232,13 +232,6 @@ def process_payment_succeeded(
     _accrue_subscription_share(db, user_id, amount, payment_id)
 
 
-def _payment_ref_id(payment_id: str) -> int:
-    n = 0
-    for ch in payment_id or "x":
-        n = (n * 33 + ord(ch)) % 2147483647
-    return n or 1
-
-
 def _accrue_subscription_share(
     db: Session,
     user_id: int,
@@ -246,12 +239,13 @@ def _accrue_subscription_share(
     payment_id: str,
 ) -> None:
     try:
+        from app.core.revenue_share import payment_reference_id
         from app.services.revenue_share_service import RevenueShareService
 
         RevenueShareService(db).accrue_subscription(
             payer_id=user_id,
             amount_rub=float(amount or 0),
-            reference_id=_payment_ref_id(payment_id),
+            reference_id=payment_reference_id(payment_id),
         )
         db.commit()
     except Exception:

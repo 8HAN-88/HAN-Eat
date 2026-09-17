@@ -693,6 +693,7 @@ class AuthService {
     String email,
     String password,
   ) async {
+    final pending = await PendingReferralStore.peek();
     final response = await HanEatHttpClient.withShared(
       (client) => client
           .post(
@@ -704,6 +705,7 @@ class AuthService {
             body: jsonEncode({
               'email': email,
               'password': password,
+              if (pending != null && pending.isNotEmpty) 'referral_code': pending,
             }),
           )
           .timeout(
@@ -751,6 +753,7 @@ class AuthService {
     required String code,
   }) async {
     final uri = Uri.parse('$baseUrl/auth/2fa/verify-login');
+    final pending = await PendingReferralStore.peek();
     final response = await HanEatHttpClient.withShared(
       (client) => client
           .post(
@@ -762,6 +765,7 @@ class AuthService {
             body: jsonEncode({
               'pending_token': pendingToken,
               'code': code.trim(),
+              if (pending != null && pending.isNotEmpty) 'referral_code': pending,
             }),
           )
           .timeout(

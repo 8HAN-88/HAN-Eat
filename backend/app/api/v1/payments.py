@@ -647,6 +647,8 @@ async def yookassa_webhook(
                 sub.refund_status = "refunded"
                 sub.refunded_at = datetime.utcnow()
                 subscription_service.revoke_access_after_refund(sub)
+                if payment_id:
+                    subscription_service._void_referral_share(str(payment_id))
                 product = getattr(sub, "product", "pro") or "pro"
                 notify_refund_approved(
                     db,

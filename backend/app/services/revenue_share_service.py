@@ -123,7 +123,7 @@ class RevenueShareService:
             code = "".join(secrets.choice(_CODE_ALPHABET) for _ in range(8))
             taken = (
                 self.db.query(User.id)
-                .filter(User.referral_code == code)
+                .filter(func.upper(User.referral_code) == code)
                 .first()
             )
             if taken:
@@ -377,6 +377,25 @@ class RevenueShareService:
                 reference_id=reference_id,
             )
 
+    def void_subscription_share(self, payment_id: str) -> int:
+        """Снять долю с возвращённой подписки, пока она в холде или доступна."""
+        from app.core.revenue_share import payment_reference_id
+
+        ref = payment_reference_id(payment_id)
+        rows = (
+            self.db.query(RevenueShareLedger)
+            .filter(
+                RevenueShareLedger.source == SOURCE_SUBSCRIPTION,
+                RevenueShareLedger.reference_type == "subscription",
+                RevenueShareLedger.reference_id == ref,
+                RevenueShareLedger.status.in_(("pending", "available")),
+            )
+            .all()
+        )
+        for row in rows:
+            row.status = "void"
+        return len(rows)
+
     def _release_ready(self, user_id: int) -> None:
         now = _now()
         rows = (
@@ -385,12 +404,13 @@ class RevenueShareService:
                 RevenueShareLedger.beneficiary_user_id == user_id,
                 RevenueShareLedger.status == "pending",
                 RevenueShareLedger.available_at.isnot(None),
-                RevenueShareLedger.available_at <= now,
             )
             .all()
         )
         for row in rows:
-            row.status = "available"
+            available = _as_naive_utc(row.available_at)
+            if available <= now:
+                row.status = "available"
 
     def snapshot(self, user: User) -> dict[str, Any]:
         self.ensure_code(user)

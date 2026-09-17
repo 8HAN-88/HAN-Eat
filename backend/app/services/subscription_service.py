@@ -586,6 +586,14 @@ class SubscriptionService:
             .first()
         )
 
+    def _void_referral_share(self, payment_id: str) -> None:
+        try:
+            from app.services.revenue_share_service import RevenueShareService
+
+            RevenueShareService(self.db).void_subscription_share(payment_id)
+        except Exception:
+            return
+
     def revoke_access_after_refund(self, subscription: Subscription) -> None:
         """Снять доступ по оплаченному тарифу после возврата."""
         subscription.status = "cancelled"
@@ -641,6 +649,7 @@ class SubscriptionService:
         subscription.refund_status = "refunded"
         subscription.refunded_at = datetime.utcnow()
         self.revoke_access_after_refund(subscription)
+        self._void_referral_share(str(pid))
 
         return {
             "refund_id": result.get("PaymentId") or pid,
@@ -688,6 +697,7 @@ class SubscriptionService:
         subscription.refund_status = "refunded"
         subscription.refunded_at = datetime.utcnow()
         self.revoke_access_after_refund(subscription)
+        self._void_referral_share(str(pid))
 
         return {
             "refund_id": result.get("refund_id"),
