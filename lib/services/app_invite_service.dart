@@ -8,27 +8,31 @@ import '../core/share/system_share.dart';
 import '../features/referral/pending_referral.dart';
 import 'auth_service.dart';
 import 'pending_referral_store.dart';
+import 'revenue_share_service.dart';
 
 /// Приглашение друзей в HanWe (ссылка + SMS / системный шаринг).
 class AppInviteService {
   AppInviteService._();
 
   static const webBase = PendingReferral.webInviteBase;
-  static String? _officialCode;
 
   static void rememberOfficialCode(String? code) {
     final normalized = PendingReferral.extract(code);
     if (normalized == null) return;
-    _officialCode = normalized;
+    PendingReferralStore.officialMemory = normalized;
+  }
+
+  static void clearOfficialCode() {
+    PendingReferralStore.officialMemory = null;
   }
 
   @visibleForTesting
   static void debugResetOfficialCode() {
-    _officialCode = null;
+    clearOfficialCode();
   }
 
   static String inviteRef([User? user]) {
-    final official = _officialCode?.trim();
+    final official = PendingReferralStore.officialMemory?.trim();
     if (official != null && official.isNotEmpty) return official;
     final u = user ?? AuthService.instance.currentUser;
     final username = u?.username?.trim();
@@ -40,12 +44,19 @@ class AppInviteService {
   static Future<String> resolvedRef({String? ref, User? user}) async {
     final explicit = PendingReferral.extract(ref);
     if (explicit != null) {
-      rememberOfficialCode(explicit);
       return explicit;
     }
-    if (_officialCode == null || _officialCode!.isEmpty) {
+    if (PendingReferralStore.officialMemory == null ||
+        PendingReferralStore.officialMemory!.isEmpty) {
       final stored = await PendingReferralStore.officialCode();
       if (stored != null) rememberOfficialCode(stored);
+    }
+    if ((PendingReferralStore.officialMemory == null ||
+            PendingReferralStore.officialMemory!.isEmpty) &&
+        AuthService.instance.currentUser != null) {
+      try {
+        await RevenueShareApi.me();
+      } catch (_) {}
     }
     return inviteRef(user);
   }

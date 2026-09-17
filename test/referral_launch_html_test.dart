@@ -16,10 +16,31 @@ void main() {
   });
 
   test('HTML register binds the invite link silently', () {
-    expect(html.contains('body.referral_code = referral'), isTrue);
+    expect(html.contains('if (referral) body.referral_code = referral'), isTrue);
     expect(html.contains("prefSet('pending_referral', code)"), isTrue);
     expect(html.contains('function capturePendingReferral'), isTrue);
+    expect(html.contains('function refFromPage'), isTrue);
+    expect(html.contains("location.hash"), isTrue);
+    expect(html.contains("removeItem(PREFIX + 'referral_code')"), isTrue);
+    expect(html.contains('(depth || 0) > 3'), isTrue);
+    expect(html.contains("'text'"), isTrue);
+    expect(html.contains('function applyPendingAfterAuth'), isTrue);
+    expect(html.contains('function queryRefParam'), isTrue);
+    expect(html.contains('function sanitizeReferral'), isTrue);
+    expect(html.contains('function refFromPath'), isTrue);
+    expect(html.contains("key === 'ref' || key === 'referral'"), isTrue);
+    expect(html.contains("&ref=' + encodeURIComponent(pending)"), isTrue);
+    expect(
+      html.contains("value.toLowerCase().indexOf('haneat.app') !== -1"),
+      isTrue,
+    );
+    expect(html.contains("apiUrl('/revenue-share/apply-code')"), isTrue);
+    expect(html.contains('pendingRef && hasSession()'), isTrue);
     expect(html.contains('extractReferral(prefGet(\'pending_referral\'))'), isTrue);
+    expect(
+      html.contains("localStorage.removeItem(PREFIX + 'pending_referral')"),
+      isFalse,
+    );
   });
 
   test('invite links open HTML signup from the unique URL', () {

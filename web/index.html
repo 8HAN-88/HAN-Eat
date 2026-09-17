@@ -414,6 +414,7 @@
           localStorage.removeItem(PREFIX + 'access_token');
           localStorage.removeItem(PREFIX + 'refresh_token');
           localStorage.removeItem(PREFIX + 'user');
+          localStorage.removeItem(PREFIX + 'referral_code');
           localStorage.removeItem(BOOT_OK_KEY);
         } catch (e) {}
       }
@@ -500,21 +501,116 @@
         return 'Ошибка ' + status;
       }
 
-      function extractReferral(raw) {
-        var value = (raw || '').trim();
-        if (!value) return '';
+      function queryRefParam(searchParams) {
+        if (!searchParams) return '';
+        try {
+          var it = searchParams.entries();
+          var step;
+          while (!(step = it.next()).done) {
+            var key = String(step.value[0] || '').toLowerCase();
+            if (key.indexOf('amp;') === 0) key = key.slice(4);
+            if (key === 'ref' || key === 'referral') {
+              var val = String(step.value[1] || '').trim();
+              if (val) return val;
+            }
+          }
+        } catch (e) {}
+        return (searchParams.get('ref') || searchParams.get('referral') || '').trim();
+      }
+
+      function sanitizeReferral(raw) {
+        var value = String(raw || '');
+        value = value.replace(/[\u200b\u200c\u200d\ufeff\u00ad]/g, '');
+        value = value.replace(/\u00a0/g, ' ');
+        value = value.replace(/&amp;/ig, '&').replace(/&#38;/g, '&');
+        return value.trim();
+      }
+
+      function extractReferral(raw, depth) {
+        var value = sanitizeReferral(raw);
+        if (!value || (depth || 0) > 3) return '';
         try {
           var uri = new URL(value, location.origin);
-          var ref = (uri.searchParams.get('ref') || '').trim();
-          if (ref) value = ref;
+          var ref = queryRefParam(uri.searchParams);
+          if (ref) {
+            if (ref.indexOf('://') !== -1 || ref.toLowerCase().indexOf('ref=') !== -1) {
+              var inner = extractReferral(ref, (depth || 0) + 1);
+              if (inner) return inner;
+            }
+            value = ref;
+          } else {
+            var hash = uri.hash || '';
+            var q = hash.indexOf('?');
+            if (q >= 0) {
+              var hp = new URLSearchParams(hash.slice(q + 1));
+              var href = queryRefParam(hp);
+              if (href) {
+                var fromHash = extractReferral(href, (depth || 0) + 1);
+                if (fromHash) return fromHash;
+                value = href;
+              }
+            }
+            if (value === (raw || '').trim() || value === sanitizeReferral(raw)) {
+              var keys = ['u', 'url', 'q', 'to', 'link', 'text'];
+              for (var i = 0; i < keys.length; i++) {
+                var nested = (uri.searchParams.get(keys[i]) || '').trim();
+                if (!nested) continue;
+                if (nested.toLowerCase().indexOf('haneat.app') !== -1 || nested.toLowerCase().indexOf('ref=') !== -1) {
+                  var unwrapped = extractReferral(nested, (depth || 0) + 1);
+                  if (unwrapped) return unwrapped;
+                }
+              }
+              var fromPath = refFromPath(uri.pathname);
+              if (fromPath) return fromPath;
+            }
+          }
         } catch (e) {}
+        var embedded = value.match(/https?:\/\/(?:www\.)?haneat\.app[^\s<>"']+/i);
+        if (embedded && embedded[0] !== value) {
+          var fromEmbed = extractReferral(embedded[0], (depth || 0) + 1);
+          if (fromEmbed) return fromEmbed;
+        }
         if (value.charAt(0) === '@') value = value.slice(1).trim();
+        value = value.replace(/[.,;:!?\)\]\}'"…/]+$/g, '');
         if (!value || value.length > 100) return '';
+        if (value.indexOf('://') !== -1 || value.toLowerCase().indexOf('haneat.app') !== -1) {
+          return '';
+        }
         return value;
       }
 
+      function refFromPath(pathname) {
+        var parts = String(pathname || '').split('/').filter(Boolean);
+        var i = -1;
+        for (var n = 0; n < parts.length; n++) {
+          if (parts[n].toLowerCase() === 'invite') i = n;
+        }
+        if (i >= 0 && parts[i + 1]) {
+          var token = parts[i + 1];
+          if (token && token.toLowerCase() !== 'index.html') {
+            return extractReferral(token);
+          }
+        }
+        return '';
+      }
+
+      function refFromPage() {
+        var fromSearch = extractReferral(queryRefParam(params));
+        if (fromSearch) return fromSearch;
+        try {
+          var hash = location.hash || '';
+          var q = hash.indexOf('?');
+          if (q >= 0) {
+            var hp = new URLSearchParams(hash.slice(q + 1));
+            var fromHash = extractReferral(queryRefParam(hp));
+            if (fromHash) return fromHash;
+          }
+        } catch (e) {}
+        return refFromPath(location.pathname);
+      }
+
       function capturePendingReferral() {
-        var code = extractReferral(params.get('ref'));
+        var code = refFromPage();
         if (!code) {
           var stored = prefGet('pending_referral');
           if (typeof stored === 'string') code = extractReferral(stored);
@@ -557,6 +653,25 @@
         // User: AuthService stores jsonEncode(user) as a String value, then
         // shared_preferences_web json.encodes that string again.
         prefSet('user', JSON.stringify(data.user));
+      }
+
+      // Login (and register retry) — bind before Flutter boots, keep pending
+      // so the app can retry if the request fails on a weak network.
+      function applyPendingAfterAuth(token) {
+        var referral = extractReferral(prefGet('pending_referral'));
+        if (!referral || !token) return;
+        try {
+          fetch(apiUrl('/revenue-share/apply-code'), {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Authorization': 'Bearer ' + token,
+            },
+            body: JSON.stringify({ code: referral }),
+            credentials: 'same-origin',
+          }).catch(function () {});
+        } catch (e) {}
       }
 
       function ping(extra) {
@@ -853,10 +968,12 @@
           if (!isAppPath()) {
             // Already-installed iOS icons still open /. A second document
             // load to /app/ was the «Открываем…» hop. Only rewrite the URL.
+            var pending = extractReferral(prefGet('pending_referral'));
+            var extra = pending ? '&ref=' + encodeURIComponent(pending) : '';
             history.replaceState(
               null,
               '',
-              '/app/?go=1&v=' + encodeURIComponent(BUILD)
+              '/app/?go=1&v=' + encodeURIComponent(BUILD) + extra
             );
           }
         } catch (e) {}
@@ -943,7 +1060,7 @@
                 accept_legal: true
               }
             : { email: email, password: password };
-          if (mode === 'register' && referral) body.referral_code = referral;
+          if (referral) body.referral_code = referral;
           var res = await fetch(apiUrl(path), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
@@ -956,9 +1073,7 @@
             throw new Error(humanAuthError(data, res.status));
           }
           saveSession(data);
-          if (mode === 'register') {
-            try { localStorage.removeItem(PREFIX + 'pending_referral'); } catch (err) {}
-          }
+          applyPendingAfterAuth(data.token);
           ping('authed=1');
           startFlutterAtApp();
         } catch (err) {
@@ -971,6 +1086,9 @@
       var pendingRef = capturePendingReferral();
       if (pendingRef && !hasSession()) {
         setMode('register');
+      }
+      if (pendingRef && hasSession()) {
+        applyPendingAfterAuth(prefGet('access_token'));
       }
 
       // Boot decision

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'auth_service.dart';
+import 'pending_referral_store.dart';
 import 'saved_posts_service.dart';
 import 'subscription_status_cache.dart';
 import 'user_service.dart';
@@ -44,6 +45,11 @@ class AccountSessionService {
 
     if (shouldPurgeLocalUserData) {
       UserService.instance.profile.value = null;
+      try {
+        await PendingReferralStore.clearOfficial();
+      } catch (e) {
+        if (kDebugMode) debugPrint('AccountSession: referral cache clear: $e');
+      }
       try {
         await SavedPostsService.clearLocalCache();
       } catch (e) {

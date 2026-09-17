@@ -13,12 +13,13 @@ class RegisterRequest(BaseModel):
         ...,
         description="Согласие с политикой конфиденциальности и пользовательским соглашением",
     )
-    referral_code: str | None = Field(None, max_length=100)
+    referral_code: str | None = Field(None, max_length=500)
 
 
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+    referral_code: str | None = Field(None, max_length=500)
 
 
 class AuthResponse(BaseModel):
@@ -100,17 +101,20 @@ class TotpDisableRequest(BaseModel):
 class TotpVerifyLoginRequest(BaseModel):
     pending_token: str = Field(..., min_length=16)
     code: str = Field(..., min_length=6, max_length=12)
+    referral_code: str | None = Field(None, max_length=500)
 
 
 class GoogleAuthRequest(BaseModel):
     id_token: str
     accept_legal: bool = False
+    referral_code: str | None = Field(None, max_length=500)
 
 
 class YandexAuthRequest(BaseModel):
     code: str
     redirect_uri: str
     accept_legal: bool = False
+    referral_code: str | None = Field(None, max_length=500)
 
 
 class LegalAcceptRequest(BaseModel):

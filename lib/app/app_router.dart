@@ -88,6 +88,7 @@ import '../features/chat/presentation/username_deep_link_screen.dart';
 import '../features/bots/presentation/bot_detail_screen.dart';
 import '../features/bots/presentation/my_bots_screen.dart';
 import '../models/chat_models.dart';
+import '../features/referral/pending_referral.dart';
 import '../services/auth_service.dart';
 import '../services/pending_referral_store.dart';
 import 'app_bootstrap_state.dart';
@@ -109,9 +110,15 @@ String? parseDeepLinkToGoPath(String raw) {
       if (host == 'haneat.app' || host == 'www.haneat.app') {
         // PWA живёт на /app/ — это HTML-шелл, не маршрут GoRouter.
         var path = browserPathToGoPath(uri.path) ?? '';
+        var query = routerQueryFromUri(uri);
         // Hash-стратегия: https://haneat.app/app/#/stories
+        // и invite: https://haneat.app/app/#/invite?ref=ABC
         if (path.isEmpty && uri.fragment.isNotEmpty) {
-          path = hashFragmentToGoPath(uri.fragment) ?? '';
+          final frag = uri.fragment.trim();
+          final fragPath = frag.startsWith('/') ? frag : '/$frag';
+          final fragUri = Uri.parse('https://haneat.app$fragPath');
+          path = browserPathToGoPath(fragUri.path) ?? '';
+          query = routerQueryFromUri(fragUri) ?? query;
         }
         // https://haneat.app/@username → /u/username
         if (path.startsWith('/@') && path.length > 2) {
@@ -120,19 +127,30 @@ String? parseDeepLinkToGoPath(String raw) {
             return UsernameDeepLinkRoute.pathFor(handle);
           }
         }
+        if (path == '/invite' || path.startsWith('/invite/')) {
+          final fromQuery = PendingReferral.queryRef(uri);
+          if (fromQuery != null) {
+            return '/invite?ref=${Uri.encodeComponent(fromQuery)}';
+          }
+          if (path.startsWith('/invite/')) {
+            final code = path.substring('/invite/'.length).split('/').first;
+            final extracted = PendingReferral.extract(code);
+            if (extracted != null) {
+              return '/invite?ref=${Uri.encodeComponent(extracted)}';
+            }
+          }
+          return query == null ? '/invite' : '/invite?$query';
+        }
         if (path.isNotEmpty && path != '/') {
           final reelPath = ReelByIdRoute.goPathFromBrowserPath(path);
           if (reelPath != null) {
             return reelPath;
           }
-          final q = routerQueryFromUri(uri);
-          return q == null ? path : '$path?$q';
+          return query == null ? path : '$path?$query';
         }
-        if (uri.queryParameters.containsKey('ref')) {
-          final ref = uri.queryParameters['ref'];
-          if (ref != null && ref.isNotEmpty) {
-            return '${RegisterRoute.path}?ref=${Uri.encodeComponent(ref)}';
-          }
+        final rootRef = PendingReferral.queryRef(uri);
+        if (rootRef != null) {
+          return '${RegisterRoute.path}?ref=${Uri.encodeComponent(rootRef)}';
         }
       }
       return null;
@@ -181,7 +199,7 @@ String? parseDeepLinkToGoPath(String raw) {
       }
     }
     if (uri.host == 'invite') {
-      final ref = uri.queryParameters['ref'];
+      final ref = PendingReferral.queryRef(uri);
       if (ref != null && ref.isNotEmpty) {
         return '${RegisterRoute.path}?ref=${Uri.encodeComponent(ref)}';
       }
@@ -314,7 +332,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         if (isAuth &&
             user.emailVerified &&
             (loc == LoginRoute.path || loc == RegisterRoute.path)) {
-          final ref = state.uri.queryParameters['ref'];
+          final ref = PendingReferral.queryRef(state.uri);
           if (ref != null && ref.isNotEmpty) {
             unawaited(PendingReferralStore.remember(ref));
             return PartnerProgramRoute.path;
@@ -713,7 +731,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/invite',
         name: 'invite',
         redirect: (context, state) {
-          final ref = state.uri.queryParameters['ref'];
+          final ref = PendingReferral.queryRef(state.uri);
           if (ref != null && ref.isNotEmpty) {
             unawaited(PendingReferralStore.remember(ref));
           }
@@ -759,7 +777,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: RegisterRoute.name,
         pageBuilder: (context, state) => MaterialPage(
           child: RegisterScreen(
-            initialReferralCode: state.uri.queryParameters['ref'],
+            initialReferralCode: PendingReferral.queryRef(state.uri),
           ),
         ),
       ),

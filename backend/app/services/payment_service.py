@@ -407,9 +407,24 @@ class PaymentService:
                 result["processed"] = True
                 result["action"] = "payment_succeeded"
                 result["subscription_id"] = subscription_id
+                result["invoice_id"] = invoice.get("id")
+                amount_paid = invoice.get("amount_paid")
+                if amount_paid is not None:
+                    try:
+                        result["amount"] = float(amount_paid) / 100.0
+                    except (TypeError, ValueError):
+                        result["amount"] = 0.0
                 if period_end is not None:
                     result["period_end"] = period_end
                 result["message"] = f"Payment succeeded for subscription {subscription_id}"
+
+        elif event_type == "charge.refunded":
+            charge = event_data
+            result["processed"] = True
+            result["action"] = "refund_succeeded"
+            result["invoice_id"] = charge.get("invoice")
+            result["payment_id"] = charge.get("payment_intent") or charge.get("id")
+            result["message"] = "Stripe charge refunded"
             
         elif event_type == 'invoice.payment_failed':
             # Неудачная оплата инвойса

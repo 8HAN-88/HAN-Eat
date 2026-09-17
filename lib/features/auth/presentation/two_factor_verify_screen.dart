@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/auth_navigation.dart';
 import '../../../app/auth_route_paths.dart';
+import '../../../features/referral/pending_referral_binder.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/push_notification_service.dart' deferred as push_svc;
 import '../../../utils/api_error_parser.dart';
@@ -60,6 +61,7 @@ class _TwoFactorVerifyScreenState extends State<TwoFactorVerifyScreen> {
           ? AuthPaths.legalConsent
           : AuthPaths.feed;
       navigateAfterAuth(context, destination);
+      unawaited(PendingReferralBinder.applyIfNeeded());
       WidgetsBinding.instance.addPostFrameCallback((_) {
         AuthService.notifySessionReadyAfterLogin();
       });

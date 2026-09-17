@@ -16,7 +16,7 @@ class ExtraAdsIn(BaseModel):
 
 
 class ApplyCodeIn(BaseModel):
-    code: str = Field(..., min_length=2, max_length=100)
+    code: str = Field(..., min_length=2, max_length=500)
 
 
 def _svc_error(exc: RevenueShareError) -> HTTPException:

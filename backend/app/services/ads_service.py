@@ -643,16 +643,13 @@ class AdsService:
             raise AdsError("Неизвестное событие")
         self.db.add(event)
         self.db.flush()
-        try:
-            from app.services.revenue_share_service import RevenueShareService
+        from app.services.revenue_share_service import RevenueShareService
 
-            RevenueShareService(self.db).accrue_ad_event(
-                viewer_id=user_id,
-                kind=key,
-                reference_id=int(event.id or 0),
-            )
-        except Exception:
-            pass
+        RevenueShareService(self.db).accrue_ad_event(
+            viewer_id=user_id,
+            kind=key,
+            reference_id=int(event.id or 0),
+        )
         self.db.commit()
         return {"ok": True}
 

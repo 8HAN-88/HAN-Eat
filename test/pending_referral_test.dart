@@ -17,8 +17,106 @@ void main() {
       PendingReferral.extract('https://haneat.app/register?ref=alice'),
       'alice',
     );
+    expect(
+      PendingReferral.extract('https://haneat.app/app/invite?ref=ABC12XYZ'),
+      'ABC12XYZ',
+    );
+    expect(
+      PendingReferral.extract('https://haneat.app/app/#/invite?ref=ABC12XYZ'),
+      'ABC12XYZ',
+    );
     expect(PendingReferral.extract(''), isNull);
     expect(PendingReferral.extract(null), isNull);
+    expect(PendingReferral.extract('https://haneat.app/app/'), isNull);
+    expect(PendingReferral.extract('https://haneat.app/'), isNull);
+    expect(
+      PendingReferral.queryRef(Uri.parse('https://haneat.app/app/')),
+      isNull,
+    );
+    expect(
+      PendingReferral.queryRef(Uri.parse('https://haneat.app/app/?go=1')),
+      isNull,
+    );
+    expect(
+      PendingReferral.extract(
+        'https://l.facebook.com/l.php?u=${Uri.encodeComponent('https://haneat.app/invite?ref=ABC12XYZ')}',
+      ),
+      'ABC12XYZ',
+    );
+    expect(
+      PendingReferral.extract('https://haneat.app/invite?ref=https://haneat.app/invite?ref=ABC12XYZ'),
+      'ABC12XYZ',
+    );
+    expect(
+      PendingReferral.extract(
+        'https://wa.me/?text=${Uri.encodeComponent('https://haneat.app/invite?ref=ABC12XYZ')}',
+      ),
+      'ABC12XYZ',
+    );
+    expect(
+      PendingReferral.extract('Смотри: https://haneat.app/invite?ref=ABC12XYZ'),
+      'ABC12XYZ',
+    );
+    expect(
+      PendingReferral.extract('https://www.haneat.app/invite?ref=ABC12XYZ'),
+      'ABC12XYZ',
+    );
+    expect(
+      PendingReferral.extract('https://haneat.app/invite?REF=ABC12XYZ'),
+      'ABC12XYZ',
+    );
+    expect(
+      PendingReferral.extract('https://haneat.app/invite?referral=ABC12XYZ'),
+      'ABC12XYZ',
+    );
+    expect(
+      PendingReferral.queryRef(
+        Uri.parse('https://haneat.app/invite?REF=ABC12XYZ'),
+      ),
+      'ABC12XYZ',
+    );
+    expect(
+      PendingReferral.extract(
+        'https://haneat.app/invite?utm=1&amp;ref=ABC12XYZ',
+      ),
+      'ABC12XYZ',
+    );
+    expect(
+      PendingReferral.extract('https://haneat.app/invite?ref=ABC12XYZ.'),
+      'ABC12XYZ',
+    );
+    expect(
+      PendingReferral.extract('ABC\u200b12XYZ'),
+      'ABC12XYZ',
+    );
+    expect(
+      PendingReferral.extract('https://haneat.app/invite/ABC12XYZ'),
+      'ABC12XYZ',
+    );
+    expect(
+      PendingReferral.extract('https://haneat.app/app/invite/ABC12XYZ'),
+      'ABC12XYZ',
+    );
+  });
+
+  test('pending is bound only to that referrer', () {
+    expect(
+      PendingReferral.boundTo('ABC12XYZ', referredByCode: 'ABC12XYZ'),
+      isTrue,
+    );
+    expect(
+      PendingReferral.boundTo('alice', referredByUsername: 'Alice'),
+      isTrue,
+    );
+    expect(PendingReferral.boundTo('u12', referredById: 12), isTrue);
+    expect(
+      PendingReferral.boundTo('OTHERCD1', referredByCode: 'ABC12XYZ'),
+      isFalse,
+    );
+    expect(
+      PendingReferral.boundTo('OTHERCD1', referredByUsername: 'alice'),
+      isFalse,
+    );
   });
 
   test('share URL always uses /invite?ref=', () {
@@ -26,6 +124,13 @@ void main() {
       PendingReferral.shareUrl('ABC12XYZ'),
       'https://haneat.app/invite?ref=ABC12XYZ',
     );
+  });
+
+  test('resolvedRef does not cache a one-off share ref as official', () async {
+    AppInviteService.rememberOfficialCode('ABC12XYZ');
+    final resolved = await AppInviteService.resolvedRef(ref: 'OTHERCD1');
+    expect(resolved, 'OTHERCD1');
+    expect(AppInviteService.inviteRef(), 'ABC12XYZ');
   });
 
   test('invite service prefers the official 8-char code', () {

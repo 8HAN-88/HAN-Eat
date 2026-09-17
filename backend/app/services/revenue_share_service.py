@@ -1,9 +1,11 @@
 """Реферальные коды, доп. реклама и начисление долей."""
 from __future__ import annotations
 
+import re
 import secrets
 from datetime import datetime, timedelta
 from typing import Any, Optional
+from urllib.parse import parse_qs, unquote, urlparse
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -25,6 +27,108 @@ from app.models.revenue_share import RevenueShareLedger
 from app.models.user import User
 
 _CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+_WRAP_KEYS = ("u", "url", "q", "to", "link", "text")
+_EMBEDDED_INVITE = re.compile(
+    r"https?://(?:www\.)?haneat\.app[^\s<>\"']+",
+    re.IGNORECASE,
+)
+
+
+_ZW = re.compile(r"[\u200b\u200c\u200d\ufeff\u00ad]")
+_TRAIL_PUNCT = re.compile(r"""[.,;:!?\)\]\}'"…/]+$""")
+
+
+def _sanitize_referral_input(raw: str) -> str:
+    value = _ZW.sub("", raw or "")
+    value = value.replace("\u00a0", " ")
+    value = (
+        value.replace("&amp;", "&").replace("&AMP;", "&").replace("&#38;", "&")
+    )
+    return value.strip()
+
+
+def _normalize_referral(raw: Optional[str]) -> Optional[str]:
+    value = _sanitize_referral_input(raw or "")
+    if value.startswith("@"):
+        value = value[1:].strip()
+    value = _TRAIL_PUNCT.sub("", value)
+    if not value or len(value) > 100:
+        return None
+    return value
+
+
+def _query_ci(query: dict[str, list[str]], *names: str) -> str:
+    wanted = {name.lower() for name in names}
+    for key, items in query.items():
+        lowered = (key or "").lower()
+        if lowered.startswith("amp;"):
+            lowered = lowered[4:]
+        if lowered not in wanted:
+            continue
+        value = unquote(((items[0] if items else "") or "").strip())
+        if value:
+            return value
+    return ""
+
+
+def extract_referral(raw: Optional[str], depth: int = 0) -> Optional[str]:
+    """Достаёт код из сырого ввода, полной ссылки или обёртки мессенджера."""
+    value = _sanitize_referral_input(raw or "")
+    if not value or depth > 3:
+        return None
+    parsed = urlparse(value)
+    query = parse_qs(parsed.query, keep_blank_values=True)
+
+    def _first(key: str) -> str:
+        return _query_ci(query, key)
+
+    ref = _query_ci(query, "ref", "referral")
+    if ref:
+        if "://" in ref or "ref=" in ref.lower():
+            inner = extract_referral(ref, depth + 1)
+            if inner:
+                return inner
+        return _normalize_referral(ref)
+
+    frag = unquote(parsed.fragment or "")
+    if "ref=" in frag.lower():
+        frag_uri = urlparse(
+            f"https://haneat.app{frag}" if frag.startswith("/") else f"https://haneat.app/{frag}"
+        )
+        href = _query_ci(parse_qs(frag_uri.query, keep_blank_values=True), "ref", "referral")
+        if href:
+            return extract_referral(href, depth + 1) or _normalize_referral(href)
+
+    for key in _WRAP_KEYS:
+        nested = _first(key)
+        if not nested:
+            continue
+        if "haneat.app" in nested.lower() or "ref=" in nested.lower():
+            inner = extract_referral(nested, depth + 1)
+            if inner:
+                return inner
+
+    parts = [item for item in (parsed.path or "").split("/") if item]
+    invite_at = next(
+        (i for i, item in enumerate(parts) if item.lower() == "invite"),
+        -1,
+    )
+    if invite_at >= 0 and invite_at + 1 < len(parts):
+        token = parts[invite_at + 1]
+        if token.lower() not in {"index.html", "app"}:
+            inner = extract_referral(token, depth + 1) or _normalize_referral(token)
+            if inner:
+                return inner
+
+    if "://" in value or "haneat.app" in value.lower():
+        match = _EMBEDDED_INVITE.search(value)
+        if match and match.group(0) != value:
+            inner = extract_referral(match.group(0), depth + 1)
+            if inner:
+                return inner
+        return None
+
+    return _normalize_referral(value)
 
 
 class RevenueShareError(Exception):
@@ -36,6 +140,12 @@ class RevenueShareError(Exception):
 
 def _now() -> datetime:
     return datetime.utcnow()
+
+
+def _as_naive_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value
+    return value.replace(tzinfo=None)
 
 
 class RevenueShareService:
@@ -53,10 +163,12 @@ class RevenueShareService:
             code = "".join(secrets.choice(_CODE_ALPHABET) for _ in range(8))
             taken = (
                 self.db.query(User.id)
-                .filter(User.referral_code == code)
+                .filter(func.upper(User.referral_code) == code)
                 .first()
             )
             if taken:
+                continue
+            if code.startswith("U") and code[1:].isdigit():
                 continue
             user.referral_code = code
             self.db.add(user)
@@ -68,16 +180,21 @@ class RevenueShareService:
         if not code:
             return None
         upper = code.upper()
+        live = (
+            User.deleted_at.is_(None),
+            User.banned_at.is_(None),
+            User.is_bot.is_(False),
+        )
         referrer = (
             self.db.query(User)
-            .filter(User.referral_code == upper, User.deleted_at.is_(None))
+            .filter(func.upper(User.referral_code) == upper, *live)
             .first()
         )
         if referrer:
             return referrer
         referrer = (
             self.db.query(User)
-            .filter(func.lower(User.username) == code.lower(), User.deleted_at.is_(None))
+            .filter(func.lower(User.username) == code.lower(), *live)
             .first()
         )
         if referrer:
@@ -85,19 +202,33 @@ class RevenueShareService:
         if upper.startswith("U") and upper[1:].isdigit():
             return (
                 self.db.query(User)
-                .filter(User.id == int(upper[1:]), User.deleted_at.is_(None))
+                .filter(User.id == int(upper[1:]), *live)
                 .first()
             )
         return None
 
+    def attach_after_signup(self, user: User, raw_code: Optional[str]) -> None:
+        """Привязка ссылки и выдача своего кода. Ошибки не роняют регистрацию."""
+        if raw_code:
+            try:
+                self.apply_code(user, raw_code)
+            except Exception:
+                pass
+        try:
+            self.ensure_code(user)
+        except Exception:
+            pass
+
     def apply_code(self, user: User, raw_code: Optional[str]) -> User:
-        code = (raw_code or "").strip()
+        code = extract_referral(raw_code)
         if not code:
             return user
         if user.referred_by_user_id:
             return user
-        created = user.created_at or _now()
-        if (_now() - created) > timedelta(days=APPLY_CODE_MAX_AGE_DAYS):
+        if bool(getattr(user, "is_bot", False)):
+            raise RevenueShareError("Реферальный код не найден")
+        created = _as_naive_utc(user.created_at or _now())
+        if (_as_naive_utc(_now()) - created) > timedelta(days=APPLY_CODE_MAX_AGE_DAYS):
             raise RevenueShareError(
                 "Код можно привязать только в первые 7 дней после регистрации"
             )
@@ -118,7 +249,21 @@ class RevenueShareService:
     def _active_referrer_id(self, user: User) -> Optional[int]:
         if not user.referred_by_user_id or not user.referred_at:
             return None
-        if (_now() - user.referred_at) > timedelta(days=REFERRAL_DAYS):
+        if (_as_naive_utc(_now()) - _as_naive_utc(user.referred_at)) > timedelta(
+            days=REFERRAL_DAYS
+        ):
+            return None
+        other = (
+            self.db.query(User)
+            .filter(User.id == user.referred_by_user_id)
+            .first()
+        )
+        if (
+            not other
+            or other.deleted_at is not None
+            or other.banned_at is not None
+            or bool(getattr(other, "is_bot", False))
+        ):
             return None
         return int(user.referred_by_user_id)
 
@@ -192,7 +337,12 @@ class RevenueShareService:
         reference_id: int,
     ) -> None:
         viewer = self.db.query(User).filter(User.id == viewer_id).first()
-        if not viewer:
+        if (
+            not viewer
+            or viewer.deleted_at is not None
+            or viewer.banned_at is not None
+            or bool(getattr(viewer, "is_bot", False))
+        ):
             return
         key = (kind or "").strip().lower()
         gross = (
@@ -240,7 +390,12 @@ class RevenueShareService:
         reference_id: int,
     ) -> None:
         payer = self.db.query(User).filter(User.id == payer_id).first()
-        if not payer:
+        if (
+            not payer
+            or payer.deleted_at is not None
+            or payer.banned_at is not None
+            or bool(getattr(payer, "is_bot", False))
+        ):
             return
         gross = rub_to_kopecks(amount_rub)
         if gross <= 0:
@@ -266,6 +421,25 @@ class RevenueShareService:
                 reference_id=reference_id,
             )
 
+    def void_subscription_share(self, payment_id: str) -> int:
+        """Снять долю с возвращённой подписки, пока она в холде или доступна."""
+        from app.core.revenue_share import payment_reference_id
+
+        ref = payment_reference_id(payment_id)
+        rows = (
+            self.db.query(RevenueShareLedger)
+            .filter(
+                RevenueShareLedger.source == SOURCE_SUBSCRIPTION,
+                RevenueShareLedger.reference_type == "subscription",
+                RevenueShareLedger.reference_id == ref,
+                RevenueShareLedger.status.in_(("pending", "available")),
+            )
+            .all()
+        )
+        for row in rows:
+            row.status = "void"
+        return len(rows)
+
     def _release_ready(self, user_id: int) -> None:
         now = _now()
         rows = (
@@ -274,12 +448,13 @@ class RevenueShareService:
                 RevenueShareLedger.beneficiary_user_id == user_id,
                 RevenueShareLedger.status == "pending",
                 RevenueShareLedger.available_at.isnot(None),
-                RevenueShareLedger.available_at <= now,
             )
             .all()
         )
         for row in rows:
-            row.status = "available"
+            available = _as_naive_utc(row.available_at)
+            if available <= now:
+                row.status = "available"
 
     def snapshot(self, user: User) -> dict[str, Any]:
         self.ensure_code(user)
@@ -299,7 +474,12 @@ class RevenueShareService:
 
         referred_count = (
             self.db.query(func.count(User.id))
-            .filter(User.referred_by_user_id == user.id, User.deleted_at.is_(None))
+            .filter(
+                User.referred_by_user_id == user.id,
+                User.deleted_at.is_(None),
+                User.banned_at.is_(None),
+                User.is_bot.is_(False),
+            )
             .scalar()
             or 0
         )
@@ -314,11 +494,13 @@ class RevenueShareService:
                 referrer = {
                     "id": other.id,
                     "name": other.name,
+                    "username": other.username,
                     "code": other.referral_code,
                 }
+        code = (user.referral_code or "").strip()
         return {
-            "referral_code": user.referral_code,
-            "share_url": f"https://haneat.app/invite?ref={user.referral_code}",
+            "referral_code": code or None,
+            "share_url": f"https://haneat.app/invite?ref={code}" if code else "",
             "extra_ads_enabled": bool(user.extra_ads_enabled),
             "referred_by": referrer,
             "referred_count": int(referred_count),

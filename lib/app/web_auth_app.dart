@@ -9,8 +9,10 @@ import '../features/auth/presentation/register_screen.dart';
 import '../features/auth/presentation/reset_password_screen.dart';
 import '../features/auth/presentation/verify_email_screen.dart';
 import '../features/auth/presentation/two_factor_verify_screen.dart';
+import '../features/referral/pending_referral.dart';
 import 'auth_route_paths.dart';
 import 'theme_mode_controller.dart';
+import 'web_auth_location.dart';
 
 /// Minimal web shell: login/register only.
 ///
@@ -35,8 +37,18 @@ class WebAuthApp extends ConsumerWidget {
 }
 
 final GoRouter _authRouter = GoRouter(
-  initialLocation: AuthPaths.login,
+  initialLocation: webAuthInitialLocation(),
   routes: [
+    GoRoute(
+      path: '/invite',
+      redirect: (context, state) {
+        final ref = PendingReferral.queryRef(state.uri);
+        if (ref != null) {
+          return AuthPaths.registerWithRef(ref);
+        }
+        return AuthPaths.register;
+      },
+    ),
     GoRoute(
       path: AuthPaths.login,
       builder: (context, state) => const LoginScreen(),
@@ -44,7 +56,7 @@ final GoRouter _authRouter = GoRouter(
     GoRoute(
       path: AuthPaths.register,
       builder: (context, state) => RegisterScreen(
-        initialReferralCode: state.uri.queryParameters['ref'],
+        initialReferralCode: PendingReferral.queryRef(state.uri),
       ),
     ),
     GoRoute(

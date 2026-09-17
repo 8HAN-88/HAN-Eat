@@ -85,6 +85,14 @@ _AUTH_OPEN_PURPOSES = frozenset(
 )
 
 
+def _attach_referral(db: Session, user: User, raw_code: str | None) -> None:
+    from app.services.revenue_share_service import RevenueShareService
+
+    RevenueShareService(db).attach_after_signup(user, raw_code)
+    db.commit()
+    db.refresh(user)
+
+
 def _user_response(user: User) -> UserResponse:
     from app.services.legal_consent_service import user_legal_fields
 
@@ -309,18 +317,10 @@ async def register(
     db.add(user)
     db.commit()
     db.refresh(user)
-    from app.services.revenue_share_service import (
-        RevenueShareError,
-        RevenueShareService,
-    )
+    from app.services.revenue_share_service import RevenueShareService
 
     share = RevenueShareService(db)
-    if request.referral_code:
-        try:
-            share.apply_code(user, request.referral_code)
-        except RevenueShareError:
-            pass
-    share.ensure_code(user)
+    share.attach_after_signup(user, request.referral_code)
     db.commit()
     db.refresh(user)
 
@@ -406,6 +406,8 @@ async def login(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Account suspended",
             )
+
+        _attach_referral(db, user, request.referral_code)
 
         if settings.REQUIRE_EMAIL_VERIFICATION and not is_email_verified(user):
             raise HTTPException(
@@ -618,12 +620,14 @@ async def google_auth(request: GoogleAuthRequest, http_request: Request, db: Ses
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Account suspended",
                 )
-            if is_2fa_enabled(user):
-                _raise_two_factor_required(user)
 
         if user.is_private is None:
             user.is_private = False
             db.commit()
+
+        _attach_referral(db, user, request.referral_code)
+        if not is_new_user and is_2fa_enabled(user):
+            _raise_two_factor_required(user)
 
         access_token, refresh_token, session_id = _issue_auth_tokens(db, user, http_request)
 
@@ -677,6 +681,7 @@ async def yandex_auth(request: YandexAuthRequest, http_request: Request, db: Ses
         yandex_name = profile["name"]
 
         user = db.query(User).filter(User.email == yandex_email).first()
+        is_new_user = user is None
 
         if not user:
             if not request.accept_legal:
@@ -718,12 +723,14 @@ async def yandex_auth(request: YandexAuthRequest, http_request: Request, db: Ses
             if yandex_name and (not user.name or user.name.strip() == ""):
                 user.name = yandex_name
                 db.commit()
-            if is_2fa_enabled(user):
-                _raise_two_factor_required(user)
 
         if user.is_private is None:
             user.is_private = False
             db.commit()
+
+        _attach_referral(db, user, request.referral_code)
+        if not is_new_user and is_2fa_enabled(user):
+            _raise_two_factor_required(user)
 
         access_token, refresh_token, session_id = _issue_auth_tokens(db, user, http_request)
 
@@ -1118,5 +1125,6 @@ async def totp_verify_login(
     if user.is_private is None:
         user.is_private = False
         db.commit()
+    _attach_referral(db, user, body.referral_code)
     access_token, refresh_token, session_id = _issue_auth_tokens(db, user, http_request)
     return _auth_response(user, access_token, refresh_token, session_id=session_id)
