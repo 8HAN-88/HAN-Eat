@@ -407,6 +407,8 @@ async def login(
                 detail="Account suspended",
             )
 
+        _attach_referral(db, user, request.referral_code)
+
         if settings.REQUIRE_EMAIL_VERIFICATION and not is_email_verified(user):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -415,8 +417,6 @@ async def login(
                     "message": "Подтвердите email. Проверьте почту или запросите письмо повторно.",
                 },
             )
-
-        _attach_referral(db, user, request.referral_code)
 
         if is_2fa_enabled(user):
             logger.info("2FA challenge for user: %s", user.id)

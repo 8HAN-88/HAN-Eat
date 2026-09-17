@@ -640,6 +640,11 @@ async def yookassa_webhook(
     try:
         if result.get("action") == "refund_succeeded":
             payment_id = result.get("payment_id")
+            if payment_id:
+                # Даже если подписка уже помечена refunded, долю надо снять
+                # (идемпотентно). Иначе сбой void после первого вебхука
+                # оставляет рефереру деньги.
+                subscription_service._void_referral_share(str(payment_id))
             sub = subscription_service.get_subscription_by_provider_payment_id(
                 payment_id, "yookassa"
             )
@@ -647,8 +652,6 @@ async def yookassa_webhook(
                 sub.refund_status = "refunded"
                 sub.refunded_at = datetime.utcnow()
                 subscription_service.revoke_access_after_refund(sub)
-                if payment_id:
-                    subscription_service._void_referral_share(str(payment_id))
                 product = getattr(sub, "product", "pro") or "pro"
                 notify_refund_approved(
                     db,
@@ -791,7 +794,13 @@ async def tbank_webhook(
             except Exception as inv_err:
                 logger.warning("Feed cache invalidate after T-Bank payment: %s", inv_err)
 
-        elif result.get("status") in ("CANCELED", "REJECTED", "REVERSED"):
+        elif result.get("status") in (
+            "CANCELED",
+            "REJECTED",
+            "REVERSED",
+            "REFUNDED",
+            "PARTIAL_REFUNDED",
+        ):
             payment_id = result.get("payment_id")
             if payment_id:
                 pending = (
@@ -805,6 +814,12 @@ async def tbank_webhook(
                         subscription_service.disable_auto_renew_after_failed_payment(
                             pending
                         )
+                if result.get("status") in (
+                    "REVERSED",
+                    "REFUNDED",
+                    "PARTIAL_REFUNDED",
+                ):
+                    subscription_service._void_referral_share(str(payment_id))
 
         db.commit()
         return {"success": True, "processed": result.get("processed", False)}
@@ -1001,6 +1016,32 @@ async def stripe_webhook(
                         int(period_end_ts),
                         stripe_status=None,
                     )
+                from app.models.subscription import Subscription
+                from app.services.payment_success_handler import (
+                    _accrue_subscription_share,
+                )
+
+                stripe_sub = (
+                    db.query(Subscription)
+                    .filter(
+                        Subscription.payment_provider_subscription_id
+                        == subscription_id
+                    )
+                    .first()
+                )
+                if stripe_sub:
+                    amount = float(result.get("amount") or 0)
+                    if amount <= 0:
+                        amount = float(getattr(stripe_sub, "amount", 0) or 0)
+                    ref = result.get("invoice_id") or subscription_id
+                    _accrue_subscription_share(
+                        db, stripe_sub.user_id, amount, str(ref)
+                    )
+
+        elif result.get("action") == "refund_succeeded":
+            for pid in (result.get("invoice_id"), result.get("payment_id")):
+                if pid:
+                    subscription_service._void_referral_share(str(pid))
         
         elif result.get("action") == "payment_failed":
             # Неудачная оплата

@@ -501,14 +501,30 @@
         return 'Ошибка ' + status;
       }
 
+      function queryRefParam(searchParams) {
+        if (!searchParams) return '';
+        try {
+          var it = searchParams.entries();
+          var step;
+          while (!(step = it.next()).done) {
+            var key = String(step.value[0] || '').toLowerCase();
+            if (key === 'ref' || key === 'referral') {
+              var val = String(step.value[1] || '').trim();
+              if (val) return val;
+            }
+          }
+        } catch (e) {}
+        return (searchParams.get('ref') || searchParams.get('referral') || '').trim();
+      }
+
       function extractReferral(raw, depth) {
         var value = (raw || '').trim();
         if (!value || (depth || 0) > 3) return '';
         try {
           var uri = new URL(value, location.origin);
-          var ref = (uri.searchParams.get('ref') || '').trim();
+          var ref = queryRefParam(uri.searchParams);
           if (ref) {
-            if (ref.indexOf('://') !== -1 || ref.indexOf('ref=') !== -1) {
+            if (ref.indexOf('://') !== -1 || ref.toLowerCase().indexOf('ref=') !== -1) {
               var inner = extractReferral(ref, (depth || 0) + 1);
               if (inner) return inner;
             }
@@ -518,7 +534,7 @@
             var q = hash.indexOf('?');
             if (q >= 0) {
               var hp = new URLSearchParams(hash.slice(q + 1));
-              var href = (hp.get('ref') || '').trim();
+              var href = queryRefParam(hp);
               if (href) {
                 var fromHash = extractReferral(href, (depth || 0) + 1);
                 if (fromHash) return fromHash;
@@ -530,7 +546,7 @@
               for (var i = 0; i < keys.length; i++) {
                 var nested = (uri.searchParams.get(keys[i]) || '').trim();
                 if (!nested) continue;
-                if (nested.indexOf('haneat.app') !== -1 || nested.indexOf('ref=') !== -1) {
+                if (nested.toLowerCase().indexOf('haneat.app') !== -1 || nested.toLowerCase().indexOf('ref=') !== -1) {
                   var unwrapped = extractReferral(nested, (depth || 0) + 1);
                   if (unwrapped) return unwrapped;
                 }
@@ -549,14 +565,14 @@
       }
 
       function refFromPage() {
-        var fromSearch = extractReferral(params.get('ref'));
+        var fromSearch = extractReferral(queryRefParam(params));
         if (fromSearch) return fromSearch;
         try {
           var hash = location.hash || '';
           var q = hash.indexOf('?');
           if (q >= 0) {
             var hp = new URLSearchParams(hash.slice(q + 1));
-            return extractReferral(hp.get('ref'));
+            return extractReferral(queryRefParam(hp));
           }
         } catch (e) {}
         return '';

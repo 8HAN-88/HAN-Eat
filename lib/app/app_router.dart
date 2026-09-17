@@ -88,6 +88,7 @@ import '../features/chat/presentation/username_deep_link_screen.dart';
 import '../features/bots/presentation/bot_detail_screen.dart';
 import '../features/bots/presentation/my_bots_screen.dart';
 import '../models/chat_models.dart';
+import '../features/referral/pending_referral.dart';
 import '../services/auth_service.dart';
 import '../services/pending_referral_store.dart';
 import 'app_bootstrap_state.dart';
@@ -133,11 +134,9 @@ String? parseDeepLinkToGoPath(String raw) {
           }
           return query == null ? path : '$path?$query';
         }
-        if (uri.queryParameters.containsKey('ref')) {
-          final ref = uri.queryParameters['ref'];
-          if (ref != null && ref.isNotEmpty) {
-            return '${RegisterRoute.path}?ref=${Uri.encodeComponent(ref)}';
-          }
+        final rootRef = PendingReferral.queryRef(uri);
+        if (rootRef != null) {
+          return '${RegisterRoute.path}?ref=${Uri.encodeComponent(rootRef)}';
         }
       }
       return null;
@@ -186,7 +185,7 @@ String? parseDeepLinkToGoPath(String raw) {
       }
     }
     if (uri.host == 'invite') {
-      final ref = uri.queryParameters['ref'];
+      final ref = PendingReferral.queryRef(uri);
       if (ref != null && ref.isNotEmpty) {
         return '${RegisterRoute.path}?ref=${Uri.encodeComponent(ref)}';
       }
@@ -319,7 +318,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         if (isAuth &&
             user.emailVerified &&
             (loc == LoginRoute.path || loc == RegisterRoute.path)) {
-          final ref = state.uri.queryParameters['ref'];
+          final ref = PendingReferral.queryRef(state.uri);
           if (ref != null && ref.isNotEmpty) {
             unawaited(PendingReferralStore.remember(ref));
             return PartnerProgramRoute.path;
@@ -718,7 +717,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/invite',
         name: 'invite',
         redirect: (context, state) {
-          final ref = state.uri.queryParameters['ref'];
+          final ref = PendingReferral.queryRef(state.uri);
           if (ref != null && ref.isNotEmpty) {
             unawaited(PendingReferralStore.remember(ref));
           }
@@ -764,7 +763,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: RegisterRoute.name,
         pageBuilder: (context, state) => MaterialPage(
           child: RegisterScreen(
-            initialReferralCode: state.uri.queryParameters['ref'],
+            initialReferralCode: PendingReferral.queryRef(state.uri),
           ),
         ),
       ),

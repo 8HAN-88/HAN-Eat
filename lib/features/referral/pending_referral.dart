@@ -16,6 +16,22 @@ class PendingReferral {
     return value;
   }
 
+  static String? _queryValue(Uri uri, List<String> names) {
+    final wanted = {for (final name in names) name.toLowerCase()};
+    for (final entry in uri.queryParameters.entries) {
+      if (!wanted.contains(entry.key.toLowerCase())) continue;
+      final value = entry.value.trim();
+      if (value.isNotEmpty) return value;
+    }
+    return null;
+  }
+
+  /// Код из `?ref=` / `?REF=` / `?referral=` у уже разобранного URI.
+  static String? queryRef(Uri? uri) {
+    if (uri == null) return null;
+    return extract(uri.toString());
+  }
+
   /// Достаёт код из сырого ввода: `ABC12XYZ`, `@alice`, `u12`,
   /// `https://haneat.app/invite?ref=ABC12XYZ`, обёрток `?u=` / `?url=`.
   static String? extract(String? raw, {int depth = 0}) {
@@ -23,22 +39,24 @@ class PendingReferral {
     if (value.isEmpty || depth > 3) return null;
     final uri = Uri.tryParse(value);
     if (uri != null) {
-      final ref = uri.queryParameters['ref']?.trim();
+      final ref = _queryValue(uri, const ['ref', 'referral']);
       if (ref != null && ref.isNotEmpty) {
-        if (ref.contains('://') || ref.contains('ref=')) {
+        if (ref.contains('://') || ref.toLowerCase().contains('ref=')) {
           final inner = extract(ref, depth: depth + 1);
           if (inner != null) return inner;
         }
         return normalize(ref);
       }
       final frag = uri.fragment;
-      if (frag.contains('ref=')) {
+      if (frag.toLowerCase().contains('ref=')) {
         final fragUri = Uri.tryParse(
           frag.startsWith('/')
               ? 'https://haneat.app$frag'
               : 'https://haneat.app/$frag',
         );
-        final href = fragUri?.queryParameters['ref']?.trim();
+        final href = fragUri == null
+            ? null
+            : _queryValue(fragUri, const ['ref', 'referral']);
         if (href != null && href.isNotEmpty) {
           return extract(href, depth: depth + 1) ?? normalize(href);
         }

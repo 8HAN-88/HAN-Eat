@@ -43,6 +43,17 @@ def _normalize_referral(raw: Optional[str]) -> Optional[str]:
     return value
 
 
+def _query_ci(query: dict[str, list[str]], *names: str) -> str:
+    wanted = {name.lower() for name in names}
+    for key, items in query.items():
+        if (key or "").lower() not in wanted:
+            continue
+        value = unquote(((items[0] if items else "") or "").strip())
+        if value:
+            return value
+    return ""
+
+
 def extract_referral(raw: Optional[str], depth: int = 0) -> Optional[str]:
     """Достаёт код из сырого ввода, полной ссылки или обёртки мессенджера."""
     value = (raw or "").strip()
@@ -52,23 +63,22 @@ def extract_referral(raw: Optional[str], depth: int = 0) -> Optional[str]:
     query = parse_qs(parsed.query, keep_blank_values=True)
 
     def _first(key: str) -> str:
-        items = query.get(key) or []
-        return unquote((items[0] if items else "").strip())
+        return _query_ci(query, key)
 
-    ref = _first("ref")
+    ref = _query_ci(query, "ref", "referral")
     if ref:
-        if "://" in ref or "ref=" in ref:
+        if "://" in ref or "ref=" in ref.lower():
             inner = extract_referral(ref, depth + 1)
             if inner:
                 return inner
         return _normalize_referral(ref)
 
     frag = unquote(parsed.fragment or "")
-    if "ref=" in frag:
+    if "ref=" in frag.lower():
         frag_uri = urlparse(
             f"https://haneat.app{frag}" if frag.startswith("/") else f"https://haneat.app/{frag}"
         )
-        href = (parse_qs(frag_uri.query).get("ref") or [""])[0].strip()
+        href = _query_ci(parse_qs(frag_uri.query, keep_blank_values=True), "ref", "referral")
         if href:
             return extract_referral(href, depth + 1) or _normalize_referral(href)
 

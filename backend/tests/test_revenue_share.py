@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine
@@ -7,6 +8,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.revenue_share import payment_reference_id, split_kopecks
 from app.models.revenue_share import RevenueShareLedger
+from app.models.subscription import Subscription
 from app.models.user import User
 from app.services.revenue_share_service import (
     RevenueShareError,
@@ -26,7 +28,11 @@ def db_session():
 
     Base.metadata.create_all(
         bind=engine,
-        tables=[User.__table__, RevenueShareLedger.__table__],
+        tables=[
+            User.__table__,
+            RevenueShareLedger.__table__,
+            Subscription.__table__,
+        ],
     )
     Session = sessionmaker(bind=engine)
     session = Session()
@@ -236,6 +242,17 @@ def test_extract_referral_unwraps_share_wrappers():
         extract_referral("Смотри: https://haneat.app/invite?ref=ABC12XYZ")
         == "ABC12XYZ"
     )
+    assert (
+        extract_referral("https://haneat.app/invite?REF=ABC12XYZ") == "ABC12XYZ"
+    )
+    assert (
+        extract_referral("https://haneat.app/invite?referral=ABC12XYZ")
+        == "ABC12XYZ"
+    )
+    assert (
+        extract_referral("https://haneat.app/app/#/invite?REF=ABC12XYZ")
+        == "ABC12XYZ"
+    )
 
 
 def test_apply_invite_url_and_whatsapp_wrap(db_session):
@@ -379,3 +396,134 @@ def test_old_account_cannot_apply_code(db_session):
     db_session.commit()
     with pytest.raises(RevenueShareError):
         svc.apply_code(old, code)
+
+
+def test_process_payment_succeeded_retries_share_when_already_linked(db_session):
+    from app.services.payment_success_handler import process_payment_succeeded
+
+    referrer = _user(db_session, 40)
+    payer = _user(db_session, 41, created_at=datetime.utcnow())
+    svc = RevenueShareService(db_session)
+    code = svc.ensure_code(referrer)
+    db_session.commit()
+    svc.apply_code(payer, code)
+    db_session.commit()
+    db_session.add(
+        Subscription(
+            user_id=payer.id,
+            plan="monthly",
+            product="pro",
+            status="active",
+            payment_provider="tbank",
+            payment_provider_subscription_id="pay_retry_1",
+            amount=199,
+            currency="RUB",
+            refund_status="none",
+        )
+    )
+    db_session.commit()
+    process_payment_succeeded(
+        db_session,
+        payment_provider="tbank",
+        payment_id="pay_retry_1",
+        payment_info={
+            "paid": True,
+            "amount": 199,
+            "metadata": {"product": "pro"},
+        },
+    )
+    assert db_session.query(RevenueShareLedger).count() == 1
+    process_payment_succeeded(
+        db_session,
+        payment_provider="tbank",
+        payment_id="pay_retry_1",
+        payment_info={
+            "paid": True,
+            "amount": 199,
+            "metadata": {"product": "pro"},
+        },
+    )
+    assert db_session.query(RevenueShareLedger).count() == 1
+    row = db_session.query(RevenueShareLedger).one()
+    assert row.beneficiary_user_id == referrer.id
+    assert row.source == "subscription"
+    assert row.status == "pending"
+
+
+def test_process_payment_succeeded_retry_skips_stars(db_session):
+    from app.services.payment_success_handler import process_payment_succeeded
+
+    referrer = _user(db_session, 42)
+    payer = _user(db_session, 43, created_at=datetime.utcnow())
+    svc = RevenueShareService(db_session)
+    code = svc.ensure_code(referrer)
+    db_session.commit()
+    svc.apply_code(payer, code)
+    db_session.commit()
+    db_session.add(
+        Subscription(
+            user_id=payer.id,
+            plan="monthly",
+            product="pro",
+            status="active",
+            payment_provider="tbank",
+            payment_provider_subscription_id="pay_stars_1",
+            amount=99,
+            currency="RUB",
+            refund_status="none",
+        )
+    )
+    db_session.commit()
+    process_payment_succeeded(
+        db_session,
+        payment_provider="tbank",
+        payment_id="pay_stars_1",
+        payment_info={
+            "paid": True,
+            "amount": 99,
+            "metadata": {"product": "stars"},
+        },
+    )
+    assert db_session.query(RevenueShareLedger).count() == 0
+
+
+def test_login_attaches_referral_before_email_verification_gate():
+    src = Path(__file__).resolve().parents[1].joinpath("app/api/v1/auth.py").read_text()
+    start = src.index("async def login(")
+    end = src.index("\nasync def ", start + 1)
+    login = src[start:end]
+    assert login.index("_attach_referral(db, user, request.referral_code)") < login.index(
+        "REQUIRE_EMAIL_VERIFICATION"
+    )
+
+
+def test_tbank_webhook_voids_refunded_and_reversed_shares():
+    src = Path(__file__).resolve().parents[1].joinpath("app/api/v1/payments.py").read_text()
+    start = src.index("async def tbank_webhook(")
+    end = src.index("\n@router.", start + 1)
+    hook = src[start:end]
+    assert '"REVERSED"' in hook
+    assert '"REFUNDED"' in hook
+    assert '"PARTIAL_REFUNDED"' in hook
+    assert "_void_referral_share(str(payment_id))" in hook
+
+
+def test_yookassa_refund_voids_even_if_already_marked():
+    src = Path(__file__).resolve().parents[1].joinpath("app/api/v1/payments.py").read_text()
+    start = src.index("async def yookassa_webhook(")
+    end = src.index("\n@router.", start + 1)
+    hook = src[start:end]
+    void_at = hook.index("_void_referral_share(str(payment_id))")
+    marked = hook.index('sub.refund_status != "refunded"')
+    assert void_at < marked
+
+
+def test_stripe_invoice_accrues_and_charge_refund_voids():
+    payments = Path(__file__).resolve().parents[1].joinpath("app/api/v1/payments.py").read_text()
+    stripe_svc = (
+        Path(__file__).resolve().parents[1].joinpath("app/services/payment_service.py").read_text()
+    )
+    assert "invoice_id" in stripe_svc
+    assert 'event_type == "charge.refunded"' in stripe_svc
+    assert "_accrue_subscription_share" in payments
+    assert 'result.get("action") == "refund_succeeded"' in payments

@@ -34,6 +34,13 @@ def process_payment_succeeded(
             payment_id,
             existing.id,
         )
+        # Повтор вебхука: подписка уже есть, долю всё равно допишем
+        # (идемпотентно по reference_id). Иначе сбой после create теряет начисление.
+        amount = float(payment_info.get("amount") or 0)
+        if amount <= 0:
+            amount = float(getattr(existing, "amount", 0) or 0)
+        if (payment_info.get("metadata") or {}).get("product") != "stars":
+            _accrue_subscription_share(db, existing.user_id, amount, payment_id)
         return
 
     if not payment_info or not payment_info.get("paid"):

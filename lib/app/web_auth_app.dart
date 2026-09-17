@@ -9,6 +9,7 @@ import '../features/auth/presentation/register_screen.dart';
 import '../features/auth/presentation/reset_password_screen.dart';
 import '../features/auth/presentation/verify_email_screen.dart';
 import '../features/auth/presentation/two_factor_verify_screen.dart';
+import '../features/referral/pending_referral.dart';
 import 'auth_route_paths.dart';
 import 'theme_mode_controller.dart';
 
@@ -44,7 +45,7 @@ final GoRouter _authRouter = GoRouter(
     GoRoute(
       path: AuthPaths.register,
       builder: (context, state) => RegisterScreen(
-        initialReferralCode: state.uri.queryParameters['ref'],
+        initialReferralCode: PendingReferral.queryRef(state.uri),
       ),
     ),
     GoRoute(
