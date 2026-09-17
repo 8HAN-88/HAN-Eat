@@ -27,6 +27,16 @@ void main() {
     );
     expect(PendingReferral.extract(''), isNull);
     expect(PendingReferral.extract(null), isNull);
+    expect(
+      PendingReferral.extract(
+        'https://l.facebook.com/l.php?u=${Uri.encodeComponent('https://haneat.app/invite?ref=ABC12XYZ')}',
+      ),
+      'ABC12XYZ',
+    );
+    expect(
+      PendingReferral.extract('https://haneat.app/invite?ref=https://haneat.app/invite?ref=ABC12XYZ'),
+      'ABC12XYZ',
+    );
   });
 
   test('share URL always uses /invite?ref=', () {

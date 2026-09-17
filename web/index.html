@@ -414,6 +414,7 @@
           localStorage.removeItem(PREFIX + 'access_token');
           localStorage.removeItem(PREFIX + 'refresh_token');
           localStorage.removeItem(PREFIX + 'user');
+          localStorage.removeItem(PREFIX + 'referral_code');
           localStorage.removeItem(BOOT_OK_KEY);
         } catch (e) {}
       }
@@ -500,13 +501,29 @@
         return 'Ошибка ' + status;
       }
 
-      function extractReferral(raw) {
+      function extractReferral(raw, depth) {
         var value = (raw || '').trim();
-        if (!value) return '';
+        if (!value || (depth || 0) > 3) return '';
         try {
           var uri = new URL(value, location.origin);
           var ref = (uri.searchParams.get('ref') || '').trim();
-          if (ref) value = ref;
+          if (ref) {
+            if (ref.indexOf('://') !== -1 || ref.indexOf('ref=') !== -1) {
+              var inner = extractReferral(ref, (depth || 0) + 1);
+              if (inner) return inner;
+            }
+            value = ref;
+          } else {
+            var keys = ['u', 'url', 'q', 'to', 'link'];
+            for (var i = 0; i < keys.length; i++) {
+              var nested = (uri.searchParams.get(keys[i]) || '').trim();
+              if (!nested) continue;
+              if (nested.indexOf('haneat.app') !== -1 || nested.indexOf('ref=') !== -1) {
+                var unwrapped = extractReferral(nested, (depth || 0) + 1);
+                if (unwrapped) return unwrapped;
+              }
+            }
+          }
         } catch (e) {}
         if (value.charAt(0) === '@') value = value.slice(1).trim();
         if (!value || value.length > 100) return '';

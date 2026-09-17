@@ -74,16 +74,17 @@ class RevenueShareService:
         if not code:
             return None
         upper = code.upper()
+        live = (User.deleted_at.is_(None), User.banned_at.is_(None))
         referrer = (
             self.db.query(User)
-            .filter(User.referral_code == upper, User.deleted_at.is_(None))
+            .filter(func.upper(User.referral_code) == upper, *live)
             .first()
         )
         if referrer:
             return referrer
         referrer = (
             self.db.query(User)
-            .filter(func.lower(User.username) == code.lower(), User.deleted_at.is_(None))
+            .filter(func.lower(User.username) == code.lower(), *live)
             .first()
         )
         if referrer:
@@ -91,7 +92,7 @@ class RevenueShareService:
         if upper.startswith("U") and upper[1:].isdigit():
             return (
                 self.db.query(User)
-                .filter(User.id == int(upper[1:]), User.deleted_at.is_(None))
+                .filter(User.id == int(upper[1:]), *live)
                 .first()
             )
         return None
@@ -139,6 +140,13 @@ class RevenueShareService:
         if (_as_naive_utc(_now()) - _as_naive_utc(user.referred_at)) > timedelta(
             days=REFERRAL_DAYS
         ):
+            return None
+        other = (
+            self.db.query(User)
+            .filter(User.id == user.referred_by_user_id)
+            .first()
+        )
+        if not other or other.deleted_at is not None or other.banned_at is not None:
             return None
         return int(user.referred_by_user_id)
 

@@ -532,6 +532,7 @@ class AuthService {
       debugPrint('Google signOut: $e');
     }
     await _clearTokens();
+    await PendingReferralStore.clearOfficial();
     // Также очищаем пользователя из SharedPreferences
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_userKey);

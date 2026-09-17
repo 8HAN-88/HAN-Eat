@@ -14,21 +14,24 @@ class AppInviteService {
   AppInviteService._();
 
   static const webBase = PendingReferral.webInviteBase;
-  static String? _officialCode;
 
   static void rememberOfficialCode(String? code) {
     final normalized = PendingReferral.extract(code);
     if (normalized == null) return;
-    _officialCode = normalized;
+    PendingReferralStore.officialMemory = normalized;
+  }
+
+  static void clearOfficialCode() {
+    PendingReferralStore.officialMemory = null;
   }
 
   @visibleForTesting
   static void debugResetOfficialCode() {
-    _officialCode = null;
+    clearOfficialCode();
   }
 
   static String inviteRef([User? user]) {
-    final official = _officialCode?.trim();
+    final official = PendingReferralStore.officialMemory?.trim();
     if (official != null && official.isNotEmpty) return official;
     final u = user ?? AuthService.instance.currentUser;
     final username = u?.username?.trim();
@@ -43,7 +46,8 @@ class AppInviteService {
       rememberOfficialCode(explicit);
       return explicit;
     }
-    if (_officialCode == null || _officialCode!.isEmpty) {
+    if (PendingReferralStore.officialMemory == null ||
+        PendingReferralStore.officialMemory!.isEmpty) {
       final stored = await PendingReferralStore.officialCode();
       if (stored != null) rememberOfficialCode(stored);
     }

@@ -21,6 +21,8 @@ void main() {
     expect(html.contains('function capturePendingReferral'), isTrue);
     expect(html.contains('function refFromPage'), isTrue);
     expect(html.contains("location.hash"), isTrue);
+    expect(html.contains("removeItem(PREFIX + 'referral_code')"), isTrue);
+    expect(html.contains('(depth || 0) > 3'), isTrue);
     expect(html.contains('extractReferral(prefGet(\'pending_referral\'))'), isTrue);
     expect(
       html.contains("localStorage.removeItem(PREFIX + 'pending_referral')"),

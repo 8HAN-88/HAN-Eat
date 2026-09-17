@@ -17,14 +17,18 @@ class PendingReferral {
   }
 
   /// Достаёт код из сырого ввода: `ABC12XYZ`, `@alice`, `u12`,
-  /// `https://haneat.app/invite?ref=ABC12XYZ`.
-  static String? extract(String? raw) {
+  /// `https://haneat.app/invite?ref=ABC12XYZ`, обёрток `?u=` / `?url=`.
+  static String? extract(String? raw, {int depth = 0}) {
     final value = raw?.trim() ?? '';
-    if (value.isEmpty) return null;
+    if (value.isEmpty || depth > 3) return null;
     final uri = Uri.tryParse(value);
     if (uri != null) {
       final ref = uri.queryParameters['ref']?.trim();
       if (ref != null && ref.isNotEmpty) {
+        if (ref.contains('://') || ref.contains('ref=')) {
+          final inner = extract(ref, depth: depth + 1);
+          if (inner != null) return inner;
+        }
         return normalize(ref);
       }
       final frag = uri.fragment;
@@ -36,7 +40,15 @@ class PendingReferral {
         );
         final href = fragUri?.queryParameters['ref']?.trim();
         if (href != null && href.isNotEmpty) {
-          return normalize(href);
+          return extract(href, depth: depth + 1) ?? normalize(href);
+        }
+      }
+      for (final key in const ['u', 'url', 'q', 'to', 'link']) {
+        final nested = uri.queryParameters[key]?.trim();
+        if (nested == null || nested.isEmpty) continue;
+        if (nested.contains('haneat.app') || nested.contains('ref=')) {
+          final inner = extract(nested, depth: depth + 1);
+          if (inner != null) return inner;
         }
       }
     }

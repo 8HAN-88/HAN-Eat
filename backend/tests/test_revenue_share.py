@@ -114,6 +114,38 @@ def test_reject_self_code(db_session):
         svc.apply_code(user, code)
 
 
+def test_apply_lowercase_official_code(db_session):
+    referrer = _user(db_session, 17, created_at=datetime.utcnow())
+    viewer = _user(db_session, 18, created_at=datetime.utcnow())
+    svc = RevenueShareService(db_session)
+    code = svc.ensure_code(referrer)
+    db_session.commit()
+    svc.apply_code(viewer, code.lower())
+    db_session.commit()
+    db_session.refresh(viewer)
+    assert viewer.referred_by_user_id == referrer.id
+
+
+def test_reject_banned_referrer(db_session):
+    referrer = _user(db_session, 19, banned_at=datetime.utcnow())
+    viewer = _user(db_session, 20, created_at=datetime.utcnow())
+    svc = RevenueShareService(db_session)
+    code = svc.ensure_code(referrer)
+    db_session.commit()
+    with pytest.raises(RevenueShareError):
+        svc.apply_code(viewer, code)
+
+
+def test_reject_deleted_referrer(db_session):
+    referrer = _user(db_session, 21, deleted_at=datetime.utcnow())
+    viewer = _user(db_session, 22, created_at=datetime.utcnow())
+    svc = RevenueShareService(db_session)
+    code = svc.ensure_code(referrer)
+    db_session.commit()
+    with pytest.raises(RevenueShareError):
+        svc.apply_code(viewer, code)
+
+
 def test_apply_username_invite_ref(db_session):
     referrer = _user(db_session, 8, created_at=datetime.utcnow())
     viewer = _user(db_session, 9, created_at=datetime.utcnow())
