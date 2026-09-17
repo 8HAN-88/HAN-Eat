@@ -10,6 +10,7 @@ import '../../../../app/auth_navigation.dart';
 import '../../../../app/auth_route_paths.dart';
 import '../../../../core/theme/color_schemes.dart';
 import '../../../../core/web/boot_ready_signal.dart';
+import '../../../features/referral/pending_referral_binder.dart';
 import '../../../../services/auth_service.dart';
 import '../../../../services/push_notification_service.dart' deferred as push_svc;
 import '../../../../utils/api_error_parser.dart';
@@ -69,6 +70,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           debugPrint('FCM after login: $e');
         }
       }());
+      unawaited(PendingReferralBinder.applyIfNeeded());
 
       if (!mounted) return;
 

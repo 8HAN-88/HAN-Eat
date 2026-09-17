@@ -514,17 +514,35 @@
             }
             value = ref;
           } else {
-            var keys = ['u', 'url', 'q', 'to', 'link'];
-            for (var i = 0; i < keys.length; i++) {
-              var nested = (uri.searchParams.get(keys[i]) || '').trim();
-              if (!nested) continue;
-              if (nested.indexOf('haneat.app') !== -1 || nested.indexOf('ref=') !== -1) {
-                var unwrapped = extractReferral(nested, (depth || 0) + 1);
-                if (unwrapped) return unwrapped;
+            var hash = uri.hash || '';
+            var q = hash.indexOf('?');
+            if (q >= 0) {
+              var hp = new URLSearchParams(hash.slice(q + 1));
+              var href = (hp.get('ref') || '').trim();
+              if (href) {
+                var fromHash = extractReferral(href, (depth || 0) + 1);
+                if (fromHash) return fromHash;
+                value = href;
+              }
+            }
+            if (value === (raw || '').trim()) {
+              var keys = ['u', 'url', 'q', 'to', 'link', 'text'];
+              for (var i = 0; i < keys.length; i++) {
+                var nested = (uri.searchParams.get(keys[i]) || '').trim();
+                if (!nested) continue;
+                if (nested.indexOf('haneat.app') !== -1 || nested.indexOf('ref=') !== -1) {
+                  var unwrapped = extractReferral(nested, (depth || 0) + 1);
+                  if (unwrapped) return unwrapped;
+                }
               }
             }
           }
         } catch (e) {}
+        var embedded = value.match(/https?:\/\/(?:www\.)?haneat\.app[^\s<>"']+/i);
+        if (embedded && embedded[0] !== value) {
+          var fromEmbed = extractReferral(embedded[0], (depth || 0) + 1);
+          if (fromEmbed) return fromEmbed;
+        }
         if (value.charAt(0) === '@') value = value.slice(1).trim();
         if (!value || value.length > 100) return '';
         return value;
@@ -588,6 +606,25 @@
         // User: AuthService stores jsonEncode(user) as a String value, then
         // shared_preferences_web json.encodes that string again.
         prefSet('user', JSON.stringify(data.user));
+      }
+
+      // Login (and register retry) — bind before Flutter boots, keep pending
+      // so the app can retry if the request fails on a weak network.
+      function applyPendingAfterAuth(token) {
+        var referral = extractReferral(prefGet('pending_referral'));
+        if (!referral || !token) return;
+        try {
+          fetch(apiUrl('/revenue-share/apply-code'), {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Authorization': 'Bearer ' + token,
+            },
+            body: JSON.stringify({ code: referral }),
+            credentials: 'same-origin',
+          }).catch(function () {});
+        } catch (e) {}
       }
 
       function ping(extra) {
@@ -987,6 +1024,7 @@
             throw new Error(humanAuthError(data, res.status));
           }
           saveSession(data);
+          applyPendingAfterAuth(data.token);
           ping('authed=1');
           startFlutterAtApp();
         } catch (err) {

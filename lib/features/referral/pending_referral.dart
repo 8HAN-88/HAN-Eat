@@ -43,7 +43,7 @@ class PendingReferral {
           return extract(href, depth: depth + 1) ?? normalize(href);
         }
       }
-      for (final key in const ['u', 'url', 'q', 'to', 'link']) {
+      for (final key in const ['u', 'url', 'q', 'to', 'link', 'text']) {
         final nested = uri.queryParameters[key]?.trim();
         if (nested == null || nested.isEmpty) continue;
         if (nested.contains('haneat.app') || nested.contains('ref=')) {
@@ -51,6 +51,14 @@ class PendingReferral {
           if (inner != null) return inner;
         }
       }
+    }
+    final embedded = RegExp(
+      r'https?://(?:www\.)?haneat\.app[^\s<>]+',
+      caseSensitive: false,
+    ).firstMatch(value);
+    if (embedded != null) {
+      final inner = extract(embedded.group(0), depth: depth + 1);
+      if (inner != null) return inner;
     }
     return normalize(value);
   }

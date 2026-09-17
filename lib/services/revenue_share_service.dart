@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../features/referral/pending_referral.dart';
 import '../utils/api_error_parser.dart';
 import 'api_service.dart';
 import 'app_invite_service.dart';
@@ -115,10 +116,11 @@ class RevenueShareApi {
   }
 
   static Future<RevenueShareSnapshot> applyCode(String code) async {
+    final extracted = PendingReferral.extract(code) ?? code.trim();
     final response = await http.post(
       Uri.parse('$_base/apply-code'),
       headers: await _headers(),
-      body: jsonEncode({'code': code.trim()}),
+      body: jsonEncode({'code': extracted}),
     );
     if (response.statusCode != 200) {
       throw apiExceptionFromHttpResponse(

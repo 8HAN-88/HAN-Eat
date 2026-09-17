@@ -11,6 +11,7 @@ from app.models.user import User
 from app.services.revenue_share_service import (
     RevenueShareError,
     RevenueShareService,
+    extract_referral,
 )
 
 
@@ -212,6 +213,81 @@ def test_apply_uid_invite_ref(db_session):
     db_session.commit()
     db_session.refresh(viewer)
     assert viewer.referred_by_user_id == referrer.id
+
+
+def test_extract_referral_unwraps_share_wrappers():
+    assert extract_referral("ABC12XYZ") == "ABC12XYZ"
+    assert extract_referral("@alice") == "alice"
+    assert (
+        extract_referral("https://haneat.app/invite?ref=ABC12XYZ") == "ABC12XYZ"
+    )
+    assert (
+        extract_referral("https://www.haneat.app/app/#/invite?ref=ABC12XYZ")
+        == "ABC12XYZ"
+    )
+    assert (
+        extract_referral(
+            "https://wa.me/?text="
+            + "https%3A%2F%2Fhaneat.app%2Finvite%3Fref%3DABC12XYZ"
+        )
+        == "ABC12XYZ"
+    )
+    assert (
+        extract_referral("Смотри: https://haneat.app/invite?ref=ABC12XYZ")
+        == "ABC12XYZ"
+    )
+
+
+def test_apply_invite_url_and_whatsapp_wrap(db_session):
+    referrer = _user(db_session, 23, created_at=datetime.utcnow())
+    viewer = _user(db_session, 24, created_at=datetime.utcnow())
+    svc = RevenueShareService(db_session)
+    code = svc.ensure_code(referrer)
+    db_session.commit()
+    svc.apply_code(viewer, f"https://haneat.app/invite?ref={code}")
+    db_session.commit()
+    db_session.refresh(viewer)
+    assert viewer.referred_by_user_id == referrer.id
+
+
+def test_reject_bot_referrer(db_session):
+    referrer = _user(db_session, 25, is_bot=True, created_at=datetime.utcnow())
+    viewer = _user(db_session, 26, created_at=datetime.utcnow())
+    svc = RevenueShareService(db_session)
+    code = svc.ensure_code(referrer)
+    db_session.commit()
+    with pytest.raises(RevenueShareError):
+        svc.apply_code(viewer, code)
+
+
+def test_banned_referrer_stops_accrual(db_session):
+    referrer = _user(db_session, 27)
+    viewer = _user(db_session, 28, created_at=datetime.utcnow())
+    svc = RevenueShareService(db_session)
+    code = svc.ensure_code(referrer)
+    db_session.commit()
+    svc.apply_code(viewer, code)
+    svc.set_extra_ads(viewer, True)
+    db_session.commit()
+    referrer.banned_at = datetime.utcnow()
+    db_session.commit()
+    svc.accrue_ad_event(viewer_id=28, kind="click", reference_id=99)
+    db_session.commit()
+    rows = db_session.query(RevenueShareLedger).all()
+    assert [row.role for row in rows] == ["viewer"]
+
+
+def test_snapshot_omits_empty_share_url(db_session, monkeypatch):
+    user = _user(db_session, 29)
+
+    def _no_code(_self, _user):
+        return ""
+
+    monkeypatch.setattr(RevenueShareService, "ensure_code", _no_code)
+    svc = RevenueShareService(db_session)
+    snap = svc.snapshot(user)
+    assert snap["share_url"] == ""
+    assert snap["referral_code"] in (None, "")
 
 
 def test_old_account_cannot_apply_code(db_session):

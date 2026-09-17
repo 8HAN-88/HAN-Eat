@@ -1,9 +1,11 @@
 """Реферальные коды, доп. реклама и начисление долей."""
 from __future__ import annotations
 
+import re
 import secrets
 from datetime import datetime, timedelta
 from typing import Any, Optional
+from urllib.parse import parse_qs, unquote, urlparse
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -25,6 +27,68 @@ from app.models.revenue_share import RevenueShareLedger
 from app.models.user import User
 
 _CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+_WRAP_KEYS = ("u", "url", "q", "to", "link", "text")
+_EMBEDDED_INVITE = re.compile(
+    r"https?://(?:www\.)?haneat\.app[^\s<>\"']+",
+    re.IGNORECASE,
+)
+
+
+def _normalize_referral(raw: Optional[str]) -> Optional[str]:
+    value = (raw or "").strip()
+    if value.startswith("@"):
+        value = value[1:].strip()
+    if not value or len(value) > 100:
+        return None
+    return value
+
+
+def extract_referral(raw: Optional[str], depth: int = 0) -> Optional[str]:
+    """Достаёт код из сырого ввода, полной ссылки или обёртки мессенджера."""
+    value = (raw or "").strip()
+    if not value or depth > 3:
+        return None
+    parsed = urlparse(value)
+    query = parse_qs(parsed.query, keep_blank_values=True)
+
+    def _first(key: str) -> str:
+        items = query.get(key) or []
+        return unquote((items[0] if items else "").strip())
+
+    ref = _first("ref")
+    if ref:
+        if "://" in ref or "ref=" in ref:
+            inner = extract_referral(ref, depth + 1)
+            if inner:
+                return inner
+        return _normalize_referral(ref)
+
+    frag = unquote(parsed.fragment or "")
+    if "ref=" in frag:
+        frag_uri = urlparse(
+            f"https://haneat.app{frag}" if frag.startswith("/") else f"https://haneat.app/{frag}"
+        )
+        href = (parse_qs(frag_uri.query).get("ref") or [""])[0].strip()
+        if href:
+            return extract_referral(href, depth + 1) or _normalize_referral(href)
+
+    for key in _WRAP_KEYS:
+        nested = _first(key)
+        if not nested:
+            continue
+        if "haneat.app" in nested or "ref=" in nested:
+            inner = extract_referral(nested, depth + 1)
+            if inner:
+                return inner
+
+    if "://" in value or "haneat.app" in value.lower():
+        match = _EMBEDDED_INVITE.search(value)
+        if match:
+            inner = extract_referral(match.group(0), depth + 1)
+            if inner:
+                return inner
+
+    return _normalize_referral(value)
 
 
 class RevenueShareError(Exception):
@@ -74,7 +138,11 @@ class RevenueShareService:
         if not code:
             return None
         upper = code.upper()
-        live = (User.deleted_at.is_(None), User.banned_at.is_(None))
+        live = (
+            User.deleted_at.is_(None),
+            User.banned_at.is_(None),
+            User.is_bot.is_(False),
+        )
         referrer = (
             self.db.query(User)
             .filter(func.upper(User.referral_code) == upper, *live)
@@ -110,7 +178,7 @@ class RevenueShareService:
             pass
 
     def apply_code(self, user: User, raw_code: Optional[str]) -> User:
-        code = (raw_code or "").strip()
+        code = extract_referral(raw_code)
         if not code:
             return user
         if user.referred_by_user_id:
@@ -146,7 +214,12 @@ class RevenueShareService:
             .filter(User.id == user.referred_by_user_id)
             .first()
         )
-        if not other or other.deleted_at is not None or other.banned_at is not None:
+        if (
+            not other
+            or other.deleted_at is not None
+            or other.banned_at is not None
+            or bool(getattr(other, "is_bot", False))
+        ):
             return None
         return int(user.referred_by_user_id)
 
@@ -344,9 +417,10 @@ class RevenueShareService:
                     "name": other.name,
                     "code": other.referral_code,
                 }
+        code = (user.referral_code or "").strip()
         return {
-            "referral_code": user.referral_code,
-            "share_url": f"https://haneat.app/invite?ref={user.referral_code}",
+            "referral_code": code or None,
+            "share_url": f"https://haneat.app/invite?ref={code}" if code else "",
             "extra_ads_enabled": bool(user.extra_ads_enabled),
             "referred_by": referrer,
             "referred_count": int(referred_count),
