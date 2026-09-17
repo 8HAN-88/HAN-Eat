@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import create_engine
@@ -131,6 +131,32 @@ def test_snapshot_uses_invite_share_url(db_session):
     snap = svc.snapshot(user)
     assert snap["share_url"] == f"https://haneat.app/invite?ref={code}"
     assert snap["referral_code"] == code
+
+
+def test_apply_code_accepts_aware_created_at(db_session):
+    referrer = _user(db_session, 10)
+    viewer = _user(
+        db_session,
+        11,
+        created_at=datetime.now(timezone.utc),
+    )
+    svc = RevenueShareService(db_session)
+    code = svc.ensure_code(referrer)
+    db_session.commit()
+    svc.apply_code(viewer, code)
+    db_session.commit()
+    db_session.refresh(viewer)
+    assert viewer.referred_by_user_id == referrer.id
+
+
+def test_apply_uid_invite_ref(db_session):
+    referrer = _user(db_session, 12, created_at=datetime.utcnow())
+    viewer = _user(db_session, 13, created_at=datetime.utcnow())
+    svc = RevenueShareService(db_session)
+    svc.apply_code(viewer, f"U{referrer.id}")
+    db_session.commit()
+    db_session.refresh(viewer)
+    assert viewer.referred_by_user_id == referrer.id
 
 
 def test_old_account_cannot_apply_code(db_session):

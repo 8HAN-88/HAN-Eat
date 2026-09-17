@@ -38,6 +38,12 @@ def _now() -> datetime:
     return datetime.utcnow()
 
 
+def _as_naive_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value
+    return value.replace(tzinfo=None)
+
+
 class RevenueShareService:
     def __init__(self, db: Session):
         self.db = db
@@ -96,8 +102,8 @@ class RevenueShareService:
             return user
         if user.referred_by_user_id:
             return user
-        created = user.created_at or _now()
-        if (_now() - created) > timedelta(days=APPLY_CODE_MAX_AGE_DAYS):
+        created = _as_naive_utc(user.created_at or _now())
+        if (_as_naive_utc(_now()) - created) > timedelta(days=APPLY_CODE_MAX_AGE_DAYS):
             raise RevenueShareError(
                 "Код можно привязать только в первые 7 дней после регистрации"
             )
@@ -118,7 +124,9 @@ class RevenueShareService:
     def _active_referrer_id(self, user: User) -> Optional[int]:
         if not user.referred_by_user_id or not user.referred_at:
             return None
-        if (_now() - user.referred_at) > timedelta(days=REFERRAL_DAYS):
+        if (_as_naive_utc(_now()) - _as_naive_utc(user.referred_at)) > timedelta(
+            days=REFERRAL_DAYS
+        ):
             return None
         return int(user.referred_by_user_id)
 

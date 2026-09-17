@@ -37,6 +37,14 @@ void main() {
       '/invite?ref=ABC12XYZ',
     );
     expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/invite?ref=ABC12XYZ'),
+      '/invite?ref=ABC12XYZ',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/register?ref=ABC12XYZ'),
+      '/register?ref=ABC12XYZ',
+    );
+    expect(
       parseDeepLinkToGoPath('haneat://invite?ref=ABC12XYZ'),
       '/register?ref=ABC12XYZ',
     );

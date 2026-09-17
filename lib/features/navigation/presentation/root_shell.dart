@@ -25,6 +25,7 @@ import '../../chat/application/chat_realtime_signals.dart';
 import '../application/shell_chat_badge_refresh_provider.dart';
 import 'package:han_eat/app/app_bootstrap_state.dart';
 import 'package:han_eat/core/web/boot_ready_signal.dart';
+import '../../referral/pending_referral_binder.dart';
 
 class RootShell extends ConsumerStatefulWidget {
   const RootShell({super.key, required this.navigationShell});
@@ -113,6 +114,7 @@ class _RootShellState extends ConsumerState<RootShell> {
     notifyPrimaryUiReady();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      unawaited(PendingReferralBinder.applyIfNeeded());
       final raw = widget.navigationShell.currentIndex;
       final safe = _syncShellTabVisibility(raw);
       if (raw != safe) {

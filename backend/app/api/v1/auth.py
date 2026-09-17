@@ -309,18 +309,19 @@ async def register(
     db.add(user)
     db.commit()
     db.refresh(user)
-    from app.services.revenue_share_service import (
-        RevenueShareError,
-        RevenueShareService,
-    )
+    from app.services.revenue_share_service import RevenueShareService
 
     share = RevenueShareService(db)
     if request.referral_code:
         try:
             share.apply_code(user, request.referral_code)
-        except RevenueShareError:
+        except Exception:
+            # Невалидная ссылка или сбой привязки не должны ронять регистрацию.
             pass
-    share.ensure_code(user)
+    try:
+        share.ensure_code(user)
+    except Exception:
+        pass
     db.commit()
     db.refresh(user)
 
