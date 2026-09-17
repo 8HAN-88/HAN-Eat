@@ -54,4 +54,40 @@ class RevenueShareLedger(Base):
     available_at = Column(DateTime, nullable=True, index=True)
     reference_type = Column(String(32), nullable=False)
     reference_id = Column(Integer, nullable=False, default=0)
+    payout_request_id = Column(
+        Integer,
+        ForeignKey("partner_payout_requests.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+
+class PartnerPayoutRequest(Base):
+    """Вывод партнёрского баланса: в звёзды сразу или на карту/СБП через админа."""
+
+    __tablename__ = "partner_payout_requests"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    kind = Column(String(16), nullable=False, index=True)  # stars | card
+    amount_kopecks = Column(Integer, nullable=False, default=0)
+    amount_stars = Column(Integer, nullable=False, default=0)
+    status = Column(String(16), nullable=False, default="pending", index=True)
+    phone = Column(String(20), nullable=True)
+    recipient_name = Column(String(80), nullable=True)
+    note = Column(String(512), nullable=True)
+    reviewed_by_user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    reviewed_at = Column(DateTime, nullable=True)
+    paid_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)

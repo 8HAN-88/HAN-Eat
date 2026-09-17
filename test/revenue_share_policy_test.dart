@@ -37,4 +37,12 @@ void main() {
     expect(split.user, 0);
     expect(split.referrer, 1750);
   });
+
+  test('convertible stars use 80 kopecks per star', () {
+    expect(RevenueSharePolicy.kopecksPerStar, 80);
+    expect(RevenueSharePolicy.minCardPayoutKopecks, 50000);
+    expect(RevenueSharePolicy.convertibleStars(79), 0);
+    expect(RevenueSharePolicy.convertibleStars(80), 1);
+    expect(RevenueSharePolicy.convertibleStars(1750), 21);
+  });
 }

@@ -7,6 +7,13 @@ class RevenueSharePolicy {
   static const int userAdOfNetBps = 5000;
   static const int referralDays = 365;
   static const int holdDays = 14;
+  static const int kopecksPerStar = 80;
+  static const int minCardPayoutKopecks = 50000;
+
+  static int convertibleStars(int availableKopecks) {
+    if (availableKopecks <= 0) return 0;
+    return availableKopecks ~/ kopecksPerStar;
+  }
 
   static RevenueShareSplit splitKopecks({
     required int gross,
