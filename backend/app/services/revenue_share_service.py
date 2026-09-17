@@ -732,17 +732,36 @@ class RevenueShareService:
             payout=payout,
             status=STATUS_PAID,
         )
-        from app.services.paid_features_service import PaidFeaturesService
-
-        PaidFeaturesService(self.db).add_stars(
-            user.id,
-            stars,
-            tx_type="partner_payout",
-            idempotency_key=f"partner_payout:{payout.id}",
-            meta={"payout_id": payout.id, "kopecks": need},
-        )
+        self._credit_stars(user.id, stars, payout.id, need)
         self.db.flush()
         return payout
+
+    def _credit_stars(
+        self,
+        user_id: int,
+        stars: int,
+        payout_id: int,
+        kopecks: int,
+    ) -> None:
+        from app.models.paid_features import StarTransaction
+
+        key = f"partner_payout:{payout_id}"
+        existing = (
+            self.db.query(StarTransaction)
+            .filter(StarTransaction.idempotency_key == key)
+            .first()
+        )
+        if existing:
+            return
+        self.db.add(
+            StarTransaction(
+                user_id=user_id,
+                amount=stars,
+                type="partner_payout",
+                idempotency_key=key,
+                meta={"payout_id": payout_id, "kopecks": kopecks},
+            )
+        )
 
     def request_card_payout(
         self,
