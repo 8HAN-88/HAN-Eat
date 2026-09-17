@@ -21,6 +21,9 @@ class RevenueShareSnapshot {
     required this.asViewerKopecks,
     required this.asReferrerKopecks,
     this.referredByName,
+    this.referredByCode,
+    this.referredByUsername,
+    this.referredById,
   });
 
   final String referralCode;
@@ -32,9 +35,13 @@ class RevenueShareSnapshot {
   final int asViewerKopecks;
   final int asReferrerKopecks;
   final String? referredByName;
+  final String? referredByCode;
+  final String? referredByUsername;
+  final int? referredById;
 
   factory RevenueShareSnapshot.fromJson(Map<String, dynamic> json) {
     final referredBy = json['referred_by'];
+    final referredMap = referredBy is Map ? referredBy : null;
     return RevenueShareSnapshot(
       referralCode: (json['referral_code'] as String? ?? '').trim(),
       shareUrl: (json['share_url'] as String? ?? '').trim(),
@@ -44,9 +51,10 @@ class RevenueShareSnapshot {
       availableKopecks: (json['available_kopecks'] as num?)?.toInt() ?? 0,
       asViewerKopecks: (json['as_viewer_kopecks'] as num?)?.toInt() ?? 0,
       asReferrerKopecks: (json['as_referrer_kopecks'] as num?)?.toInt() ?? 0,
-      referredByName: referredBy is Map
-          ? referredBy['name'] as String?
-          : null,
+      referredByName: referredMap?['name'] as String?,
+      referredByCode: (referredMap?['code'] as String?)?.trim(),
+      referredByUsername: (referredMap?['username'] as String?)?.trim(),
+      referredById: (referredMap?['id'] as num?)?.toInt(),
     );
   }
 
@@ -130,7 +138,12 @@ class RevenueShareApi {
       );
     }
     final snap = _cache(_decode(response.body));
-    if (snap.referredByName != null) {
+    if (PendingReferral.boundTo(
+      extracted,
+      referredByCode: snap.referredByCode,
+      referredByUsername: snap.referredByUsername,
+      referredById: snap.referredById,
+    )) {
       unawaited(PendingReferralStore.clear());
     }
     return snap;

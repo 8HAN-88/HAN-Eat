@@ -21,11 +21,9 @@ class PendingReferralBinder {
       if (pending != null) {
         try {
           await RevenueShareApi.applyCode(pending);
-        } on ApiClientException catch (e) {
-          final status = e.statusCode ?? 0;
-          if (status >= 400 && status < 500) {
-            await PendingReferralStore.clear();
-          }
+        } on ApiClientException {
+          // Просроченный или чужой аккаунт не должен выкидывать ссылку:
+          // следующий человек на этом телефоне ещё сможет привязаться.
         } catch (_) {
           // Сеть — оставим токен, попробуем позже.
         }

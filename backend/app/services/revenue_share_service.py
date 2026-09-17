@@ -293,7 +293,12 @@ class RevenueShareService:
         reference_id: int,
     ) -> None:
         viewer = self.db.query(User).filter(User.id == viewer_id).first()
-        if not viewer:
+        if (
+            not viewer
+            or viewer.deleted_at is not None
+            or viewer.banned_at is not None
+            or bool(getattr(viewer, "is_bot", False))
+        ):
             return
         key = (kind or "").strip().lower()
         gross = (
@@ -341,7 +346,12 @@ class RevenueShareService:
         reference_id: int,
     ) -> None:
         payer = self.db.query(User).filter(User.id == payer_id).first()
-        if not payer:
+        if (
+            not payer
+            or payer.deleted_at is not None
+            or payer.banned_at is not None
+            or bool(getattr(payer, "is_bot", False))
+        ):
             return
         gross = rub_to_kopecks(amount_rub)
         if gross <= 0:
@@ -400,7 +410,11 @@ class RevenueShareService:
 
         referred_count = (
             self.db.query(func.count(User.id))
-            .filter(User.referred_by_user_id == user.id, User.deleted_at.is_(None))
+            .filter(
+                User.referred_by_user_id == user.id,
+                User.deleted_at.is_(None),
+                User.banned_at.is_(None),
+            )
             .scalar()
             or 0
         )
@@ -415,6 +429,7 @@ class RevenueShareService:
                 referrer = {
                     "id": other.id,
                     "name": other.name,
+                    "username": other.username,
                     "code": other.referral_code,
                 }
         code = (user.referral_code or "").strip()

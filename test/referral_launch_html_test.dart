@@ -26,6 +26,7 @@ void main() {
     expect(html.contains("'text'"), isTrue);
     expect(html.contains('function applyPendingAfterAuth'), isTrue);
     expect(html.contains("apiUrl('/revenue-share/apply-code')"), isTrue);
+    expect(html.contains('pendingRef && hasSession()'), isTrue);
     expect(html.contains('extractReferral(prefGet(\'pending_referral\'))'), isTrue);
     expect(
       html.contains("localStorage.removeItem(PREFIX + 'pending_referral')"),

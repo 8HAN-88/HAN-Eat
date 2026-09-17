@@ -1038,6 +1038,9 @@
       if (pendingRef && !hasSession()) {
         setMode('register');
       }
+      if (pendingRef && hasSession()) {
+        applyPendingAfterAuth(prefGet('access_token'));
+      }
 
       // Boot decision
       // Root / and /app/ share this HTML. With a session we start Flutter

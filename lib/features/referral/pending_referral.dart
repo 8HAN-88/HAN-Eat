@@ -63,6 +63,25 @@ class PendingReferral {
     return normalize(value);
   }
 
+  /// Этот аккаунт уже привязан именно к этой ссылке — токен можно стереть.
+  /// Чужой/просроченный apply не должен выкидывать приглашение с устройства.
+  static bool boundTo(
+    String? pending, {
+    String? referredByCode,
+    String? referredByUsername,
+    int? referredById,
+  }) {
+    final token = extract(pending);
+    if (token == null) return false;
+    final lower = token.toLowerCase();
+    final code = extract(referredByCode);
+    if (code != null && code.toLowerCase() == lower) return true;
+    final username = normalize(referredByUsername);
+    if (username != null && username.toLowerCase() == lower) return true;
+    if (referredById != null && lower == 'u$referredById') return true;
+    return false;
+  }
+
   static String shareUrl(String code) {
     final ref = extract(code) ?? code.trim();
     if (ref.isEmpty) return webInviteBase;

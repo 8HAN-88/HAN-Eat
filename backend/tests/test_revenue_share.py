@@ -277,6 +277,35 @@ def test_banned_referrer_stops_accrual(db_session):
     assert [row.role for row in rows] == ["viewer"]
 
 
+def test_banned_viewer_does_not_accrue(db_session):
+    referrer = _user(db_session, 30)
+    viewer = _user(db_session, 31, created_at=datetime.utcnow())
+    svc = RevenueShareService(db_session)
+    code = svc.ensure_code(referrer)
+    db_session.commit()
+    svc.apply_code(viewer, code)
+    svc.set_extra_ads(viewer, True)
+    viewer.banned_at = datetime.utcnow()
+    db_session.commit()
+    svc.accrue_ad_event(viewer_id=31, kind="click", reference_id=77)
+    db_session.commit()
+    assert db_session.query(RevenueShareLedger).count() == 0
+
+
+def test_snapshot_includes_referrer_username(db_session):
+    referrer = _user(db_session, 32)
+    viewer = _user(db_session, 33, created_at=datetime.utcnow())
+    svc = RevenueShareService(db_session)
+    code = svc.ensure_code(referrer)
+    db_session.commit()
+    svc.apply_code(viewer, code)
+    db_session.commit()
+    snap = svc.snapshot(viewer)
+    assert snap["referred_by"]["username"] == referrer.username
+    assert snap["referred_by"]["code"] == code
+    assert snap["referred_by"]["id"] == referrer.id
+
+
 def test_snapshot_omits_empty_share_url(db_session, monkeypatch):
     user = _user(db_session, 29)
 

@@ -53,6 +53,26 @@ void main() {
     );
   });
 
+  test('pending is bound only to that referrer', () {
+    expect(
+      PendingReferral.boundTo('ABC12XYZ', referredByCode: 'ABC12XYZ'),
+      isTrue,
+    );
+    expect(
+      PendingReferral.boundTo('alice', referredByUsername: 'Alice'),
+      isTrue,
+    );
+    expect(PendingReferral.boundTo('u12', referredById: 12), isTrue);
+    expect(
+      PendingReferral.boundTo('OTHERCD1', referredByCode: 'ABC12XYZ'),
+      isFalse,
+    );
+    expect(
+      PendingReferral.boundTo('OTHERCD1', referredByUsername: 'alice'),
+      isFalse,
+    );
+  });
+
   test('share URL always uses /invite?ref=', () {
     expect(
       PendingReferral.shareUrl('ABC12XYZ'),
