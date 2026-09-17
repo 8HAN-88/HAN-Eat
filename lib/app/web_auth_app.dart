@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -13,6 +12,7 @@ import '../features/auth/presentation/two_factor_verify_screen.dart';
 import '../features/referral/pending_referral.dart';
 import 'auth_route_paths.dart';
 import 'theme_mode_controller.dart';
+import 'web_auth_location.dart';
 
 /// Minimal web shell: login/register only.
 ///
@@ -34,21 +34,6 @@ class WebAuthApp extends ConsumerWidget {
       routerConfig: router,
     );
   }
-}
-
-/// Лёгкий шелл должен сразу открыть регистрацию, если в URL есть инвайт.
-@visibleForTesting
-String webAuthInitialLocation([Uri? uri]) {
-  final target = uri ?? Uri.base;
-  final ref = PendingReferral.queryRef(target);
-  if (ref != null) {
-    return AuthPaths.registerWithRef(ref);
-  }
-  final path = target.path.toLowerCase();
-  if (path.contains('/invite') || path.contains('/register')) {
-    return AuthPaths.register;
-  }
-  return AuthPaths.login;
 }
 
 final GoRouter _authRouter = GoRouter(
