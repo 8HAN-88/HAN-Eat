@@ -26,6 +26,18 @@ APPLY_CODE_MAX_AGE_DAYS = 7
 IMPRESSION_GROSS_KOPECKS = 20
 CLICK_GROSS_KOPECKS = 200
 
+# Обратная ставка creator cashout (1 ★ = 0.8 ₽): 80 копеек = 1 звезда.
+KOPECKS_PER_STAR = 80
+MIN_CARD_PAYOUT_KOPECKS = 50_000
+KIND_STARS = "stars"
+KIND_CARD = "card"
+STATUS_PENDING = "pending"
+STATUS_AVAILABLE = "available"
+STATUS_PAYOUT_HOLD = "payout_hold"
+STATUS_PAID = "paid"
+STATUS_VOID = "void"
+STATUS_REJECTED = "rejected"
+
 
 def split_kopecks(
     gross: int,

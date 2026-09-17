@@ -15,15 +15,25 @@ from app.core.revenue_share import (
     CLICK_GROSS_KOPECKS,
     HOLD_DAYS,
     IMPRESSION_GROSS_KOPECKS,
+    KIND_CARD,
+    KIND_STARS,
+    KOPECKS_PER_STAR,
+    MIN_CARD_PAYOUT_KOPECKS,
     REFERRAL_DAYS,
     ROLE_REFERRER,
     ROLE_VIEWER,
     SOURCE_ADS,
     SOURCE_SUBSCRIPTION,
+    STATUS_AVAILABLE,
+    STATUS_PAID,
+    STATUS_PAYOUT_HOLD,
+    STATUS_PENDING,
+    STATUS_REJECTED,
+    STATUS_VOID,
     rub_to_kopecks,
     split_kopecks,
 )
-from app.models.revenue_share import RevenueShareLedger
+from app.models.revenue_share import PartnerPayoutRequest, RevenueShareLedger
 from app.models.user import User
 
 _CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -322,7 +332,7 @@ class RevenueShareService:
                 gross_kopecks=parts["gross"],
                 net_kopecks=parts["net"],
                 share_kopecks=share,
-                status="pending",
+                status=STATUS_PENDING,
                 available_at=available_at,
                 reference_type=reference_type,
                 reference_id=reference_id,
@@ -432,12 +442,12 @@ class RevenueShareService:
                 RevenueShareLedger.source == SOURCE_SUBSCRIPTION,
                 RevenueShareLedger.reference_type == "subscription",
                 RevenueShareLedger.reference_id == ref,
-                RevenueShareLedger.status.in_(("pending", "available")),
+                RevenueShareLedger.status.in_((STATUS_PENDING, STATUS_AVAILABLE)),
             )
             .all()
         )
         for row in rows:
-            row.status = "void"
+            row.status = STATUS_VOID
         return len(rows)
 
     def _release_ready(self, user_id: int) -> None:
@@ -446,7 +456,7 @@ class RevenueShareService:
             self.db.query(RevenueShareLedger)
             .filter(
                 RevenueShareLedger.beneficiary_user_id == user_id,
-                RevenueShareLedger.status == "pending",
+                RevenueShareLedger.status == STATUS_PENDING,
                 RevenueShareLedger.available_at.isnot(None),
             )
             .all()
@@ -454,7 +464,7 @@ class RevenueShareService:
         for row in rows:
             available = _as_naive_utc(row.available_at)
             if available <= now:
-                row.status = "available"
+                row.status = STATUS_AVAILABLE
 
     def snapshot(self, user: User) -> dict[str, Any]:
         self.ensure_code(user)
@@ -498,6 +508,7 @@ class RevenueShareService:
                     "code": other.referral_code,
                 }
         code = (user.referral_code or "").strip()
+        available = _sum(None, STATUS_AVAILABLE)
         return {
             "referral_code": code or None,
             "share_url": f"https://haneat.app/invite?ref={code}" if code else "",
@@ -506,15 +517,338 @@ class RevenueShareService:
             "referred_count": int(referred_count),
             "referral_days": REFERRAL_DAYS,
             "hold_days": HOLD_DAYS,
-            "pending_kopecks": _sum(None, "pending"),
-            "available_kopecks": _sum(None, "available"),
+            "pending_kopecks": _sum(None, STATUS_PENDING),
+            "available_kopecks": available,
+            "payout_hold_kopecks": _sum(None, STATUS_PAYOUT_HOLD),
+            "paid_kopecks": _sum(None, STATUS_PAID),
             "as_viewer_kopecks": _sum(ROLE_VIEWER, None),
             "as_referrer_kopecks": _sum(ROLE_REFERRER, None),
+            "kopecks_per_star": KOPECKS_PER_STAR,
+            "min_card_kopecks": MIN_CARD_PAYOUT_KOPECKS,
+            "convertible_stars": available // KOPECKS_PER_STAR,
+            "payouts": [self._payout_dict(row) for row in self.list_my_payouts(user.id)],
             "rules": {
                 "net_factor": 0.7,
                 "user_ad_share_of_net": 0.5,
                 "referrer_share_of_net": 0.25,
                 "subscription_user_share": 0,
                 "stars_excluded": True,
+                "kopecks_per_star": KOPECKS_PER_STAR,
+                "min_card_kopecks": MIN_CARD_PAYOUT_KOPECKS,
             },
         }
+
+    def _iso(self, value: Optional[datetime]) -> Optional[str]:
+        if value is None:
+            return None
+        naive = _as_naive_utc(value)
+        return naive.isoformat() + "Z"
+
+    def _payout_dict(
+        self,
+        payout: PartnerPayoutRequest,
+        *,
+        with_user: bool = False,
+    ) -> dict[str, Any]:
+        data: dict[str, Any] = {
+            "id": payout.id,
+            "user_id": payout.user_id,
+            "kind": payout.kind,
+            "amount_kopecks": int(payout.amount_kopecks or 0),
+            "amount_stars": int(payout.amount_stars or 0),
+            "status": payout.status,
+            "phone": payout.phone,
+            "recipient_name": payout.recipient_name,
+            "note": payout.note,
+            "created_at": self._iso(payout.created_at),
+            "reviewed_at": self._iso(payout.reviewed_at),
+            "paid_at": self._iso(payout.paid_at),
+        }
+        if with_user:
+            other = self.db.query(User).filter(User.id == payout.user_id).first()
+            if other:
+                data["user_name"] = other.name
+                data["user_email"] = other.email
+                data["user_username"] = other.username
+        return data
+
+    def _live_user(self, user: User) -> User:
+        if user.deleted_at is not None or user.banned_at is not None:
+            raise RevenueShareError("Аккаунт недоступен", status_code=403)
+        if bool(getattr(user, "is_bot", False)):
+            raise RevenueShareError("Выплаты ботам недоступны")
+        return user
+
+    def _available_rows(self, user_id: int) -> list[RevenueShareLedger]:
+        self._release_ready(user_id)
+        return (
+            self.db.query(RevenueShareLedger)
+            .filter(
+                RevenueShareLedger.beneficiary_user_id == user_id,
+                RevenueShareLedger.status == STATUS_AVAILABLE,
+            )
+            .order_by(
+                RevenueShareLedger.available_at.asc(),
+                RevenueShareLedger.id.asc(),
+            )
+            .with_for_update()
+            .all()
+        )
+
+    def _allocate_available(
+        self,
+        *,
+        user_id: int,
+        amount_kopecks: int,
+        payout: PartnerPayoutRequest,
+        status: str,
+    ) -> None:
+        if amount_kopecks <= 0:
+            raise RevenueShareError("Сумма должна быть больше нуля")
+        rows = self._available_rows(user_id)
+        total = sum(int(row.share_kopecks or 0) for row in rows)
+        if total < amount_kopecks:
+            raise RevenueShareError("Недостаточно доступного баланса")
+        taken: list[RevenueShareLedger] = []
+        acc = 0
+        for row in rows:
+            taken.append(row)
+            acc += int(row.share_kopecks or 0)
+            if acc >= amount_kopecks:
+                break
+        overshoot = acc - amount_kopecks
+        last = taken[-1]
+        if overshoot > 0:
+            last_share = int(last.share_kopecks or 0)
+            keep = last_share - overshoot
+            if keep <= 0:
+                raise RevenueShareError("Не удалось разделить строку баланса")
+            last.share_kopecks = keep
+            self.db.add(
+                RevenueShareLedger(
+                    beneficiary_user_id=last.beneficiary_user_id,
+                    role=last.role,
+                    source="payout",
+                    subject_user_id=last.subject_user_id,
+                    referrer_user_id=last.referrer_user_id,
+                    extra_ads=bool(last.extra_ads),
+                    gross_kopecks=0,
+                    net_kopecks=0,
+                    share_kopecks=overshoot,
+                    status=STATUS_AVAILABLE,
+                    available_at=_now(),
+                    reference_type="payout_change",
+                    reference_id=payout.id,
+                )
+            )
+        for row in taken:
+            row.status = status
+            row.payout_request_id = payout.id
+
+    def _normalize_phone(self, raw: Optional[str]) -> str:
+        digits = re.sub(r"\D", "", raw or "")
+        if digits.startswith("8") and len(digits) == 11:
+            digits = "7" + digits[1:]
+        if digits.startswith("9") and len(digits) == 10:
+            digits = "7" + digits
+        if len(digits) != 11 or not digits.startswith("7"):
+            raise RevenueShareError("Укажите телефон СБП в формате +7…")
+        return "+" + digits
+
+    def _normalize_name(self, raw: Optional[str]) -> str:
+        name = re.sub(r"\s+", " ", (raw or "").strip())
+        if len(name) < 2 or len(name) > 80:
+            raise RevenueShareError("Укажите имя получателя")
+        return name
+
+    def list_my_payouts(self, user_id: int, *, limit: int = 40) -> list[PartnerPayoutRequest]:
+        return (
+            self.db.query(PartnerPayoutRequest)
+            .filter(PartnerPayoutRequest.user_id == user_id)
+            .order_by(
+                PartnerPayoutRequest.created_at.desc(),
+                PartnerPayoutRequest.id.desc(),
+            )
+            .limit(max(1, min(limit, 200)))
+            .all()
+        )
+
+    def list_payout_queue(
+        self,
+        *,
+        status: Optional[str] = STATUS_PENDING,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        q = self.db.query(PartnerPayoutRequest).filter(
+            PartnerPayoutRequest.kind == KIND_CARD
+        )
+        if status:
+            q = q.filter(PartnerPayoutRequest.status == status)
+        rows = (
+            q.order_by(
+                PartnerPayoutRequest.created_at.asc(),
+                PartnerPayoutRequest.id.asc(),
+            )
+            .limit(max(1, min(limit, 200)))
+            .all()
+        )
+        return [self._payout_dict(row, with_user=True) for row in rows]
+
+    def convert_to_stars(
+        self,
+        user: User,
+        amount_kopecks: Optional[int] = None,
+    ) -> PartnerPayoutRequest:
+        self._live_user(user)
+        self._release_ready(user.id)
+        available = int(
+            self.db.query(func.coalesce(func.sum(RevenueShareLedger.share_kopecks), 0))
+            .filter(
+                RevenueShareLedger.beneficiary_user_id == user.id,
+                RevenueShareLedger.status == STATUS_AVAILABLE,
+            )
+            .scalar()
+            or 0
+        )
+        spendable = available if amount_kopecks is None else min(available, int(amount_kopecks))
+        stars = spendable // KOPECKS_PER_STAR
+        if stars < 1:
+            raise RevenueShareError("Нужна хотя бы 1 звезда (от 0,80 ₽)")
+        need = stars * KOPECKS_PER_STAR
+        payout = PartnerPayoutRequest(
+            user_id=user.id,
+            kind=KIND_STARS,
+            amount_kopecks=need,
+            amount_stars=stars,
+            status=STATUS_PAID,
+            paid_at=_now(),
+            created_at=_now(),
+        )
+        self.db.add(payout)
+        self.db.flush()
+        self._allocate_available(
+            user_id=user.id,
+            amount_kopecks=need,
+            payout=payout,
+            status=STATUS_PAID,
+        )
+        self._credit_stars(user.id, stars, payout.id, need)
+        self.db.flush()
+        return payout
+
+    def _credit_stars(
+        self,
+        user_id: int,
+        stars: int,
+        payout_id: int,
+        kopecks: int,
+    ) -> None:
+        from app.models.paid_features import StarTransaction
+
+        key = f"partner_payout:{payout_id}"
+        existing = (
+            self.db.query(StarTransaction)
+            .filter(StarTransaction.idempotency_key == key)
+            .first()
+        )
+        if existing:
+            return
+        self.db.add(
+            StarTransaction(
+                user_id=user_id,
+                amount=stars,
+                type="partner_payout",
+                idempotency_key=key,
+                meta={"payout_id": payout_id, "kopecks": kopecks},
+            )
+        )
+
+    def request_card_payout(
+        self,
+        user: User,
+        *,
+        amount_kopecks: Optional[int],
+        phone: str,
+        recipient_name: str,
+        note: Optional[str] = None,
+    ) -> PartnerPayoutRequest:
+        self._live_user(user)
+        self._release_ready(user.id)
+        available = int(
+            self.db.query(func.coalesce(func.sum(RevenueShareLedger.share_kopecks), 0))
+            .filter(
+                RevenueShareLedger.beneficiary_user_id == user.id,
+                RevenueShareLedger.status == STATUS_AVAILABLE,
+            )
+            .scalar()
+            or 0
+        )
+        requested = available if amount_kopecks is None else int(amount_kopecks)
+        if requested < MIN_CARD_PAYOUT_KOPECKS:
+            raise RevenueShareError("На карту — от 500 ₽")
+        if requested > available:
+            raise RevenueShareError("Недостаточно доступного баланса")
+        payout = PartnerPayoutRequest(
+            user_id=user.id,
+            kind=KIND_CARD,
+            amount_kopecks=requested,
+            amount_stars=0,
+            status=STATUS_PENDING,
+            phone=self._normalize_phone(phone),
+            recipient_name=self._normalize_name(recipient_name),
+            note=(note or "").strip() or None,
+            created_at=_now(),
+        )
+        self.db.add(payout)
+        self.db.flush()
+        self._allocate_available(
+            user_id=user.id,
+            amount_kopecks=requested,
+            payout=payout,
+            status=STATUS_PAYOUT_HOLD,
+        )
+        self.db.flush()
+        return payout
+
+    def review_payout(
+        self,
+        payout_id: int,
+        *,
+        reviewer_user_id: int,
+        approve: bool,
+        note: Optional[str] = None,
+    ) -> PartnerPayoutRequest:
+        payout = (
+            self.db.query(PartnerPayoutRequest)
+            .filter(PartnerPayoutRequest.id == payout_id)
+            .first()
+        )
+        if not payout:
+            raise RevenueShareError("Заявка не найдена", status_code=404)
+        if payout.kind != KIND_CARD:
+            raise RevenueShareError("Эту заявку нельзя разобрать вручную")
+        if payout.status != STATUS_PENDING:
+            raise RevenueShareError("Заявка уже разобрана")
+        payout.reviewed_by_user_id = reviewer_user_id
+        payout.reviewed_at = _now()
+        if note is not None:
+            payout.note = note.strip() or payout.note
+        rows = (
+            self.db.query(RevenueShareLedger)
+            .filter(RevenueShareLedger.payout_request_id == payout.id)
+            .all()
+        )
+        if approve:
+            payout.status = STATUS_PAID
+            payout.paid_at = _now()
+            for row in rows:
+                if row.status == STATUS_PAYOUT_HOLD:
+                    row.status = STATUS_PAID
+        else:
+            payout.status = STATUS_REJECTED
+            for row in rows:
+                if row.status == STATUS_PAYOUT_HOLD:
+                    row.status = STATUS_AVAILABLE
+                    row.payout_request_id = None
+        self.db.flush()
+        return payout

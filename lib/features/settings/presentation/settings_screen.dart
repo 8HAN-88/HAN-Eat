@@ -393,6 +393,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
       if (_isAdmin)
         _SettingsItem(
+          title: 'Выплаты партнёрам',
+          icon: Icons.payments_outlined,
+          subtitle: 'Заявки на карту / СБП с партнёрского баланса',
+          onTap: () => context.push(AdminPartnerPayoutsRoute.path),
+        ),
+      if (_isAdmin)
+        _SettingsItem(
           title: 'Функции подписки',
           icon: Icons.extension_outlined,
           subtitle: 'Каталог уровней, блоки и типы функций',

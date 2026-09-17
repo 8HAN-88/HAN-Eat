@@ -6,8 +6,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.core.revenue_share import payment_reference_id, split_kopecks
-from app.models.revenue_share import RevenueShareLedger
+from app.core.revenue_share import (
+    KOPECKS_PER_STAR,
+    MIN_CARD_PAYOUT_KOPECKS,
+    payment_reference_id,
+    split_kopecks,
+)
+from app.models.paid_features import StarTransaction
+from app.models.revenue_share import PartnerPayoutRequest, RevenueShareLedger
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.services.revenue_share_service import (
@@ -30,8 +36,10 @@ def db_session():
         bind=engine,
         tables=[
             User.__table__,
+            PartnerPayoutRequest.__table__,
             RevenueShareLedger.__table__,
             Subscription.__table__,
+            StarTransaction.__table__,
         ],
     )
     Session = sessionmaker(bind=engine)
@@ -564,3 +572,159 @@ def test_stripe_invoice_accrues_and_charge_refund_voids():
     assert 'event_type == "charge.refunded"' in stripe_svc
     assert "_accrue_subscription_share" in payments
     assert 'result.get("action") == "refund_succeeded"' in payments
+
+
+def _available_share(db, user, share, ref):
+    db.add(
+        RevenueShareLedger(
+            beneficiary_user_id=user.id,
+            role="referrer",
+            source="subscription",
+            subject_user_id=user.id,
+            referrer_user_id=user.id,
+            extra_ads=False,
+            gross_kopecks=share * 4,
+            net_kopecks=share * 3,
+            share_kopecks=share,
+            status="available",
+            available_at=datetime.utcnow() - timedelta(days=1),
+            reference_type="subscription",
+            reference_id=ref,
+        )
+    )
+    db.commit()
+
+
+def test_convert_to_stars_and_keep_remainder(db_session):
+    user = _user(db_session, 60)
+    svc = RevenueShareService(db_session)
+    svc.ensure_code(user)
+    _available_share(db_session, user, 1750, 101)
+    payout = svc.convert_to_stars(user)
+    db_session.commit()
+    assert payout.kind == "stars"
+    assert payout.status == "paid"
+    assert payout.amount_stars == 1750 // KOPECKS_PER_STAR
+    assert payout.amount_kopecks == payout.amount_stars * KOPECKS_PER_STAR
+    snap = svc.snapshot(user)
+    leftover = 1750 - payout.amount_kopecks
+    assert snap["available_kopecks"] == leftover
+    assert snap["paid_kopecks"] == payout.amount_kopecks
+    assert snap["convertible_stars"] == leftover // KOPECKS_PER_STAR
+    stars = db_session.query(StarTransaction).filter(StarTransaction.user_id == user.id).one()
+    assert stars.amount == payout.amount_stars
+    assert stars.type == "partner_payout"
+    row = (
+        db_session.query(RevenueShareLedger)
+        .filter(RevenueShareLedger.status == "paid")
+        .one()
+    )
+    assert row.payout_request_id == payout.id
+    assert row.share_kopecks == payout.amount_kopecks
+
+
+def test_convert_to_stars_requires_one_star(db_session):
+    user = _user(db_session, 61)
+    svc = RevenueShareService(db_session)
+    _available_share(db_session, user, 79, 102)
+    with pytest.raises(RevenueShareError):
+        svc.convert_to_stars(user)
+
+
+def test_card_payout_hold_reject_and_approve(db_session):
+    user = _user(db_session, 62)
+    admin = _user(db_session, 63, is_admin=True)
+    svc = RevenueShareService(db_session)
+    _available_share(db_session, user, 30000, 201)
+    _available_share(db_session, user, 25000, 202)
+    with pytest.raises(RevenueShareError):
+        svc.request_card_payout(
+            user,
+            amount_kopecks=MIN_CARD_PAYOUT_KOPECKS - 1,
+            phone="+79001234567",
+            recipient_name="Иван Петров",
+        )
+    payout = svc.request_card_payout(
+        user,
+        amount_kopecks=MIN_CARD_PAYOUT_KOPECKS,
+        phone="8 900 123-45-67",
+        recipient_name="Иван Петров",
+    )
+    db_session.commit()
+    assert payout.status == "pending"
+    assert payout.phone == "+79001234567"
+    snap = svc.snapshot(user)
+    assert snap["available_kopecks"] == 5000
+    assert snap["payout_hold_kopecks"] == MIN_CARD_PAYOUT_KOPECKS
+    assert snap["available_kopecks"] + snap["payout_hold_kopecks"] == 55000
+    rejected = svc.review_payout(payout.id, reviewer_user_id=admin.id, approve=False)
+    db_session.commit()
+    assert rejected.status == "rejected"
+    snap = svc.snapshot(user)
+    assert snap["available_kopecks"] == 55000
+    assert snap["payout_hold_kopecks"] == 0
+    payout2 = svc.request_card_payout(
+        user,
+        amount_kopecks=None,
+        phone="79001234567",
+        recipient_name="Иван Петров",
+    )
+    db_session.commit()
+    approved = svc.review_payout(payout2.id, reviewer_user_id=admin.id, approve=True)
+    db_session.commit()
+    assert approved.status == "paid"
+    snap = svc.snapshot(user)
+    assert snap["available_kopecks"] == 0
+    assert snap["paid_kopecks"] == 55000
+    assert snap["payout_hold_kopecks"] == 0
+
+
+def test_void_skips_hold_and_paid(db_session):
+    user = _user(db_session, 64)
+    payer = _user(db_session, 65, created_at=datetime.utcnow())
+    svc = RevenueShareService(db_session)
+    code = svc.ensure_code(user)
+    db_session.commit()
+    svc.apply_code(payer, code)
+    db_session.commit()
+    pay_id = "pay_payout_void"
+    svc.accrue_subscription(
+        payer_id=65,
+        amount_rub=100,
+        reference_id=payment_reference_id(pay_id),
+    )
+    db_session.commit()
+    row = db_session.query(RevenueShareLedger).one()
+    row.status = "paid"
+    db_session.commit()
+    assert svc.void_subscription_share(pay_id) == 0
+    db_session.refresh(row)
+    assert row.status == "paid"
+    row.status = "payout_hold"
+    db_session.commit()
+    assert svc.void_subscription_share(pay_id) == 0
+    db_session.refresh(row)
+    assert row.status == "payout_hold"
+
+
+def test_banned_user_cannot_cash_out(db_session):
+    user = _user(db_session, 66)
+    svc = RevenueShareService(db_session)
+    _available_share(db_session, user, 20000, 301)
+    user.banned_at = datetime.utcnow()
+    db_session.commit()
+    with pytest.raises(RevenueShareError):
+        svc.convert_to_stars(user)
+
+
+def test_snapshot_payout_fields(db_session):
+    user = _user(db_session, 67)
+    svc = RevenueShareService(db_session)
+    snap = svc.snapshot(user)
+    assert snap["payout_hold_kopecks"] == 0
+    assert snap["paid_kopecks"] == 0
+    assert snap["kopecks_per_star"] == KOPECKS_PER_STAR
+    assert snap["min_card_kopecks"] == MIN_CARD_PAYOUT_KOPECKS
+    assert snap["convertible_stars"] == 0
+    assert snap["payouts"] == []
+    assert snap["rules"]["min_card_kopecks"] == MIN_CARD_PAYOUT_KOPECKS

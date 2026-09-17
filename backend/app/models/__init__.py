@@ -60,7 +60,7 @@ from app.models.flex_subscription import (
     UserFlexSubscription,
 )
 from app.models.ad import AdCampaign, AdClick, AdCreative, AdHide, AdImpression
-from app.models.revenue_share import RevenueShareLedger
+from app.models.revenue_share import PartnerPayoutRequest, RevenueShareLedger
 from app.models.miniapp import BotMiniApp, MiniAppInstall, MiniAppLaunch
 from app.models.sticker import (
     StickerPack,
@@ -101,5 +101,6 @@ __all__ = [
     "AdClick",
     "AdHide",
     "RevenueShareLedger",
+    "PartnerPayoutRequest",
 ]
 

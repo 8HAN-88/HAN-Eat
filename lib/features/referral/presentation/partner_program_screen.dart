@@ -21,11 +21,20 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
   RevenueShareSnapshot? _snap;
   Object? _error;
   bool _busy = false;
+  final _cardPhone = TextEditingController();
+  final _cardName = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _cardPhone.dispose();
+    _cardName.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -96,6 +105,163 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
           ? null
           : box.localToGlobal(Offset.zero) & box.size,
     );
+  }
+
+  Future<void> _convertStars() async {
+    final snap = _snap;
+    if (snap == null || !snap.canConvertStars || _busy) return;
+    final stars = snap.convertibleStars;
+    final amount = stars * snap.kopecksPerStar;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('В звёзды'),
+        content: Text(
+          'Зачислить $stars ★ за ${RevenueShareSnapshot.rub(amount)}? '
+          'Сразу на баланс, без банка. Остаток меньше 0,80 ₽ останется.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Зачислить'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      final next = await RevenueShareApi.convertToStars();
+      if (!mounted) return;
+      setState(() {
+        _snap = next;
+        _busy = false;
+      });
+      final credited = next.lastPayout?.amountStars ?? stars;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('Зачислено $credited ★')));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _requestCard() async {
+    final snap = _snap;
+    if (snap == null || !snap.canRequestCard || _busy) return;
+    _cardPhone.clear();
+    _cardName.clear();
+    var packet = snap.minCardKopecks;
+    final all = snap.availableKopecks;
+    final packets = <int>{
+      snap.minCardKopecks,
+      if (all >= 100000) 100000,
+      all,
+    }.toList()
+      ..sort();
+    final payload = await showDialog<({int? amount, String phone, String name})>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('На карту / СБП'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'От ${RevenueShareSnapshot.rub(snap.minCardKopecks)}. '
+                  'Заявка в очередь, деньги сразу в холде.',
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final value in packets)
+                      ChoiceChip(
+                        selected: packet == value,
+                        label: Text(
+                          value == all && value != snap.minCardKopecks && value != 100000
+                              ? 'Всё ${RevenueShareSnapshot.rub(value)}'
+                              : RevenueShareSnapshot.rub(value),
+                        ),
+                        onSelected: (_) => setLocal(() => packet = value),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _cardPhone,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: 'Телефон СБП',
+                    hintText: '+7 900 000-00-00',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _cardName,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    labelText: 'Имя получателя',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final phone = _cardPhone.text.trim();
+                final name = _cardName.text.trim();
+                if (phone.length < 10 || name.length < 2) return;
+                Navigator.pop(
+                  ctx,
+                  (amount: packet, phone: phone, name: name),
+                );
+              },
+              child: const Text('Отправить'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (payload == null || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      final next = await RevenueShareApi.requestCardPayout(
+        amountKopecks: payload.amount,
+        phone: payload.phone,
+        recipientName: payload.name,
+      );
+      if (!mounted) return;
+      setState(() {
+        _snap = next;
+        _busy = false;
+      });
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('Заявка отправлена')));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
   }
 
   String? _invitedBy(RevenueShareSnapshot? snap) {
@@ -225,11 +391,66 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
                   const SizedBox(height: 8),
                   Text('Доступно: ${snap?.availableRub ?? '—'}'),
                   Text('В холде 14 дней: ${snap?.pendingRub ?? '—'}'),
+                  Text('На выплате: ${snap?.payoutHoldRub ?? '—'}'),
+                  Text('Уже выплачено: ${snap?.paidRub ?? '—'}'),
                   Text('Мне с рекламы: ${snap?.viewerRub ?? '—'}'),
                   Text('Мне как рефералу: ${snap?.referrerRub ?? '—'}'),
+                  const SizedBox(height: 12),
+                  Text(
+                    'В звёзды — сразу, 1 ★ = 0,80 ₽. '
+                    'На карту / СБП — от 500 ₽, после проверки.',
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      FilledButton.icon(
+                        onPressed: _busy || snap == null || !snap.canConvertStars
+                            ? null
+                            : _convertStars,
+                        icon: const Icon(Icons.star_outline, size: 18),
+                        label: Text(
+                          snap == null || snap.convertibleStars <= 0
+                              ? 'В звёзды'
+                              : 'В звёзды · ${snap.convertibleStars} ★',
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _busy || snap == null || !snap.canRequestCard
+                            ? null
+                            : _requestCard,
+                        icon: const Icon(Icons.account_balance_wallet_outlined, size: 18),
+                        label: const Text('На карту / СБП'),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
+            if (snap != null && snap.payouts.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _card(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Заявки',
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                    ),
+                    const SizedBox(height: 8),
+                    for (final payout in snap.payouts) ...[
+                      Text(
+                        '${payout.kindLabel} · ${payout.amountRub}'
+                        '${payout.amountStars > 0 ? ' · ${payout.amountStars} ★' : ''}'
+                        ' · ${payout.statusLabel}',
+                      ),
+                      const SizedBox(height: 6),
+                    ],
+                  ],
+                ),
+              ),
+            ],
             if (_invitedBy(snap) != null) ...[
               const SizedBox(height: 12),
               Text('Вас пригласил: ${_invitedBy(snap)}'),
