@@ -10,6 +10,7 @@ import '../../../widgets/app_gradient_background.dart';
 import '../../support/presentation/widgets/subscription_cancel_survey_sheet.dart';
 import '../application/flex_level_features.dart';
 import '../application/flex_purchase_ladder.dart';
+import 'flex_checkout_banner.dart';
 import 'flex_preview_sheet.dart';
 
 class FlexSubscriptionScreen extends StatefulWidget {
@@ -76,6 +77,12 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen>
     final me = _me;
     if (me == null || _busy) return;
     if (me.active && me.currentLevel == level) return;
+    if (me.legalConsentRequired) {
+      await context.push(LegalConsentRoute.path);
+      if (mounted) await _load();
+      return;
+    }
+    if (!me.checkoutAvailable) return;
     setState(() => _busy = true);
     try {
       final preview = await FlexSubscriptionApi.preview(level);
@@ -91,6 +98,15 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen>
       if (mounted) await _load();
     } catch (e) {
       if (!mounted) return;
+      if (e is ApiClientException && e.code == 'LEGAL_CONSENT_REQUIRED') {
+        await context.push(LegalConsentRoute.path);
+        if (mounted) await _load();
+        return;
+      }
+      if (e is ApiClientException && e.code == 'PAYMENTS_UNAVAILABLE') {
+        await _load();
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(userVisibleError(e)),
@@ -145,6 +161,11 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen>
                       padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
                       children: [
                         _StatusLine(me: me!),
+                        FlexCheckoutBanner(
+                          checkoutAvailable: me.checkoutAvailable,
+                          legalConsentRequired: me.legalConsentRequired,
+                          message: me.checkoutMessage,
+                        ),
                         const SizedBox(height: 10),
                         for (var level = 1; level <= me.maxLevel; level++)
                           _LevelCard(
@@ -155,6 +176,7 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen>
                             current: me.active && me.currentLevel == level,
                             highlight: widget.initialLevel == level,
                             busy: _busy,
+                            canBuy: me.canCheckout,
                             onBuy: () => _buyLevel(level),
                           ),
                         const SizedBox(height: 12),
@@ -169,8 +191,7 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen>
                             onPressed: _busy
                                 ? null
                                 : () async {
-                                    final ok =
-                                        await runSubscriptionCancelFlow(
+                                    final ok = await runSubscriptionCancelFlow(
                                       context,
                                     );
                                     if (ok && mounted) await _load();
@@ -196,12 +217,24 @@ class _StatusLine extends StatelessWidget {
     final text = me.active
         ? 'Уровень ${me.currentLevel} · ${me.priceRub} ₽/мес'
         : 'Одна подписка · ${me.maxLevel} ступеней · от ${FlexPurchaseLadder.basePriceRub} ₽';
-    return Text(
-      text,
-      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w800,
-            color: scheme.onSurface,
-          ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          text,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: scheme.onSurface,
+              ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          '«Без рекламы» не действует, если в партнёрке включена доп. реклама.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+        ),
+      ],
     );
   }
 }
@@ -215,6 +248,7 @@ class _LevelCard extends StatelessWidget {
     required this.current,
     required this.highlight,
     required this.busy,
+    required this.canBuy,
     required this.onBuy,
   });
 
@@ -225,6 +259,7 @@ class _LevelCard extends StatelessWidget {
   final bool current;
   final bool highlight;
   final bool busy;
+  final bool canBuy;
   final VoidCallback onBuy;
 
   @override
@@ -248,7 +283,7 @@ class _LevelCard extends StatelessWidget {
                 : null,
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: current || busy ? null : onBuy,
+          onTap: current || busy || !canBuy ? null : onBuy,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
             child: Row(
@@ -256,17 +291,14 @@ class _LevelCard extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 16,
-                  backgroundColor: current
-                      ? scheme.primary
-                      : scheme.surfaceContainerHighest,
+                  backgroundColor:
+                      current ? scheme.primary : scheme.surfaceContainerHighest,
                   child: Text(
                     '$level',
                     style: TextStyle(
                       fontWeight: FontWeight.w900,
                       fontSize: 13,
-                      color: current
-                          ? scheme.onPrimary
-                          : scheme.onSurface,
+                      color: current ? scheme.onPrimary : scheme.onSurface,
                     ),
                   ),
                 ),
@@ -316,8 +348,8 @@ class _LevelCard extends StatelessWidget {
                   )
                 else
                   TextButton(
-                    onPressed: busy ? null : onBuy,
-                    child: const Text('Оформить'),
+                    onPressed: busy || !canBuy ? null : onBuy,
+                    child: Text(canBuy ? 'Оформить' : 'Скоро'),
                   ),
               ],
             ),

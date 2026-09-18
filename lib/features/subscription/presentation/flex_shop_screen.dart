@@ -7,6 +7,7 @@ import '../../../app/app_router.dart';
 import '../../../services/flex_subscription_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
+import 'flex_checkout_banner.dart';
 import 'flex_preview_sheet.dart';
 
 class FlexShopScreen extends StatefulWidget {
@@ -66,16 +67,37 @@ class _FlexShopScreenState extends State<FlexShopScreen>
   }
 
   Future<void> _buyLevel(int level) async {
+    final shop = _shop;
+    if (shop == null) return;
+    if (shop.legalConsentRequired) {
+      await context.push(LegalConsentRoute.path);
+      if (mounted) await _load();
+      return;
+    }
+    if (!shop.checkoutAvailable) return;
     try {
       final preview = await FlexSubscriptionApi.preview(level);
       if (!mounted) return;
-      final ok = await showFlexPreviewSheet(context, preview: preview);
+      final ok = await showFlexPreviewSheet(
+        context,
+        preview: preview,
+        confirmDowngrade: preview.needsConfirm,
+      );
       if (ok != true || !mounted) return;
       await FlexSubscriptionApi.checkout(level);
       _awaitingCheckoutReturn = true;
       if (mounted) await _load();
     } catch (e) {
       if (!mounted) return;
+      if (e is ApiClientException && e.code == 'LEGAL_CONSENT_REQUIRED') {
+        await context.push(LegalConsentRoute.path);
+        if (mounted) await _load();
+        return;
+      }
+      if (e is ApiClientException && e.code == 'PAYMENTS_UNAVAILABLE') {
+        await _load();
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(userVisibleError(e)),
@@ -133,9 +155,19 @@ class _FlexShopScreenState extends State<FlexShopScreen>
                   )
                 : ListView.builder(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-                    itemCount: _shop!.features.length,
+                    itemCount: _shop!.features.length + 1,
                     itemBuilder: (context, index) {
-                      final feature = _shop!.features[index];
+                      if (index == 0) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: FlexCheckoutBanner(
+                            checkoutAvailable: _shop!.checkoutAvailable,
+                            legalConsentRequired: _shop!.legalConsentRequired,
+                            message: _shop!.checkoutMessage,
+                          ),
+                        );
+                      }
+                      final feature = _shop!.features[index - 1];
                       return Card(
                         margin: const EdgeInsets.only(bottom: 12),
                         child: Padding(
@@ -159,11 +191,15 @@ class _FlexShopScreenState extends State<FlexShopScreen>
                               if (feature.shopState != 'available') ...[
                                 const SizedBox(height: 10),
                                 FilledButton.tonal(
-                                  onPressed: () => _buyLevel(feature.assignedLevel),
+                                  onPressed: _shop!.canCheckout
+                                      ? () => _buyLevel(feature.assignedLevel)
+                                      : null,
                                   child: Text(
-                                    feature.shopState == 'plus_ten'
-                                        ? 'Открыть за +10 ₽'
-                                        : 'Перейти на уровень ${feature.assignedLevel}',
+                                    !_shop!.canCheckout
+                                        ? 'Оплата недоступна'
+                                        : feature.shopState == 'plus_ten'
+                                            ? 'Открыть за +10 ₽'
+                                            : 'Перейти на уровень ${feature.assignedLevel}',
                                   ),
                                 ),
                               ],

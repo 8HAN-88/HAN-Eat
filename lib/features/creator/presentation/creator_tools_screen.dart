@@ -191,7 +191,7 @@ class _CreatorToolsScreenState extends State<CreatorToolsScreen> {
           child: ListTile(
             leading: const Icon(Icons.workspace_premium_outlined),
             title: const Text('Подписка'),
-            subtitle: const Text('Creator или Pro'),
+            subtitle: const Text('Уровень 16 и выше — продвижение и аналитика'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.push(SubscriptionRoute.pathWithProduct('creator')),
           ),
@@ -225,14 +225,15 @@ class _CreatorToolsScreenState extends State<CreatorToolsScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Продвижение, отложенные посты и аналитика — с тарифом HanWe Creator или Pro.',
+              'Продвижение, отложенные посты и аналитика — с подпиской '
+              'уровня 16 и выше.',
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
             FilledButton(
               onPressed: () =>
                   context.push(SubscriptionRoute.pathWithProduct('creator')),
-              child: const Text('Выбрать тариф'),
+              child: const Text('Открыть подписку'),
             ),
           ],
         ),

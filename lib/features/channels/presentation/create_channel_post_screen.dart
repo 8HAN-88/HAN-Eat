@@ -604,10 +604,11 @@ class _CreateChannelPostScreenState
   }
 
   Future<void> _initializeVideoPreview(XFile video) async {
-    if (!mounted || kIsWeb) return;
+    if (!mounted) return;
     try {
-      final file = getFileFromPath(video.path);
-      final controller = VideoPlayerController.file(file);
+      final controller = kIsWeb
+          ? VideoPlayerController.networkUrl(Uri.parse(video.path))
+          : VideoPlayerController.file(getFileFromPath(video.path));
       setState(() {
         _videoPreviewController = controller;
         _videoPreviewFuture = controller.initialize();
@@ -1610,11 +1611,9 @@ class _CreateChannelPostScreenState
   }
 
   Widget _buildVideoPreview() {
-    if (kIsWeb ||
-        _videoPreviewController == null ||
-        _videoPreviewFuture == null) {
+    if (_videoPreviewController == null || _videoPreviewFuture == null) {
       return _buildVideoPlaceholder(
-        message: kIsWeb ? 'Предпросмотр недоступен в веб-версии' : null,
+        message: kIsWeb ? 'Если превью не открылось — ролик всё равно отправится' : null,
       );
     }
     return FutureBuilder<void>(

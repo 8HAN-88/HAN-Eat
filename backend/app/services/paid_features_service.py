@@ -835,6 +835,8 @@ class PaidFeaturesService:
         note: Optional[str] = None,
         method: str = "rub",
         ton_address: Optional[str] = None,
+        phone: Optional[str] = None,
+        recipient_name: Optional[str] = None,
         stars_to_rub_rate: float = 0.8,
     ) -> CreatorPayoutRequest:
         if amount_stars <= 0:
@@ -862,6 +864,8 @@ class PaidFeaturesService:
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid payout method"
             )
         dest = (ton_address or "").strip()
+        payout_phone = (phone or "").strip()
+        payout_name = (recipient_name or "").strip()
         if kind == "ton":
             user = self.db.query(User).filter(User.id == user_id).first()
             dest = dest or (getattr(user, "ton_address", None) or "").strip()
@@ -869,6 +873,12 @@ class PaidFeaturesService:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Payout address required",
+                )
+        else:
+            if len(payout_phone) < 10 or len(payout_name) < 2:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Укажите телефон СБП и имя получателя",
                 )
         amount_rub = round(float(amount_stars) * float(stars_to_rub_rate), 2)
         payout = CreatorPayoutRequest(
@@ -879,6 +889,8 @@ class PaidFeaturesService:
             note=(note or "").strip() or None,
             method=kind,
             ton_address=dest or None,
+            phone=payout_phone or None,
+            recipient_name=payout_name or None,
         )
         self.db.add(payout)
         self.db.flush()

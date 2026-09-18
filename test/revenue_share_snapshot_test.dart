@@ -45,6 +45,6 @@ void main() {
     expect(snap.payouts.single.kindLabel, 'На карту / СБП');
     expect(snap.payouts.single.statusLabel, 'В обработке');
     expect(snap.lastPayout?.amountStars, 21);
-    expect(snap.lastPayout?.kindLabel, 'В звёзды');
+    expect(snap.lastPayout?.kindLabel, 'Обменять на звёзды');
   });
 }

@@ -381,7 +381,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       _SettingsItem(
         title: 'Резервная копия',
         icon: Icons.backup_outlined,
-        subtitle: 'Экспорт и восстановление данных',
+        subtitle: 'Экспорт и восстановление профиля (JSON)',
         onTap: () => context.push(BackupRoute.path),
       ),
       if (_isAdmin)

@@ -114,7 +114,7 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('В звёзды'),
+        title: const Text('Обменять на звёзды'),
         content: Text(
           'Зачислить $stars ★ за ${RevenueShareSnapshot.rub(amount)}? '
           'Сразу на баланс, без банка. Остаток меньше 0,80 ₽ останется.',
@@ -398,7 +398,7 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
                   Text('Мне как рефералу: ${snap?.referrerRub ?? '—'}'),
                   const SizedBox(height: 12),
                   Text(
-                    'В звёзды — сразу, 1 ★ = 0,80 ₽. '
+                    'Обмен на звёзды — сразу, 1 ★ = 0,80 ₽. '
                     'На карту / СБП — от 500 ₽, после проверки.',
                   ),
                   const SizedBox(height: 12),
@@ -414,8 +414,8 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
                         icon: const Icon(Icons.star_outline, size: 18),
                         label: Text(
                           snap == null || snap.convertibleStars <= 0
-                              ? 'В звёзды'
-                              : 'В звёзды · ${snap.convertibleStars} ★',
+                              ? 'Обменять на звёзды'
+                              : 'Обменять · ${snap.convertibleStars} ★',
                         ),
                       ),
                       OutlinedButton.icon(

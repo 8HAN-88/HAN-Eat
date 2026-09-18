@@ -411,6 +411,16 @@ def _enrich_item(db: Session, item: ModerationQueue) -> Dict[str, Any]:
                 if author
                 else None,
             }
+    elif item.content_type == "message":
+        from app.models.conversation import Message
+
+        message = db.query(Message).filter(Message.id == item.content_id).first()
+        if message:
+            content_data = {
+                "id": message.id,
+                "conversation_id": message.conversation_id,
+                "text": (message.content or "")[:200],
+            }
     elif item.content_type == "channel":
         from app.models.community import Channel
 

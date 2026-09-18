@@ -69,6 +69,12 @@ String parseApiErrorMessage(
     if (code == 'CONTENT_BLOCKED') {
       return 'Публикация не прошла модерацию и не может быть опубликована';
     }
+    if (code == 'PAYMENTS_UNAVAILABLE') {
+      return 'Оплата подписок временно недоступна';
+    }
+    if (code == 'LEGAL_CONSENT_REQUIRED') {
+      return 'Примите документы перед оплатой';
+    }
     if (code == 'group_slow_mode') {
       final retry = parseApiRetryAfterSeconds(detail);
       if (retry != null && retry > 0) {

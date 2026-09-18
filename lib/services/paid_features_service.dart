@@ -236,6 +236,8 @@ class PaidFeaturesService {
     String? note,
     String method = 'rub',
     String? tonAddress,
+    String? phone,
+    String? recipientName,
   }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/paid/payouts/request'),
@@ -246,6 +248,9 @@ class PaidFeaturesService {
         if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
         if (tonAddress != null && tonAddress.trim().isNotEmpty)
           'ton_address': tonAddress.trim(),
+        if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
+        if (recipientName != null && recipientName.trim().isNotEmpty)
+          'recipient_name': recipientName.trim(),
       }),
     );
     if (response.statusCode == 200) {
@@ -1043,6 +1048,8 @@ class CreatorPayoutRequest {
     this.note,
     this.method = 'rub',
     this.tonAddress,
+    this.phone,
+    this.recipientName,
     this.createdAt,
   });
 
@@ -1054,6 +1061,8 @@ class CreatorPayoutRequest {
   final String? note;
   final String method;
   final String? tonAddress;
+  final String? phone;
+  final String? recipientName;
   final DateTime? createdAt;
 
   factory CreatorPayoutRequest.fromJson(Map<String, dynamic> json) =>
@@ -1066,6 +1075,8 @@ class CreatorPayoutRequest {
         note: json['note'] as String?,
         method: json['method'] as String? ?? 'rub',
         tonAddress: json['ton_address'] as String?,
+        phone: json['phone'] as String?,
+        recipientName: json['recipient_name'] as String?,
         createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
       );
 }

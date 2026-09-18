@@ -130,6 +130,8 @@ class CreatorPayoutRequest(Base):
     note = Column(String(512), nullable=True)
     method = Column(String(16), nullable=False, default="rub")  # rub | ton
     ton_address = Column(String(128), nullable=True)
+    phone = Column(String(32), nullable=True)
+    recipient_name = Column(String(80), nullable=True)
     reviewed_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     reviewed_at = Column(DateTime, nullable=True)
     paid_at = Column(DateTime, nullable=True)

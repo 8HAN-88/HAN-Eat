@@ -28,7 +28,8 @@ class FlexSubscriptionApi {
   }
 
   static Future<FlexMe> me() async {
-    final response = await http.get(Uri.parse('$baseUrl/me'), headers: await _headers());
+    final response =
+        await http.get(Uri.parse('$baseUrl/me'), headers: await _headers());
     if (response.statusCode == 200) {
       return FlexMe.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
     }
@@ -36,9 +37,11 @@ class FlexSubscriptionApi {
   }
 
   static Future<FlexShop> shop() async {
-    final response = await http.get(Uri.parse('$baseUrl/shop'), headers: await _headers());
+    final response =
+        await http.get(Uri.parse('$baseUrl/shop'), headers: await _headers());
     if (response.statusCode == 200) {
-      return FlexShop.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+      return FlexShop.fromJson(
+          jsonDecode(response.body) as Map<String, dynamic>);
     }
     _throw(response, 'Не удалось загрузить магазин функций');
   }
@@ -50,7 +53,8 @@ class FlexSubscriptionApi {
       body: jsonEncode({'level': level}),
     );
     if (response.statusCode == 200) {
-      return FlexPreview.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+      return FlexPreview.fromJson(
+          jsonDecode(response.body) as Map<String, dynamic>);
     }
     _throw(response, 'Не удалось построить превью');
   }
@@ -71,7 +75,8 @@ class FlexSubscriptionApi {
     _throw(response, 'Не удалось сохранить конфигурацию');
   }
 
-  static Future<FlexMe> move({required int featureId, required int targetLevel}) async {
+  static Future<FlexMe> move(
+      {required int featureId, required int targetLevel}) async {
     final response = await http.post(
       Uri.parse('$baseUrl/move'),
       headers: await _headers(),
@@ -117,13 +122,16 @@ class FlexSubscriptionApi {
     _throw(response, 'Не удалось загрузить каталог');
   }
 
-  static Future<void> adminSaveFeature(Map<String, dynamic> body, {int? id}) async {
+  static Future<void> adminSaveFeature(Map<String, dynamic> body,
+      {int? id}) async {
     final uri = id == null
         ? Uri.parse('$baseUrl/admin/features')
         : Uri.parse('$baseUrl/admin/features/$id');
     final response = id == null
-        ? await http.post(uri, headers: await _headers(), body: jsonEncode(body))
-        : await http.patch(uri, headers: await _headers(), body: jsonEncode(body));
+        ? await http.post(uri,
+            headers: await _headers(), body: jsonEncode(body))
+        : await http.patch(uri,
+            headers: await _headers(), body: jsonEncode(body));
     if (response.statusCode != 200 && response.statusCode != 201) {
       _throw(response, 'Не удалось сохранить функцию');
     }
@@ -181,7 +189,9 @@ class FlexFeature {
         title: json['title'] as String? ?? '',
         description: json['description'] as String?,
         icon: json['icon'] as String?,
-        assignedLevel: json['assigned_level'] as int? ?? json['default_level'] as int? ?? 1,
+        assignedLevel: json['assigned_level'] as int? ??
+            json['default_level'] as int? ??
+            1,
         minLevel: json['min_level'] as int? ?? 1,
         maxLevel: json['max_level'] as int? ?? 79,
         featureType: json['feature_type'] as String? ?? 'movable',
@@ -226,6 +236,9 @@ class FlexMe {
     this.nextPriceRub,
     this.nextFeature,
     this.expiresAt,
+    this.checkoutAvailable = true,
+    this.legalConsentRequired = false,
+    this.checkoutMessage,
   });
 
   final int currentLevel;
@@ -238,6 +251,11 @@ class FlexMe {
   final String? expiresAt;
   final List<FlexFeature> levels;
   final List<FlexBlock> blocks;
+  final bool checkoutAvailable;
+  final bool legalConsentRequired;
+  final String? checkoutMessage;
+
+  bool get canCheckout => checkoutAvailable && !legalConsentRequired;
 
   factory FlexMe.fromJson(Map<String, dynamic> json) => FlexMe(
         currentLevel: json['current_level'] as int? ?? 0,
@@ -250,6 +268,9 @@ class FlexMe {
             ? FlexFeature.fromJson(json['next_feature'] as Map<String, dynamic>)
             : null,
         expiresAt: json['expires_at'] as String?,
+        checkoutAvailable: json['checkout_available'] as bool? ?? true,
+        legalConsentRequired: json['legal_consent_required'] as bool? ?? false,
+        checkoutMessage: json['checkout_message'] as String?,
         levels: [
           for (final raw in (json['levels'] as List<dynamic>? ?? const []))
             if (raw is Map<String, dynamic>) FlexFeature.fromJson(raw),
@@ -262,12 +283,26 @@ class FlexMe {
 }
 
 class FlexShop {
-  const FlexShop({required this.currentLevel, required this.features});
+  const FlexShop({
+    required this.currentLevel,
+    required this.features,
+    this.checkoutAvailable = true,
+    this.legalConsentRequired = false,
+    this.checkoutMessage,
+  });
   final int currentLevel;
   final List<FlexFeature> features;
+  final bool checkoutAvailable;
+  final bool legalConsentRequired;
+  final String? checkoutMessage;
+
+  bool get canCheckout => checkoutAvailable && !legalConsentRequired;
 
   factory FlexShop.fromJson(Map<String, dynamic> json) => FlexShop(
         currentLevel: json['current_level'] as int? ?? 0,
+        checkoutAvailable: json['checkout_available'] as bool? ?? true,
+        legalConsentRequired: json['legal_consent_required'] as bool? ?? false,
+        checkoutMessage: json['checkout_message'] as String?,
         features: [
           for (final raw in (json['features'] as List<dynamic>? ?? const []))
             if (raw is Map<String, dynamic>) FlexFeature.fromJson(raw),
@@ -311,7 +346,8 @@ class FlexPreview {
             ? FlexFeature.fromJson(json['next_feature'] as Map<String, dynamic>)
             : null,
         nextFeatures: [
-          for (final raw in (json['next_features'] as List<dynamic>? ?? const []))
+          for (final raw
+              in (json['next_features'] as List<dynamic>? ?? const []))
             if (raw is Map<String, dynamic>) FlexFeature.fromJson(raw),
         ],
         features: [
@@ -336,7 +372,8 @@ class FlexAdminCatalog {
   final List<FlexFeature> features;
   final List<FlexBlock> blocks;
 
-  factory FlexAdminCatalog.fromJson(Map<String, dynamic> json) => FlexAdminCatalog(
+  factory FlexAdminCatalog.fromJson(Map<String, dynamic> json) =>
+      FlexAdminCatalog(
         features: [
           for (final raw in (json['features'] as List<dynamic>? ?? const []))
             if (raw is Map<String, dynamic>) FlexFeature.fromJson(raw),

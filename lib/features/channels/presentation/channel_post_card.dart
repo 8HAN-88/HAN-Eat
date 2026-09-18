@@ -56,7 +56,6 @@ String? _channelRepostUserComment(PostModel post) {
   return first;
 }
 
-
 class ChannelPostCard extends StatefulWidget {
   final PostModel post;
   final int channelId;
@@ -264,8 +263,6 @@ class _ChannelPostCardState extends State<ChannelPostCard>
     }
   }
 
-
-
   bool get _isPostAuthor {
     final uid = AuthService.instance.currentUser?.id;
     return uid != null && widget.post.userId == uid;
@@ -278,7 +275,6 @@ class _ChannelPostCardState extends State<ChannelPostCard>
   bool get _canManagePost {
     return _canEditPost || _canDeletePost;
   }
-
 
   Future<void> _toggleLike() async {
     if (_isLoading) return;
@@ -522,7 +518,6 @@ class _ChannelPostCardState extends State<ChannelPostCard>
 
   // Используем утилиту для форматирования чисел
   String _formatCount(int count) => NumberFormatter.formatCount(count);
-
 
   Future<void> _openEditPost() async {
     final cid = widget.post.channelId ?? widget.channelId;
@@ -1032,9 +1027,8 @@ class _ChannelPostCardState extends State<ChannelPostCard>
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .tertiaryContainer,
+                          color:
+                              Theme.of(context).colorScheme.tertiaryContainer,
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Row(
@@ -1345,7 +1339,9 @@ class _ChannelPostCardState extends State<ChannelPostCard>
       void onMediaTap() {
         if (post.channelId != null) {
           context.push(ChannelDetailRoute.post(post.channelId!, post.id));
+          return;
         }
+        context.push(PostFeedRoute.pathFor(post.id));
       }
 
       final imageUrls = images
@@ -1363,7 +1359,8 @@ class _ChannelPostCardState extends State<ChannelPostCard>
             imageUrls: imageUrls,
             maxHeight: screenWidth * 0.75,
             singleAspectRatio: 4 / 3,
-            enableFullscreen: true,
+            onTap: onMediaTap,
+            enableFullscreen: false,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
           ),
         );

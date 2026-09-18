@@ -25,12 +25,36 @@ def _svc(db: Session) -> FlexSubscriptionService:
     return FlexSubscriptionService(db)
 
 
+def _checkout_flags(user: User) -> dict:
+    from app.services.country_service import CountryService
+    from app.services.legal_consent_service import consent_required
+
+    legal = consent_required(user)
+    provider = CountryService.get_payment_provider_for_country(
+        user.country_code or "RU"
+    )
+    available = provider != "none"
+    if legal:
+        message = "Примите документы перед оплатой"
+    elif not available:
+        message = "Оплата подписок временно недоступна"
+    else:
+        message = None
+    return {
+        "checkout_available": available,
+        "checkout_message": message,
+        "legal_consent_required": legal,
+    }
+
+
 @router.get("/me", response_model=FlexMeResponse)
 def get_my_flex(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    return _svc(db).me_payload(current_user.id)
+    payload = _svc(db).me_payload(current_user.id)
+    payload.update(_checkout_flags(current_user))
+    return payload
 
 
 @router.get("/shop", response_model=FlexShopResponse)
@@ -38,7 +62,9 @@ def get_flex_shop(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    return _svc(db).shop_payload(current_user.id)
+    payload = _svc(db).shop_payload(current_user.id)
+    payload.update(_checkout_flags(current_user))
+    return payload
 
 
 @router.post("/preview", response_model=FlexPreviewResponse)

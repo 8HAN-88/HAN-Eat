@@ -89,7 +89,7 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = '$e';
+        _error = userVisibleError(e, fallback: 'Не удалось загрузить каталог');
         _loading = false;
         _hasLoadedOnce = true;
       });

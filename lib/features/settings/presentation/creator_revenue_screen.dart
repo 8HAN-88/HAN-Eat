@@ -25,6 +25,8 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
   CreatorRevenuePeriod _period = CreatorRevenuePeriod.days30;
   CreatorRevenueSource _source = CreatorRevenueSource.all;
   CreatorRevenueChartMode _chartMode = CreatorRevenueChartMode.line;
+  final _payoutPhone = TextEditingController();
+  final _payoutName = TextEditingController();
 
   @override
   void initState() {
@@ -32,6 +34,13 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
     _future = _load();
     _payoutsFuture = _loadPayouts();
     _restoreRevenuePrefs();
+  }
+
+  @override
+  void dispose() {
+    _payoutPhone.dispose();
+    _payoutName.dispose();
+    super.dispose();
   }
 
   Future<void> _restoreRevenuePrefs() async {
@@ -149,31 +158,55 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
       noteController.dispose();
       return;
     }
-    final payload = await showDialog<({int amount, String? note})>(
+    final payload = await showDialog<
+        ({int amount, String? note, String phone, String name})>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Запросить выплату'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: amountController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Сумма в звёздах',
-                hintText: 'например, 500',
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'На карту / СБП. Заявка в очередь, звёзды сразу в холде.',
               ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              textCapitalization: TextCapitalization.sentences,
-              controller: noteController,
-              maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: 'Комментарий (опционально)',
+              const SizedBox(height: 12),
+              TextField(
+                controller: amountController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Сумма в звёздах',
+                  hintText: 'например, 500',
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              TextField(
+                controller: _payoutPhone,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'Телефон СБП',
+                  hintText: '+7 900 000-00-00',
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _payoutName,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(
+                  labelText: 'Имя получателя',
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                textCapitalization: TextCapitalization.sentences,
+                controller: noteController,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'Комментарий (необязательно)',
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -183,7 +216,9 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
           FilledButton(
             onPressed: () {
               final amount = int.tryParse(amountController.text.trim()) ?? 0;
-              if (amount <= 0) return;
+              final phone = _payoutPhone.text.trim();
+              final name = _payoutName.text.trim();
+              if (amount <= 0 || phone.length < 10 || name.length < 2) return;
               Navigator.pop(
                 ctx,
                 (
@@ -191,6 +226,8 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
                   note: noteController.text.trim().isEmpty
                       ? null
                       : noteController.text.trim(),
+                  phone: phone,
+                  name: name,
                 ),
               );
             },
@@ -206,13 +243,15 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
   }
 
   Future<void> _submitPayoutRequest(
-    ({int amount, String? note}) payload,
+    ({int amount, String? note, String phone, String name}) payload,
   ) async {
     try {
       final payout = await PaidFeaturesService.requestCreatorPayout(
         amountStars: payload.amount,
         note: payload.note,
         method: 'rub',
+        phone: payload.phone,
+        recipientName: payload.name,
       );
       if (!mounted) return;
       setState(() => _payoutsFuture = _loadPayouts());
@@ -598,7 +637,7 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
                             iconColor: scheme.secondary,
                             title: '${p.amountStars} ★',
                             subtitle:
-                                '${_payoutStatusLabel(p.status)}${p.createdAt != null ? ' · ${_date(p.createdAt!)}' : ''}',
+                                '${_payoutStatusLabel(p.status)}${p.phone != null && p.phone!.isNotEmpty ? ' · ${p.phone}' : ''}${p.createdAt != null ? ' · ${_date(p.createdAt!)}' : ''}',
                             trailing: Text(
                               '~${p.amountRub.toStringAsFixed(0)} ₽',
                               style:

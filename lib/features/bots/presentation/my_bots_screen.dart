@@ -45,7 +45,7 @@ class _MyBotsScreenState extends State<MyBotsScreen> {
       setState(() => _bots = list);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = '$e');
+      setState(() => _error = userVisibleError(e, fallback: 'Не удалось загрузить ботов'));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

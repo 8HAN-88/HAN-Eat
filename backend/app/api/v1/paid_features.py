@@ -418,6 +418,8 @@ async def request_creator_payout(
         note=request.note,
         method=request.method,
         ton_address=request.ton_address,
+        phone=request.phone,
+        recipient_name=request.recipient_name,
     )
     db.commit()
     db.refresh(payout)

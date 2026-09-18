@@ -12,9 +12,10 @@ import '../../../widgets/app_empty_state.dart';
 
 class ModerationQueueScreen extends ConsumerStatefulWidget {
   const ModerationQueueScreen({super.key});
-  
+
   @override
-  ConsumerState<ModerationQueueScreen> createState() => _ModerationQueueScreenState();
+  ConsumerState<ModerationQueueScreen> createState() =>
+      _ModerationQueueScreenState();
 }
 
 class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
@@ -26,20 +27,20 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
   Object? _loadError;
   String? _selectedContentType; // post | comment
   final ScrollController _scrollController = ScrollController();
-  
+
   @override
   void initState() {
     super.initState();
     _loadItems();
     _scrollController.addListener(_onScroll);
   }
-  
+
   @override
   void dispose() {
     _scrollController.dispose();
     super.dispose();
   }
-  
+
   void _onScroll() {
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent * 0.8) {
@@ -48,10 +49,10 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
       }
     }
   }
-  
+
   Future<void> _loadItems({bool refresh = false}) async {
     if (_isLoading) return;
-    
+
     setState(() {
       _isLoading = true;
       if (refresh) {
@@ -69,9 +70,7 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
         contentType: _selectedContentType,
       );
 
-      final merged = refresh
-          ? response.items
-          : [..._items, ...response.items];
+      final merged = refresh ? response.items : [..._items, ...response.items];
 
       setState(() {
         if (refresh) {
@@ -102,7 +101,7 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
       }
     }
   }
-  
+
   Future<void> _loadMore() async {
     await _loadItems();
   }
@@ -133,17 +132,15 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
       }),
     );
   }
-  
+
   bool _isUserReport(ModerationItem item) => item.reason == 'reported';
 
   Future<void> _approveItem(ModerationItem item) async {
     final comment = await _showCommentDialog(
-      title: _isUserReport(item)
-          ? 'Оставить пост в ленте'
-          : 'Одобрить контент',
+      title: _isUserReport(item) ? 'Оставить пост в ленте' : 'Одобрить контент',
       hint: 'Комментарий (опционально)',
     );
-    
+
     if (comment == null || !mounted) return;
 
     try {
@@ -151,7 +148,7 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
         itemId: item.id,
         comment: comment.isEmpty ? null : comment,
       );
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -179,7 +176,7 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
       }
     }
   }
-  
+
   int? _authorId(ModerationItem item) => item.userId ?? item.author?.id;
 
   Future<void> _warnAuthor(ModerationItem item) async {
@@ -293,16 +290,16 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
       context: context,
       builder: (context) => _RejectDialog(isUserReport: _isUserReport(item)),
     );
-    
+
     if (result == null) return;
-    
+
     try {
       await ModerationService.rejectItem(
         itemId: item.id,
         reason: result['reason'] as String,
         comment: result['comment'] as String?,
       );
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -330,7 +327,7 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
       }
     }
   }
-  
+
   /// `null` — отмена, `''` — отправить без текста, иначе текст сообщения.
   Future<String?> _showCommentDialog({
     required String title,
@@ -344,11 +341,11 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
       ),
     );
   }
-  
+
   String _formatDate(DateTime date) {
     final now = DateTime.now();
     final difference = now.difference(date);
-    
+
     if (difference.inDays == 0) {
       if (difference.inHours == 0) {
         if (difference.inMinutes == 0) {
@@ -369,7 +366,7 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
       }
     }
   }
-  
+
   String _getContentTypeLabel(String type) {
     switch (type) {
       case 'post':
@@ -382,7 +379,7 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
         return type;
     }
   }
-  
+
   IconData _getContentTypeIcon(String type) {
     switch (type) {
       case 'post':
@@ -395,7 +392,7 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
         return Icons.help_outline;
     }
   }
-  
+
   Color _getReasonColor(String? reason) {
     if (reason == null) return Colors.grey;
     switch (reason) {
@@ -411,7 +408,7 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
         return Colors.grey;
     }
   }
-  
+
   bool _hasAiScores(ModerationItem item) {
     return item.toxicityScore != null ||
         item.spamScore != null ||
@@ -458,7 +455,8 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
           context.push(PostCommentsRoute.pathFor(postId.toInt()));
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Не удалось определить пост комментария')),
+            const SnackBar(
+                content: Text('Не удалось определить пост комментария')),
           );
         }
         return;
@@ -469,9 +467,28 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
       case 'user_profile':
         context.push(ProfileRoute.withUserId(item.contentId));
         return;
+      case 'message':
+        final convId = item.contentPreview?['conversation_id'];
+        final conversationId = convId is int
+            ? convId
+            : convId is num
+                ? convId.toInt()
+                : null;
+        if (conversationId != null) {
+          context.push(
+            '${ChatThreadRoute.pathForId(conversationId)}?msg=${item.contentId}',
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Не удалось открыть чат сообщения')),
+          );
+        }
+        return;
       default:
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Просмотр недоступен для типа «${item.contentType}»')),
+          SnackBar(
+              content:
+                  Text('Просмотр недоступен для типа «${item.contentType}»')),
         );
     }
   }
@@ -487,6 +504,8 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
       case 'user':
       case 'user_profile':
         return 'Открыть профиль';
+      case 'message':
+        return 'Открыть сообщение';
       default:
         return 'Открыть контент';
     }
@@ -539,9 +558,7 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
   }
 
   Widget _buildReportDetailLines(ModerationReport report) {
-    final when = report.createdAt != null
-        ? _formatDate(report.createdAt!)
-        : '';
+    final when = report.createdAt != null ? _formatDate(report.createdAt!) : '';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -618,7 +635,7 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
       ),
     );
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -711,9 +728,9 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
                       ),
                     );
                   }
-                  
+
                   final item = _items[index];
-                  
+
                   return Card(
                     margin: const EdgeInsets.symmetric(
                       horizontal: 8,
@@ -836,7 +853,8 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
                               children: [
                                 OutlinedButton.icon(
                                   onPressed: () => _warnAuthor(item),
-                                  icon: const Icon(Icons.warning_amber_outlined, size: 18),
+                                  icon: const Icon(Icons.warning_amber_outlined,
+                                      size: 18),
                                   label: const Text('Предупредить'),
                                 ),
                                 OutlinedButton.icon(
@@ -849,8 +867,10 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
                                 ),
                                 if (item.contentType == 'post')
                                   OutlinedButton.icon(
-                                    onPressed: () => _hideFromRecommendations(item),
-                                    icon: const Icon(Icons.visibility_off, size: 18),
+                                    onPressed: () =>
+                                        _hideFromRecommendations(item),
+                                    icon: const Icon(Icons.visibility_off,
+                                        size: 18),
                                     label: const Text('Скрыть из ленты'),
                                   ),
                               ],
@@ -909,7 +929,8 @@ class _ModeratorMessageDialog extends StatefulWidget {
   final String hint;
 
   @override
-  State<_ModeratorMessageDialog> createState() => _ModeratorMessageDialogState();
+  State<_ModeratorMessageDialog> createState() =>
+      _ModeratorMessageDialogState();
 }
 
 class _ModeratorMessageDialogState extends State<_ModeratorMessageDialog> {
@@ -968,22 +989,20 @@ class _RejectDialog extends StatefulWidget {
 class _RejectDialogState extends State<_RejectDialog> {
   String _selectedReason = 'spam';
   final _commentController = TextEditingController();
-  
+
   @override
   void dispose() {
     _commentController.dispose();
     super.dispose();
   }
-  
+
   @override
   Widget build(BuildContext context) {
     final dialogWidth = MediaQuery.sizeOf(context).width * 0.88;
 
     return AlertDialog(
       title: Text(
-        widget.isUserReport
-            ? 'Удалить пост из ленты'
-            : 'Отклонить контент',
+        widget.isUserReport ? 'Удалить пост из ленты' : 'Отклонить контент',
       ),
       content: SizedBox(
         width: dialogWidth.clamp(280.0, 400.0),

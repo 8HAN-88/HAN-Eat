@@ -751,7 +751,7 @@ class _WebhookQueueCard extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
-                  'Redis stub mode: метрики приблизительные',
+                  'Метрики приблизительные: кэш недоступен',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),

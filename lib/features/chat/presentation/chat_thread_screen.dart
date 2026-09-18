@@ -3050,7 +3050,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (miniAppId == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Mini app недоступен для запуска')),
+        const SnackBar(
+          content: Text(
+            'Мини-приложение нельзя открыть: нет ссылки. Откройте его из каталога.',
+          ),
+        ),
       );
       return;
     }
@@ -3078,7 +3082,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            userVisibleError(e, fallback: 'Не удалось открыть mini app'),
+            userVisibleError(
+              e,
+              fallback:
+                  'Не удалось открыть мини-приложение. Проверьте каталог или бота.',
+            ),
           ),
           action: SnackBarAction(
             label: 'Повторить',

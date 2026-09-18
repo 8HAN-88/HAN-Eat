@@ -233,7 +233,7 @@ Future<void> reportReelOrVideoWithDialog(
   ScaffoldMessenger.of(context).showSnackBar(
     const SnackBar(
       content: Text(
-        'Жалоба на это видео недоступна: обновите приложение или откройте рилс из ленты API.',
+        'Жалоба на это видео недоступна. Откройте ролик из ленты и повторите.',
       ),
     ),
   );

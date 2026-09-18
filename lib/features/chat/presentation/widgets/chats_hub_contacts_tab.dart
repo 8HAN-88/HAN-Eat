@@ -208,14 +208,7 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
   Future<void> _importFromPhoneBook() async {
     if (!PhoneContactsService.supportsContactPicker) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Импорт из телефонной книги недоступен в этом браузере. '
-            'Используйте Chrome на Android или добавьте контакты вручную.',
-          ),
-        ),
-      );
+      await _addPhoneContact();
       return;
     }
 

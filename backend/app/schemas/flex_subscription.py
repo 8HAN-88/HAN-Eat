@@ -48,11 +48,17 @@ class FlexMeResponse(BaseModel):
     next_feature: Optional[FlexFeatureItem] = None
     levels: List[FlexFeatureItem]
     blocks: List[FlexBlockItem]
+    checkout_available: bool = True
+    checkout_message: Optional[str] = None
+    legal_consent_required: bool = False
 
 
 class FlexShopResponse(BaseModel):
     current_level: int
     features: List[FlexFeatureItem]
+    checkout_available: bool = True
+    checkout_message: Optional[str] = None
+    legal_consent_required: bool = False
 
 
 class FlexPreviewResponse(BaseModel):
