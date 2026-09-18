@@ -14,7 +14,7 @@ def test_ensure_url_rejects_private_local_hosts(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         m._ensure_url("https://127.0.0.1/app")
     assert exc.value.status_code == 400
-    assert "Local/private hosts" in str(exc.value.detail)
+    assert "закрытые адреса" in str(exc.value.detail)
 
 
 def test_ensure_url_allows_subdomain_for_allowed_hosts(monkeypatch):
@@ -38,11 +38,11 @@ def test_ensure_url_rejects_credentials_and_fragment(monkeypatch):
 
     with pytest.raises(HTTPException) as exc1:
         m._ensure_url("https://user:pass@example.com/app")
-    assert "credentials" in str(exc1.value.detail).lower()
+    assert "учётные данные" in str(exc1.value.detail).lower()
 
     with pytest.raises(HTTPException) as exc2:
         m._ensure_url("https://example.com/app#token")
-    assert "fragments" in str(exc2.value.detail).lower()
+    assert "фрагмент" in str(exc2.value.detail).lower()
 
 
 def test_url_risk_summary_marks_non_https_as_medium():

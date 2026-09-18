@@ -116,6 +116,55 @@ const _knownEnglishDetails = <String, String>{
       'В продакшене разрешён только https',
   'Command already exists': 'Такая команда уже есть',
   'Command not found': 'Команда не найдена',
+  'pack_not_found': 'Набор стикеров не найден',
+  'sticker_not_found': 'Стикер не найден',
+  'missing_sticker': 'Нужен стикер',
+  'empty_patch': 'Нет изменений',
+  'invalid_title': 'Неверное название',
+  'missing_media': 'Нужно медиа',
+  'invalid_sticker_type': 'Неверный тип стикера',
+  'Story not found': 'История не найдена',
+  'Invalid visibility': 'Неверная видимость',
+  'Only the author can see viewers': 'Просмотры видит только автор',
+  'Cannot react to your own story': 'Нельзя ставить реакцию на свою историю',
+  'Invalid emoji': 'Неверный эмодзи',
+  'Notification not found': 'Уведомление не найдено',
+  'GIF search is temporarily unavailable': 'Поиск гифок временно недоступен',
+  'GIF catalog is temporarily unavailable': 'Каталог гифок временно недоступен',
+  'Bot token is missing': 'Нет токена бота',
+  'Bot is not in this chat': 'Бота нет в этом чате',
+  'short_name must be alphanumeric with _ or -':
+      'Короткое имя: только буквы, цифры, _ или -',
+  'Mini app short_name already exists for this bot':
+      'Такое короткое имя уже есть у этого бота',
+  'URL credentials are not allowed': 'Учётные данные в ссылке запрещены',
+  'URL fragments are not allowed': 'Фрагмент ссылки запрещён',
+  'Local/private hosts are not allowed':
+      'Локальные и закрытые адреса запрещены',
+  'URL host is not allowed': 'Этот хост не разрешён',
+  'bad_miniapp_category': 'Неверная категория мини-приложения',
+  'data is required': 'Нужны данные',
+  'data too long': 'Слишком много данных',
+  'init_data must be valid JSON': 'init_data должен быть корректным JSON',
+  'init_data must be an object': 'init_data должен быть объектом',
+  'init_data hash is required': 'Нужна подпись init_data',
+  'init_data auth_date is invalid': 'Неверная дата init_data',
+  'init_data auth_date is in the future': 'Дата init_data в будущем',
+  'init_data has expired': 'Срок init_data истёк',
+  'init_data miniapp_id mismatch': 'init_data не совпадает с мини-приложением',
+  'init_data bot_id mismatch': 'init_data не совпадает с ботом',
+  'init_data user is missing': 'В init_data нет пользователя',
+  'init_data user.id is invalid': 'Неверный user.id в init_data',
+  'Invalid init_data signature': 'Неверная подпись init_data',
+  'Already refunded': 'Возврат уже выполнен',
+  'Failed to create payment session': 'Не удалось создать сессию оплаты',
+  'Failed to create checkout session': 'Не удалось создать сессию оплаты',
+  'Failed to create stars checkout': 'Не удалось создать оплату звёзд',
+  'Failed to load subscription prices': 'Не удалось загрузить цены',
+  'Failed to load payment history': 'Не удалось загрузить историю оплат',
+  'Unknown stars package': 'Неизвестный пакет звёзд',
+  'Too many mini app requests. Please try again later.':
+      'Слишком много запросов к мини-приложению. Подождите немного.',
 };
 
 String? localizeKnownEnglishDetail(String detail) =>
@@ -172,7 +221,9 @@ String parseApiErrorMessage(
   }
   if (detail is Map) {
     final msg = detail['message'] as String?;
-    if (msg != null && msg.isNotEmpty) return msg;
+    if (msg != null && msg.isNotEmpty) {
+      return localizeKnownEnglishDetail(msg) ?? msg;
+    }
     final code = detail['code'] as String?;
     if (code == 'STARS_REQUIRED') {
       return 'Недостаточно звёзд';
@@ -192,6 +243,9 @@ String parseApiErrorMessage(
     }
     if (code == 'PAYMENTS_UNAVAILABLE') {
       return 'Оплата подписок временно недоступна';
+    }
+    if (code == 'MINIAPP_RATE_LIMIT_EXCEEDED') {
+      return 'Слишком много запросов к мини-приложению. Подождите немного.';
     }
     if (code == 'LEGAL_CONSENT_REQUIRED') {
       return 'Примите документы перед оплатой';

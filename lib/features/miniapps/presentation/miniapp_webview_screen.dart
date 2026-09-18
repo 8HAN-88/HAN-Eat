@@ -359,7 +359,7 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
     if (miniAppId == null || miniAppId <= 0) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Mini App не привязан к боту')),
+        const SnackBar(content: Text('Мини-приложение не привязано к боту')),
       );
       return;
     }

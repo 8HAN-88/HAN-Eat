@@ -66,6 +66,21 @@ def price_for_level(level: int) -> int:
     return BASE_PRICE_RUB + (n - 1) * LEVEL_STEP_RUB
 
 
+def level_from_price(amount: Any) -> Optional[int]:
+    try:
+        raw = int(round(float(amount)))
+    except (TypeError, ValueError):
+        return None
+    if LEVEL_STEP_RUB <= 0:
+        return None
+    level = (raw - BASE_PRICE_RUB) // LEVEL_STEP_RUB + 1
+    if level < MIN_LEVEL or level > MAX_LEVEL:
+        return None
+    if price_for_level(level) != raw:
+        return None
+    return level
+
+
 def _now() -> datetime:
     return datetime.utcnow()
 

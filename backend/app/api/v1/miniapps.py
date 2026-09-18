@@ -107,15 +107,15 @@ def _ensure_url(url: str) -> str:
     if not host:
         raise HTTPException(status_code=400, detail="Укажите хост ссылки")
     if parsed.username or parsed.password:
-        raise HTTPException(status_code=400, detail="URL credentials are not allowed")
+        raise HTTPException(status_code=400, detail="Учётные данные в ссылке запрещены")
     if parsed.fragment:
-        raise HTTPException(status_code=400, detail="URL fragments are not allowed")
+        raise HTTPException(status_code=400, detail="Фрагмент ссылки запрещён")
     if bool(getattr(settings, "MINIAPP_BLOCK_PRIVATE_HOSTS", True)) and _is_private_or_local_host(host):
-        raise HTTPException(status_code=400, detail="Local/private hosts are not allowed")
+        raise HTTPException(status_code=400, detail="Локальные и закрытые адреса запрещены")
     if settings.MINIAPP_ALLOWED_HOSTS:
         allowed = set(settings.MINIAPP_ALLOWED_HOSTS)
         if not _host_allowed(host, allowed):
-            raise HTTPException(status_code=400, detail="URL host is not allowed")
+            raise HTTPException(status_code=400, detail="Этот хост не разрешён")
     elif settings.APP_ENV != "development" and parsed.scheme != "https":
         raise HTTPException(status_code=400, detail="В продакшене разрешён только https")
     return clean
@@ -163,7 +163,7 @@ def _enforce_user_rate_limit(user_id: int, action: str, per_minute: int) -> None
                 status_code=429,
                 detail={
                     "code": "MINIAPP_RATE_LIMIT_EXCEEDED",
-                    "message": "Too many mini app requests. Please try again later.",
+                    "message": "Слишком много запросов к мини-приложению. Подождите немного.",
                     "action": action,
                 },
                 headers={"Retry-After": "60"},
@@ -180,7 +180,7 @@ def _normalize_category(raw: Optional[str]) -> Optional[str]:
     if not value:
         return None
     if value not in MINIAPP_CATEGORIES:
-        raise HTTPException(status_code=400, detail="bad_miniapp_category")
+        raise HTTPException(status_code=400, detail="Неверная категория мини-приложения")
     return value
 
 
@@ -432,7 +432,7 @@ async def list_miniapps_by_bot(
 ):
     bot = db.query(User).filter(User.id == bot_id, User.is_bot == True).first()
     if not bot or bot.created_by_user_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Bot not found")
+        raise HTTPException(status_code=404, detail="Бот не найден")
     apps = (
         db.query(BotMiniApp)
         .filter(BotMiniApp.bot_id == bot_id)
@@ -471,21 +471,21 @@ async def create_miniapp(
 ):
     bot = db.query(User).filter(User.id == payload.bot_id, User.is_bot == True).first()
     if not bot or bot.created_by_user_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Bot not found")
+        raise HTTPException(status_code=404, detail="Бот не найден")
     short_name = payload.short_name.strip().lower()
     if (
         not short_name.replace("_", "").replace("-", "").isalnum()
         or not short_name[0].isalnum()
         or not short_name[-1].isalnum()
     ):
-        raise HTTPException(status_code=400, detail="short_name must be alphanumeric with _ or -")
+        raise HTTPException(status_code=400, detail="Короткое имя: только буквы, цифры, _ или -")
     exists = (
         db.query(BotMiniApp)
         .filter(BotMiniApp.bot_id == bot.id, BotMiniApp.short_name == short_name)
         .first()
     )
     if exists:
-        raise HTTPException(status_code=400, detail="Mini app short_name already exists for this bot")
+        raise HTTPException(status_code=400, detail="Такое короткое имя уже есть у этого бота")
 
     app = BotMiniApp(
         bot_id=bot.id,
@@ -515,7 +515,7 @@ async def update_miniapp(
         raise HTTPException(status_code=404, detail="Мини-приложение не найдено")
     bot = db.query(User).filter(User.id == app.bot_id, User.is_bot == True).first()
     if not bot or bot.created_by_user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=403, detail="Нет доступа")
 
     requires_re_moderation = False
     if payload.name is not None:
@@ -559,7 +559,7 @@ async def delete_miniapp(
         raise HTTPException(status_code=404, detail="Мини-приложение не найдено")
     bot = db.query(User).filter(User.id == app.bot_id, User.is_bot == True).first()
     if not bot or bot.created_by_user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=403, detail="Нет доступа")
     db.delete(app)
     db.commit()
     return {"status": "ok"}
@@ -576,7 +576,7 @@ async def install_miniapp(
         raise HTTPException(status_code=404, detail="Мини-приложение не найдено")
     bot = db.query(User).filter(User.id == app.bot_id, User.is_bot == True).first()
     if not bot:
-        raise HTTPException(status_code=404, detail="Bot not found")
+        raise HTTPException(status_code=404, detail="Бот не найден")
     if (
         bool(getattr(settings, "MINIAPP_REQUIRE_APPROVED_FOR_USE", True))
         and app.moderation_status != "approved"
@@ -629,7 +629,7 @@ async def launch_miniapp_init_data(
         raise HTTPException(status_code=404, detail="Мини-приложение не найдено")
     bot = db.query(User).filter(User.id == app.bot_id, User.is_bot == True).first()
     if not bot or not bot.bot_token:
-        raise HTTPException(status_code=400, detail="Bot token is missing")
+        raise HTTPException(status_code=400, detail="Нет токена бота")
     if (
         bool(getattr(settings, "MINIAPP_REQUIRE_APPROVED_FOR_USE", True))
         and app.moderation_status != "approved"
@@ -709,7 +709,7 @@ async def send_miniapp_web_app_data(
         raise HTTPException(status_code=404, detail="Мини-приложение не найдено")
     bot = db.query(User).filter(User.id == app.bot_id, User.is_bot == True).first()
     if not bot:
-        raise HTTPException(status_code=400, detail="Bot not found")
+        raise HTTPException(status_code=400, detail="Бот не найден")
     if (
         bool(getattr(settings, "MINIAPP_REQUIRE_APPROVED_FOR_USE", True))
         and app.moderation_status != "approved"
@@ -719,9 +719,9 @@ async def send_miniapp_web_app_data(
 
     data = (payload.data or "").strip()
     if not data:
-        raise HTTPException(status_code=400, detail="data is required")
+        raise HTTPException(status_code=400, detail="Нужны данные")
     if len(data) > 4096:
-        raise HTTPException(status_code=400, detail="data too long")
+        raise HTTPException(status_code=400, detail="Слишком много данных")
 
     conversation_id = payload.conversation_id
     if conversation_id is None:
@@ -745,7 +745,7 @@ async def send_miniapp_web_app_data(
             conv = ChatService(db).get_or_create_direct(current_user.id, bot.id)
             conversation_id = conv.id
         except ValueError as exc:
-            raise HTTPException(status_code=400, detail="Cannot open bot chat") from exc
+            raise HTTPException(status_code=400, detail="Не удалось открыть чат с ботом") from exc
 
     member = (
         db.query(ConversationMember)
@@ -756,7 +756,7 @@ async def send_miniapp_web_app_data(
         .first()
     )
     if not member:
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=403, detail="Нет доступа")
     bot_member = (
         db.query(ConversationMember)
         .filter(
@@ -766,9 +766,9 @@ async def send_miniapp_web_app_data(
         .first()
     )
     if not bot_member:
-        raise HTTPException(status_code=400, detail="Bot is not in this chat")
+        raise HTTPException(status_code=400, detail="Бота нет в этом чате")
 
-    button_text = (payload.button_text or app.name or "Mini App").strip()[:64]
+    button_text = (payload.button_text or app.name or "Мини-приложение").strip()[:64]
     content = json.dumps(
         {
             "data": data,
@@ -858,43 +858,43 @@ async def verify_miniapp_init_data(
         raise HTTPException(status_code=404, detail="Мини-приложение не найдено")
     bot = db.query(User).filter(User.id == app.bot_id, User.is_bot == True).first()
     if not bot or not bot.bot_token:
-        raise HTTPException(status_code=400, detail="Bot token is missing")
+        raise HTTPException(status_code=400, detail="Нет токена бота")
 
     try:
         data = json.loads(payload.init_data)
     except Exception:
-        raise HTTPException(status_code=400, detail="init_data must be valid JSON")
+        raise HTTPException(status_code=400, detail="init_data должен быть корректным JSON")
     if not isinstance(data, dict):
-        raise HTTPException(status_code=400, detail="init_data must be an object")
+        raise HTTPException(status_code=400, detail="init_data должен быть объектом")
     provided_hash = str(data.get("hash") or "").strip()
     if not provided_hash:
-        raise HTTPException(status_code=400, detail="init_data hash is required")
+        raise HTTPException(status_code=400, detail="Нужна подпись init_data")
     auth_date_raw = data.get("auth_date")
     try:
         auth_date = int(auth_date_raw)
     except Exception:
-        raise HTTPException(status_code=400, detail="init_data auth_date is invalid")
+        raise HTTPException(status_code=400, detail="Неверная дата init_data")
     now_ts = int(time.time())
     ttl = max(30, int(settings.MINIAPP_INITDATA_TTL_SECONDS))
     if auth_date > now_ts + 30:
-        raise HTTPException(status_code=401, detail="init_data auth_date is in the future")
+        raise HTTPException(status_code=401, detail="Дата init_data в будущем")
     if now_ts - auth_date > ttl:
-        raise HTTPException(status_code=401, detail="init_data has expired")
+        raise HTTPException(status_code=401, detail="Срок init_data истёк")
 
     payload_miniapp_id = data.get("miniapp_id")
     payload_bot_id = data.get("bot_id")
     if str(payload_miniapp_id) != str(app.id):
-        raise HTTPException(status_code=401, detail="init_data miniapp_id mismatch")
+        raise HTTPException(status_code=401, detail="init_data не совпадает с мини-приложением")
     if str(payload_bot_id) != str(app.bot_id):
-        raise HTTPException(status_code=401, detail="init_data bot_id mismatch")
+        raise HTTPException(status_code=401, detail="init_data не совпадает с ботом")
 
     user = data.get("user")
     if not isinstance(user, dict) or not user.get("id"):
-        raise HTTPException(status_code=400, detail="init_data user is missing")
+        raise HTTPException(status_code=400, detail="В init_data нет пользователя")
     try:
         payload_user_id = int(user.get("id"))
     except Exception:
-        raise HTTPException(status_code=400, detail="init_data user.id is invalid")
+        raise HTTPException(status_code=400, detail="Неверный user.id в init_data")
 
     limiter_user_id = current_user.id if current_user is not None else payload_user_id
     _enforce_user_rate_limit(
@@ -908,7 +908,7 @@ async def verify_miniapp_init_data(
     expected_hash = _sign_payload(check_payload, bot.bot_token)
     valid = hmac.compare_digest(provided_hash, expected_hash)
     if not valid:
-        raise HTTPException(status_code=401, detail="Invalid init_data signature")
+        raise HTTPException(status_code=401, detail="Неверная подпись init_data")
     return {
         "ok": True,
         "miniapp_id": app.id,
@@ -932,7 +932,7 @@ async def moderate_miniapp(
     if payload.moderation_status == "rejected" and len(note) < 5:
         raise HTTPException(
             status_code=400,
-            detail="Rejection reason is required (min 5 chars)",
+            detail="Укажите причину отклонения (минимум 5 символов)",
         )
     app.moderation_status = payload.moderation_status
     app.moderation_note = note or None
@@ -944,7 +944,7 @@ async def moderate_miniapp(
     db.refresh(app)
     bot = db.query(User).filter(User.id == app.bot_id, User.is_bot == True).first()
     if not bot:
-        raise HTTPException(status_code=404, detail="Bot not found")
+        raise HTTPException(status_code=404, detail="Бот не найден")
     is_owner = bool(bot.created_by_user_id == current_user.id)
     installed = (
         db.query(MiniAppInstall)

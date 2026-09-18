@@ -33,9 +33,6 @@ void refreshSubscriptionStatus(WidgetRef ref) {
 
 final hasProSubscriptionProvider = Provider<bool>((ref) {
   final status = ref.watch(subscriptionStatusProvider);
-  return status.when(
-    data: (s) => s?.hasPro ?? false,
-    loading: () => false,
-    error: (_, __) => false,
-  );
+  final current = status.valueOrNull ?? SubscriptionStatusCache.peek();
+  return current?.hasPro ?? false;
 });

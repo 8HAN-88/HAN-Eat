@@ -40,6 +40,7 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
   String? _submitError;
   List<SupportTicket> _tickets = [];
   bool _ticketsLoading = true;
+  String? _ticketsError;
 
   @override
   void initState() {
@@ -60,17 +61,27 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
   }
 
   Future<void> _loadTickets() async {
-    setState(() => _ticketsLoading = true);
+    setState(() {
+      _ticketsLoading = true;
+      _ticketsError = null;
+    });
     try {
       final res = await SupportService.getUserTickets(limit: 10);
       if (!mounted) return;
       setState(() {
         _tickets = res.tickets;
         _ticketsLoading = false;
+        _ticketsError = null;
       });
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
-      setState(() => _ticketsLoading = false);
+      setState(() {
+        _ticketsLoading = false;
+        _ticketsError = userVisibleError(
+          e,
+          fallback: 'Не удалось загрузить обращения',
+        );
+      });
     }
   }
 
@@ -243,6 +254,23 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 12),
                   child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_ticketsError != null)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _ticketsError!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: _loadTickets,
+                      child: const Text('Повторить'),
+                    ),
+                  ],
                 )
               else if (_tickets.isEmpty)
                 Text(
