@@ -45,8 +45,8 @@ class _MiniAppsModerationScreenState extends State<MiniAppsModerationScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error =
-            userVisibleError(e, fallback: 'Не удалось загрузить mini apps');
+        _error = userVisibleError(e,
+            fallback: 'Не удалось загрузить мини-приложения');
       });
     }
   }
@@ -71,9 +71,9 @@ class _MiniAppsModerationScreenState extends State<MiniAppsModerationScreen> {
         SnackBar(
           content: Text(
             status == 'approved'
-                ? 'Mini app одобрен'
+                ? 'Мини-приложение одобрено'
                 : status == 'rejected'
-                    ? 'Mini app отклонён'
+                    ? 'Мини-приложение отклонено'
                     : 'Статус обновлён',
           ),
         ),
@@ -97,7 +97,7 @@ class _MiniAppsModerationScreenState extends State<MiniAppsModerationScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Модерация mini apps'),
+        title: const Text('Модерация мини-приложений'),
         actions: [
           PopupMenuButton<String?>(
             initialValue: _statusFilter,
@@ -149,7 +149,7 @@ class _MiniAppsModerationScreenState extends State<MiniAppsModerationScreen> {
               : _items.isEmpty
                   ? AppEmptyState(
                       icon: Icons.check_circle_outline,
-                      title: 'Очередь mini apps пуста',
+                      title: 'Очередь мини-приложений пуста',
                       subtitle: 'Нет приложений для модерации',
                       action: _statusFilter != null
                           ? FilledButton(

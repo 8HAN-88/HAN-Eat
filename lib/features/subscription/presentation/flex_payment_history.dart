@@ -18,6 +18,7 @@ class FlexPaymentHistory extends StatefulWidget {
 class _FlexPaymentHistoryState extends State<FlexPaymentHistory> {
   List<PaymentHistoryItem> _payments = [];
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -26,13 +27,25 @@ class _FlexPaymentHistoryState extends State<FlexPaymentHistory> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final items = await PaymentService.getPaymentHistory();
       if (!mounted) return;
-      setState(() => _payments = items);
-    } catch (_) {
-      // история опциональна
+      setState(() {
+        _payments = items;
+        _error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = userVisibleError(
+          e,
+          fallback: 'Не удалось загрузить историю оплат',
+        );
+      });
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -134,6 +147,28 @@ class _FlexPaymentHistoryState extends State<FlexPaymentHistory> {
             padding: EdgeInsets.all(16),
             child: Center(child: CircularProgressIndicator()),
           )
+        else if (_error != null)
+          TelegramGroupedSurface(
+            margin: EdgeInsets.zero,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _error!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _load,
+                    child: const Text('Повторить'),
+                  ),
+                ],
+              ),
+            ),
+          )
         else if (_payments.isEmpty)
           TelegramGroupedSurface(
             margin: EdgeInsets.zero,
@@ -167,6 +202,16 @@ class _FlexPaymentHistoryState extends State<FlexPaymentHistory> {
   }
 }
 
+int? _flexLevelFromAmount(double amount) {
+  const base = 39;
+  const step = 10;
+  final raw = amount.round();
+  final level = ((raw - base) ~/ step) + 1;
+  if (level < 1 || level > 79) return null;
+  if (base + (level - 1) * step != raw) return null;
+  return level;
+}
+
 String _displayName(PaymentHistoryItem payment) {
   switch (payment.product) {
     case 'ai':
@@ -175,6 +220,12 @@ String _displayName(PaymentHistoryItem payment) {
       return 'HanWe · уровень 16';
     case 'pro':
       return 'HanWe · уровень 18';
+    case 'flex':
+      final named = payment.productName.trim();
+      if (named.contains('уровень')) return named;
+      final level = _flexLevelFromAmount(payment.amount);
+      if (level != null) return 'HanWe · уровень $level';
+      return named.isNotEmpty ? named : 'HanWe';
     default:
       return payment.productName;
   }

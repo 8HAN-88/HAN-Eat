@@ -131,6 +131,33 @@ void main() {
     );
   });
 
+  test(
+      'localizeKnownEnglishDetail maps stickers stories gifs and miniapps leftovers',
+      () {
+    expect(parseApiErrorMessage('pack_not_found'), 'Набор стикеров не найден');
+    expect(parseApiErrorMessage('Story not found'), 'История не найдена');
+    expect(
+      parseApiErrorMessage('GIF search is temporarily unavailable'),
+      'Поиск гифок временно недоступен',
+    );
+    expect(
+      parseApiErrorMessage('Notification not found'),
+      'Уведомление не найдено',
+    );
+    expect(parseApiErrorMessage('Bot token is missing'), 'Нет токена бота');
+    expect(
+      parseApiErrorMessage('Already refunded'),
+      'Возврат уже выполнен',
+    );
+    expect(
+      parseApiErrorMessage({
+        'code': 'MINIAPP_RATE_LIMIT_EXCEEDED',
+        'message': 'Too many mini app requests. Please try again later.',
+      }),
+      'Слишком много запросов к мини-приложению. Подождите немного.',
+    );
+  });
+
   test('userVisibleAuthError prefers auth message for 401', () {
     expect(
       userVisibleAuthError(

@@ -142,7 +142,7 @@ async def mark_notification_read(
     if not notification:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Notification not found"
+            detail="Уведомление не найдено"
         )
     
     notification.is_read = request.read
@@ -191,7 +191,7 @@ async def mark_all_read(
 
     return {
         "marked_read": updated,
-        "message": f"Marked {updated} notifications as read"
+        "message": f"Отмечено прочитанными: {updated}"
     }
 
 
@@ -227,7 +227,7 @@ async def cleanup_invalid_tokens(
     if not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only administrators can cleanup tokens"
+            detail="Очищать токены могут только администраторы"
         )
     
     push_service = get_push_service()
@@ -235,7 +235,7 @@ async def cleanup_invalid_tokens(
     if not push_service.enabled:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Push service is not available"
+            detail="Сервис пушей недоступен"
         )
     
     try:
@@ -244,11 +244,11 @@ async def cleanup_invalid_tokens(
         return {
             "success": True,
             "removed_count": removed_count,
-            "message": f"Cleaned up {removed_count} invalid FCM tokens"
+            "message": f"Удалено недействительных токенов: {removed_count}"
         }
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to cleanup tokens: {str(e)}"
+            detail="Не удалось очистить токены"
         )
 

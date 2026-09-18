@@ -42,6 +42,7 @@ from app.services.subscription_notify import (
 )
 from app.core.payments_startup import collect_payments_issues
 from app.core.receipt_copy import product_label
+from app.services.flex_subscription_service import level_from_price
 
 logger = logging.getLogger(__name__)
 
@@ -218,7 +219,7 @@ async def create_stars_checkout(
         )
     package = STAR_PACKAGES.get(request.package_id)
     if not package:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown stars package")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неизвестный пакет звёзд")
 
     country_code = current_user.country_code or CountryService.get_country_from_request(http_request)
     if not current_user.country_code:
@@ -322,7 +323,7 @@ async def create_stars_checkout(
         logger.error("Failed to create stars checkout: %s", e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create stars checkout",
+            detail="Не удалось создать оплату звёзд",
         )
 
 
@@ -606,7 +607,7 @@ async def create_checkout_session(
         logger.error(f"Error creating payment session: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create payment session"
+            detail="Не удалось создать сессию оплаты"
         )
 
 
@@ -1206,11 +1207,12 @@ async def get_subscription_prices(
 
 def _subscription_payment_dict(s: Subscription, svc: SubscriptionService) -> dict:
     product = getattr(s, "product", "pro") or "pro"
+    flex_level = level_from_price(s.amount) if product == "flex" else None
     product_names = {
         "ai": product_label("ai"),
         "creator": product_label("creator"),
         "pro": product_label("pro"),
-        "flex": product_label("flex"),
+        "flex": product_label("flex", flex_level),
     }
     refund_status = getattr(s, "refund_status", None) or "none"
     receipt_url = getattr(s, "receipt_url", None)
@@ -1376,11 +1378,11 @@ async def admin_process_refund(
     """Провести возврат через Т-Банк или ЮKassa (только админ)."""
     sub = db.query(Subscription).filter(Subscription.id == body.subscription_id).first()
     if not sub:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscription not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Подписка не найдена")
     if sub.refund_status == "refunded":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Already refunded",
+            detail="Возврат уже выполнен",
         )
 
     svc = SubscriptionService(db)
@@ -1456,11 +1458,11 @@ async def admin_reject_refund(
     """Отклонить запрос на возврат (только админ)."""
     sub = db.query(Subscription).filter(Subscription.id == body.subscription_id).first()
     if not sub:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscription not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Подписка не найдена")
     if sub.refund_status not in ("requested", "none"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot reject refund in status {sub.refund_status}",
+            detail=f"Нельзя отклонить возврат в статусе {sub.refund_status}",
         )
 
     sub.refund_status = "rejected"
@@ -1513,7 +1515,7 @@ async def get_subscription_receipt(
         .first()
     )
     if not sub:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payment not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Платёж не найден")
     svc = SubscriptionService(db)
     url = svc.refresh_receipt_url(sub)
     return {"subscription_id": sub.id, "receipt_url": url}

@@ -22,7 +22,7 @@ async def search_gifs(
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="GIF search unavailable",
+            detail="Поиск гифок временно недоступен",
         ) from exc
 
 
@@ -38,5 +38,5 @@ async def featured_gifs(
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="GIF catalog unavailable",
+            detail="Каталог гифок временно недоступен",
         ) from exc

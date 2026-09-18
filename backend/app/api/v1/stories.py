@@ -214,7 +214,7 @@ def can_view_story(story: Story, viewer: User, db: Session) -> bool:
 
 def _ensure_can_view(story: Story, viewer: User, db: Session) -> None:
     if not can_view_story(story, viewer, db):
-        raise HTTPException(status_code=404, detail="Story not found")
+        raise HTTPException(status_code=404, detail="История не найдена")
 
 
 @router.get("", response_model=List[StoryResponse])
@@ -272,7 +272,7 @@ async def create_story(
     """Создать сторис. Срок жизни — 24 часа."""
     visibility = (payload.visibility or "public").strip().lower()
     if visibility not in _VALID_VISIBILITY:
-        raise HTTPException(status_code=400, detail="Invalid visibility")
+        raise HTTPException(status_code=400, detail="Неверная видимость")
     if visibility == "close_friends":
         close_count = (
             db.query(func.count(CloseFriend.id))
@@ -309,7 +309,7 @@ async def mark_story_viewed(
 ):
     story = _active_story_query(db).filter(Story.id == story_id).first()
     if not story:
-        raise HTTPException(status_code=404, detail="Story not found")
+        raise HTTPException(status_code=404, detail="История не найдена")
     _ensure_can_view(story, current_user, db)
     if story.user_id != current_user.id:
         existing = (
@@ -353,9 +353,9 @@ async def list_story_viewers(
         .first()
     )
     if not story:
-        raise HTTPException(status_code=404, detail="Story not found")
+        raise HTTPException(status_code=404, detail="История не найдена")
     if story.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Only the author can see viewers")
+        raise HTTPException(status_code=403, detail="Просмотры видит только автор")
 
     limit = min(max(limit, 1), 200)
     views = (
@@ -396,14 +396,14 @@ async def set_story_reaction(
 ):
     story = _active_story_query(db).filter(Story.id == story_id).first()
     if not story:
-        raise HTTPException(status_code=404, detail="Story not found")
+        raise HTTPException(status_code=404, detail="История не найдена")
     _ensure_can_view(story, current_user, db)
     if story.user_id == current_user.id:
-        raise HTTPException(status_code=400, detail="Cannot react to your own story")
+        raise HTTPException(status_code=400, detail="Нельзя ставить реакцию на свою историю")
 
     emoji = (payload.emoji or "").strip()
     if not emoji or len(emoji) > 16:
-        raise HTTPException(status_code=400, detail="Invalid emoji")
+        raise HTTPException(status_code=400, detail="Неверный эмодзи")
 
     existing = (
         db.query(StoryReaction)
@@ -439,7 +439,7 @@ async def clear_story_reaction(
 ):
     story = _active_story_query(db).filter(Story.id == story_id).first()
     if not story:
-        raise HTTPException(status_code=404, detail="Story not found")
+        raise HTTPException(status_code=404, detail="История не найдена")
     _ensure_can_view(story, current_user, db)
     row = (
         db.query(StoryReaction)
@@ -474,7 +474,7 @@ async def delete_story(
         .first()
     )
     if not story:
-        raise HTTPException(status_code=404, detail="Story not found")
+        raise HTTPException(status_code=404, detail="История не найдена")
     story.deleted_at = datetime.utcnow()
     story.is_active = False
     db.commit()

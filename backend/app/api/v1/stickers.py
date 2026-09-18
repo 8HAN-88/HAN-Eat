@@ -24,6 +24,24 @@ from app.services.sticker_service import StickerService
 
 router = APIRouter()
 
+_STICKER_ERRORS = {
+    "pack_not_found": "Набор стикеров не найден",
+    "sticker_not_found": "Стикер не найден",
+    "forbidden": "Нет доступа к набору",
+    "missing_sticker": "Нужен стикер",
+    "empty_patch": "Нет изменений",
+    "invalid_title": "Неверное название",
+    "missing_media": "Нужно медиа",
+    "invalid_sticker_type": "Неверный тип стикера",
+}
+
+
+def _sticker_http(status_code: int, code: str) -> HTTPException:
+    return HTTPException(
+        status_code=status_code,
+        detail=_STICKER_ERRORS.get(code, "Не удалось выполнить действие со стикерами"),
+    )
+
 
 def _pack_share_link(slug: str) -> str:
     return f"https://haneat.app/stickers/{slug}"
@@ -121,7 +139,7 @@ async def get_sticker_pack(
     svc = StickerService(db)
     pack = svc.get_pack_for_user(current_user.id, pack_id)
     if not pack:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "pack_not_found")
+        raise _sticker_http(status.HTTP_404_NOT_FOUND, "pack_not_found")
     installed = svc.installed_pack_ids(current_user.id)
     stickers_by_pack_id = svc.stickers_by_pack_ids([pack_id])
     sticker_counts = svc.stickers_count_by_pack_ids([pack_id])
@@ -142,7 +160,7 @@ async def get_sticker_pack_by_slug(
     svc = StickerService(db)
     pack = svc.get_public_pack_by_slug(slug)
     if not pack:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "pack_not_found")
+        raise _sticker_http(status.HTTP_404_NOT_FOUND, "pack_not_found")
     installed = svc.installed_pack_ids(current_user.id)
     stickers_by_pack_id = svc.stickers_by_pack_ids([pack.id])
     sticker_counts = svc.stickers_count_by_pack_ids([pack.id])
@@ -173,7 +191,7 @@ async def create_sticker_pack(
         db.rollback()
         code = str(e)
         if code == "invalid_title":
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+            raise _sticker_http(status.HTTP_400_BAD_REQUEST, code)
         raise
     installed = svc.installed_pack_ids(current_user.id)
     stickers_by_pack_id = svc.stickers_by_pack_ids([pack.id])
@@ -207,15 +225,15 @@ async def add_sticker_to_pack(
         db.rollback()
         code = str(e)
         if code == "pack_not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, code)
+            raise _sticker_http(status.HTTP_404_NOT_FOUND, code)
         if code in ("forbidden",):
-            raise HTTPException(status.HTTP_403_FORBIDDEN, code)
+            raise _sticker_http(status.HTTP_403_FORBIDDEN, code)
         if code in ("missing_media", "invalid_sticker_type"):
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+            raise _sticker_http(status.HTTP_400_BAD_REQUEST, code)
         raise
     pack = svc.get_pack_for_user(current_user.id, pack_id)
     if not pack:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "pack_not_found")
+        raise _sticker_http(status.HTTP_404_NOT_FOUND, "pack_not_found")
     installed = svc.installed_pack_ids(current_user.id)
     stickers_by_pack_id = svc.stickers_by_pack_ids([pack.id])
     sticker_counts = svc.stickers_count_by_pack_ids([pack.id])
@@ -235,7 +253,7 @@ async def update_sticker_pack(
     db: Session = Depends(get_db),
 ):
     if body.title is None and body.is_public is None:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "empty_patch")
+        raise _sticker_http(status.HTTP_400_BAD_REQUEST, "empty_patch")
     svc = StickerService(db)
     try:
         pack = svc.update_pack(
@@ -250,11 +268,11 @@ async def update_sticker_pack(
         db.rollback()
         code = str(e)
         if code == "pack_not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, code)
+            raise _sticker_http(status.HTTP_404_NOT_FOUND, code)
         if code == "forbidden":
-            raise HTTPException(status.HTTP_403_FORBIDDEN, code)
+            raise _sticker_http(status.HTTP_403_FORBIDDEN, code)
         if code == "invalid_title":
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+            raise _sticker_http(status.HTTP_400_BAD_REQUEST, code)
         raise
     installed = svc.installed_pack_ids(current_user.id)
     stickers_by_pack_id = svc.stickers_by_pack_ids([pack.id])
@@ -286,9 +304,9 @@ async def delete_sticker_from_pack(
         db.rollback()
         code = str(e)
         if code in ("pack_not_found", "sticker_not_found"):
-            raise HTTPException(status.HTTP_404_NOT_FOUND, code)
+            raise _sticker_http(status.HTTP_404_NOT_FOUND, code)
         if code == "forbidden":
-            raise HTTPException(status.HTTP_403_FORBIDDEN, code)
+            raise _sticker_http(status.HTTP_403_FORBIDDEN, code)
         raise
     return {"ok": True}
 
@@ -312,9 +330,9 @@ async def reorder_pack_stickers(
         db.rollback()
         code = str(e)
         if code == "pack_not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, code)
+            raise _sticker_http(status.HTTP_404_NOT_FOUND, code)
         if code == "forbidden":
-            raise HTTPException(status.HTTP_403_FORBIDDEN, code)
+            raise _sticker_http(status.HTTP_403_FORBIDDEN, code)
         raise
     return {"ok": True}
 
@@ -333,9 +351,9 @@ async def install_sticker_pack(
         db.rollback()
         code = str(e)
         if code == "pack_not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, code)
+            raise _sticker_http(status.HTTP_404_NOT_FOUND, code)
         if code == "forbidden":
-            raise HTTPException(status.HTTP_403_FORBIDDEN, code)
+            raise _sticker_http(status.HTTP_403_FORBIDDEN, code)
         raise
     return {"ok": True}
 
@@ -349,7 +367,7 @@ async def import_sticker_pack_by_slug(
     svc = StickerService(db)
     pack = svc.get_public_pack_by_slug(slug)
     if not pack:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "pack_not_found")
+        raise _sticker_http(status.HTTP_404_NOT_FOUND, "pack_not_found")
     svc.install_pack(current_user.id, pack.id)
     db.commit()
     return {"ok": True, "pack_id": pack.id}
@@ -397,7 +415,7 @@ async def toggle_sticker_favorite(
     db: Session = Depends(get_db),
 ):
     if body.sticker_id is None and not (body.media_url or "").strip():
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "missing_sticker")
+        raise _sticker_http(status.HTTP_400_BAD_REQUEST, "missing_sticker")
     svc = StickerService(db)
     try:
         sticker, favorited = svc.toggle_favorite(
@@ -410,7 +428,7 @@ async def toggle_sticker_favorite(
         db.rollback()
         code = str(e)
         if code == "sticker_not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, code)
+            raise _sticker_http(status.HTTP_404_NOT_FOUND, code)
         raise
     return {
         "ok": True,
@@ -480,6 +498,6 @@ async def toggle_pinned_sticker_pack(
         db.rollback()
         code = str(e)
         if code == "pack_not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, code)
+            raise _sticker_http(status.HTTP_404_NOT_FOUND, code)
         raise
     return {"ok": True, "pinned": pinned, "pack_ids": pack_ids}

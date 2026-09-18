@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'auth_service.dart';
 import 'api_service.dart';
+import '../utils/api_error_parser.dart';
 
 /// Платежи: YooKassa (RU) / Stripe.
 class PaymentService {
@@ -39,7 +40,12 @@ class PaymentService {
       return CheckoutSessionResponse.fromJson(data);
     } else {
       final error = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(error['detail'] ?? 'Failed to create checkout session');
+      throw Exception(
+        parseApiErrorMessage(
+          error['detail'],
+          fallback: 'Не удалось создать сессию оплаты',
+        ),
+      );
     }
   }
 
@@ -72,7 +78,12 @@ class PaymentService {
       return CheckoutSessionResponse.fromJson(data);
     }
     final error = jsonDecode(response.body) as Map<String, dynamic>;
-    throw Exception(error['detail'] ?? 'Failed to create stars checkout');
+    throw Exception(
+      parseApiErrorMessage(
+        error['detail'],
+        fallback: 'Не удалось создать оплату звёзд',
+      ),
+    );
   }
 
   static Future<SubscriptionPricesResponse> getPrices() async {
@@ -90,7 +101,7 @@ class PaymentService {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return SubscriptionPricesResponse.fromJson(data);
     } else {
-      throw Exception('Failed to load subscription prices');
+      throw Exception('Не удалось загрузить цены');
     }
   }
 
@@ -116,7 +127,7 @@ class PaymentService {
           .map((e) => PaymentHistoryItem.fromJson(e as Map<String, dynamic>))
           .toList();
     }
-    throw Exception('Failed to load payment history');
+    throw Exception('Не удалось загрузить историю оплат');
   }
 
   static Future<String?> refreshReceiptUrl(int subscriptionId) async {
