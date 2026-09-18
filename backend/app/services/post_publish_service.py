@@ -151,7 +151,7 @@ def promote_post(db: Session, post_id: int, user_id: int) -> Post:
         db,
         user_id,
         "creator_promotion",
-        "Продвижение доступно с подпиской уровня 16"
+        "Продвижение доступно с подпиской уровня 16",
         code=HAN_CREATOR_REQUIRED_CODE,
     )
 
@@ -189,7 +189,7 @@ def unpromote_post(db: Session, post_id: int, user_id: int) -> Post:
         db,
         user_id,
         "creator_promotion",
-        "Продвижение доступно с подпиской уровня 16"
+        "Продвижение доступно с подпиской уровня 16",
         code=HAN_CREATOR_REQUIRED_CODE,
     )
     post.is_promoted = False
@@ -220,7 +220,7 @@ def pin_post(db: Session, post_id: int, user_id: int) -> Post:
         db,
         user_id,
         "creator_pinned",
-        "Закрепление доступно с подпиской уровня 16"
+        "Закрепление доступно с подпиской уровня 16",
         code=HAN_CREATOR_REQUIRED_CODE,
     )
 
@@ -255,7 +255,7 @@ def unpin_post(db: Session, post_id: int, user_id: int) -> Post:
         db,
         user_id,
         "creator_pinned",
-        "Закрепление доступно с подпиской уровня 16"
+        "Закрепление доступно с подпиской уровня 16",
         code=HAN_CREATOR_REQUIRED_CODE,
     )
     post.is_pinned = False
