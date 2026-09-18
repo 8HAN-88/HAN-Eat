@@ -66,7 +66,7 @@ def _require_can_view_posts(
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication required",
+                detail="Войдите в аккаунт",
             )
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
@@ -80,16 +80,16 @@ def _require_can_view_posts(
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication required",
+                detail="Войдите в аккаунт",
             )
         if member and member.status == MEMBER_STATUS_PENDING:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Membership pending approval",
+                detail="Заявка на вступление ещё на рассмотрении",
             )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Channel is private",
+            detail="Канал закрытый",
         )
     return member
 
@@ -231,7 +231,7 @@ async def create_channel(
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Channel with this slug already exists"
+                detail="Канал с таким адресом уже есть"
             )
         
         is_public = request.is_public if request.is_public is not None else True
@@ -324,7 +324,7 @@ async def update_channel(
     if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Channel not found"
+            detail="Канал не найден"
         )
     
     member = get_membership(db, channel_id, current_user.id)
@@ -342,7 +342,7 @@ async def update_channel(
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Channel with this slug already exists"
+                detail="Канал с таким адресом уже есть"
             )
     
     # Обновляем поля (только переданные)
@@ -503,7 +503,7 @@ async def patch_channel_inbox_prefs(
     if not member:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Not a member of this channel",
+            detail="Вы не участник канала",
         )
     if body.is_favorite is not None:
         member.is_favorite = body.is_favorite
@@ -534,7 +534,7 @@ async def get_channel(
     if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Channel not found"
+            detail="Канал не найден"
         )
     
     member = (
@@ -861,7 +861,7 @@ async def join_channel(
     if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Channel not found"
+            detail="Канал не найден"
         )
     
     # Проверяем, не является ли уже участником
@@ -880,7 +880,7 @@ async def join_channel(
             )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Already a member of this channel",
+            detail="Вы уже в канале",
         )
 
     if channel.is_public:
@@ -920,7 +920,7 @@ async def leave_channel(
     if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Channel not found"
+            detail="Канал не найден"
         )
     
     # Проверяем, является ли участником
@@ -932,13 +932,13 @@ async def leave_channel(
     if not member:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Not a member of this channel"
+            detail="Вы не участник канала"
         )
     
     if member.role in ("owner", "admin"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Owner or admin cannot leave channel. Transfer rights or delete channel.",
+            detail="Владелец или админ не может выйти. Передайте права или удалите канал.",
         )
 
     db.delete(member)
@@ -970,7 +970,7 @@ async def list_channel_join_requests(
     if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Channel not found",
+            detail="Канал не найден",
         )
     _require_channel_permission(
         db,
@@ -1034,7 +1034,7 @@ async def approve_channel_join_request(
     if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Channel not found",
+            detail="Канал не найден",
         )
     _require_channel_permission(
         db,
@@ -1048,7 +1048,7 @@ async def approve_channel_join_request(
     if not pending or pending.status != MEMBER_STATUS_PENDING:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Join request not found",
+            detail="Заявка не найдена",
         )
     pending.status = MEMBER_STATUS_ACTIVE
     sync_channel_members_count(db, channel_id)
@@ -1097,7 +1097,7 @@ async def reject_channel_join_request(
     if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Channel not found",
+            detail="Канал не найден",
         )
     _require_channel_permission(
         db,
@@ -1111,7 +1111,7 @@ async def reject_channel_join_request(
     if not pending or pending.status != MEMBER_STATUS_PENDING:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Join request not found",
+            detail="Заявка не найдена",
         )
     db.delete(pending)
     db.commit()
@@ -1129,13 +1129,13 @@ async def mark_channel_inbox_read(
     if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Channel not found",
+            detail="Канал не найден",
         )
     member = get_membership(db, channel_id, current_user.id)
     if not member or member.status != MEMBER_STATUS_ACTIVE:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not a member of this channel",
+            detail="Вы не участник канала",
         )
     posts_count = channel.posts_count or 0
     seen = member.last_seen_posts_count or 0
@@ -1160,7 +1160,7 @@ async def patch_channel_notifications(
     if not member or member.status != MEMBER_STATUS_ACTIVE:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Not a member of this channel",
+            detail="Вы не участник канала",
         )
     member.notifications_enabled = body.enabled
     db.commit()
@@ -1205,7 +1205,7 @@ async def get_channel_posts(
     if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Channel not found"
+            detail="Канал не найден"
         )
     
     _require_can_view_posts(db, channel, current_user)
@@ -1386,7 +1386,7 @@ async def get_channel_members(
     if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Channel not found"
+            detail="Канал не найден"
         )
     
     _require_can_view_posts(db, channel, current_user)
@@ -1457,7 +1457,7 @@ async def create_channel_post(
     if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Channel not found"
+            detail="Канал не найден"
         )
     
     _require_channel_permission(
@@ -1579,7 +1579,7 @@ async def update_channel_post(
     if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Channel not found"
+            detail="Канал не найден"
         )
     
     # Проверяем существование поста
@@ -1591,7 +1591,7 @@ async def update_channel_post(
     if not post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post not found"
+            detail="Пост не найден"
         )
     
     is_author = post.user_id == current_user.id
@@ -1689,7 +1689,7 @@ async def delete_channel_post(
     if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Channel not found"
+            detail="Канал не найден"
         )
     
     # Проверяем существование поста
@@ -1701,7 +1701,7 @@ async def delete_channel_post(
     if not post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post not found"
+            detail="Пост не найден"
         )
     
     is_author = post.user_id == current_user.id
@@ -1847,7 +1847,7 @@ async def update_member_role(
     if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Channel not found"
+            detail="Канал не найден"
         )
     
     _require_channel_permission(
@@ -1866,19 +1866,19 @@ async def update_member_role(
     if not member:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Member not found"
+            detail="Участник не найден"
         )
     
     if member.role == "owner" or channel.admin_user_id == user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot change owner role"
+            detail="Роль владельца менять нельзя"
         )
     
     if request.role not in ["admin", "moderator", "member"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid role. Must be: admin, moderator, or member"
+            detail="Неверная роль. Допустимо: админ, модератор или участник"
         )
     
     member.role = request.role
@@ -1918,7 +1918,7 @@ async def remove_member(
     if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Channel not found"
+            detail="Канал не найден"
         )
     
     _require_channel_permission(
@@ -1937,13 +1937,13 @@ async def remove_member(
     if not member:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Member not found"
+            detail="Участник не найден"
         )
     
     if member.role == "owner" or channel.admin_user_id == user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot remove channel owner"
+            detail="Нельзя удалить владельца канала"
         )
     
     db.delete(member)
@@ -1968,13 +1968,13 @@ async def delete_channel(
     if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Channel not found"
+            detail="Канал не найден"
         )
     
     if channel.admin_user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only channel owner can delete channel"
+            detail="Удалить канал может только владелец"
         )
 
     member_rows = (

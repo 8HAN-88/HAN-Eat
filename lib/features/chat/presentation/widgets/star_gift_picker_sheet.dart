@@ -255,7 +255,7 @@ class _StarGiftPickerSheetState extends State<_StarGiftPickerSheet> {
                                 const SizedBox(height: 2),
                                 Text(
                                   soldOut
-                                      ? 'Sold out'
+                                      ? 'Распродано'
                                       : gift.isLimited && gift.remaining != null
                                           ? '${gift.stars} ★ · ${gift.remaining}'
                                           : '${gift.stars} ★',
@@ -269,7 +269,7 @@ class _StarGiftPickerSheetState extends State<_StarGiftPickerSheet> {
                                 ),
                                 if (gift.isLimited && !soldOut)
                                   Text(
-                                    'limited',
+                                    'лимитированный',
                                     style: Theme.of(context)
                                         .textTheme
                                         .labelSmall
