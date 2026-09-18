@@ -198,6 +198,22 @@ void main() {
     );
   });
 
+  test(
+      'localizeKnownEnglishDetail maps paid gifts giveaways and search leftovers',
+      () {
+    expect(parseApiErrorMessage('Gift not found'), 'Подарок не найден');
+    expect(
+      parseApiErrorMessage('Creator cannot join own giveaway'),
+      'Нельзя участвовать в своём розыгрыше',
+    );
+    expect(parseApiErrorMessage('empty_text'), 'Введите текст для ассистента');
+    expect(
+      parseApiErrorMessage('q must be at least 2 characters'),
+      'В запросе нужно минимум 2 символа',
+    );
+    expect(parseApiErrorMessage('Video not found'), 'Видео не найдено');
+  });
+
   test('userVisibleAuthError prefers auth message for 401', () {
     expect(
       userVisibleAuthError(

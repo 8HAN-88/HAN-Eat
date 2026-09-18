@@ -83,7 +83,7 @@ class SubscriptionMaintenanceService:
                         type="subscription_expired",
                         title="Подписка завершена",
                         body=(
-                            "Срок подписки истёк. Оформите тариф снова "
+                            "Срок подписки истёк. Оформите подписку снова "
                             "в разделе «Подписка»."
                         ),
                         entity_type="subscription",

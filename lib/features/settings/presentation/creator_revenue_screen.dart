@@ -390,6 +390,27 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
     }
   }
 
+  String _refTypeLabel(String type) {
+    switch (type) {
+      case 'giveaway':
+        return 'Розыгрыш';
+      case 'payout':
+        return 'Выплата';
+      case 'content_sale':
+        return 'Продажа контента';
+      case 'donation':
+        return 'Донат';
+      case 'channel_subscription':
+        return 'Подписка на канал';
+      case 'paid_media':
+        return 'Платное медиа';
+      case 'gift':
+        return 'Подарок';
+      default:
+        return type;
+    }
+  }
+
   String _date(DateTime date) {
     if (date.millisecondsSinceEpoch == 0) return '';
     return '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}';
@@ -728,7 +749,9 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
                                     Text(
                                         'Контрагент: #${tx.counterpartyUserId}'),
                                   if (tx.referenceType != null)
-                                    Text('Тип ссылки: ${tx.referenceType}'),
+                                    Text(
+                                      'Тип ссылки: ${_refTypeLabel(tx.referenceType!)}',
+                                    ),
                                   if (tx.referenceId != null)
                                     Text('ID ссылки: ${tx.referenceId}'),
                                 ],

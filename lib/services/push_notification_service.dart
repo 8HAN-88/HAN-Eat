@@ -121,17 +121,21 @@ class PushNotificationService {
         return;
       }
     }
-    if (route == 'subscription') {
-      router.push('/subscription');
+    if (route == 'subscription' || type.startsWith('subscription_')) {
+      final rawLevel = data['level'] ?? data['flex_level'];
+      final level = rawLevel is int
+          ? rawLevel
+          : int.tryParse('${rawLevel ?? ''}');
+      router.push(
+        level != null && level > 0
+            ? FlexSubscriptionRoute.pathWithLevel(level)
+            : FlexSubscriptionRoute.path,
+      );
       return;
     }
     final userId = _parseId(data, 'user_id', 'actor_id');
     if (userId != null) {
       router.push('/profile?userId=$userId');
-      return;
-    }
-    if (type.startsWith('subscription_')) {
-      router.push('/subscription');
       return;
     }
     router.push('/notifications');

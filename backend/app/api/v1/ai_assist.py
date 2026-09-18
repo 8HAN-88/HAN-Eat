@@ -27,7 +27,7 @@ async def chat_assist(
 ):
     text = (body.text or "").strip()
     if not text:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="empty_text")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Введите текст для ассистента")
     svc = SubscriptionService(db)
     if not svc.has_ai_access(current_user.id):
         from app.core.entitlements import HAN_AI_REQUIRED_CODE
@@ -36,7 +36,7 @@ async def chat_assist(
             status.HTTP_403_FORBIDDEN,
             detail={
                 "code": HAN_AI_REQUIRED_CODE,
-                "message": "Ассистент доступен с AI-функциями подписки",
+                "message": "Ассистент доступен с подпиской уровня 9",
             },
         )
     priority = svc.has_entitlement(current_user.id, "ai_priority_speed")

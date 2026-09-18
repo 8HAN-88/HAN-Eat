@@ -473,7 +473,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               clipBehavior: Clip.antiAlias,
               child: SwitchListTile(
                 secondary: const Icon(Icons.vibration_outlined),
-                title: const Text('Вибро-отсчёт slow mode'),
+                title: const Text('Вибро-отсчёт медленного режима'),
                 subtitle: const Text(
                   'Лёгкий тактильный акцент на 3-2-1 и при разблокировке отправки',
                 ),
@@ -488,7 +488,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 secondary: const Icon(Icons.autorenew_rounded),
                 title: const Text('Автоповтор при лимитах'),
                 subtitle: const Text(
-                  'Автоматически повторять отправку после slow mode и антифлуда',
+                  'Автоматически повторять отправку после медленного режима и антифлуда',
                 ),
                 value: _autoRetryOnLimitsEnabled,
                 onChanged: _toggleAutoRetryOnLimits,

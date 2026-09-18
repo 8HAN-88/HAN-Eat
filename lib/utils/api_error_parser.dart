@@ -218,6 +218,34 @@ const _knownEnglishDetails = <String, String>{
   'Invalid file path': 'Неверный путь к файлу',
   'File not found': 'Файл не найден',
   'Group not found': 'Группа не найдена',
+  'Gift not found': 'Подарок не найден',
+  'Giveaway not found': 'Розыгрыш не найден',
+  'Invoice not found': 'Счёт не найден',
+  'Invoice already paid': 'Счёт уже оплачен',
+  'Invoice expired': 'Срок счёта истёк',
+  'Cannot pay own invoice': 'Нельзя оплатить свой счёт',
+  'Creator cannot join own giveaway': 'Нельзя участвовать в своём розыгрыше',
+  'Join the channel to enter the giveaway':
+      'Вступите в канал, чтобы участвовать',
+  'Channel already has an active giveaway':
+      'В канале уже есть активный розыгрыш',
+  'empty_text': 'Введите текст для ассистента',
+  'unsupported_emoji': 'Эта реакция недоступна',
+  'Video not found': 'Видео не найдено',
+  'Bot not found or access denied': 'Бот не найден или нет доступа',
+  'You are not a member of this chat': 'Вы не участник этого чата',
+  'Conversation not found': 'Чат не найден',
+  'Invalid date format. Use YYYY-MM-DD':
+      'Неверный формат даты. Используйте ГГГГ-ММ-ДД',
+  'q must be at least 2 characters': 'В запросе нужно минимум 2 символа',
+  'Provide q (min 2 chars) and/or date_from/date_to':
+      'Укажите запрос (от 2 символов) или даты',
+  'Cannot ban admin': 'Нельзя заблокировать администратора',
+  'Moderation item not found': 'Элемент модерации не найден',
+  'Item already moderated': 'Элемент уже проверен',
+  'Amount must be positive': 'Сумма должна быть больше нуля',
+  'Gift is not for sale': 'Подарок не продаётся',
+  'Cannot buy your own gift': 'Нельзя купить свой подарок',
 };
 
 String? localizeKnownEnglishDetail(String detail) =>

@@ -64,10 +64,10 @@ def set_post_reaction(db: Session, *, post_id: int, user_id: int, emoji: str) ->
         .first()
     )
     if not post:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Post not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Пост не найден")
     clean = (emoji or "").strip()
     if clean not in ALLOWED_POST_REACTION_EMOJIS:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="unsupported_emoji")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Эта реакция недоступна")
     if clean in EXCLUSIVE_REACTION_EMOJIS and not SubscriptionService(db).has_entitlement(
         user_id, "exclusive_reactions"
     ):
@@ -75,7 +75,7 @@ def set_post_reaction(db: Session, *, post_id: int, user_id: int, emoji: str) ->
             status.HTTP_403_FORBIDDEN,
             detail={
                 "code": HAN_PLUS_REQUIRED_CODE,
-                "message": "Эксклюзивные реакции доступны по подписке",
+                "message": "Эксклюзивные реакции доступны с подпиской",
             },
         )
     row = (

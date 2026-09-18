@@ -538,7 +538,7 @@ class FlexSubscriptionService:
     def create_feature(self, data: dict[str, Any]) -> SubscriptionFeature:
         slug = str(data.get("slug") or "").strip().lower()
         if not slug:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "slug required")
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Нужен идентификатор функции")
         if self.db.query(SubscriptionFeature).filter(SubscriptionFeature.slug == slug).first():
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "slug already exists")
         feat = SubscriptionFeature(**self._feature_fields(data, slug=slug))
@@ -549,7 +549,7 @@ class FlexSubscriptionService:
     def update_feature(self, feature_id: int, data: dict[str, Any]) -> SubscriptionFeature:
         feat = self.db.query(SubscriptionFeature).filter(SubscriptionFeature.id == feature_id).first()
         if not feat:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Feature not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Функция не найдена")
         fields = self._feature_fields(data, slug=feat.slug, partial=True)
         for key, value in fields.items():
             setattr(feat, key, value)
@@ -564,7 +564,7 @@ class FlexSubscriptionService:
                 .first()
             )
             if not block:
-                raise HTTPException(status.HTTP_404_NOT_FOUND, "Block not found")
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Блок не найден")
         else:
             key = str(data.get("key") or "").strip()
             if not key:

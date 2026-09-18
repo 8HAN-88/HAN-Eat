@@ -1906,7 +1906,7 @@ def _parse_search_date(value: Optional[str], *, end_of_day: bool = False) -> Opt
     except ValueError as exc:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail="Invalid date format. Use YYYY-MM-DD",
+            detail="Неверный формат даты. Используйте ГГГГ-ММ-ДД",
         ) from exc
     if end_of_day:
         return parsed.replace(hour=23, minute=59, second=59)
@@ -1933,12 +1933,12 @@ async def search_messages_global(
     if len(term) < 2 and date_from_obj is None and date_to_obj is None:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail="Provide q (min 2 chars) and/or date_from/date_to",
+            detail="Укажите запрос (от 2 символов) или даты",
         )
     if 0 < len(term) < 2:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail="q must be at least 2 characters",
+            detail="В запросе нужно минимум 2 символа",
         )
     svc = ChatService(db)
     try:
@@ -1980,12 +1980,12 @@ async def search_messages_in_chat(
     if len(term) < 2 and date_from_obj is None and date_to_obj is None:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail="Provide q (min 2 chars) and/or date_from/date_to",
+            detail="Укажите запрос (от 2 символов) или даты",
         )
     if 0 < len(term) < 2:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail="q must be at least 2 characters",
+            detail="В запросе нужно минимум 2 символа",
         )
     svc = ChatService(db)
     try:

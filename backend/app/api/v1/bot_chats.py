@@ -30,12 +30,12 @@ async def add_bot_to_chat(
     # Проверяем, что бот существует и принадлежит текущему пользователю
     bot = db.query(User).filter(User.id == bot_id, User.is_bot == True).first()
     if not bot or bot.created_by_user_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Bot not found or access denied")
+        raise HTTPException(status_code=404, detail="Бот не найден или нет доступа")
 
     # Проверяем, что чат существует
     conv = db.query(Conversation).filter(Conversation.id == payload.conversation_id).first()
     if not conv:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+        raise HTTPException(status_code=404, detail="Чат не найден")
 
     # Проверяем, что пользователь является участником чата (или владельцем канала)
     is_member = db.query(ConversationMember).filter(
@@ -43,7 +43,7 @@ async def add_bot_to_chat(
         ConversationMember.user_id == current_user.id,
     ).first()
     if not is_member:
-        raise HTTPException(status_code=403, detail="You are not a member of this chat")
+        raise HTTPException(status_code=403, detail="Вы не участник этого чата")
 
     # Проверяем, что бот ещё не в чате
     already_in = db.query(ConversationMember).filter(
