@@ -396,6 +396,13 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
                                   ?.canCreatorTools ??
                               false;
                           if (!canTools) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Приватный канал — с подпиской уровня 16+',
+                                ),
+                              ),
+                            );
                             context.push(
                               SubscriptionRoute.pathWithProduct('creator'),
                             );

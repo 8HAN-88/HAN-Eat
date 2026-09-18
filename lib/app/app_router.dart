@@ -75,6 +75,7 @@ import '../features/moderation/presentation/moderation_dashboard_screen.dart';
 import '../features/admin/presentation/admin_refund_queue_screen.dart';
 import '../features/admin/presentation/admin_partner_payouts_screen.dart';
 import '../features/admin/presentation/admin_creator_payouts_screen.dart';
+import '../features/admin/presentation/admin_support_tickets_screen.dart';
 import '../features/moderation/presentation/moderation_queue_screen.dart';
 import '../features/moderation/presentation/miniapps_moderation_screen.dart';
 import '../features/search/application/search_scope.dart';
@@ -1239,6 +1240,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) =>
             const MaterialPage(child: AdminCreatorPayoutsScreen()),
       ),
+      GoRoute(
+        path: AdminSupportTicketsRoute.path,
+        name: AdminSupportTicketsRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: AdminSupportTicketsScreen()),
+      ),
       // Легаси: /community → главная лента; избранное — отдельный маршрут
       GoRoute(
         path: CommunityRoute.path,
@@ -1515,6 +1522,11 @@ class AdminPartnerPayoutsRoute {
 class AdminCreatorPayoutsRoute {
   static const path = '/admin/creator-payouts';
   static const name = 'admin_creator_payouts';
+}
+
+class AdminSupportTicketsRoute {
+  static const path = '/admin/support-tickets';
+  static const name = 'admin_support_tickets';
 }
 
 

@@ -14,13 +14,13 @@ import 'server_config.dart';
 import 'auth_service.dart';
 import '../utils/api_error_parser.dart';
 
-/// Бэкенд вернул 403: нужна подписка с AI (HanWe AI или Pro).
+/// Бэкенд вернул 403: нужна подписка с AI (уровень 9+).
 /// Алиас для совместимости: раньше «Plus», сейчас AI/Pro.
 typedef HanAiRequiredException = HanPlusRequiredException;
 
 class HanPlusRequiredException implements Exception {
   const HanPlusRequiredException(
-      [this.message = 'Требуется подписка HanWe AI или Pro']);
+      [this.message = 'Нужна подписка с AI (уровень 9+)']);
   final String message;
   @override
   String toString() => message;
@@ -303,7 +303,7 @@ class ApiService {
             code == 'HAN_AI_REQUIRED' ||
             code == 'HAN_PRO_REQUIRED') {
           throw HanPlusRequiredException(
-            msg.isNotEmpty ? msg : 'Требуется подписка HanWe AI или Pro',
+            msg.isNotEmpty ? msg : 'Нужна подписка с AI (уровень 9+)',
           );
         }
         if (code == 'LOGIN_REQUIRED') {

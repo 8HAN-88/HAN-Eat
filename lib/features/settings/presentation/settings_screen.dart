@@ -365,7 +365,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       _SettingsItem(
         title: 'Поддержка и безопасность',
         icon: Icons.verified_user_outlined,
-        subtitle: 'GDPR, модерация, жалобы, правила сообщества',
+        subtitle: 'Конфиденциальность, модерация, жалобы, правила сообщества',
         onTap: () => context.push(SupportSecurityRoute.path),
       ),
       _SettingsItem(
@@ -404,6 +404,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           icon: Icons.account_balance_wallet_outlined,
           subtitle: 'Заявки авторов на карту / СБП',
           onTap: () => context.push(AdminCreatorPayoutsRoute.path),
+        ),
+      if (_isAdmin)
+        _SettingsItem(
+          title: 'Обращения в поддержку',
+          icon: Icons.support_agent_outlined,
+          subtitle: 'Открытые тикеты и приоритетная очередь',
+          onTap: () => context.push(AdminSupportTicketsRoute.path),
         ),
       if (_isAdmin)
         _SettingsItem(

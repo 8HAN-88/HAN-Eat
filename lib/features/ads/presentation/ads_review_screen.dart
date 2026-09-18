@@ -91,7 +91,14 @@ class _AdsReviewScreenState extends State<AdsReviewScreen> {
       ),
     );
     controller.dispose();
-    if (reason == null || reason.length < 2) return;
+    if (reason == null) return;
+    if (reason.length < 2) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Укажите причину не короче 2 символов')),
+      );
+      return;
+    }
     try {
       await AdsService.reject(campaign.id, reason);
       if (!mounted) return;

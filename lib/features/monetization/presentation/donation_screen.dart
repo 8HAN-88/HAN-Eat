@@ -56,10 +56,9 @@ class _DonationScreenState extends State<DonationScreen> {
       await ApiService.createDonation(request);
 
       if (!mounted) return;
-
-      Navigator.of(context).pop(true); // true = успешно отправлено
-
-      ScaffoldMessenger.of(context).showSnackBar(
+      final messenger = ScaffoldMessenger.of(context);
+      Navigator.of(context).pop(true);
+      messenger.showSnackBar(
         SnackBar(
           content: Text('Спасибо! Донат $_selectedAmount ★ отправлен'),
           backgroundColor: Colors.green,
