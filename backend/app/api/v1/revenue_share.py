@@ -135,7 +135,7 @@ def admin_payout_queue(
     user: User = Depends(get_current_user_required),
 ):
     if not user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail="Нужны права администратора")
     return RevenueShareService(db).list_payout_queue(status=status, limit=limit)
 
 
@@ -147,7 +147,7 @@ def review_partner_payout(
     user: User = Depends(get_current_user_required),
 ):
     if not user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail="Нужны права администратора")
     svc = RevenueShareService(db)
     try:
         payout = svc.review_payout(

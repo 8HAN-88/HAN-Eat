@@ -46,7 +46,7 @@ async def get_current_user_required(
     if not credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required",
+            detail="Войдите в аккаунт",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
@@ -56,7 +56,7 @@ async def get_current_user_required(
     if not payload or payload.get("type") != "access":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
+            detail="Неверные данные входа",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
@@ -64,19 +64,19 @@ async def get_current_user_required(
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token payload"
+            detail="Неверные данные токена"
         )
     
     user = db.query(User).filter(User.id == int(user_id)).first()
     if not user or user.deleted_at:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found"
+            detail="Пользователь не найден"
         )
     if user.banned_at is not None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account suspended",
+            detail="Аккаунт заблокирован",
         )
 
     return user
@@ -89,7 +89,7 @@ async def get_current_admin_required(
     if not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required"
+            detail="Нужны права администратора"
         )
     return current_user
 
@@ -101,7 +101,7 @@ async def get_current_moderator_required(
     if not (current_user.is_moderator or current_user.is_admin):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Moderator or admin access required"
+            detail="Нужны права модератора"
         )
     return current_user
 

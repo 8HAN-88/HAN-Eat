@@ -826,7 +826,7 @@ class _ChannelManagementScreenState
             decoration: const InputDecoration(
               labelText: 'Цвет акцента канала',
               hintText: '#FF6B35',
-              helperText: 'Оформление Creator: HEX-цвет бейджа и акцентов',
+              helperText: 'Оформление с уровня 16: HEX-цвет бейджа и акцентов',
             ),
           ),
         ],

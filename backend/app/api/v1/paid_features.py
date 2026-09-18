@@ -454,7 +454,7 @@ async def admin_creator_payout_queue(
     db: Session = Depends(get_db),
 ):
     if not current_user.is_admin:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нужны права администратора")
     service = PaidFeaturesService(db)
     rows = service.list_payout_queue(status=status, limit=limit)
     user_ids = {row.creator_user_id for row in rows}
@@ -477,7 +477,7 @@ async def review_payout(
     db: Session = Depends(get_db),
 ):
     if not current_user.is_admin:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нужны права администратора")
     service = PaidFeaturesService(db)
     payout = service.review_payout(
         payout_id,

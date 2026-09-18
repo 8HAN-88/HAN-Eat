@@ -165,6 +165,41 @@ const _knownEnglishDetails = <String, String>{
   'Unknown stars package': 'Неизвестный пакет звёзд',
   'Too many mini app requests. Please try again later.':
       'Слишком много запросов к мини-приложению. Подождите немного.',
+  'Incorrect email or password': 'Неверный email или пароль',
+  'Email already registered': 'Email уже занят',
+  'Username already taken': 'Это имя уже занято',
+  'Account deleted': 'Аккаунт удалён',
+  'Account suspended': 'Аккаунт заблокирован',
+  'Invalid refresh token': 'Неверный токен обновления',
+  'Invalid token payload': 'Неверные данные токена',
+  'Invalid authentication credentials': 'Неверные данные входа',
+  'Session not found': 'Сессия не найдена',
+  'Session revoked': 'Сессия отозвана',
+  'Two-factor authentication is already enabled':
+      'Двухфакторная защита уже включена',
+  'Two-factor authentication is not enabled':
+      'Двухфакторная защита не включена',
+  'Invalid authenticator code': 'Неверный код из приложения',
+  'Incorrect password': 'Неверный пароль',
+  'Invalid or expired 2FA pending token': 'Код входа устарел. Войдите снова',
+  'No active subscription found': 'Активная подписка не найдена',
+  'You already have an open request to cancel subscription.':
+      'Запрос на отмену уже отправлен',
+  'Your cancellation request has been submitted.': 'Запрос на отмену отправлен',
+  'User profile is private': 'Профиль закрытый',
+  'Cannot add yourself': 'Нельзя добавить себя',
+  'Close friend not found': 'Близкий друг не найден',
+  'Post already reposted': 'Вы уже репостнули этот пост',
+  'Cannot repost your own post': 'Нельзя репостнуть свой пост',
+  'Repost not found': 'Репост не найден',
+  'Plan must be \'monthly\' or \'yearly\'': 'Выберите период: месяц или год',
+  'Product must be \'ai\', \'creator\', or \'pro\'': 'Неверный тариф',
+  'Trial is only available for \'ai\' or \'pro\'':
+      'Пробный период доступен для уровней 9 и 18',
+  'Trial is not available for this account':
+      'Пробный период для этого аккаунта недоступен',
+  'Admin access required': 'Нужны права администратора',
+  'Moderator or admin access required': 'Нужны права модератора',
 };
 
 String? localizeKnownEnglishDetail(String detail) =>

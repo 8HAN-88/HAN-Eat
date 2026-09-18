@@ -158,6 +158,28 @@ void main() {
     );
   });
 
+  test('localizeKnownEnglishDetail maps auth subscription and repost leftovers',
+      () {
+    expect(
+      parseApiErrorMessage('Incorrect email or password'),
+      'Неверный email или пароль',
+    );
+    expect(parseApiErrorMessage('Account suspended'), 'Аккаунт заблокирован');
+    expect(
+      parseApiErrorMessage('Your cancellation request has been submitted.'),
+      'Запрос на отмену отправлен',
+    );
+    expect(parseApiErrorMessage('User profile is private'), 'Профиль закрытый');
+    expect(
+      parseApiErrorMessage('Post already reposted'),
+      'Вы уже репостнули этот пост',
+    );
+    expect(
+      parseApiErrorMessage('Cannot repost your own post'),
+      'Нельзя репостнуть свой пост',
+    );
+  });
+
   test('userVisibleAuthError prefers auth message for 401', () {
     expect(
       userVisibleAuthError(

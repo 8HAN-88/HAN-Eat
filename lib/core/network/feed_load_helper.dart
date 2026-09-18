@@ -13,6 +13,7 @@ class FeedLoadHelper {
     if (e is AuthException) {
       final m = e.message;
       return m.contains('Сессия истекла') ||
+          m.contains('Не удалось обновить сессию') ||
           m.contains('Token refresh failed') ||
           m.contains('No refresh token');
     }
@@ -22,9 +23,11 @@ class FeedLoadHelper {
       return false;
     }
     return s.contains('Сессия истекла') ||
+        s.contains('Не удалось обновить сессию') ||
         s.contains('Token refresh failed') ||
         s.contains('No refresh token') ||
-        s.contains('Invalid refresh token');
+        s.contains('Invalid refresh token') ||
+        s.contains('Неверный токен обновления');
   }
 
   static bool isNetworkError(Object e) {

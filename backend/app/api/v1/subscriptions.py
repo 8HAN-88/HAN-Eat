@@ -65,13 +65,13 @@ async def start_subscription_trial(
     if product not in ("ai", "pro"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Trial is only available for 'ai' or 'pro'",
+            detail="Пробный период доступен для уровней 9 и 18",
         )
     svc = SubscriptionService(db)
     if not svc.trial_eligible(current_user.id, product):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Trial is not available for this account",
+            detail="Пробный период для этого аккаунта недоступен",
         )
     try:
         sub = svc.start_trial(current_user.id, product)
@@ -95,7 +95,10 @@ async def start_subscription_trial(
         return {
             "success": True,
             "subscription": SubscriptionResponse.model_validate(sub),
-            "message": f"Пробный период HanWe {product.upper()} активирован",
+            "message": (
+                "Пробный период HanWe · уровень "
+                f"{'9' if product == 'ai' else '18'} активирован"
+            ),
         }
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -139,12 +142,12 @@ async def create_subscription(
         return {
             "success": True,
             "subscription": SubscriptionResponse.model_validate(subscription),
-            "message": "Subscription created successfully",
+            "message": "Подписка оформлена",
         }
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to create subscription: {str(e)}",
+            detail="Не удалось оформить подписку",
         )
 
 
@@ -160,7 +163,7 @@ async def cancel_subscription(
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No active subscription found",
+            detail="Активная подписка не найдена",
         )
 
     existing_ticket = (
@@ -176,7 +179,7 @@ async def cancel_subscription(
     if existing_ticket:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You already have an open request to cancel subscription.",
+            detail="Запрос на отмену уже отправлен",
         )
 
     message_lines = [
@@ -204,8 +207,8 @@ async def cancel_subscription(
     return {
         "success": True,
         "ticket_id": ticket.id,
-        "message": "Your cancellation request has been submitted.",
-        "note": "Subscription remains active until expiration after processing.",
+        "message": "Запрос на отмену отправлен",
+        "note": "Подписка останется активной до конца оплаченного периода.",
     }
 
 
