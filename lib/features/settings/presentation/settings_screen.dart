@@ -109,8 +109,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _loadPrivacyPrefs() async {
     try {
-      final user =
-          AuthService.instance.currentUser ?? await AuthService.getCurrentUser();
+      final user = AuthService.instance.currentUser ??
+          await AuthService.getCurrentUser();
       if (!mounted || user == null) return;
       setState(() {
         _lastSeenPrivacy = normalizeLastSeenPrivacy(
@@ -139,8 +139,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       _privacyBusy = true;
     });
     try {
-      final updated =
-          await UserService.updateProfile(paidMessageStars: next);
+      final updated = await UserService.updateProfile(paidMessageStars: next);
       await AuthService.persistUpdatedUser(updated);
       if (!mounted) return;
       setState(() {
@@ -335,7 +334,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       _SettingsItem(
         title: 'Реферальная программа',
         icon: Icons.group_add_outlined,
-        subtitle: 'Ваша ссылка — 17,5% нетто с тех, кто по ней зарегистрировался',
+        subtitle:
+            'Ваша ссылка — 17,5% нетто с тех, кто по ней зарегистрировался',
         onTap: () => context.push(PartnerProgramRoute.path),
       ),
       _SettingsItem(
@@ -388,7 +388,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _SettingsItem(
           title: 'Возвраты подписок',
           icon: Icons.currency_exchange_outlined,
-          subtitle: 'Очередь запросов на возврат (ЮKassa)',
+          subtitle: 'Очередь запросов на возврат',
           onTap: () => context.push(AdminRefundQueueRoute.path),
         ),
       if (_isAdmin)
@@ -521,14 +521,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       leading: const Icon(Icons.person_off_outlined),
                       title: const Text('Кто пишет бесплатно'),
                       subtitle: const Text(
-                        'Исключения — как в Telegram Paid Messages',
+                        'Кто может писать вам без оплаты звёздами',
                       ),
                       trailing: const Icon(Icons.chevron_right_rounded),
                       onTap: () {
                         Navigator.of(context).push(
                           MaterialPageRoute<void>(
-                            builder: (_) =>
-                                const PaidMessageExceptionsScreen(),
+                            builder: (_) => const PaidMessageExceptionsScreen(),
                           ),
                         );
                       },

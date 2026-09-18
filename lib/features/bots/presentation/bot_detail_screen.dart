@@ -30,6 +30,7 @@ enum BotDetailOpenSection {
   none,
   token,
   miniApps,
+
   /// Mini Apps list + immediately show New Mini App dialog.
   newApp,
   commands,
@@ -191,7 +192,7 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Токен недоступен. Если вы его потеряли — сделайте Revoke Token.',
+            'Токен недоступен. Если вы его потеряли — сбросьте токен.',
           ),
         ),
       );
@@ -210,7 +211,7 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  forceReveal ? 'Done! Congratulations on your new bot.' : 'API Token',
+                  forceReveal ? 'Бот создан' : 'Токен API',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w800,
                       ),
@@ -218,7 +219,7 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
                 const SizedBox(height: 8),
                 Text(
                   forceReveal
-                      ? 'Сохраните токен сейчас — как в Telegram, он нужен для API.'
+                      ? 'Сохраните токен сейчас — он нужен для API.'
                       : 'Используйте этот токен для HTTP API вашего бота.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -297,10 +298,9 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Revoke token?'),
+        title: const Text('Сбросить токен?'),
         content: const Text(
-          'Как /revoke в BotFather: старый токен перестанет работать, '
-          'будет выдан новый.',
+          'Старый токен перестанет работать, будет выдан новый.',
         ),
         actions: [
           TextButton(
@@ -309,7 +309,7 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Revoke'),
+            child: const Text('Сбросить'),
           ),
         ],
       ),
@@ -428,7 +428,7 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Webhook',
+                'Вебхук',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w800,
                     ),
@@ -436,8 +436,8 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
               const SizedBox(height: 8),
               Text(
                 _bot?.webhookEnabled == true
-                    ? 'Webhook включён'
-                    : 'Webhook выключен',
+                    ? 'Вебхук включён'
+                    : 'Вебхук выключен',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 12),
@@ -452,7 +452,7 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
               TextField(
                 controller: _webhookSecretController,
                 decoration: const InputDecoration(
-                  labelText: 'Secret token (опционально)',
+                  labelText: 'Секретный токен (необязательно)',
                 ),
               ),
               const SizedBox(height: 14),
@@ -557,7 +557,8 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
                                 const Divider(height: 1),
                             itemBuilder: (context, index) {
                               final inv = invoices[index];
-                              final statusLabel = _invoiceStatusLabel(inv.status);
+                              final statusLabel =
+                                  _invoiceStatusLabel(inv.status);
                               final canRefund = inv.status == 'paid';
                               return ListTile(
                                 title: Text(
@@ -615,7 +616,7 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
     final created = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Stars Invoice'),
+        title: const Text('Счёт на звёзды'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -638,7 +639,7 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
               TextField(
                 controller: payloadController,
                 decoration: const InputDecoration(
-                  labelText: 'Payload (для webhook)',
+                  labelText: 'Payload (для вебхука)',
                 ),
               ),
             ],
@@ -723,7 +724,7 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(url.isEmpty ? 'Webhook удалён' : 'Webhook сохранён'),
+          content: Text(url.isEmpty ? 'Вебхук удалён' : 'Вебхук сохранён'),
         ),
       );
     } catch (e) {
@@ -785,7 +786,7 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
         ),
         TelegramActionSheetAction(
           icon: Icons.key_off_outlined,
-          title: 'Revoke token',
+          title: 'Сбросить токен',
           subtitle: 'Выдать новый API-токен',
           onTap: _revokeToken,
         ),
@@ -896,7 +897,7 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
                                 (bot.shortDescription ?? bot.description ?? '')
                                         .trim()
                                         .isEmpty
-                                    ? 'Настройте бота как в @BotFather'
+                                    ? 'Добавьте описание и команды бота'
                                     : (bot.shortDescription ??
                                         bot.description)!,
                                 textAlign: TextAlign.center,
@@ -912,19 +913,19 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
                                 children: [
                                   _BotFatherTile(
                                     icon: Icons.key_rounded,
-                                    title: 'API Token',
+                                    title: 'Токен API',
                                     subtitle: 'Показать / скопировать токен',
                                     onTap: () => _showTokenSheet(),
                                   ),
                                   _BotFatherTile(
                                     icon: Icons.edit_outlined,
-                                    title: 'Edit Bot',
-                                    subtitle: 'Имя, About, Description',
+                                    title: 'Изменить бота',
+                                    subtitle: 'Имя, коротко и описание',
                                     onTap: _editBotProfile,
                                   ),
                                   _BotFatherTile(
                                     icon: Icons.code_rounded,
-                                    title: 'Edit Commands',
+                                    title: 'Команды',
                                     subtitle: _commandsError != null
                                         ? 'Не удалось загрузить'
                                         : _commands.isEmpty
@@ -936,11 +937,11 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
                                   ),
                                   _BotFatherTile(
                                     icon: Icons.apps_rounded,
-                                    title: 'Mini Apps',
+                                    title: 'Мини-приложения',
                                     subtitle: _miniAppsError != null
                                         ? 'Не удалось загрузить'
                                         : _miniApps.isEmpty
-                                            ? 'New App · Edit App · Delete App'
+                                            ? 'Создать · изменить · удалить'
                                             : '${_miniApps.length} · ${_miniApps.where((a) => a.isApproved).length} в каталоге',
                                     onTap: _miniAppsError != null
                                         ? () => unawaited(_loadMiniApps())
@@ -953,7 +954,7 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
                                 children: [
                                   _BotFatherTile(
                                     icon: Icons.webhook_outlined,
-                                    title: 'Webhook',
+                                    title: 'Вебхук',
                                     subtitle: bot.webhookEnabled
                                         ? 'Включён'
                                         : 'Не задан',
@@ -961,20 +962,20 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
                                   ),
                                   _BotFatherTile(
                                     icon: Icons.stars_rounded,
-                                    title: 'Stars Invoice',
+                                    title: 'Счёт на звёзды',
                                     subtitle: 'Счёт на оплату звёздами',
                                     onTap: _createStarsInvoice,
                                   ),
                                   _BotFatherTile(
                                     icon: Icons.receipt_long_outlined,
-                                    title: 'Stars Invoices',
+                                    title: 'Счета',
                                     subtitle:
                                         'История; возврат — в карточке счёта',
                                     onTap: _listStarsInvoices,
                                   ),
                                   _BotFatherTile(
                                     icon: Icons.chat_bubble_outline_rounded,
-                                    title: 'Add to Chat',
+                                    title: 'Добавить в чат',
                                     subtitle: 'Добавить бота в чат или группу',
                                     onTap: _showAddToChatSheet,
                                   ),
@@ -985,13 +986,14 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
                                 children: [
                                   _BotFatherTile(
                                     icon: Icons.key_off_outlined,
-                                    title: 'Revoke Token',
-                                    subtitle: 'Старый токен перестанет работать',
+                                    title: 'Сбросить токен',
+                                    subtitle:
+                                        'Старый токен перестанет работать',
                                     onTap: _revokeToken,
                                   ),
                                   _BotFatherTile(
                                     icon: Icons.delete_outline_rounded,
-                                    title: 'Delete Bot',
+                                    title: 'Удалить бота',
                                     subtitle: 'Удалить бота навсегда',
                                     destructive: true,
                                     onTap: _deleteBot,
@@ -1123,7 +1125,7 @@ class _EditBotProfileDialogState extends State<_EditBotProfileDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Edit Bot'),
+      title: const Text('Изменить бота'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1131,7 +1133,7 @@ class _EditBotProfileDialogState extends State<_EditBotProfileDialog> {
             TextField(
               textCapitalization: TextCapitalization.sentences,
               controller: _name,
-              decoration: const InputDecoration(labelText: 'Name'),
+              decoration: const InputDecoration(labelText: 'Имя'),
             ),
             const SizedBox(height: 10),
             TextField(
@@ -1139,7 +1141,7 @@ class _EditBotProfileDialogState extends State<_EditBotProfileDialog> {
               controller: _about,
               maxLength: 120,
               decoration: const InputDecoration(
-                labelText: 'About',
+                labelText: 'Коротко',
                 helperText: 'Короткое описание в профиле бота',
               ),
             ),
@@ -1148,7 +1150,7 @@ class _EditBotProfileDialogState extends State<_EditBotProfileDialog> {
               controller: _desc,
               maxLines: 4,
               decoration: const InputDecoration(
-                labelText: 'Description',
+                labelText: 'Описание',
                 helperText: 'Что умеет бот',
               ),
             ),
@@ -1258,7 +1260,7 @@ class _BotMiniAppsScreenState extends State<BotMiniAppsScreen> {
   Future<void> _newApp() async {
     final result = await _showMiniAppForm(
       context,
-      title: 'New Mini App',
+      title: 'Новое мини-приложение',
     );
     if (result == null) return;
     try {
@@ -1294,7 +1296,7 @@ class _BotMiniAppsScreenState extends State<BotMiniAppsScreen> {
   Future<void> _editApp(MiniAppItem app) async {
     final result = await _showMiniAppForm(
       context,
-      title: 'Edit Mini App',
+      title: 'Изменить мини-приложение',
       initial: app,
       shortNameReadOnly: true,
     );
@@ -1348,7 +1350,7 @@ class _BotMiniAppsScreenState extends State<BotMiniAppsScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete Mini App?'),
+        title: const Text('Удалить мини-приложение?'),
         content: Text('«${app.name}» будет удалено из каталога.'),
         actions: [
           TextButton(
@@ -1414,12 +1416,12 @@ class _BotMiniAppsScreenState extends State<BotMiniAppsScreen> {
       actions: [
         TelegramActionSheetAction(
           icon: Icons.open_in_new_rounded,
-          title: 'Open App',
+          title: 'Открыть',
           onTap: () => _openApp(app),
         ),
         TelegramActionSheetAction(
           icon: Icons.edit_outlined,
-          title: 'Edit App',
+          title: 'Изменить',
           subtitle: 'Название, URL, описание, иконка',
           onTap: () => _editApp(app),
         ),
@@ -1427,12 +1429,12 @@ class _BotMiniAppsScreenState extends State<BotMiniAppsScreen> {
           icon: app.isActive
               ? Icons.visibility_off_outlined
               : Icons.visibility_outlined,
-          title: app.isActive ? 'Deactivate' : 'Activate',
+          title: app.isActive ? 'Отключить' : 'Включить',
           onTap: () => _toggleActive(app),
         ),
         TelegramActionSheetAction(
           icon: Icons.delete_outline_rounded,
-          title: 'Delete App',
+          title: 'Удалить',
           destructive: true,
           onTap: () => _deleteApp(app),
         ),
@@ -1459,7 +1461,7 @@ class _BotMiniAppsScreenState extends State<BotMiniAppsScreen> {
                     ),
                     Expanded(
                       child: Text(
-                        'Mini Apps',
+                        'Мини-приложения',
                         style: Theme.of(context)
                             .textTheme
                             .titleLarge
@@ -1468,7 +1470,7 @@ class _BotMiniAppsScreenState extends State<BotMiniAppsScreen> {
                     ),
                     NeoCircleAction(
                       icon: Icons.add_rounded,
-                      tooltip: 'New App',
+                      tooltip: 'Новое приложение',
                       onPressed: _newApp,
                     ),
                   ],
@@ -1478,8 +1480,8 @@ class _BotMiniAppsScreenState extends State<BotMiniAppsScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
               child: Text(
-                'Как /newapp в BotFather: short name уникален для бота, '
-                'после проверки приложение появится в каталоге.',
+                'Короткое имя уникально для бота. После проверки '
+                'приложение появится в каталоге.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
@@ -1509,7 +1511,7 @@ class _BotMiniAppsScreenState extends State<BotMiniAppsScreen> {
                                   FilledButton.icon(
                                     onPressed: _newApp,
                                     icon: const Icon(Icons.add_rounded),
-                                    label: const Text('New Mini App'),
+                                    label: const Text('Новое мини-приложение'),
                                   ),
                               ],
                             ),
@@ -1638,9 +1640,8 @@ class _MiniAppFormDialogState extends State<_MiniAppFormDialog> {
     _desc = TextEditingController(text: app?.description ?? '');
     _icon = TextEditingController(text: app?.iconUrl ?? '');
     final existing = (app?.category ?? 'tools').toLowerCase();
-    _category = MiniAppCategory.known.any((c) => c.id == existing)
-        ? existing
-        : 'tools';
+    _category =
+        MiniAppCategory.known.any((c) => c.id == existing) ? existing : 'tools';
   }
 
   @override
@@ -1661,7 +1662,7 @@ class _MiniAppFormDialogState extends State<_MiniAppFormDialog> {
     if (!_shortRe.hasMatch(shortName)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Short name: 3–30 символов, a-z 0-9 _'),
+          content: Text('Короткое имя: 3–30 символов, a-z 0-9 _'),
         ),
       );
       return;
@@ -1722,7 +1723,7 @@ class _MiniAppFormDialogState extends State<_MiniAppFormDialog> {
                     readOnly: widget.shortNameReadOnly,
                     textInputAction: TextInputAction.next,
                     decoration: const InputDecoration(
-                      labelText: 'Short name',
+                      labelText: 'Короткое имя',
                       helperText: '3–30 символов: a-z, 0-9, _',
                       helperMaxLines: 2,
                     ),
@@ -1736,7 +1737,7 @@ class _MiniAppFormDialogState extends State<_MiniAppFormDialog> {
                     keyboardType: TextInputType.url,
                     textInputAction: TextInputAction.next,
                     decoration: const InputDecoration(
-                      labelText: 'Web App URL',
+                      labelText: 'Адрес приложения',
                       hintText: 'https://…',
                     ),
                   ),
@@ -1773,7 +1774,7 @@ class _MiniAppFormDialogState extends State<_MiniAppFormDialog> {
                     controller: _icon,
                     keyboardType: TextInputType.url,
                     decoration: const InputDecoration(
-                      labelText: 'Photo URL',
+                      labelText: 'Адрес фото',
                       hintText: 'необязательно',
                     ),
                   ),
@@ -2266,7 +2267,8 @@ class _AddCommandDialogState extends State<_AddCommandDialog> {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     parsedButtons.errors.first,
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error),
                   ),
                 ),
               ),
@@ -2313,7 +2315,8 @@ class _AddCommandDialogState extends State<_AddCommandDialog> {
             if (!_commandRegExp.hasMatch(command)) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Команда: только a-z, 0-9 и _ (до 32 символов)'),
+                  content:
+                      Text('Команда: только a-z, 0-9 и _ (до 32 символов)'),
                 ),
               );
               return;
@@ -2415,7 +2418,8 @@ class _AddCommandDialogState extends State<_AddCommandDialog> {
             : '';
         final miniAppId = int.tryParse(rawId);
         if (miniAppId == null || miniAppId <= 0) {
-          errors.add('Строка ${i + 1}: укажите ID мини-приложения (web_app:123)');
+          errors
+              .add('Строка ${i + 1}: укажите ID мини-приложения (web_app:123)');
           continue;
         }
         btn = BotInlineButton(text: text, miniAppId: miniAppId);

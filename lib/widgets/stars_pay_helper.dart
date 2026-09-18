@@ -153,7 +153,7 @@ Future<int?> pickPaidMessageStars(
               ),
               const SizedBox(height: 6),
               Text(
-                'Как в Telegram: люди будут платить звёзды за каждое сообщение вам.',
+                'Люди будут платить звёзды за каждое сообщение вам.',
                 style: TextStyle(color: scheme.onSurfaceVariant, height: 1.35),
               ),
               const SizedBox(height: 14),
@@ -416,7 +416,7 @@ Future<ChannelSubscribeChoice?> showChannelSubscribeSheet(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Автопродление'),
                     subtitle: const Text(
-                      'Как в Telegram: списывать звёзды каждый месяц',
+                      'Списывать звёзды каждый месяц'
                     ),
                     value: autoRenew,
                     onChanged: (v) => setLocal(() => autoRenew = v),

@@ -688,7 +688,7 @@ class PaidFeaturesService:
             return user
         if len(clean) < 10 or len(clean) > 128:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid TON address"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid payout address"
             )
         user.ton_address = clean
         self.db.flush()
@@ -868,7 +868,7 @@ class PaidFeaturesService:
             if len(dest) < 10:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="TON address required",
+                    detail="Payout address required",
                 )
         amount_rub = round(float(amount_stars) * float(stars_to_rub_rate), 2)
         payout = CreatorPayoutRequest(

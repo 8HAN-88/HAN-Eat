@@ -166,7 +166,7 @@ class _MyBotsScreenState extends State<MyBotsScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
               child: Text(
-                'Как в @BotFather: создайте бота, получите токен, '
+                'Создайте бота, получите токен, '
                 'настройте команды и мини-приложения.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -200,7 +200,7 @@ class _MyBotsScreenState extends State<MyBotsScreen> {
         icon: Icons.smart_toy_outlined,
         title: 'Ботов пока нет',
         subtitle:
-            'Создайте бота — как через @BotFather. Потом можно добавить команды и мини-приложения.',
+            'Создайте бота здесь. Потом можно добавить команды и мини-приложения.',
         action: FilledButton.icon(
           onPressed: _createBot,
           icon: const Icon(Icons.add_rounded),
@@ -236,8 +236,8 @@ class _MyBotsScreenState extends State<MyBotsScreen> {
                         color: scheme.primaryContainer.withValues(alpha: 0.55),
                         borderRadius: BorderRadius.circular(16),
                       ),
-                      child: Icon(Icons.smart_toy_rounded,
-                          color: scheme.primary),
+                      child:
+                          Icon(Icons.smart_toy_rounded, color: scheme.primary),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -322,7 +322,7 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Как в Telegram: укажите имя и username, заканчивающийся на bot.',
+              'Укажите имя и username, который заканчивается на bot.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
@@ -343,7 +343,7 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
                 setState(() => _usernameError = validateBotUsername(value));
               },
               decoration: InputDecoration(
-                labelText: 'Username',
+                labelText: 'Имя пользователя',
                 hintText: 'weather_bot',
                 prefixText: '@',
                 errorText: _usernameError,
@@ -359,7 +359,7 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
               controller: _aboutController,
               maxLength: 120,
               decoration: const InputDecoration(
-                labelText: 'About (коротко)',
+                labelText: 'Коротко',
                 hintText: 'до 120 символов',
               ),
             ),
@@ -368,7 +368,7 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
               controller: _descController,
               maxLines: 3,
               decoration: const InputDecoration(
-                labelText: 'Description (опционально)',
+                labelText: 'Описание (необязательно)',
               ),
             ),
           ],

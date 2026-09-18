@@ -242,7 +242,7 @@ class FlexSubscriptionService:
     ) -> tuple[bool, str]:
         level = int(target_level)
         if level < MIN_LEVEL or level > MAX_LEVEL:
-            return False, "Уровень вне диапазона 1–10"
+            return False, f"Уровень вне диапазона {MIN_LEVEL}–{MAX_LEVEL}"
         if moving and (feature.feature_type == "fixed" or not feature.movable or feature.required and feature.feature_type == "fixed"):
             if feature.feature_type == "fixed" or not bool(feature.movable):
                 return False, "Эту функцию нельзя перемещать"

@@ -54,7 +54,7 @@ class _AdminRefundQueueScreenState extends State<AdminRefundQueueScreen> {
         content: Text(
           'Вернуть ${item.amount.toStringAsFixed(0)} ₽ пользователю '
           '${item.userEmail ?? "id:${item.id}"}?\n'
-          'Операция в ЮKassa необратима.',
+          'Операция необратима.',
         ),
         actions: [
           TextButton(

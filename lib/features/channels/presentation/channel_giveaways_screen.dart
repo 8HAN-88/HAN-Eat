@@ -97,7 +97,7 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Как в Telegram: приз спишется сразу и будет разыгран между участниками.',
+                    'Приз спишется сразу и будет разыгран между участниками.',
                     style: TextStyle(
                       color: Theme.of(ctx).colorScheme.onSurfaceVariant,
                     ),

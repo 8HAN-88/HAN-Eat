@@ -25,7 +25,8 @@ class PaidFeaturesService {
       headers: await _headers(),
     );
     if (response.statusCode == 200) {
-      return StarsBalance.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+      return StarsBalance.fromJson(
+          jsonDecode(response.body) as Map<String, dynamic>);
     }
     _throwForResponse(response, 'Не удалось загрузить баланс');
   }
@@ -84,7 +85,8 @@ class PaidFeaturesService {
       body: jsonEncode({
         'recipient_id': recipientId,
         'amount_stars': amountStars,
-        if (message != null && message.trim().isNotEmpty) 'message': message.trim(),
+        if (message != null && message.trim().isNotEmpty)
+          'message': message.trim(),
       }),
     );
     if (response.statusCode == 200) {
@@ -174,7 +176,8 @@ class PaidFeaturesService {
     _throwForResponse(response, 'Не удалось загрузить исключения');
   }
 
-  static Future<PaidMessageExceptionUser> addMessageException(int userId) async {
+  static Future<PaidMessageExceptionUser> addMessageException(
+      int userId) async {
     final response = await http.post(
       Uri.parse('$baseUrl/paid/message-exceptions'),
       headers: await _headers(),
@@ -262,7 +265,7 @@ class PaidFeaturesService {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return data['ton_address'] as String?;
     }
-    _throwForResponse(response, 'Не удалось загрузить TON-адрес');
+    _throwForResponse(response, 'Не удалось загрузить реквизит выплаты');
   }
 
   static Future<String?> setTonAddress(String? address) async {
@@ -275,7 +278,7 @@ class PaidFeaturesService {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return data['ton_address'] as String?;
     }
-    _throwForResponse(response, 'Не удалось сохранить TON-адрес');
+    _throwForResponse(response, 'Не удалось сохранить реквизит выплаты');
   }
 
   static Future<List<UserStarGift>> reorderGifts(List<int> giftIds) async {
@@ -294,7 +297,8 @@ class PaidFeaturesService {
     _throwForResponse(response, 'Не удалось сохранить порядок');
   }
 
-  static Future<GroupPaidSettings> getGroupPaidSettings(int conversationId) async {
+  static Future<GroupPaidSettings> getGroupPaidSettings(
+      int conversationId) async {
     final response = await http.get(
       Uri.parse('$baseUrl/paid/groups/$conversationId/subscription'),
       headers: await _headers(),
@@ -536,7 +540,8 @@ class PaidFeaturesService {
     _throwForResponse(response, 'Не удалось улучшить подарок');
   }
 
-  static Future<List<UserStarGift>> listMarketplaceGifts({int limit = 50}) async {
+  static Future<List<UserStarGift>> listMarketplaceGifts(
+      {int limit = 50}) async {
     final response = await http.get(
       Uri.parse('$baseUrl/paid/gifts/marketplace?limit=$limit'),
       headers: await _headers(),
@@ -1014,7 +1019,8 @@ class StarTransaction {
   final String? referenceType;
   final int? referenceId;
 
-  factory StarTransaction.fromJson(Map<String, dynamic> json) => StarTransaction(
+  factory StarTransaction.fromJson(Map<String, dynamic> json) =>
+      StarTransaction(
         id: json['id'] as int? ?? 0,
         amount: json['amount'] as int? ?? 0,
         type: json['type'] as String? ?? '',
@@ -1160,8 +1166,7 @@ class StarGift {
   final int upgradeStars;
   final int transferStars;
 
-  bool get isSoldOut =>
-      isLimited && remaining != null && remaining! <= 0;
+  bool get isSoldOut => isLimited && remaining != null && remaining! <= 0;
 
   factory StarGift.fromJson(Map<String, dynamic> json) => StarGift(
         id: json['id'] as int? ?? 0,
@@ -1291,11 +1296,9 @@ class UserStarGift {
   bool get canTransfer =>
       isCollectible && !isListed && (status == 'held' || status == 'kept');
 
-  bool get canSell =>
-      isCollectible && (status == 'held' || status == 'kept');
+  bool get canSell => isCollectible && (status == 'held' || status == 'kept');
 
-  bool get canWear =>
-      isCollectible && (status == 'held' || status == 'kept');
+  bool get canWear => isCollectible && (status == 'held' || status == 'kept');
 
   String get sellerLabel {
     final u = sellerUsername?.trim();

@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_admin_required, get_current_user_required
 from app.core.database import get_db
+from app.core.flex_catalog import MAX_LEVEL, MIN_LEVEL
 from app.models.user import User
 from app.schemas.flex_subscription import (
     FlexBlockWrite,
@@ -143,8 +144,11 @@ def admin_update_block(
 
 @router.get("/price/{level}")
 def flex_price(level: int):
-    if level < 1 or level > 10:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Level must be 1–10")
+    if level < MIN_LEVEL or level > MAX_LEVEL:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Level must be {MIN_LEVEL}–{MAX_LEVEL}",
+        )
     return {"level": level, "price_rub": price_for_level(level)}
 
 

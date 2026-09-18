@@ -1981,8 +1981,8 @@ class _VideoNotePickPanel extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           kIsWeb
-              ? 'Выберите короткое видео из галереи — оно отправится кружком, как в Telegram.'
-              : 'Запишите короткое видео — оно отправится кружком, как в Telegram.',
+              ? 'Выберите короткое видео из галереи — оно отправится кружком.'
+              : 'Запишите короткое видео — оно отправится кружком.',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: scheme.onSurfaceVariant,

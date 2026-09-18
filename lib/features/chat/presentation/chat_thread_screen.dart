@@ -8650,7 +8650,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final payload = await pickStarsTipDraft(
       context,
       title: 'Отправить звёзды ${peer.displayName}',
-      subtitle: 'Как в Telegram: звёзды появятся сообщением в чате.',
+      subtitle: 'Звёзды придут отдельным сообщением в этот чат.',
     );
     if (payload == null || !mounted) return;
     try {

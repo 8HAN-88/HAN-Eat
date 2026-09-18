@@ -1955,7 +1955,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                           title: const Text('Темы (форум)'),
                           subtitle: Text(
                             _canChangeInfo
-                                ? 'Разделить группу на темы вроде Telegram Topics'
+                                ? 'Разделить группу на отдельные темы'
                                 : 'Нет права менять информацию группы',
                           ),
                           value: _conversation.isForum,

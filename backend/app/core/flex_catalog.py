@@ -164,7 +164,7 @@ DEFAULT_BLOCKS = (
     },
     {
         "key": "H",
-        "title": "Telegram+",
+        "title": "Чат++",
         "min_level": 36,
         "max_level": 39,
         "sort_order": 8,
@@ -739,7 +739,7 @@ DEFAULT_FEATURES = (
     {
         "slug": "folder_icons",
         "title": "Эмодзи папок",
-        "description": "Своя иконка-эмодзи у папки чатов, как в Telegram Premium.",
+        "description": "Своя иконка-эмодзи у папки чатов.",
         "icon": "emoji_emotions",
         "default_level": 39,
         "min_level": 36,
@@ -752,7 +752,7 @@ DEFAULT_FEATURES = (
     {
         "slug": "voice_to_text",
         "title": "Голос в текст",
-        "description": "Расшифровка голосовых и кружков, как в Telegram Premium.",
+        "description": "Расшифровка голосовых и кружков.",
         "icon": "hearing",
         "default_level": 40,
         "min_level": 40,
@@ -830,7 +830,7 @@ DEFAULT_FEATURES = (
     {
         "slug": "saved_tags",
         "title": "Теги в Избранном",
-        "description": "Метки для сообщений в Избранном, как в Telegram Premium.",
+        "description": "Метки для сообщений в Избранном.",
         "icon": "sell",
         "default_level": 46,
         "min_level": 44,
@@ -869,7 +869,7 @@ DEFAULT_FEATURES = (
     {
         "slug": "longer_stories",
         "title": "Длинные сторис",
-        "description": "Видео до 60 секунд и сторис на 48 часов, как в Telegram Premium.",
+        "description": "Видео до 60 секунд и сторис на 48 часов.",
         "icon": "timelapse",
         "default_level": 49,
         "min_level": 48,
@@ -921,7 +921,7 @@ DEFAULT_FEATURES = (
     {
         "slug": "story_download",
         "title": "Сохранить сторис",
-        "description": "Скачать сторис в галерею, как в Telegram Premium.",
+        "description": "Скачать сторис в галерею.",
         "icon": "download",
         "default_level": 53,
         "min_level": 52,
@@ -947,7 +947,7 @@ DEFAULT_FEATURES = (
     {
         "slug": "chat_tags",
         "title": "Метки чатов",
-        "description": "Цветные метки на чатах и фильтр входящих, как в Telegram Premium.",
+        "description": "Цветные метки на чатах и фильтр входящих.",
         "icon": "label",
         "default_level": 55,
         "min_level": 52,
@@ -1168,7 +1168,7 @@ DEFAULT_FEATURES = (
     {
         "slug": "business_intro",
         "title": "Стартовая страница",
-        "description": "Заголовок и текст интро в профиле, как у Telegram Business.",
+        "description": "Заголовок и текст интро в профиле.",
         "icon": "web_stories",
         "default_level": 72,
         "min_level": 72,
