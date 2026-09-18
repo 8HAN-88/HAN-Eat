@@ -170,7 +170,7 @@ async def init_upload(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate upload URL: {str(e)}"
+            detail="Не удалось начать загрузку"
         )
 
 
@@ -358,7 +358,7 @@ async def complete_upload(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to complete upload: {str(e)}"
+            detail="Не удалось завершить загрузку"
         )
 
 
@@ -421,7 +421,7 @@ async def get_upload_status(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get upload status: {str(e)}"
+            detail="Не удалось проверить загрузку"
         )
 
 

@@ -261,7 +261,7 @@ class _RootShellState extends ConsumerState<RootShell> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Не удалось обновить подписку — показан сохранённый тариф',
+                  'Не удалось обновить подписку — показан сохранённый уровень',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(

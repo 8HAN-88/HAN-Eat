@@ -1087,6 +1087,7 @@ async def stripe_webhook(
                         entity_id=subscription.id,
                         data={
                             "action": "payment_failed",
+                            "route": "subscription",
                             "payment_provider_subscription_id": subscription_id,
                         },
                     )

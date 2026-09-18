@@ -177,7 +177,7 @@ async def like_community_video(
         Post.deleted_at.is_(None),
     ).first()
     if not post:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Video not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Видео не найдено")
 
     existing = (
         db.query(Like)
@@ -303,7 +303,7 @@ async def upload_community_video(
         if not channel:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Channel not found",
+                detail="Канал не найден",
             )
         member = get_membership(db, channel_id, current_user.id)
         if not has_channel_permission(

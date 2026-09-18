@@ -924,7 +924,7 @@ async def set_shadow_moderation(
 ):
     target = db.query(User).filter(User.id == user_id).first()
     if not target:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
     target.shadow_moderation = enabled
     ModerationAuditService(db).log(
         moderator_user_id=current_user.id,
@@ -944,9 +944,9 @@ async def approve_content(
 ):
     item = db.query(ModerationQueue).filter(ModerationQueue.id == item_id).first()
     if not item:
-        raise HTTPException(status_code=404, detail="Moderation item not found")
+        raise HTTPException(status_code=404, detail="Элемент модерации не найден")
     if item.status != "pending":
-        raise HTTPException(status_code=400, detail="Item already moderated")
+        raise HTTPException(status_code=400, detail="Элемент уже проверен")
 
     author_id = None
     content_label = "Контент"
@@ -1014,9 +1014,9 @@ async def reject_content(
 ):
     item = db.query(ModerationQueue).filter(ModerationQueue.id == item_id).first()
     if not item:
-        raise HTTPException(status_code=404, detail="Moderation item not found")
+        raise HTTPException(status_code=404, detail="Элемент модерации не найден")
     if item.status != "pending":
-        raise HTTPException(status_code=400, detail="Item already moderated")
+        raise HTTPException(status_code=400, detail="Элемент уже проверен")
 
     author_id = None
     content_label = "Контент"
@@ -1087,7 +1087,7 @@ async def hide_content(
     """Скрыть из рекомендаций, оставить на профиле при published."""
     item = db.query(ModerationQueue).filter(ModerationQueue.id == item_id).first()
     if not item:
-        raise HTTPException(status_code=404, detail="Not found")
+        raise HTTPException(status_code=404, detail="Не найдено")
     if item.content_type == "post":
         post = db.query(Post).filter(Post.id == item.content_id).first()
         if post:
@@ -1121,7 +1121,7 @@ async def warn_user(
 ):
     target = db.query(User).filter(User.id == user_id).first()
     if not target:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
     target.account_warnings = (target.account_warnings or 0) + 1
     TrustScoreService(db).on_warning(user_id)
     ModerationAuditService(db).log(
@@ -1161,9 +1161,9 @@ async def ban_user(
 ):
     target = db.query(User).filter(User.id == user_id).first()
     if not target:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
     if target.is_admin:
-        raise HTTPException(status_code=400, detail="Cannot ban admin")
+        raise HTTPException(status_code=400, detail="Нельзя заблокировать администратора")
     target.banned_at = datetime.utcnow()
     target.trust_score = 0.0
     ModerationAuditService(db).log(

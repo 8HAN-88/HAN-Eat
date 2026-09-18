@@ -123,7 +123,25 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
       );
     }
 
-    if (status != null && !status.canCreatorAnalytics) {
+    if (status == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Аналитика')),
+        body: AppEmptyState(
+          icon: Icons.cloud_off_rounded,
+          title: 'Не удалось загрузить статус',
+          subtitle: 'Проверьте сеть и обновите подписку',
+          action: FilledButton(
+            onPressed: () {
+              refreshSubscriptionStatus(ref);
+              _loadAnalytics();
+            },
+            child: const Text('Повторить'),
+          ),
+        ),
+      );
+    }
+
+    if (!status.canCreatorAnalytics) {
       return Scaffold(
         appBar: AppBar(title: const Text('Аналитика')),
         body: _creatorUpsell(),

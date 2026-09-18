@@ -53,7 +53,7 @@ async def og_share_page(
 ):
     """Public HTML with OG tags for Telegram / iMessage / first-hop /reel/:id."""
     if kind not in ("reel", "post"):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Не найдено")
     preview = try_own_content_preview(db, f"https://haneat.app/{kind}/{post_id}")
     if preview is None:
         preview = {

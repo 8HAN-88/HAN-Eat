@@ -81,7 +81,7 @@ class PaidFeaturesService:
             .first()
         )
         if not user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
 
     def star_balance(self, user_id: int) -> int:
         total = (
@@ -151,7 +151,7 @@ class PaidFeaturesService:
         meta: Optional[dict] = None,
     ) -> StarTransaction:
         if amount <= 0:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Amount must be positive")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Сумма должна быть больше нуля")
         if idempotency_key:
             existing = (
                 self.db.query(StarTransaction)
@@ -247,11 +247,11 @@ class PaidFeaturesService:
     def purchase_post(self, user_id: int, post_id: int, *, idempotency_key: Optional[str] = None) -> PaidContentPurchase:
         post = self.db.query(Post).filter(Post.id == post_id, Post.deleted_at.is_(None)).first()
         if not post:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пост не найден")
         if not getattr(post, "is_paid", False):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Post is not paid")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Это не платный пост")
         if post.user_id == user_id:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Authors already own their content")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Автору контент уже доступен")
         existing = (
             self.db.query(PaidContentPurchase)
             .filter(PaidContentPurchase.user_id == user_id, PaidContentPurchase.post_id == post_id)
@@ -263,7 +263,7 @@ class PaidFeaturesService:
         if amount <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Paid content price must be greater than 0 stars",
+                detail="Цена должна быть больше 0 звёзд",
             )
         self._spend_stars(
             user_id,
@@ -304,10 +304,10 @@ class PaidFeaturesService:
     ) -> tuple[StarTransaction, Optional[Message]]:
         """Send Stars tip. Optionally posts a Telegram-like tip bubble in the DM."""
         if sender_id == recipient_id:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot donate to yourself")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Нельзя отправить донат себе")
         recipient_exists = self.db.query(User.id).filter(User.id == recipient_id, User.deleted_at.is_(None)).first()
         if not recipient_exists:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recipient not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Получатель не найден")
         note = (message or "").strip() or None
         tx = self._spend_stars(
             sender_id,
@@ -384,15 +384,15 @@ class PaidFeaturesService:
         auto_renew: bool = False,
     ) -> PaidChannelSubscription:
         if months < 1 or months > 12:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Months must be between 1 and 12")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Срок: от 1 до 12 месяцев")
         channel = self.db.query(Channel).filter(Channel.id == channel_id).first()
         if not channel:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Канал не найден")
         if channel.admin_user_id == user_id:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Owner already has access")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Владелец уже имеет доступ")
         price = int(getattr(channel, "monthly_price_stars", 0) or 0) * months
         if not getattr(channel, "is_paid", False) or price <= 0:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Channel is not paid")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Канал бесплатный")
         now = datetime.utcnow()
         existing = (
             self.db.query(PaidChannelSubscription)
@@ -484,13 +484,13 @@ class PaidFeaturesService:
         sub = self.get_channel_subscription(user_id, channel_id)
         if sub is None:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Subscription not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="Подписка не найдена"
             )
         now = datetime.utcnow()
         if sub.status != "active" or not sub.expires_at or sub.expires_at <= now:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Subscription is not active",
+                detail="Подписка не активна",
             )
         sub.auto_renew = bool(auto_renew)
         self.db.flush()
@@ -503,13 +503,13 @@ class PaidFeaturesService:
         sub = self.get_channel_subscription(user_id, channel_id)
         if sub is None:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Subscription not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="Подписка не найдена"
             )
         now = datetime.utcnow()
         if sub.status != "active" or not sub.expires_at or sub.expires_at <= now:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Subscription is not active",
+                detail="Подписка не активна",
             )
         sub.auto_renew = False
         self.db.flush()
@@ -540,12 +540,12 @@ class PaidFeaturesService:
         )
         is_owner = conv.created_by_user_id == actor_user_id
         if not is_owner and not (member and member.is_admin and member.can_change_info):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not group admin")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нужны права администратора группы")
         price = max(0, int(monthly_price_stars or 0))
         if is_paid and (price < 10 or price > 100_000):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Monthly price must be between 10 and 100000 stars",
+                detail="Цена: от 10 до 100000 звёзд в месяц",
             )
         conv.is_paid = bool(is_paid) and price > 0
         conv.monthly_price_stars = price if conv.is_paid else 0
@@ -605,7 +605,7 @@ class PaidFeaturesService:
         if months < 1 or months > 12:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Months must be between 1 and 12",
+                detail="Срок: от 1 до 12 месяцев",
             )
         conv = (
             self.db.query(Conversation)
@@ -616,12 +616,12 @@ class PaidFeaturesService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Группа не найдена")
         if conv.created_by_user_id == user_id:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Owner already has access"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Владелец уже имеет доступ"
             )
         price = int(getattr(conv, "monthly_price_stars", 0) or 0) * months
         if not getattr(conv, "is_paid", False) or price <= 0:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Group is not paid"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Группа бесплатная"
             )
         owner_id = int(conv.created_by_user_id or 0)
         now = datetime.utcnow()
@@ -680,7 +680,7 @@ class PaidFeaturesService:
     def set_ton_address(self, user_id: int, ton_address: Optional[str]) -> User:
         user = self.db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
         if not user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
         clean = (ton_address or "").strip()
         if not clean:
             user.ton_address = None
@@ -688,7 +688,7 @@ class PaidFeaturesService:
             return user
         if len(clean) < 10 or len(clean) > 128:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid payout address"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный адрес выплаты"
             )
         user.ton_address = clean
         self.db.flush()
@@ -697,7 +697,7 @@ class PaidFeaturesService:
     def reorder_user_star_gifts(self, owner_id: int, gift_ids: list[int]) -> list[UserStarGift]:
         ids = [int(x) for x in gift_ids if int(x) > 0]
         if not ids:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty order")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Пустой заказ")
         gifts = (
             self.db.query(UserStarGift)
             .filter(UserStarGift.owner_id == owner_id, UserStarGift.id.in_(ids))
@@ -705,7 +705,7 @@ class PaidFeaturesService:
         )
         by_id = {g.id: g for g in gifts}
         if len(by_id) != len(set(ids)):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Подарок не найден")
         for index, gift_id in enumerate(ids):
             by_id[gift_id].display_order = index
         self.db.flush()
@@ -733,7 +733,7 @@ class PaidFeaturesService:
         if owner_id == allowed_user_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot add yourself as exception",
+                detail="Нельзя добавить себя в исключения",
             )
         allowed = (
             self.db.query(User)
@@ -742,7 +742,7 @@ class PaidFeaturesService:
         )
         if not allowed:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден"
             )
         existing = (
             self.db.query(PaidMessageException)
@@ -774,7 +774,7 @@ class PaidFeaturesService:
         )
         if row is None:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Exception not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="Исключение не найдено"
             )
         self.db.delete(row)
         self.db.flush()
@@ -801,10 +801,10 @@ class PaidFeaturesService:
 
     def boost_post(self, user_id: int, post_id: int, amount: int, *, duration_days: int = 7) -> PostBoost:
         if duration_days < 1 or duration_days > 30:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Duration must be between 1 and 30 days")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Срок: от 1 до 30 дней")
         post = self.db.query(Post).filter(Post.id == post_id, Post.deleted_at.is_(None)).first()
         if not post:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пост не найден")
         self._spend_stars(
             user_id,
             amount,
@@ -842,26 +842,26 @@ class PaidFeaturesService:
         if amount_stars <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Amount must be positive",
+                detail="Сумма должна быть больше нуля",
             )
         balance = self.creator_balance(user_id)
         available = int(balance.available_stars or 0)
         if amount_stars > available:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Not enough creator balance",
+                detail="Недостаточно баланса автора",
             )
         # Escrow spendable Stars immediately so cashout can't be spent twice
         # while the request is pending.
         if self.star_balance(user_id) < amount_stars:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Not enough spendable stars to cash out",
+                detail="Недостаточно звёзд для вывода",
             )
         kind = (method or "rub").strip().lower()
         if kind not in ("rub", "ton"):
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid payout method"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный способ выплаты"
             )
         dest = (ton_address or "").strip()
         payout_phone = (phone or "").strip()
@@ -872,7 +872,7 @@ class PaidFeaturesService:
             if len(dest) < 10:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Payout address required",
+                    detail="Укажите адрес выплаты",
                 )
         else:
             if len(payout_phone) < 10 or len(payout_name) < 2:
@@ -947,9 +947,9 @@ class PaidFeaturesService:
             .first()
         )
         if not payout:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payout not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Выплата не найдена")
         if payout.status != "pending":
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Payout already reviewed")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Выплата уже обработана")
         payout.status = "approved" if approve else "rejected"
         payout.reviewed_by_user_id = reviewer_user_id
         payout.reviewed_at = datetime.utcnow()
@@ -1015,9 +1015,9 @@ class PaidFeaturesService:
             .first()
         )
         if not message:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Сообщение не найдено")
         if not getattr(message, "is_paid", False):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Message is not paid")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Это не платное сообщение")
         member = (
             self.db.query(ConversationMember.id)
             .filter(
@@ -1027,11 +1027,11 @@ class PaidFeaturesService:
             .first()
         )
         if not member:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа")
         if message.sender_id == user_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Authors already own their media",
+                detail="Автору медиа уже доступно",
             )
         existing = (
             self.db.query(PaidMessageUnlock)
@@ -1092,7 +1092,7 @@ class PaidFeaturesService:
         if amount <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Paid media price must be greater than 0 stars",
+                detail="Цена медиа должна быть больше 0 звёзд",
             )
         self._spend_stars(
             user_id,
@@ -1240,7 +1240,7 @@ class PaidFeaturesService:
             .first()
         )
         if not gift:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Подарок не найден")
         idem = (idempotency_key or "").strip() or None
         if idem:
             existing_tx = (
@@ -1265,14 +1265,14 @@ class PaidFeaturesService:
             .first()
         )
         if not member:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа")
         conv = self.db.query(Conversation).filter(Conversation.id == conversation_id).first()
         if not conv:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Чат не найден")
         if conv.type != "direct":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Gifts can only be sent in direct chats",
+                detail="Подарки можно отправлять только в личных чатах",
             )
         recipient_id = (
             conv.direct_user_high_id
@@ -1282,7 +1282,7 @@ class PaidFeaturesService:
         if not recipient_id or recipient_id == sender_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Gift recipient not found",
+                detail="Получатель подарка не найден",
             )
 
         is_collectible = bool(getattr(gift, "is_limited", False))
@@ -1415,22 +1415,22 @@ class PaidFeaturesService:
             .first()
         )
         if not gift:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Подарок не найден")
         if gift.status == "converted":
             return gift
         if bool(getattr(gift, "is_collectible", False)):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Collectible gifts cannot be converted to Stars",
+                detail="Коллекционный подарок нельзя обменять на звёзды",
             )
         if int(getattr(gift, "listed_stars", 0) or 0) > 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Take the gift off sale before converting",
+                detail="Снимите подарок с продажи перед обменом",
             )
         if gift.status not in ("held", "kept"):
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Gift cannot be converted"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Этот подарок нельзя обменять"
             )
         amount = int(gift.stars)
         self.add_stars(
@@ -1463,10 +1463,10 @@ class PaidFeaturesService:
             .first()
         )
         if not gift:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Подарок не найден")
         if gift.status == "converted":
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Gift already converted"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Подарок уже обменян"
             )
         gift.status = "kept"
         gift.is_displayed = True
@@ -1483,21 +1483,21 @@ class PaidFeaturesService:
             .first()
         )
         if not owned:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Подарок не найден")
         if owned.status not in ("held", "kept"):
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Gift cannot be upgraded"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Этот подарок нельзя улучшить"
             )
         if bool(getattr(owned, "is_collectible", False)):
             return owned
         if int(getattr(owned, "listed_stars", 0) or 0) > 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Take the gift off sale before upgrading",
+                detail="Снимите подарок с продажи перед улучшением",
             )
         if not owned.gift_id:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Gift catalog entry missing"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Нет записи в каталоге подарков"
             )
         catalog = (
             self.db.query(StarGift)
@@ -1506,12 +1506,12 @@ class PaidFeaturesService:
             .first()
         )
         if not catalog:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Подарок не найден")
         fee = int(getattr(catalog, "upgrade_stars", 0) or 0)
         if fee <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="This gift cannot be upgraded",
+                detail="Этот подарок нельзя улучшить",
             )
         supply = getattr(catalog, "total_supply", None)
         sold = int(getattr(catalog, "sold_count", 0) or 0)
@@ -1564,7 +1564,7 @@ class PaidFeaturesService:
 
         if owner_id == to_user_id:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot transfer to yourself"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Нельзя передать себе"
             )
         recipient = (
             self.db.query(User)
@@ -1572,7 +1572,7 @@ class PaidFeaturesService:
             .first()
         )
         if not recipient:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
         owned = (
             self.db.query(UserStarGift)
             .filter(UserStarGift.id == user_gift_id, UserStarGift.owner_id == owner_id)
@@ -1580,20 +1580,20 @@ class PaidFeaturesService:
             .first()
         )
         if not owned:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Подарок не найден")
         if owned.status not in ("held", "kept"):
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Gift cannot be transferred"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Этот подарок нельзя передать"
             )
         if not bool(getattr(owned, "is_collectible", False)):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Only collectible gifts can be transferred",
+                detail="Передавать можно только коллекционные подарки",
             )
         if int(getattr(owned, "listed_stars", 0) or 0) > 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Take the gift off sale before transferring",
+                detail="Снимите подарок с продажи перед передачей",
             )
         fee = 0
         total_supply = None
@@ -1638,10 +1638,10 @@ class PaidFeaturesService:
             code = str(exc)
             if code == "user_blocked":
                 raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN, detail="User is blocked"
+                    status_code=status.HTTP_403_FORBIDDEN, detail="Пользователь в чёрном списке"
                 ) from exc
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot open chat"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Не удалось открыть чат"
             ) from exc
 
         notice = Message(
@@ -1713,7 +1713,7 @@ class PaidFeaturesService:
         price = int(listed_stars)
         if price < 1 or price > 100000:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid listing price"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Неверная цена продажи"
             )
         gift = (
             self.db.query(UserStarGift)
@@ -1722,15 +1722,15 @@ class PaidFeaturesService:
             .first()
         )
         if not gift:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Подарок не найден")
         if gift.status not in ("held", "kept"):
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Gift cannot be listed"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Этот подарок нельзя выставить на продажу"
             )
         if not bool(getattr(gift, "is_collectible", False)):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Only collectible gifts can be listed",
+                detail="Продавать можно только коллекционные подарки",
             )
         gift.listed_stars = price
         gift.listed_at = datetime.utcnow()
@@ -1745,7 +1745,7 @@ class PaidFeaturesService:
             .first()
         )
         if not gift:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Подарок не найден")
         self._clear_gift_listing(gift)
         self.db.flush()
         return gift
@@ -1760,15 +1760,15 @@ class PaidFeaturesService:
             .first()
         )
         if not gift:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Подарок не найден")
         if gift.status not in ("held", "kept"):
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Gift cannot be worn"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Этот подарок нельзя надеть"
             )
         if worn and not bool(getattr(gift, "is_collectible", False)):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Only collectible gifts can be worn",
+                detail="Надевать можно только коллекционные подарки",
             )
         if worn:
             (
@@ -1803,21 +1803,21 @@ class PaidFeaturesService:
             .first()
         )
         if not gift:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Подарок не найден")
         seller_id = int(gift.owner_id)
         if seller_id == buyer_id:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot buy your own gift"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Нельзя купить свой подарок"
             )
         price = int(getattr(gift, "listed_stars", 0) or 0)
         if price <= 0 or gift.status not in ("held", "kept"):
             raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT, detail="Gift is not for sale"
+                status_code=status.HTTP_409_CONFLICT, detail="Подарок не продаётся"
             )
         if not bool(getattr(gift, "is_collectible", False)):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Only collectible gifts can be bought",
+                detail="Покупать можно только коллекционные подарки",
             )
         buyer = (
             self.db.query(User)
@@ -1825,7 +1825,7 @@ class PaidFeaturesService:
             .first()
         )
         if not buyer:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
         fee = self.resale_fee_stars(price)
         seller_credit = price - fee
         self._spend_stars(
@@ -1869,10 +1869,10 @@ class PaidFeaturesService:
             code = str(exc)
             if code == "user_blocked":
                 raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN, detail="User is blocked"
+                    status_code=status.HTTP_403_FORBIDDEN, detail="Пользователь в чёрном списке"
                 ) from exc
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot open chat"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Не удалось открыть чат"
             ) from exc
 
         notice = Message(
@@ -1922,12 +1922,12 @@ class PaidFeaturesService:
             .first()
         )
         if not invoice:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Счёт не найден")
         if invoice.creator_user_id != actor_user_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not invoice owner")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Это не ваш счёт")
         if invoice.status != "pending":
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Invoice is not pending"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Счёт уже обработан"
             )
         invoice.status = "cancelled"
         self.db.flush()
@@ -1947,9 +1947,9 @@ class PaidFeaturesService:
             .first()
         )
         if not bot:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bot not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Бот не найден")
         if int(getattr(bot, "created_by_user_id", 0) or 0) != actor_user_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not bot owner")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Это не ваш бот")
         limit = max(1, min(int(limit or 50), 100))
         q = self.db.query(StarInvoice).filter(StarInvoice.bot_id == bot_id)
         if status_filter:
@@ -1969,18 +1969,18 @@ class PaidFeaturesService:
             .first()
         )
         if not invoice:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Счёт не найден")
         if invoice.creator_user_id != actor_user_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not invoice owner")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Это не ваш счёт")
         if invoice.status == "refunded":
             return invoice
         if invoice.status != "paid":
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Only paid invoices can be refunded"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Вернуть можно только оплаченный счёт"
             )
         if not invoice.payer_user_id:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Invoice has no payer"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="У счёта нет плательщика"
             )
         amount = int(invoice.amount_stars)
         # Claw back from creator wallet (requires sufficient Stars balance).
@@ -2022,11 +2022,11 @@ class PaidFeaturesService:
             .first()
         )
         if not message:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Сообщение не найдено")
         if message.sender_id != actor_user_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not media author")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Это не ваш медиафайл")
         if not getattr(message, "is_paid", False):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Message is not paid")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Это не платное сообщение")
         group_id = (getattr(message, "media_group_id", None) or "").strip()
         message_ids = [message.id]
         if group_id:
@@ -2053,7 +2053,7 @@ class PaidFeaturesService:
         )
         if not unlocks:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Nothing to refund"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Нечего возвращать"
             )
         now = datetime.utcnow()
         refunded = 0
@@ -2088,7 +2088,7 @@ class PaidFeaturesService:
         if refunded <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Refund window expired",
+                detail="Срок возврата истёк",
             )
         self.db.flush()
         return refunded
@@ -2102,24 +2102,24 @@ class PaidFeaturesService:
             .first()
         )
         if not gift:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Подарок не найден")
         if gift.sender_id != actor_user_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not gift sender")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Это не ваш подарок")
         if gift.status == "refunded":
             return gift
         if gift.status not in ("held", "kept"):
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Gift cannot be refunded"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Этот подарок нельзя вернуть"
             )
         if bool(getattr(gift, "is_collectible", False)):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Collectible gifts cannot be refunded",
+                detail="Коллекционный подарок нельзя вернуть",
             )
         created = gift.created_at or datetime.utcnow()
         if datetime.utcnow() - created > self._REFUND_WINDOW:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Refund window expired"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Срок возврата истёк"
             )
         amount = int(gift.stars)
         self.add_stars(
@@ -2164,11 +2164,11 @@ class PaidFeaturesService:
             .first()
         )
         if not gift:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Подарок не найден")
         if gift.status == "converted":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Converted gifts cannot be displayed",
+                detail="Обменянный подарок нельзя показать",
             )
         gift.is_displayed = bool(displayed)
         if displayed and gift.status == "held":
@@ -2215,7 +2215,7 @@ class PaidFeaturesService:
         if message.sender_id == user_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot pay reaction on your own message",
+                detail="Нельзя оплатить реакцию на своё сообщение",
             )
         idem = (idempotency_key or "").strip() or None
         if idem:
@@ -2253,10 +2253,10 @@ class PaidFeaturesService:
 
         channel = self.db.query(Channel).filter(Channel.id == channel_id).first()
         if not channel:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Канал не найден")
         user = self.db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
         if not user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
         if is_channel_owner(channel, user):
             return channel
         member = (
@@ -2270,7 +2270,7 @@ class PaidFeaturesService:
             .first()
         )
         if member is None:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not channel admin")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нужны права администратора канала")
         return channel
 
     def create_star_giveaway(
@@ -2288,30 +2288,30 @@ class PaidFeaturesService:
         kind = (prize_type or "stars").strip().lower()
         if kind not in ("stars", "premium"):
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid prize type"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный тип приза"
             )
         months = int(premium_months or 0)
         if kind == "premium":
             if months not in (1, 3, 6, 12):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Premium months must be 1, 3, 6 or 12",
+                    detail="Срок подписки: 1, 3, 6 или 12 месяцев",
                 )
             prize_stars = self.PREMIUM_STARS_PER_MONTH * months
         elif prize_stars < 1 or prize_stars > 100_000:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Prize must be between 1 and 100000 stars",
+                detail="Приз: от 1 до 100000 звёзд",
             )
         if winners_count < 1 or winners_count > 100:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Winners count must be between 1 and 100",
+                detail="Победителей: от 1 до 100",
             )
         if duration_hours < 1 or duration_hours > 24 * 30:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Duration must be between 1 hour and 30 days",
+                detail="Срок: от 1 часа до 30 дней",
             )
         self._channel_manage_access(user_id, channel_id)
         active = (
@@ -2325,7 +2325,7 @@ class PaidFeaturesService:
         if active is not None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Channel already has an active giveaway",
+                detail="В канале уже есть активный розыгрыш",
             )
         escrow = int(prize_stars) * int(winners_count)
         giveaway = StarGiveaway(
@@ -2369,7 +2369,7 @@ class PaidFeaturesService:
     def get_giveaway(self, giveaway_id: int) -> StarGiveaway:
         row = self.db.query(StarGiveaway).filter(StarGiveaway.id == giveaway_id).first()
         if not row:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Giveaway not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Розыгрыш не найден")
         return row
 
     def join_star_giveaway(self, user_id: int, giveaway_id: int) -> StarGiveawayParticipant:
@@ -2386,20 +2386,20 @@ class PaidFeaturesService:
             .first()
         )
         if not giveaway:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Giveaway not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Розыгрыш не найден")
         if giveaway.status != "active":
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Giveaway is not active"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Розыгрыш не активен"
             )
         now = datetime.utcnow()
         if giveaway.ends_at <= now:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Giveaway already ended"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Розыгрыш уже завершён"
             )
         if giveaway.creator_user_id == user_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Creator cannot join own giveaway",
+                detail="Нельзя участвовать в своём розыгрыше",
             )
         existing = (
             self.db.query(StarGiveawayParticipant)
@@ -2414,7 +2414,7 @@ class PaidFeaturesService:
         channel = self.db.query(Channel).filter(Channel.id == giveaway.channel_id).first()
         user = self.db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
         if not channel or not user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Не найдено")
         if giveaway.require_membership and not is_channel_owner(channel, user):
             member = (
                 self.db.query(ChannelMember)
@@ -2428,7 +2428,7 @@ class PaidFeaturesService:
             if member is None:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Join the channel to enter the giveaway",
+                    detail="Вступите в канал, чтобы участвовать",
                 )
         row = StarGiveawayParticipant(giveaway_id=giveaway_id, user_id=user_id)
         self.db.add(row)
@@ -2444,11 +2444,11 @@ class PaidFeaturesService:
             .first()
         )
         if not giveaway:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Giveaway not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Розыгрыш не найден")
         self._channel_manage_access(user_id, giveaway.channel_id)
         if giveaway.status != "active":
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Giveaway is not active"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Розыгрыш не активен"
             )
         remaining = int(giveaway.total_escrow_stars or 0)
         if remaining > 0:
@@ -2474,7 +2474,7 @@ class PaidFeaturesService:
             .first()
         )
         if not giveaway:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Giveaway not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Розыгрыш не найден")
         if giveaway.status != "active":
             return giveaway
         participants = (
@@ -2545,19 +2545,19 @@ class PaidFeaturesService:
     ) -> ChannelSuggestedPost:
         clean = (text or "").strip()
         if not clean:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Text required")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Нужен текст")
         if amount_stars < 10 or amount_stars > 100_000:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Amount must be between 10 and 100000 stars",
+                detail="Сумма: от 10 до 100000 звёзд",
             )
         channel = self.db.query(Channel).filter(Channel.id == channel_id).first()
         if not channel:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Канал не найден")
         if int(getattr(channel, "admin_user_id", 0) or 0) == user_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Channel owner cannot suggest to self",
+                detail="Нельзя предложить пост себе",
             )
         row = ChannelSuggestedPost(
             channel_id=channel_id,
@@ -2598,10 +2598,10 @@ class PaidFeaturesService:
 
         channel = self.db.query(Channel).filter(Channel.id == channel_id).first()
         if not channel:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Канал не найден")
         user = self.db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
         if not user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
         is_manager = is_channel_owner(channel, user)
         if not is_manager:
             member = (
@@ -2639,7 +2639,7 @@ class PaidFeaturesService:
             .first()
         )
         if not row:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Suggestion not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Предложение не найдено")
         channel = self._channel_manage_access(user_id, row.channel_id)
         if row.status != "pending":
             return row
@@ -2711,21 +2711,21 @@ class PaidFeaturesService:
             .first()
         )
         if not bot:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bot not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Бот не найден")
         if int(getattr(bot, "created_by_user_id", 0) or 0) != creator_user_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not bot owner")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Это не ваш бот")
         clean_title = (title or "").strip()
         if not clean_title:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Title required")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Нужно название")
         if amount_stars < 1 or amount_stars > 100_000:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Amount must be between 1 and 100000",
+                detail="Сумма: от 1 до 100000",
             )
         if expires_in_hours < 1 or expires_in_hours > 24 * 30:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Expiry must be between 1 hour and 30 days",
+                detail="Срок: от 1 часа до 30 дней",
             )
         invoice = StarInvoice(
             bot_id=bot_id,
@@ -2744,7 +2744,7 @@ class PaidFeaturesService:
     def get_star_invoice(self, invoice_id: int) -> StarInvoice:
         row = self.db.query(StarInvoice).filter(StarInvoice.id == invoice_id).first()
         if not row:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Счёт не найден")
         return row
 
     def pay_star_invoice(self, payer_user_id: int, invoice_id: int) -> StarInvoice:
@@ -2755,27 +2755,27 @@ class PaidFeaturesService:
             .first()
         )
         if not invoice:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Счёт не найден")
         if invoice.status == "paid":
             if invoice.payer_user_id == payer_user_id:
                 return invoice
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Invoice already paid"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Счёт уже оплачен"
             )
         if invoice.status != "pending":
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Invoice is not payable"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Счёт нельзя оплатить"
             )
         now = datetime.utcnow()
         if invoice.expires_at and invoice.expires_at <= now:
             invoice.status = "expired"
             self.db.flush()
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Invoice expired"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Срок счёта истёк"
             )
         if payer_user_id in (invoice.bot_id, invoice.creator_user_id):
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot pay own invoice"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Нельзя оплатить свой счёт"
             )
         self._spend_stars(
             payer_user_id,

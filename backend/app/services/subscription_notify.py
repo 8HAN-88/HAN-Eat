@@ -18,6 +18,14 @@ def _product_label(product: Optional[str]) -> str:
     return product_label(product)
 
 
+def _subscription_route_data(subscription_id: int, product: Optional[str]) -> dict:
+    data = {"route": "subscription", "subscription_id": subscription_id}
+    level = {"ai": 9, "creator": 16, "pro": 18}.get((product or "").lower())
+    if level is not None:
+        data["level"] = level
+    return data
+
+
 def notify_refund_requested(
     db: Session,
     *,
@@ -37,7 +45,7 @@ def notify_refund_requested(
             ),
             entity_type="subscription",
             entity_id=subscription_id,
-            data={"route": "subscription", "subscription_id": subscription_id},
+            data=_subscription_route_data(subscription_id, product),
         )
     except Exception:
         logger.exception("notify_refund_requested failed user_id=%s", user_id)
@@ -62,7 +70,7 @@ def notify_refund_approved(
             ),
             entity_type="subscription",
             entity_id=subscription_id,
-            data={"route": "subscription", "subscription_id": subscription_id},
+            data=_subscription_route_data(subscription_id, product),
         )
     except Exception:
         logger.exception("notify_refund_approved failed user_id=%s", user_id)
@@ -90,7 +98,7 @@ def notify_refund_rejected(
             body=body[:500],
             entity_type="subscription",
             entity_id=subscription_id,
-            data={"route": "subscription", "subscription_id": subscription_id},
+            data=_subscription_route_data(subscription_id, product),
         )
     except Exception:
         logger.exception("notify_refund_rejected failed user_id=%s", user_id)

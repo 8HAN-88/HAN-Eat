@@ -244,9 +244,9 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
           // Общий переключатель push уведомлений
           Card(
             child: SwitchListTile(
-              title: const Text('Push уведомления'),
+              title: const Text('Всплывающие уведомления'),
               subtitle: const Text(
-                'Включить или выключить все push уведомления',
+                'Включить или выключить все всплывающие уведомления',
               ),
               value: _preferences!.pushEnabled,
               onChanged: (v) =>
@@ -285,7 +285,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                 SwitchListTile(
                   title: const Text('Сообщения'),
                   subtitle: const Text(
-                    'Push о новых личных сообщениях в чатах',
+                    'Уведомления о новых личных сообщениях в чатах',
                   ),
                   value: _preferences!.messagesEnabled,
                   onChanged: _preferences!.pushEnabled

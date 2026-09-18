@@ -123,7 +123,7 @@ class _SubscriptionSuccessScreenState
                 const SizedBox(height: 16),
                 const Text(
                   'Спасибо за подписку! '
-                  'Теперь вам доступны возможности выбранного тарифа.',
+                  'Теперь вам доступны возможности выбранного уровня.',
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 32),
