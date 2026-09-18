@@ -58,6 +58,46 @@ const _knownEnglishDetails = <String, String>{
   'Refund is not available for this payment':
       'Возврат для этого платежа недоступен',
   'Payment not found': 'Платёж не найден',
+  'Post already saved': 'Пост уже сохранён',
+  'Post not saved': 'Пост не был сохранён',
+  'Cannot report your own post': 'Нельзя пожаловаться на свой пост',
+  'Cannot report your own comment': 'Нельзя пожаловаться на свой комментарий',
+  'Cannot report your own channel': 'Нельзя пожаловаться на свой канал',
+  'Cannot report yourself': 'Нельзя пожаловаться на себя',
+  'Cannot report your own message': 'Нельзя пожаловаться на своё сообщение',
+  'Comment not found': 'Комментарий не найден',
+  'User not found': 'Пользователь не найден',
+  'Message not found': 'Сообщение не найдено',
+  'Access denied': 'Нет доступа',
+  'Not your post': 'Это не ваш пост',
+  'Not allowed': 'Нет доступа',
+  'Post is private': 'Пост закрытый',
+  'Only published posts can be promoted':
+      'Продвигать можно только опубликованные посты',
+  'Only published posts can be pinned':
+      'Закреплять можно только опубликованные посты',
+  'Only channel posts can be pinned': 'Закреплять можно только посты канала',
+  'scheduled_publish_at must be in the future':
+      'Время публикации должно быть в будущем',
+  'Scheduled post not found': 'Отложенный пост не найден',
+  'Требуется тариф Creator или Pro': 'Доступно с подпиской уровня 16',
+  'Invalid date_from format. Use YYYY-MM-DD':
+      'Неверный формат даты. Используйте ГГГГ-ММ-ДД',
+  'Invalid date_to format. Use YYYY-MM-DD':
+      'Неверный формат даты. Используйте ГГГГ-ММ-ДД',
+  'sort_by must be one of: relevance, date, popularity':
+      'Сортировка: relevance, date или popularity',
+  'Authentication required for following_only search':
+      'Войдите в аккаунт, чтобы искать только подписки',
+  'Text or rating is required': 'Нужен текст или оценка',
+  'You can only delete your own comments':
+      'Можно удалить только свой комментарий',
+  'Failed to load refund queue': 'Не удалось загрузить очередь возвратов',
+  'Failed to process refund': 'Не удалось обработать возврат',
+  'Failed to reject refund': 'Не удалось отклонить возврат',
+  'Could not launch checkout URL': 'Не удалось открыть оплату',
+  'Poll not found': 'Опрос не найден',
+  'URL is required': 'Нужна ссылка',
 };
 
 String? localizeKnownEnglishDetail(String detail) =>

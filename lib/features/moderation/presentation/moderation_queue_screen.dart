@@ -437,6 +437,18 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
         return 'Нарушение авторских прав';
       case 'reported':
         return 'Жалоба пользователя';
+      case 'harassment':
+        return 'Оскорбления';
+      case 'nsfw':
+        return 'NSFW';
+      case 'violence':
+        return 'Насилие';
+      case 'misinformation':
+        return 'Ложная информация';
+      case 'scam':
+        return 'Мошенничество';
+      case 'other':
+        return 'Другое';
       default:
         return reason;
     }

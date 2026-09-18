@@ -209,7 +209,8 @@ class PaymentService {
       throw Exception('Требуются права администратора');
     }
     final error = jsonDecode(response.body) as Map<String, dynamic>;
-    throw Exception(error['detail'] ?? 'Failed to load refund queue');
+    throw Exception(
+        error['detail'] ?? 'Не удалось загрузить очередь возвратов');
   }
 
   static Future<void> adminProcessRefund({
@@ -238,7 +239,7 @@ class PaymentService {
 
     if (response.statusCode == 200) return;
     final error = jsonDecode(response.body) as Map<String, dynamic>;
-    throw Exception(error['detail'] ?? 'Failed to process refund');
+    throw Exception(error['detail'] ?? 'Не удалось обработать возврат');
   }
 
   static Future<void> adminRejectRefund({
@@ -265,7 +266,7 @@ class PaymentService {
 
     if (response.statusCode == 200) return;
     final error = jsonDecode(response.body) as Map<String, dynamic>;
-    throw Exception(error['detail'] ?? 'Failed to reject refund');
+    throw Exception(error['detail'] ?? 'Не удалось отклонить возврат');
   }
 
   static Future<void> openCheckout(String checkoutUrl) async {
@@ -276,7 +277,7 @@ class PaymentService {
         mode: LaunchMode.externalApplication,
       );
     } else {
-      throw Exception('Could not launch checkout URL');
+      throw Exception('Не удалось открыть оплату');
     }
   }
 }

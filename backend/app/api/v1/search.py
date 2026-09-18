@@ -58,7 +58,7 @@ async def search_posts(
             except ValueError:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid date_from format. Use YYYY-MM-DD"
+                    detail="Неверный формат даты. Используйте ГГГГ-ММ-ДД"
                 )
         
         date_to_obj = None
@@ -70,20 +70,20 @@ async def search_posts(
             except ValueError:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid date_to format. Use YYYY-MM-DD"
+                    detail="Неверный формат даты. Используйте ГГГГ-ММ-ДД"
                 )
         
         # Валидация sort_by
         if sort_by not in ["relevance", "date", "popularity"]:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="sort_by must be one of: relevance, date, popularity"
+                detail="Сортировка: relevance, date или popularity"
             )
         
         if following_only and user_id is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication required for following_only search",
+                detail="Войдите в аккаунт, чтобы искать только подписки",
             )
 
         results = search_service.search_posts(

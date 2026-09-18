@@ -151,7 +151,7 @@ async def list_promoted_posts(
         db,
         current_user.id,
         "creator_promotion",
-        "Требуется тариф Creator или Pro",
+        "Доступно с подпиской уровня 16",
     )
     posts = (
         db.query(Post)
@@ -189,7 +189,7 @@ async def list_scheduled_posts(
         db,
         current_user.id,
         "creator_scheduled_posts",
-        "Требуется тариф Creator или Pro",
+        "Доступно с подпиской уровня 16",
     )
     posts = (
         db.query(Post)
@@ -233,7 +233,7 @@ async def reschedule_post(
         db,
         current_user.id,
         "creator_scheduled_posts",
-        "Требуется тариф Creator или Pro",
+        "Доступно с подпиской уровня 16",
     )
 
     post = (
@@ -247,13 +247,13 @@ async def reschedule_post(
         .first()
     )
     if not post:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scheduled post not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Отложенный пост не найден")
 
     scheduled_at = parse_scheduled_at(request.scheduled_publish_at)
     if scheduled_at is None or scheduled_at <= datetime.utcnow():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="scheduled_publish_at must be in the future",
+            detail="Время публикации должно быть в будущем",
         )
 
     post.scheduled_publish_at = scheduled_at
@@ -282,7 +282,7 @@ async def cancel_scheduled_post(
         .first()
     )
     if not post:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scheduled post not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Отложенный пост не найден")
 
     post.status = "deleted"
     post.deleted_at = datetime.utcnow()

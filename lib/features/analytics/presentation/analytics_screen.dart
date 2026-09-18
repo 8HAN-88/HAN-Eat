@@ -100,7 +100,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
             const SizedBox(height: 24),
             FilledButton(
               onPressed: () =>
-                  context.push(SubscriptionRoute.pathWithProduct('creator')),
+                  context.push(FlexSubscriptionRoute.pathWithLevel(16)),
               child: Text(SubscriptionCopy.creatorLevelCta),
             ),
           ],

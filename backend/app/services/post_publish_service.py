@@ -45,7 +45,7 @@ def require_creator_for_schedule(db: Session, user: User, scheduled_at: Optional
     if scheduled_at <= datetime.utcnow():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="scheduled_publish_at must be in the future",
+            detail="Время публикации должно быть в будущем",
         )
     require_entitlement_or_403(
         db,
@@ -139,13 +139,13 @@ def promote_post(db: Session, post_id: int, user_id: int) -> Post:
         .first()
     )
     if not post:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пост не найден")
     if post.user_id != user_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your post")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Это не ваш пост")
     if post.status != "published":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only published posts can be promoted",
+            detail="Продвигать можно только опубликованные посты",
         )
     require_entitlement_or_403(
         db,
@@ -182,9 +182,9 @@ def unpromote_post(db: Session, post_id: int, user_id: int) -> Post:
         .first()
     )
     if not post:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пост не найден")
     if post.user_id != user_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your post")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Это не ваш пост")
     require_entitlement_or_403(
         db,
         user_id,
@@ -203,18 +203,18 @@ def pin_post(db: Session, post_id: int, user_id: int) -> Post:
         .first()
     )
     if not post:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пост не найден")
     if post.user_id != user_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your post")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Это не ваш пост")
     if post.status != "published":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only published posts can be pinned",
+            detail="Закреплять можно только опубликованные посты",
         )
     if not post.channel_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only channel posts can be pinned",
+            detail="Закреплять можно только посты канала",
         )
     require_entitlement_or_403(
         db,
@@ -248,9 +248,9 @@ def unpin_post(db: Session, post_id: int, user_id: int) -> Post:
         .first()
     )
     if not post:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пост не найден")
     if post.user_id != user_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your post")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Это не ваш пост")
     require_entitlement_or_403(
         db,
         user_id,

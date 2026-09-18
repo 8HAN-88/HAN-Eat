@@ -3,7 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/app_router.dart';
 
-/// Opens Creator subscription for gated author actions (schedule, analytics, etc.).
+/// Открывает лестницу Flex на уровне 16 для авторских действий.
 Future<void> showCreatorUpsell(BuildContext context) async {
-  await context.push(SubscriptionRoute.pathWithProduct('creator'));
+  await context.push(FlexSubscriptionRoute.pathWithLevel(16));
 }

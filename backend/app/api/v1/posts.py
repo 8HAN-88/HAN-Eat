@@ -26,7 +26,7 @@ def _paid_post_fields(is_paid: bool, price_stars: Optional[int], preview_mode: O
     if paid and price <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Paid content price must be greater than 0 stars",
+            detail="Цена платного контента должна быть больше 0 ★",
         )
     return {
         "is_paid": paid,
@@ -116,7 +116,7 @@ async def preview_link(
     if not raw_url:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="URL is required",
+            detail="Нужна ссылка",
         )
     own = try_own_content_preview(db, raw_url)
     if own:
@@ -139,7 +139,7 @@ async def mark_post_as_viewed(
     if not post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post not found"
+            detail="Пост не найден"
         )
     
     # Проверяем, не просмотрел ли уже пользователь этот пост
@@ -184,7 +184,7 @@ async def create_post(
         if not request.poll:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Poll data is required for poll posts",
+                detail="Для опроса нужны варианты ответа",
             )
         try:
             body = build_poll_body(request.poll.question, request.poll.options)
@@ -197,7 +197,7 @@ async def create_post(
         if not request.link or not request.link.url.strip():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Link URL is required for link posts",
+                detail="Для поста-ссылки нужен адрес",
             )
         from app.services.link_preview_service import fetch_link_preview
 
@@ -241,7 +241,7 @@ async def create_post(
         if not channel_obj:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Channel not found"
+                detail="Канал не найден"
             )
 
         member = get_membership(db, request.channel_id, current_user.id)
@@ -463,7 +463,7 @@ async def get_poll_voters(
     if not post or post.type != "poll":
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Poll not found",
+            detail="Опрос не найден",
         )
 
     raw_poll = (post.body or {}).get("poll") if isinstance(post.body, dict) else None
@@ -534,12 +534,12 @@ async def update_post(
     if not post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post not found",
+            detail="Пост не найден",
         )
     if post.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not allowed",
+            detail="Нет доступа",
         )
 
     if request.title is not None:
@@ -646,17 +646,17 @@ async def delete_post(
     if not post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post not found",
+            detail="Пост не найден",
         )
     if post.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not allowed",
+            detail="Нет доступа",
         )
     if post.channel_id is not None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Use channel endpoint to delete channel posts",
+            detail="Удаляйте посты канала из канала",
         )
 
     post.deleted_at = datetime.utcnow()
@@ -703,7 +703,7 @@ async def get_post(
             if post_data.get("visibility") == "private" and (not current_user or current_user.id != post_data.get("user_id")):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Post is private"
+                    detail="Пост закрытый"
                 )
             # Логируем просмотр (асинхронно, не блокируем ответ)
             if current_user:
@@ -738,14 +738,14 @@ async def get_post(
     if not post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post not found"
+            detail="Пост не найден"
         )
     
     # Проверяем видимость
     if post.visibility == "private" and (not current_user or current_user.id != post.user_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Post is private"
+            detail="Пост закрытый"
         )
     
     # Логируем просмотр поста

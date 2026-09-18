@@ -27,7 +27,7 @@ async def create_comment(
     if not text_value and request.rating is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Text or rating is required",
+            detail="Нужен текст или оценка",
         )
 
     # Проверяем, что пост существует
@@ -39,7 +39,7 @@ async def create_comment(
     if not post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post not found"
+            detail="Пост не найден"
         )
     from app.services.anti_spam_service import AntiSpamService
 
@@ -141,7 +141,7 @@ async def get_comments(
     if not post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post not found"
+            detail="Пост не найден"
         )
     
     # Получаем комментарии с eager loading авторов (оптимизация для 100k пользователей)
@@ -196,7 +196,7 @@ async def get_post_rating(
     if not post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post not found",
+            detail="Пост не найден",
         )
 
     rating_rows = db.query(Comment.rating).filter(
@@ -226,13 +226,13 @@ async def delete_comment(
     if not comment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Comment not found"
+            detail="Комментарий не найден"
         )
     
     if comment.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only delete your own comments"
+            detail="Можно удалить только свой комментарий"
         )
     
     from datetime import datetime

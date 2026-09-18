@@ -595,7 +595,7 @@ class _ChannelPostCardState extends State<ChannelPostCard>
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Нужна подписка уровня 16+')),
         );
-        context.push(SubscriptionRoute.pathWithProduct('creator'));
+        context.push(FlexSubscriptionRoute.pathWithLevel(16));
         return;
       }
       await ChannelService.pinPost(widget.post.id);
@@ -654,7 +654,7 @@ class _ChannelPostCardState extends State<ChannelPostCard>
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Нужна подписка уровня 16+')),
         );
-        context.push(SubscriptionRoute.pathWithProduct('creator'));
+        context.push(FlexSubscriptionRoute.pathWithLevel(16));
         return;
       }
       await ChannelService.promotePost(widget.post.id);
