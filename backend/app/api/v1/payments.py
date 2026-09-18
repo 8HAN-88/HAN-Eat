@@ -384,14 +384,14 @@ async def create_checkout_session(
     if request.plan not in ["monthly", "yearly"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Plan must be 'monthly' or 'yearly'",
+            detail="Выберите период: месяц или год",
         )
 
     product = (request.product or "pro").strip().lower()
     if product not in ("ai", "creator", "pro"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Product must be 'ai', 'creator', or 'pro'",
+            detail="Неверный тариф",
         )
 
     subscription_service = SubscriptionService(db)

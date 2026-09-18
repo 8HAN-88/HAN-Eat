@@ -223,7 +223,7 @@ async def _resolve_google_claims(id_token: str) -> dict:
         )
 
     if resp.status_code != 200:
-        detail = "Invalid Google ID token"
+        detail = "Неверный токен Google"
         try:
             err_body = resp.json()
             if isinstance(err_body, dict) and err_body.get("error_description"):
@@ -257,7 +257,7 @@ async def _resolve_google_claims(id_token: str) -> dict:
     if str(ev).lower() in ("false", "0"):
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail="Google account email is not verified",
+            detail="Email аккаунта Google не подтверждён",
         )
 
     return claims
@@ -276,7 +276,7 @@ async def register(
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
+            detail="Email уже занят"
         )
     
     # Проверяем username, если указан
@@ -285,7 +285,7 @@ async def register(
         if existing_username:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Username already taken"
+                detail="Это имя уже занято"
             )
 
     if not request.accept_legal:
@@ -383,28 +383,28 @@ async def login(
             logger.warning(f"User not found: {request.email}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect email or password"
+                detail="Неверный email или пароль"
             )
         
         if not verify_password(request.password, user.password_hash):
             logger.warning(f"Invalid password for user: {request.email}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect email or password"
+                detail="Неверный email или пароль"
             )
         
         if user.deleted_at:
             logger.warning(f"Attempt to login to deleted account: {request.email}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Account deleted"
+                detail="Аккаунт удалён"
             )
 
         if user.banned_at:
             logger.warning("Banned user login attempt: %s", request.email)
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Account suspended",
+                detail="Аккаунт заблокирован",
             )
 
         _attach_referral(db, user, request.referral_code)
@@ -469,14 +469,14 @@ async def refresh_token(
     if not payload or payload.get("type") != "refresh":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token"
+            detail="Неверный токен обновления"
         )
     
     user_id = payload.get("sub")
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token payload"
+            detail="Неверные данные токена"
         )
 
     try:
@@ -484,24 +484,24 @@ async def refresh_token(
     except (TypeError, ValueError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token",
+            detail="Неверный токен обновления",
         )
 
     user = db.query(User).filter(User.id == uid).first()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token",
+            detail="Неверный токен обновления",
         )
     if user.deleted_at:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Account deleted",
+            detail="Аккаунт удалён",
         )
     if user.banned_at:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account suspended",
+            detail="Аккаунт заблокирован",
         )
 
     sid = payload.get("sid")
@@ -512,13 +512,13 @@ async def refresh_token(
         except (TypeError, ValueError):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid refresh token",
+                detail="Неверный токен обновления",
             )
         session = get_active_session(db, session_id=sid_int, jti=jti)
         if session is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Session revoked",
+                detail="Сессия отозвана",
             )
         new_access_token, new_refresh_token = rotate_session_tokens(
             db, session=session, user=user
@@ -574,7 +574,7 @@ async def google_auth(request: GoogleAuthRequest, http_request: Request, db: Ses
         if not google_email:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid Google token: missing email"
+                detail="В токене Google нет email"
             )
         
         # Ищем существующего пользователя по email
@@ -613,12 +613,12 @@ async def google_auth(request: GoogleAuthRequest, http_request: Request, db: Ses
             if user.deleted_at:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Account deleted",
+                    detail="Аккаунт удалён",
                 )
             if user.banned_at:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Account suspended",
+                    detail="Аккаунт заблокирован",
                 )
 
         if user.is_private is None:
@@ -662,7 +662,7 @@ async def yandex_authorize_url(redirect_uri: str):
     if not yandex_oauth_configured():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Yandex OAuth is not configured",
+            detail="Вход через Яндекс не настроен",
         )
     return {"authorize_url": build_authorize_url(redirect_uri=redirect_uri)}
 
@@ -713,12 +713,12 @@ async def yandex_auth(request: YandexAuthRequest, http_request: Request, db: Ses
             if user.deleted_at:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Account deleted",
+                    detail="Аккаунт удалён",
                 )
             if user.banned_at:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Account suspended",
+                    detail="Аккаунт заблокирован",
                 )
             if yandex_name and (not user.name or user.name.strip() == ""):
                 user.name = yandex_name
@@ -754,10 +754,10 @@ async def yandex_auth(request: YandexAuthRequest, http_request: Request, db: Ses
 async def open_auth_email_link(purpose: str, token: str = ""):
     """Страница из письма: редирект в приложение (haneat://) + код для ручного ввода."""
     if purpose not in _AUTH_OPEN_PURPOSES:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Не найдено")
     token = token.strip()
     if len(token) < 16:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid token")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Неверная ссылка")
     return HTMLResponse(render_open_link_page(purpose, token))
 
 
@@ -768,7 +768,7 @@ async def verify_email(body: TokenBody, db: Session = Depends(get_db)):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=err)
     user = db.query(User).filter(User.id == row.user_id).first()
     if not user or user.deleted_at:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="User not found")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Пользователь не найден")
     mark_email_verified(user)
     db.commit()
     return MessageResponse(message="Email подтверждён. Теперь можно войти в приложение.")
@@ -805,7 +805,7 @@ async def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_d
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=err)
     user = db.query(User).filter(User.id == row.user_id).first()
     if not user or user.deleted_at:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="User not found")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Пользователь не найден")
     user.password_hash = get_password_hash(body.new_password)
     db.commit()
     return MessageResponse(message="Пароль обновлён. Войдите с новым паролем.")
@@ -866,17 +866,17 @@ async def confirm_email_change(body: TokenBody, db: Session = Depends(get_db)):
     if err:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=err)
     if not row.extra_data:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid token data")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Неверные данные ссылки")
     try:
         payload = json.loads(row.extra_data)
         new_email = (payload.get("new_email") or "").strip().lower()
     except json.JSONDecodeError:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid token data")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Неверные данные ссылки")
     if not new_email:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid token data")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Неверные данные ссылки")
     user = db.query(User).filter(User.id == row.user_id).first()
     if not user or user.deleted_at:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="User not found")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Пользователь не найден")
     existing = db.query(User).filter(User.email == new_email, User.id != user.id).first()
     if existing:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Email уже занят")
@@ -970,9 +970,9 @@ async def revoke_auth_session(
 
     row = revoke_session(db, user_id=current_user.id, session_id=session_id)
     if row is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Session not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Сессия не найдена")
     db.commit()
-    return MessageResponse(message="Session revoked")
+    return MessageResponse(message="Сессия отозвана")
 
 
 @router.post("/sessions/revoke-others", response_model=MessageResponse)
@@ -987,13 +987,13 @@ async def revoke_other_auth_sessions(
     if current_id is None:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail="Current session id required (X-Auth-Session-Id)",
+            detail="Не удалось определить текущую сессию",
         )
     count = revoke_other_sessions(
         db, user_id=current_user.id, keep_session_id=current_id
     )
     db.commit()
-    return MessageResponse(message=f"Revoked {count} sessions")
+    return MessageResponse(message=f"Отозвано сессий: {count}")
 
 
 @router.post("/sessions/revoke-all", response_model=MessageResponse)
@@ -1005,7 +1005,7 @@ async def revoke_all_auth_sessions(
 
     count = revoke_all_sessions(db, user_id=current_user.id)
     db.commit()
-    return MessageResponse(message=f"Revoked {count} sessions")
+    return MessageResponse(message=f"Отозвано сессий: {count}")
 
 
 @router.get("/2fa/status", response_model=TotpStatusResponse)
@@ -1024,7 +1024,7 @@ async def totp_setup(
     if is_2fa_enabled(current_user):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Two-factor authentication is already enabled",
+            detail="Двухфакторная защита уже включена",
         )
     secret = generate_secret()
     account = current_user.email or current_user.username or str(current_user.id)
@@ -1045,24 +1045,24 @@ async def totp_enable(
     if is_2fa_enabled(current_user):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Two-factor authentication is already enabled",
+            detail="Двухфакторная защита уже включена",
         )
     secret = getattr(current_user, "totp_secret", None)
     if not secret:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Call /auth/2fa/setup first",
+            detail="Сначала настройте двухфакторную защиту",
         )
     if not verify_totp_code(secret, body.code):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid authenticator code",
+            detail="Неверный код из приложения",
         )
 
     current_user.totp_enabled = True
     current_user.totp_enabled_at = datetime.utcnow()
     db.commit()
-    return MessageResponse(message="Two-factor authentication enabled")
+    return MessageResponse(message="Двухфакторная защита включена")
 
 
 @router.post("/2fa/disable", response_model=MessageResponse)
@@ -1074,23 +1074,23 @@ async def totp_disable(
     if not is_2fa_enabled(current_user):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Two-factor authentication is not enabled",
+            detail="Двухфакторная защита не включена",
         )
     if not verify_password(body.password, current_user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect password",
+            detail="Неверный пароль",
         )
     if not verify_totp_code(current_user.totp_secret or "", body.code):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid authenticator code",
+            detail="Неверный код из приложения",
         )
     current_user.totp_secret = None
     current_user.totp_enabled = False
     current_user.totp_enabled_at = None
     db.commit()
-    return MessageResponse(message="Two-factor authentication disabled")
+    return MessageResponse(message="Двухфакторная защита выключена")
 
 
 @router.post("/2fa/verify-login", response_model=AuthResponse)
@@ -1104,23 +1104,23 @@ async def totp_verify_login(
     if user_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired 2FA pending token",
+            detail="Код входа устарел. Войдите снова",
         )
     user = db.query(User).filter(User.id == user_id).first()
     if not user or user.deleted_at or user.banned_at:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired 2FA pending token",
+            detail="Код входа устарел. Войдите снова",
         )
     if not is_2fa_enabled(user):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Two-factor authentication is not enabled",
+            detail="Двухфакторная защита не включена",
         )
     if not verify_totp_code(user.totp_secret or "", body.code):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authenticator code",
+            detail="Неверный код из приложения",
         )
     if user.is_private is None:
         user.is_private = False

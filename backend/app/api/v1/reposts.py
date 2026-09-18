@@ -101,7 +101,7 @@ async def create_repost(
     if not post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post not found"
+            detail="Пост не найден"
         )
     
     # Проверяем, не репостнул ли уже
@@ -113,14 +113,14 @@ async def create_repost(
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Post already reposted"
+            detail="Вы уже репостнули этот пост"
         )
     
     # Нельзя репостнуть свой пост из профиля (но можно из канала на профиль)
     if post.user_id == current_user.id and post.channel_id is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot repost your own post"
+            detail="Нельзя репостнуть свой пост"
         )
     
     # Создаем репост
@@ -187,7 +187,7 @@ async def repost_to_channel(
     if not post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post not found"
+            detail="Пост не найден"
         )
 
     channel = db.query(Channel).filter(Channel.id == request.channel_id).first()
@@ -276,13 +276,13 @@ async def delete_repost(
     if not repost:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Repost not found"
+            detail="Репост не найден"
         )
     
     db.delete(repost)
     db.commit()
     
-    return {"reposted": False, "message": "Repost deleted successfully"}
+    return {"reposted": False, "message": "Репост удалён"}
 
 
 @router.get("/posts/{post_id}/reposts")
@@ -303,7 +303,7 @@ async def get_reposts(
     if not post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post not found"
+            detail="Пост не найден"
         )
     
     # Получаем репосты

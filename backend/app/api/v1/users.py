@@ -401,7 +401,7 @@ async def update_user_profile(
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="last_seen_privacy must be one of: everybody, contacts, nobody",
+                detail="Неверная настройка «был(а) в сети»",
             )
     if request.show_read_receipts is not None:
         current_user.show_read_receipts = bool(request.show_read_receipts)
@@ -419,7 +419,7 @@ async def update_user_profile(
         if request.device_platform not in ["android", "ios", "web"]:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="device_platform must be one of: android, ios, web"
+                detail="Неверная платформа устройства"
             )
         current_user.device_platform = request.device_platform
     
@@ -457,7 +457,7 @@ async def get_user_posts(
         if not is_following:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="User profile is private"
+                detail="Профиль закрытый"
             )
     
     # Личные посты на стене (без каналов) + репосты пользователя (оригиналы из ленты/каналов)
@@ -969,7 +969,7 @@ async def add_close_friend(
     from app.models.close_friend import CloseFriend
 
     if friend_user_id == current_user.id:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Cannot add yourself")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Нельзя добавить себя")
     friend = (
         db.query(User)
         .filter(User.id == friend_user_id, User.deleted_at.is_(None))
@@ -1010,7 +1010,7 @@ async def remove_close_friend(
         .first()
     )
     if row is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Close friend not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Близкий друг не найден")
     db.delete(row)
     db.commit()
     return {"ok": True}

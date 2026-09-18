@@ -11,6 +11,7 @@ import '../core/network/haneat_http_client.dart';
 import '../core/network/api_endpoint_resolver.dart';
 import '../core/network/cold_start_policy.dart';
 import '../features/referral/pending_referral.dart';
+import '../utils/api_error_parser.dart';
 import 'account_session_service.dart';
 import 'pending_referral_store.dart';
 import 'server_config.dart';
@@ -31,6 +32,7 @@ bool _apiUnreachable(Object e) {
 bool _isDefinitiveSessionLoss(AuthException e) {
   final m = e.message;
   return m.contains('Сессия истекла') ||
+      m.contains('Не удалось обновить сессию') ||
       m.contains('Token refresh failed') ||
       m.contains('No refresh token');
 }
@@ -1133,7 +1135,7 @@ class AuthService {
     final refreshToken = prefs.getString(_refreshTokenKey);
 
     if (refreshToken == null) {
-      throw AuthException('No refresh token available');
+      throw AuthException('Сессия истекла. Войдите снова.');
     }
 
     final uri = Uri.parse('$baseUrl/auth/refresh');
@@ -1177,7 +1179,7 @@ class AuthService {
         await logout();
         throw AuthException('Сессия истекла. Войдите снова.');
       }
-      throw AuthException('Token refresh failed');
+      throw AuthException('Не удалось обновить сессию. Войдите снова.');
     } catch (e) {
       if (e is AuthException) {
         rethrow;
@@ -1487,14 +1489,15 @@ AuthException _authExceptionFromResponse(
       final detail = error['detail'];
       if (detail is Map<String, dynamic>) {
         final code = detail['code'] as String?;
-        final message = (detail['message'] as String?) ??
+        final raw = (detail['message'] as String?) ??
             (detail['detail'] as String?) ??
             fallback;
+        final message = parseApiErrorMessage(raw, fallback: fallback);
         final pending = detail['pending_token'] as String?;
         return AuthException(message, code: code, pendingToken: pending);
       }
       if (detail is String && detail.isNotEmpty) {
-        return AuthException(detail);
+        return AuthException(parseApiErrorMessage(detail, fallback: fallback));
       }
     }
   } catch (_) {}
