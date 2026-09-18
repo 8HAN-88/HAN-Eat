@@ -124,6 +124,7 @@ async def _kitchen_gone(request: Request, path: str | None = None):
         status_code=status.HTTP_410_GONE,
         content={
             "detail": KITCHEN_GONE_DETAIL,
+            "code": "kitchen_retired",
         },
     )
 

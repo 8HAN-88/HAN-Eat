@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 KITCHEN_GONE_MESSAGE = "Этот раздел удалён. HanWe — мессенджер."
 
 KITCHEN_GONE_DETAIL = {
-    "code": "FEATURE_REMOVED",
+    "code": "kitchen_retired",
     "message": KITCHEN_GONE_MESSAGE,
 }
 
@@ -16,5 +16,8 @@ KITCHEN_GONE_DETAIL = {
 def kitchen_gone_response() -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_410_GONE,
-        content={"detail": KITCHEN_GONE_DETAIL},
+        content={
+            "detail": KITCHEN_GONE_DETAIL,
+            "code": "kitchen_retired",
+        },
     )
