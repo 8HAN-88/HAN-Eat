@@ -81,7 +81,7 @@ def _fetch_proxied_image(url: str) -> Response:
         image_url = urllib.parse.unquote(url)
 
     if not _proxy_allowed_image_url(image_url):
-        raise HTTPException(status_code=400, detail="Invalid image URL")
+        raise HTTPException(status_code=400, detail="Неверная ссылка на изображение")
 
     resp = requests.get(
         image_url,
@@ -97,7 +97,7 @@ def _fetch_proxied_image(url: str) -> Response:
             resp.status_code,
             image_url[:80],
         )
-        raise HTTPException(status_code=resp.status_code, detail="Failed to fetch image")
+        raise HTTPException(status_code=resp.status_code, detail="Не удалось загрузить изображение")
 
     content_type = resp.headers.get("Content-Type", "image/jpeg")
     return Response(

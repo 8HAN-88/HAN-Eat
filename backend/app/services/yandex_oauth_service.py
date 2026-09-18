@@ -40,7 +40,7 @@ async def exchange_code_and_fetch_profile(
     if not yandex_oauth_configured():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Yandex OAuth is not configured",
+            detail="Вход через Яндекс не настроен",
         )
 
     async with httpx.AsyncClient() as client:
@@ -59,14 +59,14 @@ async def exchange_code_and_fetch_profile(
             logger.warning("Yandex token error: %s %s", token_resp.status_code, token_resp.text)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Yandex token exchange failed",
+                detail="Не удалось войти через Яндекс",
             )
         token_data = token_resp.json()
         access_token = token_data.get("access_token")
         if not access_token:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Yandex token response missing access_token",
+                detail="Не удалось войти через Яндекс",
             )
 
         info_resp = await client.get(
@@ -79,7 +79,7 @@ async def exchange_code_and_fetch_profile(
             logger.warning("Yandex userinfo error: %s", info_resp.text)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Failed to fetch Yandex profile",
+                detail="Не удалось получить профиль Яндекса",
             )
         info = info_resp.json()
 
@@ -87,12 +87,12 @@ async def exchange_code_and_fetch_profile(
     if not email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Yandex account has no email",
+            detail="В аккаунте Яндекса нет email",
         )
     name = (
         info.get("display_name")
         or info.get("real_name")
         or info.get("login")
-        or "Yandex User"
+        or "Пользователь Яндекса"
     )
     return {"email": str(email).strip().lower(), "name": str(name).strip()}

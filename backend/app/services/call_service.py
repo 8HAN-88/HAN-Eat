@@ -41,7 +41,7 @@ class CallService:
             q = q.with_for_update()
         call = q.first()
         if not call:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Call not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Звонок не найден")
         return call
 
     def _assert_participant(self, call: CallSession, user_id: int) -> None:
@@ -56,15 +56,15 @@ class CallService:
                 .first()
             )
             if not row and user_id != call.caller_id:
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа")
             return
         if user_id not in (call.caller_id, call.callee_id):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа")
 
     def _peer_id(self, call: CallSession, user_id: int) -> int:
         if call.callee_id is None:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Peer signaling requires to_user_id"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Нужен получатель сигнала"
             )
         return call.callee_id if user_id == call.caller_id else call.caller_id
 
@@ -308,7 +308,7 @@ class CallService:
         media_norm = (media or "voice").strip().lower()
         if media_norm not in ("voice", "video"):
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="media must be voice or video"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Тип звонка: голос или видео"
             )
         member = (
             self.db.query(ConversationMember)
@@ -319,21 +319,21 @@ class CallService:
             .first()
         )
         if not member:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа")
         conv = (
             self.db.query(Conversation)
             .filter(Conversation.id == conversation_id)
             .first()
         )
         if not conv:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Чат не найден")
         if conv.type == "group":
             return self.create_group_call(
                 caller_id, conversation_id=conversation_id, media=media_norm
             )
         if conv.type != "direct":
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Calls only supported in direct chats"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Звонки доступны только в личных чатах"
             )
         callee_id = (
             conv.direct_user_high_id
@@ -342,7 +342,7 @@ class CallService:
         )
         if not callee_id or callee_id == caller_id:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Call peer not found"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Собеседник не найден"
             )
         callee = (
             self.db.query(User)
@@ -351,10 +351,10 @@ class CallService:
         )
         if not callee or bool(getattr(callee, "is_bot", False)):
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot call this user"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Этому пользователю нельзя позвонить"
             )
         if self._has_block(caller_id, callee_id):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User is blocked")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Пользователь в чёрном списке")
         if self._user_busy(caller_id) or self._user_busy(callee_id):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -421,11 +421,11 @@ class CallService:
         self._assert_participant(call, user_id)
         if user_id != call.callee_id:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Only callee can answer"
+                status_code=status.HTTP_403_FORBIDDEN, detail="Ответить может только тот, кому звонят"
             )
         if call.status != "ringing":
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Call is not ringing"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Звонок уже не идёт"
             )
         if self._user_busy(user_id, exclude_call_id=call.id):
             raise HTTPException(
@@ -446,11 +446,11 @@ class CallService:
         self._assert_participant(call, user_id)
         if user_id != call.callee_id:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Only callee can reject"
+                status_code=status.HTTP_403_FORBIDDEN, detail="Отклонить может только тот, кому звонят"
             )
         if call.status != "ringing":
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Call is not ringing"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Звонок уже не идёт"
             )
         call.status = "rejected"
         call.ended_at = datetime.utcnow()
@@ -466,11 +466,11 @@ class CallService:
         self._assert_participant(call, user_id)
         if user_id != call.caller_id:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Only caller can cancel"
+                status_code=status.HTTP_403_FORBIDDEN, detail="Отменить может только тот, кто звонит"
             )
         if call.status != "ringing":
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Call is not ringing"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Звонок уже не идёт"
             )
         call.status = "cancelled"
         call.ended_at = datetime.utcnow()
@@ -515,16 +515,16 @@ class CallService:
         self._assert_participant(call, user_id)
         if call.status not in ("ringing", "active"):
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Call is not active"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Звонок не активен"
             )
         kind_norm = (kind or "").strip().lower()
         if kind_norm not in ALL_SIGNAL_KINDS:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid signal kind"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный тип сигнала"
             )
         if not isinstance(payload, dict):
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="payload must be an object"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Неверные данные сигнала"
             )
         is_control = kind_norm in CONTROL_SIGNAL_KINDS
         targets: list[int] = []
@@ -532,7 +532,7 @@ class CallService:
             if to_user_id:
                 if to_user_id == user_id:
                     raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot signal self"
+                        status_code=status.HTTP_400_BAD_REQUEST, detail="Нельзя отправить сигнал себе"
                     )
                 self._assert_participant(call, to_user_id)
                 targets = [to_user_id]
@@ -551,7 +551,7 @@ class CallService:
             else:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="to_user_id required for group call signaling",
+                    detail="Нужен получатель сигнала в групповом звонке",
                 )
         else:
             targets = [self._peer_id(call, user_id)]
@@ -586,7 +586,7 @@ class CallService:
         media_norm = (media or "voice").strip().lower()
         if media_norm not in ("voice", "video"):
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="media must be voice or video"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Тип звонка: голос или видео"
             )
         members = (
             self.db.query(ConversationMember.user_id)
@@ -595,7 +595,7 @@ class CallService:
         )
         member_ids = [uid for (uid,) in members]
         if host_id not in member_ids:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа")
         from app.services.chat_service import ChatService
 
         if not ChatService(self.db).can_manage_group_video_chats(
@@ -612,7 +612,7 @@ class CallService:
         others = [uid for uid in member_ids if uid != host_id][: MAX_GROUP_CALL_PARTICIPANTS - 1]
         if not others:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Group has no other members"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="В группе нет других участников"
             )
         if self._user_busy(host_id):
             raise HTTPException(
@@ -696,10 +696,10 @@ class CallService:
     def join_group_call(self, user_id: int, call_id: int) -> CallSession:
         call = self._get_call(call_id, for_update=True)
         if not self._is_group(call):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Not a group call")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Это не групповой звонок")
         if call.status not in ("ringing", "active"):
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Call is not active"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Звонок не активен"
             )
         row = (
             self.db.query(CallParticipant)
@@ -708,7 +708,7 @@ class CallService:
             .first()
         )
         if not row:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа")
         if row.status == "joined":
             return call
         joined_count = (
@@ -768,7 +768,7 @@ class CallService:
     ) -> CallSession:
         call = self._get_call(call_id, for_update=True)
         if not self._is_group(call):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Not a group call")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Это не групповой звонок")
         row = (
             self.db.query(CallParticipant)
             .filter(CallParticipant.call_id == call.id, CallParticipant.user_id == user_id)
@@ -830,10 +830,10 @@ class CallService:
         """Invite another group member into an active group call (mid-call)."""
         call = self._get_call(call_id, for_update=True)
         if not self._is_group(call):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Not a group call")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Это не групповой звонок")
         if call.status != "active":
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Call is not active"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Звонок не активен"
             )
         actor = (
             self.db.query(CallParticipant)
@@ -846,11 +846,11 @@ class CallService:
         )
         if not actor:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Only joined participants can invite"
+                status_code=status.HTTP_403_FORBIDDEN, detail="Приглашать могут только участники звонка"
             )
         if invitee_id == actor_id:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot invite yourself"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Нельзя пригласить себя"
             )
         member = (
             self.db.query(ConversationMember.id)
@@ -862,7 +862,7 @@ class CallService:
         )
         if not member:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="User is not in this group"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Пользователя нет в этой группе"
             )
         invitee = (
             self.db.query(User)
@@ -871,7 +871,7 @@ class CallService:
         )
         if not invitee or bool(getattr(invitee, "is_bot", False)):
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot invite this user"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Этого пользователя нельзя пригласить"
             )
 
         row = (
@@ -882,7 +882,7 @@ class CallService:
         )
         if row and row.status == "joined":
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="User is already in the call"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Пользователь уже в звонке"
             )
 
         live_count = (

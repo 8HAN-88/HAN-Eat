@@ -74,7 +74,7 @@ async def dismiss_post_from_feed(
     if not post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post not found",
+            detail="Пост не найден",
         )
 
     analytics = AnalyticsService(db)
