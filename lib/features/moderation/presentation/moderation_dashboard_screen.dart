@@ -860,37 +860,37 @@ class _WebhookQueueCard extends StatelessWidget {
                   onPressed:
                       !controlsEnabled || loading ? null : onPromoteDelayed,
                   icon: const Icon(Icons.playlist_add_check_circle_outlined),
-                  label: const Text('Promote delayed'),
+                  label: const Text('Продвинуть отложенные'),
                 ),
                 FilledButton.icon(
                   onPressed: !controlsEnabled || loading
                       ? null
                       : onRunRecoveryPlaybook,
                   icon: const Icon(Icons.medical_services_outlined),
-                  label: const Text('Run recovery playbook'),
+                  label: const Text('Запустить восстановление'),
                 ),
                 OutlinedButton.icon(
                   onPressed:
                       !controlsEnabled || loading ? null : onResetMetrics,
                   icon: const Icon(Icons.restart_alt),
-                  label: const Text('Reset metrics'),
+                  label: const Text('Сбросить метрики'),
                 ),
                 OutlinedButton.icon(
                   onPressed: !controlsEnabled || loading ? null : onClearQueue,
                   icon: const Icon(Icons.delete_sweep_outlined),
-                  label: const Text('Clear queue'),
+                  label: const Text('Очистить очередь'),
                 ),
                 OutlinedButton.icon(
                   onPressed:
                       !controlsEnabled || loading ? null : onRequeueDropped,
                   icon: const Icon(Icons.replay_outlined),
-                  label: const Text('Requeue dropped'),
+                  label: const Text('Вернуть сброшенные'),
                 ),
                 OutlinedButton.icon(
                   onPressed:
                       !controlsEnabled || loading ? null : onClearDropped,
                   icon: const Icon(Icons.delete_outline),
-                  label: const Text('Clear dead-letter'),
+                  label: const Text('Очистить ошибки'),
                 ),
               ],
             ),

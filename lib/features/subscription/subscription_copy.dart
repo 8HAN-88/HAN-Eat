@@ -5,10 +5,12 @@ class SubscriptionCopy {
   static const paywallCta = 'Оформить подписку';
   static const paywallLater = 'Позже';
 
-  static const paymentsComingSoonTitle = 'Оплата скоро';
+  static const paymentsComingSoonTitle = 'Оплата временно недоступна';
   static const paymentsComingSoonBody =
       'Оплата по СБП сейчас выключена. Когда шлюз включат, '
       'кнопка «Оформить» заработает сама.';
+  static const creatorLevelHint = 'Доступно с подпиской уровня 16.';
+  static const creatorLevelCta = 'Открыть уровень 16';
   static const paymentsComingSoonCta = 'Оплата появится после включения';
 
   static const screenTitle = 'Подписка';
@@ -33,11 +35,11 @@ class SubscriptionCopy {
   static String tierTitle(String id) {
     switch (id) {
       case 'ai':
-        return 'HanWe AI';
+        return 'Уровень 9 · AI';
       case 'creator':
-        return 'HanWe Creator';
+        return 'Уровень 16 · Автор';
       case 'pro':
-        return 'HanWe Pro';
+        return 'Уровень 18';
       default:
         return id;
     }
@@ -92,8 +94,8 @@ class SubscriptionCopy {
   ];
 
   static const List<String> _proBenefits = [
-    'Всё из тарифа HanWe AI',
-    'Всё из тарифа HanWe Creator',
+    'Всё из уровня 9 (AI)',
+    'Всё из уровня 16 (автор)',
     'Приоритетная поддержка',
     'Максимальный доступ ко всем функциям',
   ];

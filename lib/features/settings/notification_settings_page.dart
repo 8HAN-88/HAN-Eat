@@ -19,12 +19,27 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   bool _isSaving = false;
   PushRegistrationInfo? _pushInfo;
   bool _pushRefreshing = false;
+  Timer? _saveDebounce;
 
   @override
   void initState() {
     super.initState();
     _loadPreferences();
     _loadPushStatus();
+  }
+
+  @override
+  void dispose() {
+    _saveDebounce?.cancel();
+    super.dispose();
+  }
+
+  void _applyPref(NotificationPreferences next) {
+    setState(() => _preferences = next);
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(const Duration(milliseconds: 350), () {
+      unawaited(_savePreferences(silent: true));
+    });
   }
 
   Future<void> _loadPushStatus() async {
@@ -35,7 +50,8 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   Future<void> _retryPushRegistration() async {
     setState(() => _pushRefreshing = true);
     try {
-      final granted = await PushNotificationService.requestPermissionAndRegister();
+      final granted =
+          await PushNotificationService.requestPermissionAndRegister();
       if (!granted) {
         await PushNotificationService.syncTokenAfterAuth();
       }
@@ -88,9 +104,9 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
     }
   }
 
-  Future<void> _savePreferences() async {
+  Future<void> _savePreferences({bool silent = false}) async {
     if (_preferences == null) return;
-    
+
     setState(() => _isSaving = true);
     try {
       final updated = await NotificationPreferencesService.updatePreferences(
@@ -107,7 +123,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
         _preferences = updated;
         _isSaving = false;
       });
-      if (mounted) {
+      if (mounted && !silent) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Настройки уведомлений сохранены')),
         );
@@ -233,15 +249,12 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                 'Включить или выключить все push уведомления',
               ),
               value: _preferences!.pushEnabled,
-              onChanged: (v) {
-                setState(() {
-                  _preferences = _preferences!.copyWith(pushEnabled: v);
-                });
-              },
+              onChanged: (v) =>
+                  _applyPref(_preferences!.copyWith(pushEnabled: v)),
             ),
           ),
           const SizedBox(height: 16),
-          
+
           // Типы уведомлений
           Card(
             child: Column(
@@ -253,24 +266,19 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                   ),
                   value: _preferences!.likesEnabled,
                   onChanged: _preferences!.pushEnabled
-                      ? (v) {
-                          setState(() {
-                            _preferences = _preferences!.copyWith(likesEnabled: v);
-                          });
-                        }
+                      ? (v) =>
+                          _applyPref(_preferences!.copyWith(likesEnabled: v))
                       : null,
                 ),
                 const Divider(height: 1),
                 SwitchListTile(
                   title: const Text('Комментарии'),
-                  subtitle: const Text('Получать уведомления о новых комментариях'),
+                  subtitle:
+                      const Text('Получать уведомления о новых комментариях'),
                   value: _preferences!.commentsEnabled,
                   onChanged: _preferences!.pushEnabled
-                      ? (v) {
-                          setState(() {
-                            _preferences = _preferences!.copyWith(commentsEnabled: v);
-                          });
-                        }
+                      ? (v) =>
+                          _applyPref(_preferences!.copyWith(commentsEnabled: v))
                       : null,
                 ),
                 const Divider(height: 1),
@@ -281,12 +289,8 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                   ),
                   value: _preferences!.messagesEnabled,
                   onChanged: _preferences!.pushEnabled
-                      ? (v) {
-                          setState(() {
-                            _preferences =
-                                _preferences!.copyWith(messagesEnabled: v);
-                          });
-                        }
+                      ? (v) =>
+                          _applyPref(_preferences!.copyWith(messagesEnabled: v))
                       : null,
                 ),
                 const Divider(height: 1),
@@ -297,11 +301,8 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                   ),
                   value: _preferences!.followsEnabled,
                   onChanged: _preferences!.pushEnabled
-                      ? (v) {
-                          setState(() {
-                            _preferences = _preferences!.copyWith(followsEnabled: v);
-                          });
-                        }
+                      ? (v) =>
+                          _applyPref(_preferences!.copyWith(followsEnabled: v))
                       : null,
                 ),
                 const Divider(height: 1),
@@ -312,11 +313,8 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                   ),
                   value: _preferences!.repostsEnabled,
                   onChanged: _preferences!.pushEnabled
-                      ? (v) {
-                          setState(() {
-                            _preferences = _preferences!.copyWith(repostsEnabled: v);
-                          });
-                        }
+                      ? (v) =>
+                          _applyPref(_preferences!.copyWith(repostsEnabled: v))
                       : null,
                 ),
                 const Divider(height: 1),
@@ -327,11 +325,8 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                   ),
                   value: _preferences!.mentionsEnabled,
                   onChanged: _preferences!.pushEnabled
-                      ? (v) {
-                          setState(() {
-                            _preferences = _preferences!.copyWith(mentionsEnabled: v);
-                          });
-                        }
+                      ? (v) =>
+                          _applyPref(_preferences!.copyWith(mentionsEnabled: v))
                       : null,
                 ),
                 const Divider(height: 1),
@@ -342,11 +337,8 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                   ),
                   value: _preferences!.systemEnabled,
                   onChanged: _preferences!.pushEnabled
-                      ? (v) {
-                          setState(() {
-                            _preferences = _preferences!.copyWith(systemEnabled: v);
-                          });
-                        }
+                      ? (v) =>
+                          _applyPref(_preferences!.copyWith(systemEnabled: v))
                       : null,
                 ),
               ],

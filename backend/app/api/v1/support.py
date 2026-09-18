@@ -74,7 +74,7 @@ async def create_support_ticket(
         if not subscription:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No active subscription to cancel"
+                detail="Нет активной подписки для отмены"
             )
         
         related_entity_type = "subscription"

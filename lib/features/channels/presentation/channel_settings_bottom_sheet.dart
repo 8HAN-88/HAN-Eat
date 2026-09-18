@@ -95,6 +95,22 @@ class _ChannelSettingsBottomSheetState
       await ChannelSheetPrefs.setShowInFeed(widget.channelId, value);
       if (mounted) setState(() => _showInFeed = value);
       ref.read(channelsMainListRefreshProvider.notifier).state++;
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            value
+                ? 'Канал снова в списке чатов'
+                : 'Канал скрыт из списка чатов. Включить снова можно здесь.',
+          ),
+          action: value
+              ? null
+              : SnackBarAction(
+                  label: 'Вернуть',
+                  onPressed: () => unawaited(_setShowInFeed(true)),
+                ),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

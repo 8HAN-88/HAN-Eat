@@ -112,14 +112,14 @@ class _PromotedPostsScreenState extends State<PromotedPostsScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Text(
-                'Продвижение постов доступно с тарифом Creator или Pro.',
+                'Продвижение постов доступно с подпиской уровня 16.',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
               FilledButton(
                 onPressed: () =>
                     context.push(SubscriptionRoute.pathWithProduct('creator')),
-                child: const Text('Выбрать тариф'),
+                child: const Text('Открыть уровень 16'),
               ),
             ],
           ),

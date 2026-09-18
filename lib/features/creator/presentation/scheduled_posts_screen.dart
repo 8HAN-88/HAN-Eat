@@ -205,14 +205,14 @@ class _ScheduledPostsScreenState extends ConsumerState<ScheduledPostsScreen> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Доступно с тарифом HanWe Creator или Pro.',
+                'Доступно с подпиской уровня 16.',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 20),
               FilledButton(
                 onPressed: () =>
                     context.push(SubscriptionRoute.pathWithProduct('creator')),
-                child: const Text('Выбрать тариф'),
+                child: const Text('Открыть уровень 16'),
               ),
             ],
           ),

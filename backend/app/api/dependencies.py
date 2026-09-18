@@ -125,7 +125,7 @@ async def require_han_ai_subscriber(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "code": HAN_AI_REQUIRED_CODE,
-                "message": "Требуется подписка HanWe AI или Pro",
+                "message": "Нужна подписка с AI (уровень 9+)",
             },
         )
     return current_user
@@ -142,7 +142,7 @@ async def require_han_creator_subscriber(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "code": HAN_CREATOR_REQUIRED_CODE,
-                "message": "Требуется подписка HanWe Creator или Pro",
+                "message": "Нужна подписка уровня 16+",
             },
         )
     return current_user

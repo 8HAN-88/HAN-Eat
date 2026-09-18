@@ -107,19 +107,19 @@ class _MiniAppsModerationScreenState extends State<MiniAppsModerationScreen> {
             itemBuilder: (_) => const [
               PopupMenuItem<String?>(
                 value: null,
-                child: Text('Pending + Rejected'),
+                child: Text('На проверке и отклонённые'),
               ),
               PopupMenuItem<String?>(
                 value: 'pending',
-                child: Text('Pending'),
+                child: Text('На проверке'),
               ),
               PopupMenuItem<String?>(
                 value: 'approved',
-                child: Text('Approved'),
+                child: Text('Одобренные'),
               ),
               PopupMenuItem<String?>(
                 value: 'rejected',
-                child: Text('Rejected'),
+                child: Text('Отклонённые'),
               ),
             ],
             child: const Padding(
@@ -249,18 +249,18 @@ class _MiniAppsModerationScreenState extends State<MiniAppsModerationScreen> {
                                             ? null
                                             : () => _moderate(app, 'approved'),
                                         icon: const Icon(Icons.check),
-                                        label: const Text('Approve'),
+                                        label: const Text('Одобрить'),
                                       ),
                                       OutlinedButton.icon(
                                         onPressed: app.moderationStatus == 'rejected'
                                             ? null
                                             : () => _moderate(app, 'rejected'),
                                         icon: const Icon(Icons.close),
-                                        label: const Text('Reject'),
+                                        label: const Text('Отклонить'),
                                       ),
                                       TextButton(
                                         onPressed: () => _moderate(app, 'pending'),
-                                        child: const Text('Set Pending'),
+                                        child: const Text('Вернуть на проверку'),
                                       ),
                                     ],
                                   ),
@@ -284,9 +284,9 @@ class _StatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final normalized = status.trim().toLowerCase();
     final (label, color) = switch (normalized) {
-      'approved' => ('Approved', Colors.green),
-      'rejected' => ('Rejected', Colors.red),
-      _ => ('Pending', Colors.amber.shade800),
+      'approved' => ('Одобрено', Colors.green),
+      'rejected' => ('Отклонено', Colors.red),
+      _ => ('На проверке', Colors.amber.shade800),
     };
     return Chip(
       label: Text(label),

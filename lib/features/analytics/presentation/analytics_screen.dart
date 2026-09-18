@@ -7,6 +7,7 @@ import '../../../app/app_router.dart';
 import '../../../../services/analytics_service.dart';
 import '../../settings/application/subscription_status_provider.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../subscription/subscription_copy.dart';
 
 class AnalyticsScreen extends ConsumerStatefulWidget {
   final int? postId; // Если указан, показываем аналитику поста, иначе профиля
@@ -92,7 +93,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Подключите HanWe Creator или Pro, чтобы видеть статистику постов и канала.',
+              'Подписка уровня 16 открывает статистику постов и канала.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium,
             ),
@@ -100,7 +101,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
             FilledButton(
               onPressed: () =>
                   context.push(SubscriptionRoute.pathWithProduct('creator')),
-              child: const Text('Выбрать тариф'),
+              child: Text(SubscriptionCopy.creatorLevelCta),
             ),
           ],
         ),

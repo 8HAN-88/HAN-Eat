@@ -38,6 +38,8 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
   String _selectedType = 'other';
   bool _isSubmitting = false;
   String? _submitError;
+  List<SupportTicket> _tickets = [];
+  bool _ticketsLoading = true;
 
   @override
   void initState() {
@@ -53,6 +55,37 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
     final type = widget.initialType?.trim();
     if (type != null && _supportTicketTypes.contains(type)) {
       _selectedType = type;
+    }
+    _loadTickets();
+  }
+
+  Future<void> _loadTickets() async {
+    setState(() => _ticketsLoading = true);
+    try {
+      final res = await SupportService.getUserTickets(limit: 10);
+      if (!mounted) return;
+      setState(() {
+        _tickets = res.tickets;
+        _ticketsLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _ticketsLoading = false);
+    }
+  }
+
+  String _ticketStatusLabel(String status) {
+    switch (status) {
+      case 'open':
+        return 'Открыто';
+      case 'in_progress':
+        return 'В работе';
+      case 'resolved':
+        return 'Решено';
+      case 'closed':
+        return 'Закрыто';
+      default:
+        return status;
     }
   }
 
@@ -93,6 +126,7 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
           _selectedType = 'other';
           _submitError = null;
         });
+        await _loadTickets();
       }
     } catch (e) {
       if (mounted) {
@@ -196,6 +230,43 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
                   ),
                 ),
               ),
+              const SizedBox(height: 24),
+              const Text(
+                'Мои обращения',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              if (_ticketsLoading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_tickets.isEmpty)
+                Text(
+                  'Пока нет обращений',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                )
+              else
+                ..._tickets.map(
+                  (t) => Card(
+                    child: ListTile(
+                      title: Text(t.subject),
+                      subtitle: Text(
+                        [
+                          _ticketStatusLabel(t.status),
+                          if (t.resolutionComment != null &&
+                              t.resolutionComment!.isNotEmpty)
+                            t.resolutionComment!,
+                        ].join(' · '),
+                      ),
+                    ),
+                  ),
+                ),
               const SizedBox(height: 24),
               // Форма обращения
               const Text(

@@ -804,7 +804,7 @@ class _CreateChannelPostScreenState
                     Text(
                       hasCreator
                           ? label
-                          : 'Отложенная публикация — тариф Creator или Pro',
+                          : 'Отложенная публикация — с уровня 16',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: scheme.onSurfaceVariant,
                           ),
