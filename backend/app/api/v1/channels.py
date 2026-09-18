@@ -101,7 +101,7 @@ def assert_can_create_private_channel(is_public: bool, has_creator: bool) -> Non
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "code": HAN_CREATOR_REQUIRED_CODE,
-                "message": "Приватные каналы доступны с тарифом Creator или Pro",
+                "message": "Приватные каналы доступны с подпиской уровня 16",
             },
         )
 
@@ -397,7 +397,7 @@ async def update_channel(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={
                     "code": HAN_CREATOR_REQUIRED_CODE,
-                    "message": "Оформление канала доступно с тарифом Creator или Pro",
+                    "message": "Оформление канала доступно с подпиской уровня 16",
                 },
             )
         color = (request.accent_color or "").strip()

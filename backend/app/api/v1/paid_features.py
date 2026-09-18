@@ -186,7 +186,7 @@ async def donate_stars(
     db: Session = Depends(get_db),
 ):
     if request.recipient_id == current_user.id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot donate to yourself")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Нельзя отправить донат себе")
     service = PaidFeaturesService(db)
     tx, tip_msg = service.donate(
         current_user.id,
@@ -249,7 +249,7 @@ def _channel_subscription_info(
         service.db.query(Channel).filter(Channel.id == channel_id).first()
     )
     if not channel:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Канал не найден")
     monthly = int(getattr(channel, "monthly_price_stars", 0) or 0)
     sub = service.get_channel_subscription(user_id, channel_id)
     now = datetime.utcnow()
@@ -1481,7 +1481,7 @@ async def get_group_paid_settings(
         .first()
     )
     if not conv:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Группа не найдена")
     return _group_paid_settings(PaidFeaturesService(db), current_user.id, conv)
 
 

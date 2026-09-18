@@ -44,6 +44,7 @@ class _AdCampaignEditorScreenState extends State<AdCampaignEditorScreen> {
   String? _imageUrl;
   int? _channelId;
   List<Channel> _myChannels = const [];
+  String? _channelsError;
   int _step = 0;
 
   bool get _isNew => widget.campaignId == null;
@@ -83,8 +84,13 @@ class _AdCampaignEditorScreenState extends State<AdCampaignEditorScreen> {
       try {
         final channels = await channelsFuture;
         _myChannels = channels.items;
-      } catch (_) {
+        _channelsError = null;
+      } catch (e) {
         _myChannels = const [];
+        _channelsError = userVisibleError(
+          e,
+          fallback: 'Не удалось загрузить каналы',
+        );
       }
       if (!mounted) return;
       setState(() => _loading = false);
@@ -619,18 +625,33 @@ class _AdCampaignEditorScreenState extends State<AdCampaignEditorScreen> {
             ),
           )
         else if (_destinationType == 'channel')
-          _myChannels.isEmpty
+          _channelsError != null
               ? Card(
                   child: ListTile(
-                    leading: const Icon(Icons.info_outline),
-                    title: const Text('Своих каналов пока нет'),
-                    subtitle: const Text(
-                      'Создайте канал или поставьте обычную ссылку на сайт',
+                    leading: Icon(
+                      Icons.error_outline,
+                      color: Theme.of(context).colorScheme.error,
                     ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => context.push(CreateChannelRoute.path),
+                    title: const Text('Не удалось загрузить каналы'),
+                    subtitle: Text(_channelsError!),
+                    trailing: TextButton(
+                      onPressed: _bootstrap,
+                      child: const Text('Повторить'),
+                    ),
                   ),
                 )
+              : _myChannels.isEmpty
+                  ? Card(
+                      child: ListTile(
+                        leading: const Icon(Icons.info_outline),
+                        title: const Text('Своих каналов пока нет'),
+                        subtitle: const Text(
+                          'Создайте канал или поставьте обычную ссылку на сайт',
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => context.push(CreateChannelRoute.path),
+                      ),
+                    )
               : DropdownButtonFormField<int>(
                   value: _myChannels.any((c) => c.id == _channelId)
                       ? _channelId

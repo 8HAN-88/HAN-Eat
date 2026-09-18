@@ -200,6 +200,24 @@ const _knownEnglishDetails = <String, String>{
       'Пробный период для этого аккаунта недоступен',
   'Admin access required': 'Нужны права администратора',
   'Moderator or admin access required': 'Нужны права модератора',
+  'Приватные каналы доступны с тарифом Creator или Pro':
+      'Приватные каналы доступны с подпиской уровня 16',
+  'Оформление канала доступно с тарифом Creator или Pro':
+      'Оформление канала доступно с подпиской уровня 16',
+  'Аналитика доступна с тарифом Creator или Pro':
+      'Аналитика доступна с подпиской уровня 16',
+  'Event type not allowed': 'Этот тип события недоступен',
+  'Post not found or access denied': 'Пост не найден или нет доступа',
+  'Could not fetch preview': 'Не удалось получить предпросмотр',
+  'No preview available': 'Предпросмотр недоступен',
+  'Only http/https URLs are allowed': 'Разрешены только ссылки http/https',
+  'Invalid URL': 'Неверная ссылка',
+  'Blocked host': 'Этот адрес недоступен',
+  'Could not resolve host': 'Не удалось найти этот адрес',
+  'Empty upload body': 'Файл пустой',
+  'Invalid file path': 'Неверный путь к файлу',
+  'File not found': 'Файл не найден',
+  'Group not found': 'Группа не найдена',
 };
 
 String? localizeKnownEnglishDetail(String detail) =>

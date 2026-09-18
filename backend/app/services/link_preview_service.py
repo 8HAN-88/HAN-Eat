@@ -180,19 +180,19 @@ def _is_blocked_ip(ip: ipaddress._BaseAddress) -> bool:
 def _validate_public_url(url: str) -> str:
     parsed = urlparse(url.strip())
     if parsed.scheme not in ("http", "https"):
-        raise ValueError("Only http/https URLs are allowed")
+        raise ValueError("Разрешены только ссылки http/https")
     if not parsed.netloc:
-        raise ValueError("Invalid URL")
+        raise ValueError("Неверная ссылка")
     host = parsed.hostname
     if not host:
-        raise ValueError("Invalid URL")
+        raise ValueError("Неверная ссылка")
     lowered = host.lower()
     if lowered in ("localhost", "127.0.0.1", "0.0.0.0") or lowered.endswith(".local"):
-        raise ValueError("Blocked host")
+        raise ValueError("Этот адрес недоступен")
     try:
         addr_infos = socket.getaddrinfo(host, None)
     except socket.gaierror as exc:
-        raise ValueError("Could not resolve host") from exc
+        raise ValueError("Не удалось найти этот адрес") from exc
     for info in addr_infos:
         ip_str = info[4][0]
         try:
@@ -200,7 +200,7 @@ def _validate_public_url(url: str) -> str:
         except ValueError:
             continue
         if _is_blocked_ip(ip):
-            raise ValueError("Blocked host")
+            raise ValueError("Этот адрес недоступен")
     return parsed.geturl()
 
 
@@ -260,7 +260,7 @@ def fetch_link_preview(url: str) -> dict:
         response.raise_for_status()
         content_type = (response.headers.get("content-type") or "").lower()
         if "text/html" not in content_type and "application/xhtml" not in content_type:
-            raise ValueError("Not an HTML page")
+            raise ValueError("Это не страница для предпросмотра")
         raw = response.content[:_MAX_BYTES]
         html = raw.decode(response.encoding or "utf-8", errors="ignore")
 

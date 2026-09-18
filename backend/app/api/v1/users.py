@@ -215,7 +215,7 @@ async def get_user_by_username(
     svc = ChatService(db)
     user = svc.get_user_by_username(username)
     if not user:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Пользователь не найден")
     return {
         "id": user.id,
         "name": user.name,
@@ -235,7 +235,7 @@ async def get_user_profile(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            detail="Пользователь не найден"
         )
     
     # Пытаемся получить статистику из кэша
@@ -443,7 +443,7 @@ async def get_user_posts(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            detail="Пользователь не найден"
         )
     
     # Проверяем приватность
@@ -683,7 +683,7 @@ async def follow_user(
         )
     target = db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
     if not target:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
 
     existing = (
         db.query(Follower)
@@ -727,7 +727,7 @@ async def get_user_followers(
     """Список подписчиков пользователя."""
     user = db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
     total = db.query(func.count(Follower.id)).filter(Follower.followee_id == user_id).scalar() or 0
     rows = (
         db.query(User)
@@ -767,7 +767,7 @@ async def get_user_following(
     """Список пользователей, на которых подписан пользователь."""
     user = db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
     total = db.query(func.count(Follower.id)).filter(Follower.follower_id == user_id).scalar() or 0
     rows = (
         db.query(User)
@@ -909,7 +909,7 @@ async def block_user(
         db.rollback()
         code = str(e)
         if code == "user_not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Пользователь не найден")
         if code == "self_block":
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot block yourself")
         raise
@@ -976,7 +976,7 @@ async def add_close_friend(
         .first()
     )
     if not friend:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
     existing = (
         db.query(CloseFriend)
         .filter(

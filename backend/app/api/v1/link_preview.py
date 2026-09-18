@@ -35,12 +35,12 @@ async def get_link_preview(
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Could not fetch preview",
+            detail="Не удалось получить предпросмотр",
         )
     if not preview.get("title") and not preview.get("description"):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No preview available",
+            detail="Предпросмотр недоступен",
         )
     return preview
 

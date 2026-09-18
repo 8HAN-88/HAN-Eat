@@ -869,7 +869,7 @@ class ChannelService {
     throw apiExceptionFromResponse(
       response.statusCode,
       error,
-      fallback: 'Не удалось загрузить статистику Creator',
+      fallback: 'Не удалось загрузить статистику автора',
     );
   }
 

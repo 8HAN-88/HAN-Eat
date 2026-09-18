@@ -453,7 +453,7 @@ async def mock_upload(
             )
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Upload ID not found. Call /uploads/init again (server may have restarted).",
+                detail="Сессия загрузки не найдена. Начните загрузку заново.",
             )
         
         # Потоково читаем upload, чтобы не держать большие файлы в RAM.
@@ -470,7 +470,7 @@ async def mock_upload(
             if written <= 0:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Empty upload body",
+                    detail="Файл пустой",
                 )
 
             media_service = MediaService()
@@ -490,7 +490,7 @@ async def mock_upload(
                     logger.exception("API upload to S3 failed for %s", file_key)
                     raise HTTPException(
                         status_code=status.HTTP_502_BAD_GATEWAY,
-                        detail=f"S3 upload failed: {e}",
+                        detail="Не удалось загрузить файл",
                     ) from e
                 url = f"{media_service.cdn_url}/{file_key}"
                 return {"ok": True, "url": url, "file_key": file_key}
@@ -528,7 +528,7 @@ async def mock_upload(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to upload file: {str(e)}"
+            detail="Не удалось загрузить файл"
         )
 
 
@@ -553,13 +553,13 @@ async def get_uploaded_file(file_path: str, request: Request):
     if ".." in file_path:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid file path",
+            detail="Неверный путь к файлу",
         )
 
     if not file_path.startswith("uploads/"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid file path",
+            detail="Неверный путь к файлу",
         )
 
     content_type = content_type_for_upload_path(file_path)
@@ -590,15 +590,15 @@ async def get_uploaded_file(file_path: str, request: Request):
             if code in ("404", "NoSuchKey", "NotFound"):
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail="File not found",
+                    detail="Файл не найден",
                 ) from e
             logger.exception("S3 file read failed for %s", file_path)
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Failed to read file from storage",
+                detail="Не удалось прочитать файл",
             ) from e
 
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
-        detail="File not found",
+        detail="Файл не найден",
     )

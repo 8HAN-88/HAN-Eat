@@ -143,8 +143,7 @@ class _PromotedPostsScreenState extends State<PromotedPostsScreen> {
       return AppEmptyState(
         icon: Icons.trending_up_rounded,
         title: 'Нет активных продвижений',
-        subtitle:
-            'Откройте пост в канале → «⋯» → «Продвинуть в ленте»',
+        subtitle: 'Откройте пост в канале → «⋯» → «Продвинуть в ленте»',
         action: FilledButton(
           onPressed: () => context.push(ChannelsManagementRoute.path),
           child: const Text('К каналам'),
@@ -163,14 +162,13 @@ class _PromotedPostsScreenState extends State<PromotedPostsScreen> {
         ),
         const SizedBox(height: 8),
         ..._posts.map((p) {
-          final title = (p.title?.trim().isNotEmpty == true)
-              ? p.title!
-              : 'Пост #${p.id}';
+          final title =
+              (p.title?.trim().isNotEmpty == true) ? p.title! : 'Пост #${p.id}';
           return Card(
             child: ListTile(
               leading: const Icon(Icons.trending_up, color: Colors.amber),
               title: Text(title),
-              subtitle: Text(p.type),
+              subtitle: Text(_labelForType(p.type)),
               trailing: IconButton(
                 tooltip: 'Снять продвижение',
                 icon: const Icon(Icons.close),
@@ -181,5 +179,22 @@ class _PromotedPostsScreenState extends State<PromotedPostsScreen> {
         }),
       ],
     );
+  }
+
+  String _labelForType(String type) {
+    switch (type) {
+      case 'photo':
+        return 'Фото';
+      case 'reel':
+        return 'Рилс';
+      case 'recipe':
+        return 'Пост';
+      case 'text':
+        return 'Текст';
+      case 'video':
+        return 'Видео';
+      default:
+        return 'Пост';
+    }
   }
 }

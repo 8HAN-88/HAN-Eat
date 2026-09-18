@@ -529,7 +529,7 @@ class PaidFeaturesService:
             .first()
         )
         if not conv:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Группа не найдена")
         member = (
             self.db.query(ConversationMember)
             .filter(
@@ -613,7 +613,7 @@ class PaidFeaturesService:
             .first()
         )
         if not conv:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Группа не найдена")
         if conv.created_by_user_id == user_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Owner already has access"
