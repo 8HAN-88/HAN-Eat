@@ -7,6 +7,7 @@ from fastapi import APIRouter, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.core.config import settings
+from app.core.retired import KITCHEN_GONE_DETAIL
 from app.api.v1 import auth, users, posts, feed, channels, communities, media, moderation, likes, comments, saved_posts, reposts, reports, analytics, notifications, subscriptions, support, search, payments, recipes, community_upload, creator, system, legal, chats, link_preview, realtime, paid_features, bots, bot_chats, donations, stories, miniapps, stickers, calls, gifs, flex_subscription, ai_assist, ads, revenue_share
 import app.services.user_realtime_hooks  # noqa: F401 — регистрация after_commit hooks
 from app.middleware.monitoring import PerformanceMonitoringMiddleware
@@ -122,7 +123,7 @@ async def _kitchen_gone(request: Request, path: str | None = None):
     return JSONResponse(
         status_code=status.HTTP_410_GONE,
         content={
-            "detail": "Kitchen features were removed. HanWe is a messenger.",
+            "detail": KITCHEN_GONE_DETAIL,
             "code": "kitchen_retired",
         },
     )

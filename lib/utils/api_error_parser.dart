@@ -19,8 +19,7 @@ class ApiClientException implements Exception {
   final Map<String, dynamic>? details;
 
   bool get isContentBlocked => code == 'CONTENT_BLOCKED';
-  bool get isRateLimited =>
-      statusCode == 429 || code == 'RATE_LIMIT_EXCEEDED';
+  bool get isRateLimited => statusCode == 429 || code == 'RATE_LIMIT_EXCEEDED';
 
   @override
   String toString() => message;
@@ -41,12 +40,36 @@ String parseApiErrorMessage(
         'Слишком часто. В этом чате включен slow mode, подождите немного.',
       'group_flood_limited' =>
         'Превышен лимит сообщений в минуту. Подождите и попробуйте снова.',
-      'paid_media_locked' =>
-        'Сначала откройте платное медиа, чтобы переслать',
-      _ => detail.toLowerCase().contains('too many requests') ||
-              detail == 'RATE_LIMIT_EXCEEDED'
-          ? 'Слишком много запросов. Подождите немного.'
-          : detail,
+      'paid_media_locked' => 'Сначала откройте платное медиа, чтобы переслать',
+      'T-Bank unavailable' ||
+      'YooKassa unavailable' ||
+      'Payments unavailable' ||
+      'Payment service (T-Bank) is not available' =>
+        'Оплата подписок временно недоступна',
+      _ => () {
+          final lower = detail.toLowerCase();
+          if (lower.contains('too many requests') ||
+              detail == 'RATE_LIMIT_EXCEEDED') {
+            return 'Слишком много запросов. Подождите немного.';
+          }
+          if (lower.contains('kitchen features were removed')) {
+            return 'Этот раздел удалён. HanWe — мессенджер.';
+          }
+          if (lower.contains('level must be')) {
+            return 'Выберите уровень от 1 до 79';
+          }
+          if (lower.contains('please log in') ||
+              lower.contains('not authenticated')) {
+            return 'Войдите в аккаунт';
+          }
+          if (lower.startsWith('failed to')) {
+            return 'Не удалось выполнить действие. Попробуйте ещё раз.';
+          }
+          if (lower.contains('payment is not available')) {
+            return 'Оплата подписок временно недоступна';
+          }
+          return detail;
+        }(),
     };
   }
   if (detail is Map) {
@@ -74,6 +97,12 @@ String parseApiErrorMessage(
     }
     if (code == 'LEGAL_CONSENT_REQUIRED') {
       return 'Примите документы перед оплатой';
+    }
+    if (code == 'FEATURE_REMOVED' || code == 'kitchen_retired') {
+      return 'Этот раздел удалён. HanWe — мессенджер.';
+    }
+    if (code == 'INVALID_FLEX_LEVEL') {
+      return 'Выберите уровень от 1 до 79';
     }
     if (code == 'group_slow_mode') {
       final retry = parseApiRetryAfterSeconds(detail);
@@ -208,8 +237,26 @@ String userVisibleError(Object e, {String fallback = 'Произошла оши�
   }
   final raw = e.toString().replaceAll('Exception: ', '').trim();
   if (raw.isEmpty) return fallback;
-  if (raw == 'Not authenticated') return 'Войдите в аккаунт';
+  if (raw == 'Not authenticated' ||
+      raw.toLowerCase().contains('please log in')) {
+    return 'Войдите в аккаунт';
+  }
   final lower = raw.toLowerCase();
+  if (lower.contains('kitchen features were removed')) {
+    return 'Этот раздел удалён. HanWe — мессенджер.';
+  }
+  if ((lower.contains('t-bank') && lower.contains('unavailable')) ||
+      (lower.contains('yookassa') && lower.contains('unavailable')) ||
+      lower.contains('payments unavailable') ||
+      lower.contains('payment is not available')) {
+    return 'Оплата подписок временно недоступна';
+  }
+  if (lower.contains('level must be')) {
+    return 'Выберите уровень от 1 до 79';
+  }
+  if (lower.startsWith('failed to')) {
+    return 'Не удалось выполнить действие. Попробуйте ещё раз.';
+  }
   if (lower.contains('too many requests') ||
       lower.contains('rate_limit') ||
       lower.contains('429')) {

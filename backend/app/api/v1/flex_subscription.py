@@ -174,8 +174,11 @@ def admin_update_block(
 def flex_price(level: int):
     if level < MIN_LEVEL or level > MAX_LEVEL:
         raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            f"Level must be {MIN_LEVEL}–{MAX_LEVEL}",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "INVALID_FLEX_LEVEL",
+                "message": f"Уровень должен быть от {MIN_LEVEL} до {MAX_LEVEL}",
+            },
         )
     return {"level": level, "price_rub": price_for_level(level)}
 
@@ -225,7 +228,13 @@ def create_flex_checkout(
     if provider == "tbank":
         tbank = get_tbank_service()
         if not tbank.enabled:
-            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "T-Bank unavailable")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={
+                    "code": "PAYMENTS_UNAVAILABLE",
+                    "message": "Оплата подписок временно недоступна",
+                },
+            )
         result = tbank.create_payment(
             user_id=current_user.id,
             amount=amount,
@@ -247,7 +256,13 @@ def create_flex_checkout(
     if provider == "yookassa":
         yookassa = get_yookassa_service()
         if not yookassa.enabled:
-            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "YooKassa unavailable")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={
+                    "code": "PAYMENTS_UNAVAILABLE",
+                    "message": "Оплата подписок временно недоступна",
+                },
+            )
         result = yookassa.create_payment(
             user_id=current_user.id,
             user_email=current_user.email,
@@ -256,6 +271,7 @@ def create_flex_checkout(
             description=description,
             return_url=success_url,
             product="flex",
+            receipt_description=description[:128],
             metadata_extra=extra,
         )
         return {
@@ -266,4 +282,10 @@ def create_flex_checkout(
             "level": level,
             "amount": amount,
         }
-    raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Payments unavailable")
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail={
+            "code": "PAYMENTS_UNAVAILABLE",
+            "message": "Оплата подписок временно недоступна",
+        },
+    )

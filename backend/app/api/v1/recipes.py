@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse, Response
 
 from app.core.config import settings
+from app.core.retired import kitchen_gone_response
 from app.services.text_translation import (  # noqa: F401 — re-export for callers
     TRANSLATOR_AVAILABLE,
     translate_list,
@@ -112,13 +113,7 @@ def _fetch_proxied_image(url: str) -> Response:
 
 
 def _kitchen_gone() -> JSONResponse:
-    return JSONResponse(
-        status_code=status.HTTP_410_GONE,
-        content={
-            "detail": "Kitchen features were removed. HanWe is a messenger.",
-            "code": "kitchen_retired",
-        },
-    )
+    return kitchen_gone_response()
 
 
 @router.get("/recipe-image-proxy")

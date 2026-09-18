@@ -61,9 +61,9 @@ class YooKassaService:
 
     @staticmethod
     def receipt_item_description(product: str, plan: str = "monthly") -> str:
-        names = {"ai": "HanWe AI", "creator": "HanWe Creator", "pro": "HanWe Pro"}
-        period = "1 мес." if plan == "monthly" else "1 год"
-        return f"Подписка {names.get(product, product)} ({period})"
+        from app.core.receipt_copy import receipt_item_description as _receipt
+
+        return _receipt(product, plan)
 
     @staticmethod
     def extract_payment_method_id(payment: Any) -> Optional[str]:
@@ -109,7 +109,7 @@ class YooKassaService:
         user_email: str,
         amount: float,
         plan: str,
-        description: str = "Подписка HanWe Pro",
+        description: str = "Подписка HanWe",
         return_url: Optional[str] = None,
         product: str = "pro",
         receipt_description: Optional[str] = None,

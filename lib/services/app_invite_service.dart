@@ -34,10 +34,6 @@ class AppInviteService {
   static String inviteRef([User? user]) {
     final official = PendingReferralStore.officialMemory?.trim();
     if (official != null && official.isNotEmpty) return official;
-    final u = user ?? AuthService.instance.currentUser;
-    final username = u?.username?.trim();
-    if (username != null && username.isNotEmpty) return username;
-    if (u != null) return 'u${u.id}';
     return '';
   }
 
@@ -107,6 +103,18 @@ class AppInviteService {
   }) async {
     final user = AuthService.instance.currentUser;
     final resolved = await resolvedRef(ref: ref, user: user);
+    if (PendingReferral.extract(resolved) == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Ссылка приглашения ещё не готова. Подождите секунду и попробуйте снова.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
     await SystemShare.shareText(
       context,
       text: inviteMessage(
@@ -142,6 +150,18 @@ class AppInviteService {
   }) async {
     final user = AuthService.instance.currentUser;
     final resolved = await resolvedRef(user: user);
+    if (PendingReferral.extract(resolved) == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Ссылка приглашения ещё не готова. Подождите секунду и попробуйте снова.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
     final message = inviteMessage(
       contactName: displayName,
       inviterName: user?.name,

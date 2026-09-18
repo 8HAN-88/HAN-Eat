@@ -28,6 +28,7 @@ class ChatArchivedScreen extends StatefulWidget {
 class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
   List<ChatConversation> _chats = [];
   List<Channel> _channels = [];
+  List<Channel> _hiddenChannels = [];
   bool _loading = true;
   Object? _error;
   bool _selectionMode = false;
@@ -40,6 +41,7 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
 
   static String _chatKey(int id) => 'chat_$id';
   static String _channelKey(int id) => 'channel_$id';
+  static String _hiddenKey(int id) => 'hidden_$id';
 
   @override
   void initState() {
@@ -55,8 +57,7 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
       if (cid == null) return;
       if (!_chats.any((c) => c.id == cid)) return;
       final uid = event.userId ?? 0;
-      final activity =
-          event.activity == 'recording' ? 'recording' : 'typing';
+      final activity = event.activity == 'recording' ? 'recording' : 'typing';
       setState(() {
         final byUser = _typingUntilByUser.putIfAbsent(cid, () => {});
         byUser[uid] = DateTime.now().add(const Duration(seconds: 5));
@@ -206,14 +207,17 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
       final results = await Future.wait<Object>([
         ChatService.listConversations(archived: true),
         ChannelSheetPrefs.listArchivedIds(),
+        ChannelSheetPrefs.listHiddenFromFeedIds(),
       ]);
       var chatItems = results[0] as List<ChatConversation>;
       final archivedIds = results[1] as Set<int>;
+      final hiddenIds = (results[2] as Set<int>).difference(archivedIds);
       final expired = await _expireTimedMutes(chatItems);
       if (expired > 0) {
         chatItems = await ChatService.listConversations(archived: true);
       }
       final channels = <Channel>[];
+      final hidden = <Channel>[];
       var failedChannels = 0;
       for (final id in archivedIds) {
         try {
@@ -223,7 +227,19 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
           failedChannels++;
         }
       }
+      for (final id in hiddenIds) {
+        try {
+          final detail = await ChannelService.getChannel(id);
+          hidden.add(detail);
+        } catch (_) {
+          failedChannels++;
+        }
+      }
       channels.sort(
+        (a, b) => (b.lastPostAt ?? b.createdAt)
+            .compareTo(a.lastPostAt ?? a.createdAt),
+      );
+      hidden.sort(
         (a, b) => (b.lastPostAt ?? b.createdAt)
             .compareTo(a.lastPostAt ?? a.createdAt),
       );
@@ -231,10 +247,12 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
       setState(() {
         _chats = chatItems;
         _channels = channels;
+        _hiddenChannels = hidden;
         _loading = false;
         final valid = <String>{
           ...chatItems.map((c) => _chatKey(c.id)),
           ...channels.map((c) => _channelKey(c.id)),
+          ...hidden.map((c) => _hiddenKey(c.id)),
         };
         _selectedKeys.removeWhere((k) => !valid.contains(k));
         if (_selectedKeys.isEmpty) _selectionMode = false;
@@ -295,7 +313,8 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
       _selectedKeys
         ..clear()
         ..addAll(_chats.map((c) => _chatKey(c.id)))
-        ..addAll(_channels.map((c) => _channelKey(c.id)));
+        ..addAll(_channels.map((c) => _channelKey(c.id)))
+        ..addAll(_hiddenChannels.map((c) => _hiddenKey(c.id)));
     });
   }
 
@@ -352,6 +371,7 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
     setState(() => _channels.removeWhere((c) => c.id == channel.id));
     try {
       await ChannelSheetPrefs.setArchived(channel.id, false);
+      await ChannelSheetPrefs.setShowInFeed(channel.id, true);
     } catch (e) {
       if (!mounted) return;
       setState(() => _channels.add(channel));
@@ -361,6 +381,25 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
           action: SnackBarAction(
             label: 'Повторить',
             onPressed: () => unawaited(_unarchiveChannel(channel)),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _restoreHiddenChannel(Channel channel) async {
+    setState(() => _hiddenChannels.removeWhere((c) => c.id == channel.id));
+    try {
+      await ChannelSheetPrefs.setShowInFeed(channel.id, true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _hiddenChannels.add(channel));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_restoreHiddenChannel(channel)),
           ),
         ),
       );
@@ -392,6 +431,17 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
         if (!keys.contains(key)) continue;
         try {
           await ChannelSheetPrefs.setArchived(channel.id, false);
+          await ChannelSheetPrefs.setShowInFeed(channel.id, true);
+          ok += 1;
+        } catch (_) {
+          failedKeys.add(key);
+        }
+      }
+      for (final channel in List<Channel>.from(_hiddenChannels)) {
+        final key = _hiddenKey(channel.id);
+        if (!keys.contains(key)) continue;
+        try {
+          await ChannelSheetPrefs.setShowInFeed(channel.id, true);
           ok += 1;
         } catch (_) {
           failedKeys.add(key);
@@ -431,13 +481,15 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
   }
 
   Future<void> _unarchiveAll() async {
-    if (_chats.isEmpty && _channels.isEmpty) return;
+    if (_chats.isEmpty && _channels.isEmpty && _hiddenChannels.isEmpty) {
+      return;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Разархивировать все?'),
         content: Text(
-          'Вернуть в основной список ${_chats.length + _channels.length} '
+          'Вернуть в основной список ${_chats.length + _channels.length + _hiddenChannels.length} '
           '${_chats.length + _channels.length == 1 ? 'чат' : 'чатов'}?',
         ),
         actions: [
@@ -459,8 +511,10 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isEmpty = _chats.isEmpty && _channels.isEmpty;
-    final totalCount = _chats.length + _channels.length;
+    final isEmpty =
+        _chats.isEmpty && _channels.isEmpty && _hiddenChannels.isEmpty;
+    final totalCount =
+        _chats.length + _channels.length + _hiddenChannels.length;
 
     return PopScope(
       canPop: !_selectionMode,
@@ -546,7 +600,8 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
                         title: 'Архив пуст',
                         subtitle:
                             'Свайпните чат или канал влево в списке «Чаты», '
-                            'или удержите строку и выберите «В архив».',
+                            'или удержите строку и выберите «В архив». '
+                            'Каналы, скрытые из списка, тоже появятся здесь.',
                         action: FilledButton(
                           onPressed: () {
                             if (context.canPop()) {
@@ -613,10 +668,54 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
                                 final key = _channelKey(channel.id);
                                 return _ArchivedChannelTile(
                                   channel: channel,
+                                  dismissKey: 'archived_channel_${channel.id}',
+                                  selectionMode: _selectionMode,
+                                  selected: _selectedKeys.contains(key),
+                                  onUnarchive: () => _unarchiveChannel(channel),
+                                  onToggleSelect: () => _toggleSelected(key),
+                                  onLongPress: () {
+                                    if (_selectionMode) {
+                                      _toggleSelected(key);
+                                    } else {
+                                      _enterSelection(key);
+                                    }
+                                  },
+                                  onOpen: () async {
+                                    await context.push(
+                                      ChannelDetailRoute.pathFor(channel.id),
+                                    );
+                                    if (mounted) _load();
+                                  },
+                                );
+                              }),
+                            ],
+                            if (_hiddenChannels.isNotEmpty) ...[
+                              Padding(
+                                padding: EdgeInsets.fromLTRB(
+                                  16,
+                                  (_chats.isEmpty && _channels.isEmpty)
+                                      ? 12
+                                      : 20,
+                                  16,
+                                  4,
+                                ),
+                                child: Text(
+                                  'Скрытые из списка',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleSmall
+                                      ?.copyWith(fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                              ..._hiddenChannels.map((channel) {
+                                final key = _hiddenKey(channel.id);
+                                return _ArchivedChannelTile(
+                                  channel: channel,
+                                  dismissKey: 'hidden_channel_${channel.id}',
                                   selectionMode: _selectionMode,
                                   selected: _selectedKeys.contains(key),
                                   onUnarchive: () =>
-                                      _unarchiveChannel(channel),
+                                      _restoreHiddenChannel(channel),
                                   onToggleSelect: () => _toggleSelected(key),
                                   onLongPress: () {
                                     if (_selectionMode) {
@@ -822,9 +921,11 @@ class _ArchivedChannelTile extends StatelessWidget {
     required this.selected,
     required this.onToggleSelect,
     required this.onLongPress,
+    required this.dismissKey,
   });
 
   final Channel channel;
+  final String dismissKey;
   final VoidCallback onUnarchive;
   final VoidCallback onOpen;
   final bool selectionMode;
@@ -907,7 +1008,7 @@ class _ArchivedChannelTile extends StatelessWidget {
     if (selectionMode) return tile;
 
     return Dismissible(
-      key: ValueKey('archived_channel_${channel.id}'),
+      key: ValueKey(dismissKey),
       direction: DismissDirection.endToStart,
       background: Container(
         color: Theme.of(context).colorScheme.primary,

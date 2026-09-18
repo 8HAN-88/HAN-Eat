@@ -11,6 +11,7 @@ import '../../support/presentation/widgets/subscription_cancel_survey_sheet.dart
 import '../application/flex_level_features.dart';
 import '../application/flex_purchase_ladder.dart';
 import 'flex_checkout_banner.dart';
+import 'flex_payment_history.dart';
 import 'flex_preview_sheet.dart';
 
 class FlexSubscriptionScreen extends StatefulWidget {
@@ -222,6 +223,8 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen>
                             child: const Text('Отменить подписку'),
                           ),
                         ],
+                        const SizedBox(height: 16),
+                        const FlexPaymentHistory(),
                       ],
                     ),
                   ),

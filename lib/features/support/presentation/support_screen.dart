@@ -85,7 +85,7 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
       case 'closed':
         return 'Закрыто';
       default:
-        return status;
+        return 'Статус: $status';
     }
   }
 
@@ -182,7 +182,7 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            'Уровень 18: ваши обращения обрабатываются в приоритетной очереди.',
+                            'Уровень 17: ваши обращения обрабатываются в приоритетной очереди.',
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
                         ),
@@ -197,11 +197,11 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
                     leading: const Icon(Icons.workspace_premium_outlined),
                     title: const Text('Приоритетная поддержка'),
                     subtitle: const Text(
-                      'С подпиской уровня 18 обращения обрабатываются быстрее.',
+                      'С подпиской уровня 17 обращения обрабатываются быстрее.',
                     ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () =>
-                        context.push(SubscriptionRoute.pathWithProduct('pro')),
+                        context.push(FlexSubscriptionRoute.pathWithLevel(17)),
                   ),
                 ),
               if (!hasPro) const SizedBox(height: 16),

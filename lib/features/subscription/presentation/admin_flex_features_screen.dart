@@ -6,11 +6,27 @@ import '../../../services/flex_subscription_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
 
+String _flexTypeLabel(String type) {
+  switch (type) {
+    case 'fixed':
+      return 'фиксированная';
+    case 'movable':
+      return 'перемещаемая';
+    case 'blocked':
+      return 'закрытая';
+    case 'premium':
+      return 'премиум';
+    default:
+      return type;
+  }
+}
+
 class AdminFlexFeaturesScreen extends StatefulWidget {
   const AdminFlexFeaturesScreen({super.key});
 
   @override
-  State<AdminFlexFeaturesScreen> createState() => _AdminFlexFeaturesScreenState();
+  State<AdminFlexFeaturesScreen> createState() =>
+      _AdminFlexFeaturesScreenState();
 }
 
 class _AdminFlexFeaturesScreenState extends State<AdminFlexFeaturesScreen> {
@@ -90,10 +106,12 @@ class _AdminFlexFeaturesScreenState extends State<AdminFlexFeaturesScreen> {
                   value: type,
                   decoration: const InputDecoration(labelText: 'Тип'),
                   items: const [
-                    DropdownMenuItem(value: 'fixed', child: Text('Fixed')),
-                    DropdownMenuItem(value: 'movable', child: Text('Movable')),
-                    DropdownMenuItem(value: 'blocked', child: Text('Blocked')),
-                    DropdownMenuItem(value: 'premium', child: Text('Premium')),
+                    DropdownMenuItem(
+                        value: 'fixed', child: Text('Фиксированная')),
+                    DropdownMenuItem(
+                        value: 'movable', child: Text('Перемещаемая')),
+                    DropdownMenuItem(value: 'blocked', child: Text('Закрытая')),
+                    DropdownMenuItem(value: 'premium', child: Text('Премиум')),
                   ],
                   onChanged: (v) => setLocal(() => type = v ?? type),
                 ),
@@ -102,7 +120,8 @@ class _AdminFlexFeaturesScreenState extends State<AdminFlexFeaturesScreen> {
                   decoration: const InputDecoration(labelText: 'Блок'),
                   items: [
                     for (final b in _catalog?.blocks ?? const <FlexBlock>[])
-                      DropdownMenuItem(value: b.key, child: Text('${b.key} · ${b.title}')),
+                      DropdownMenuItem(
+                          value: b.key, child: Text('${b.key} · ${b.title}')),
                   ],
                   onChanged: (v) => setLocal(() => blockKey = v ?? blockKey),
                 ),
@@ -111,18 +130,20 @@ class _AdminFlexFeaturesScreenState extends State<AdminFlexFeaturesScreen> {
                     Expanded(
                       child: TextFormField(
                         initialValue: '$minLevel',
-                        decoration: const InputDecoration(labelText: 'min'),
+                        decoration: const InputDecoration(labelText: 'мин'),
                         keyboardType: TextInputType.number,
-                        onChanged: (v) => minLevel = int.tryParse(v) ?? minLevel,
+                        onChanged: (v) =>
+                            minLevel = int.tryParse(v) ?? minLevel,
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: TextFormField(
                         initialValue: '$maxLevel',
-                        decoration: const InputDecoration(labelText: 'max'),
+                        decoration: const InputDecoration(labelText: 'макс'),
                         keyboardType: TextInputType.number,
-                        onChanged: (v) => maxLevel = int.tryParse(v) ?? maxLevel,
+                        onChanged: (v) =>
+                            maxLevel = int.tryParse(v) ?? maxLevel,
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -131,7 +152,8 @@ class _AdminFlexFeaturesScreenState extends State<AdminFlexFeaturesScreen> {
                         initialValue: '$defaultLevel',
                         decoration: const InputDecoration(labelText: 'уровень'),
                         keyboardType: TextInputType.number,
-                        onChanged: (v) => defaultLevel = int.tryParse(v) ?? defaultLevel,
+                        onChanged: (v) =>
+                            defaultLevel = int.tryParse(v) ?? defaultLevel,
                       ),
                     ),
                   ],
@@ -158,8 +180,12 @@ class _AdminFlexFeaturesScreenState extends State<AdminFlexFeaturesScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Сохранить')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Отмена')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Сохранить')),
           ],
         ),
       ),
@@ -238,12 +264,13 @@ class _AdminFlexFeaturesScreenState extends State<AdminFlexFeaturesScreen> {
                           style: const TextStyle(fontWeight: FontWeight.w800),
                         ),
                         const SizedBox(height: 8),
-                        for (final feature in _catalog!.features.where((f) => f.blockKey == block.key))
+                        for (final feature in _catalog!.features
+                            .where((f) => f.blockKey == block.key))
                           ListTile(
                             contentPadding: EdgeInsets.zero,
                             title: Text(feature.title),
                             subtitle: Text(
-                              '${feature.slug} · ${feature.featureType} · ур. ${feature.assignedLevel}',
+                              '${feature.slug} · ${_flexTypeLabel(feature.featureType)} · ур. ${feature.assignedLevel}',
                             ),
                             trailing: IconButton(
                               icon: const Icon(Icons.edit_outlined),

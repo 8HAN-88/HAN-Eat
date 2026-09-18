@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user_required, require_entitlement_or_403
 from app.core.database import get_db
+from app.core.retired import KITCHEN_GONE_DETAIL
 from app.models.post import Post
 from app.models.user import User
 from app.schemas.post import PostResponse
@@ -33,10 +34,7 @@ async def analyze_recipe_nutrition_retired():
     """Kitchen nutrition AI removed — HanWe is a messenger."""
     raise HTTPException(
         status_code=status.HTTP_410_GONE,
-        detail={
-            "detail": "Kitchen features were removed. HanWe is a messenger.",
-            "code": "kitchen_retired",
-        },
+        detail=KITCHEN_GONE_DETAIL,
     )
 
 
