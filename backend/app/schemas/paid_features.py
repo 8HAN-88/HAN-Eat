@@ -118,6 +118,8 @@ class CreatorPayoutRequestCreate(BaseModel):
     note: Optional[str] = Field(default=None, max_length=512)
     method: str = Field(default="rub")
     ton_address: Optional[str] = Field(default=None, max_length=128)
+    phone: Optional[str] = Field(default=None, max_length=32)
+    recipient_name: Optional[str] = Field(default=None, max_length=80)
 
 
 class CreatorPayoutReviewRequest(BaseModel):
@@ -134,10 +136,14 @@ class CreatorPayoutResponse(BaseModel):
     note: Optional[str] = None
     method: str = "rub"
     ton_address: Optional[str] = None
+    phone: Optional[str] = None
+    recipient_name: Optional[str] = None
     reviewed_by_user_id: Optional[int] = None
     reviewed_at: Optional[datetime] = None
     paid_at: Optional[datetime] = None
     created_at: datetime
+    user_name: Optional[str] = None
+    user_email: Optional[str] = None
 
     class Config:
         from_attributes = True

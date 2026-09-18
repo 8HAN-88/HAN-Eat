@@ -94,6 +94,7 @@ class _ChannelSettingsBottomSheetState
     try {
       await ChannelSheetPrefs.setShowInFeed(widget.channelId, value);
       if (mounted) setState(() => _showInFeed = value);
+      ref.read(channelsMainListRefreshProvider.notifier).state++;
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -274,9 +275,10 @@ class _ChannelSettingsBottomSheetState
             ),
             ListTile(
               leading: const Icon(Icons.celebration_outlined),
-              title: const Text('Розыгрыш Stars'),
+              title: const Text('Розыгрыш звёзд'),
               subtitle: Text(
-                widget.channel.isOwner || widget.channel.canManageChannelSettings
+                widget.channel.isOwner ||
+                        widget.channel.canManageChannelSettings
                     ? 'Создать или управлять розыгрышем'
                     : 'Участвовать в розыгрыше канала',
               ),
@@ -296,7 +298,8 @@ class _ChannelSettingsBottomSheetState
               leading: const Icon(Icons.outgoing_mail),
               title: const Text('Предложить пост'),
               subtitle: Text(
-                widget.channel.isOwner || widget.channel.canManageChannelSettings
+                widget.channel.isOwner ||
+                        widget.channel.canManageChannelSettings
                     ? 'Модерация предложенных постов за ★'
                     : 'Отправить пост в канал за ★',
               ),
@@ -334,6 +337,7 @@ class _ChannelSettingsBottomSheetState
             ListTile(
               leading: const Icon(Icons.feed_outlined),
               title: const Text('Показ в разделе'),
+              subtitle: const Text('В списке чатов'),
               trailing: Switch(
                 value: _showInFeed,
                 onChanged: (value) => unawaited(_setShowInFeed(value)),

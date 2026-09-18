@@ -13,6 +13,7 @@ import '../../../services/repost_service.dart';
 import '../../../widgets/report_content_dialog.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/comment_service.dart';
+import '../../../utils/api_error_parser.dart';
 import '../../../utils/session_snackbar.dart';
 import '../../../widgets/telegram_photo_grid.dart';
 import '../../../utils/number_formatter.dart';
@@ -57,7 +58,6 @@ String? _channelRepostUserCommentFromPost(PostModel post) {
   if (first.isEmpty || first.startsWith('Репост:')) return null;
   return first;
 }
-
 
 class NewPostCard extends StatefulWidget {
   final PostModel post;
@@ -321,8 +321,6 @@ class _NewPostCardState extends State<NewPostCard>
     });
   }
 
-
-
   bool get _likesViaPostApi => true;
 
   Future<void> _openLink(String url) async {
@@ -344,8 +342,6 @@ class _NewPostCardState extends State<NewPostCard>
     }
   }
 
-
-
   Future<void> _refreshCommentsCount() async {
     try {
       final total = await CommentService.getCommentsTotal(widget.post.id);
@@ -355,10 +351,8 @@ class _NewPostCardState extends State<NewPostCard>
     } catch (_) {}
   }
 
-
   Future<void> _toggleLike() async {
     if (_isLiking) return;
-
 
     setState(() {
       _isLiking = true;
@@ -634,7 +628,9 @@ class _NewPostCardState extends State<NewPostCard>
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString().replaceFirst('Exception: ', '')),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось отправить донат'),
+            ),
             action: SnackBarAction(
               label: 'Повторить',
               onPressed: () => unawaited(_showDonateDialog()),
@@ -737,7 +733,9 @@ class _NewPostCardState extends State<NewPostCard>
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString().replaceFirst('Exception: ', '')),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось запустить буст'),
+            ),
             action: SnackBarAction(
               label: 'Повторить',
               onPressed: () => unawaited(_showBoostDialog()),
@@ -1606,7 +1604,6 @@ class _NewPostCardState extends State<NewPostCard>
   // Используем утилиту для форматирования чисел
   String _formatCount(int count) => NumberFormatter.formatCount(count);
 
-
   String _getProxyUrl(String originalUrl) {
     return ServerConfig.resolveRecipeImageUrl(originalUrl);
   }
@@ -1634,8 +1631,8 @@ class _NewPostCardState extends State<NewPostCard>
           feedVideoAuthor != null) {
         return FeedVideoPlayer(
           videoUrl: post.videoUrl!,
-          playbackUrls: post.reelVideoSources
-              .playbackUrls(VideoQualityPreference.auto),
+          playbackUrls:
+              post.reelVideoSources.playbackUrls(VideoQualityPreference.auto),
           thumbnailUrl: post.videoThumbnail,
           author: feedVideoAuthor,
           onDoubleTap: _handleDoubleTapLike,
@@ -1682,21 +1679,25 @@ class _NewPostCardState extends State<NewPostCard>
     }
 
     // Показываем изображения для всех типов постов, если они есть (как в Telegram)
-    final images =
-        effectiveMedia.where((m) => _isImageMediaItem(m)).toList();
+    final images = effectiveMedia.where((m) => _isImageMediaItem(m)).toList();
     if (images.isNotEmpty) {
       // Обработчик клика для открытия детальной страницы поста
       void onMediaTap() {
         if (post.channelId != null) {
-          // Если пост из канала, открываем детальную страницу поста канала
           FeedAnalyticsService.openDetail(
             post,
             source: 'post_card',
             target: 'channel_post',
           );
           context.push('/channel/${post.channelId}/post/${post.id}');
+          return;
         }
-        // Для обычных постов пока просто ничего не делаем (можно добавить роут позже)
+        FeedAnalyticsService.openDetail(
+          post,
+          source: 'post_card',
+          target: 'post',
+        );
+        context.push(PostFeedRoute.pathFor(post.id));
       }
 
       // Извлекаем URL изображений (с proxy для legacy CDN при необходимости)
@@ -1716,14 +1717,14 @@ class _NewPostCardState extends State<NewPostCard>
           singleAspectRatio: 4 / 5,
           borderRadius: BorderRadius.zero,
           onDoubleTap: _handleDoubleTapLike,
-          enableFullscreen: true,
+          onTap: onMediaTap,
+          enableFullscreen: false,
         );
       }
     }
 
     // Показываем видео для всех типов постов, если они есть (Instagram-style inline autoplay)
-    final videos =
-        effectiveMedia.where((m) => _isVideoMediaItem(m)).toList();
+    final videos = effectiveMedia.where((m) => _isVideoMediaItem(m)).toList();
     if (videos.isNotEmpty) {
       final rawVideoUrl = videos[0]['url'] as String;
       final rawThumbnailUrl = videos[0]['thumbnail_url'] as String? ??
@@ -1732,8 +1733,8 @@ class _NewPostCardState extends State<NewPostCard>
       final thumbnailUrl = rawThumbnailUrl != null
           ? ServerConfig.resolveMediaUrl(rawThumbnailUrl)
           : null;
-      final playbackUrls = post.reelVideoSources
-          .playbackUrls(VideoQualityPreference.auto);
+      final playbackUrls =
+          post.reelVideoSources.playbackUrls(VideoQualityPreference.auto);
       if (feedVideoAuthor != null) {
         return FeedVideoPlayer(
           videoUrl: videoUrl,
@@ -1815,7 +1816,6 @@ class _NewPostCardState extends State<NewPostCard>
         path.endsWith('.webm') ||
         path.endsWith('.m3u8');
   }
-
 }
 
 class _ViewsBadge extends StatelessWidget {

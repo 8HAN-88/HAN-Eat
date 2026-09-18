@@ -201,7 +201,7 @@ class _StarInvoicePayScreenState extends State<StarInvoicePayScreen> {
     final scheme = Theme.of(context).colorScheme;
     final invoice = _invoice;
     return Scaffold(
-      appBar: AppBar(title: const Text('Счёт Stars')),
+      appBar: AppBar(title: const Text('Счёт в звёздах')),
       body: AppGradientBackground(
         child: _loading
             ? const Center(child: CircularProgressIndicator())
@@ -310,7 +310,7 @@ class _StarInvoicePayScreenState extends State<StarInvoicePayScreen> {
                         const SizedBox(height: 16),
                         OutlinedButton(
                           onPressed: () => context.go('/paid/wallet'),
-                          child: const Text('К кошельку Stars'),
+                          child: const Text('К кошельку звёзд'),
                         ),
                         if (invoice.status == 'paid' &&
                             AuthService.instance.currentUser?.id ==

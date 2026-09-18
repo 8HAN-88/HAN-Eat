@@ -117,6 +117,38 @@ async def test_close_friends_story_visibility(db_session):
 
 
 @pytest.mark.asyncio
+async def test_close_friends_story_requires_list(db_session):
+    owner = _user(db_session, 1)
+    db_session.commit()
+    with pytest.raises(HTTPException) as exc:
+        await stories_api.create_story(
+            payload=stories_api.StoryCreateRequest(
+                media_url="https://cdn.example/s.jpg",
+                media_type="image",
+                visibility="close_friends",
+            ),
+            current_user=owner,
+            db=db_session,
+        )
+    assert exc.value.status_code == 400
+    assert "близких" in str(exc.value.detail).lower()
+
+    friend = _user(db_session, 2)
+    db_session.add(CloseFriend(user_id=owner.id, friend_user_id=friend.id))
+    db_session.commit()
+    created = await stories_api.create_story(
+        payload=stories_api.StoryCreateRequest(
+            media_url="https://cdn.example/ok.jpg",
+            media_type="image",
+            visibility="close_friends",
+        ),
+        current_user=owner,
+        db=db_session,
+    )
+    assert created.visibility == "close_friends"
+
+
+@pytest.mark.asyncio
 async def test_cannot_add_self(db_session):
     owner = _user(db_session, 1)
     db_session.commit()

@@ -197,7 +197,9 @@ def test_payout_escrows_spendable_stars(db_session):
     bal.available_stars = 80
     db_session.commit()
 
-    payout = svc.request_creator_payout(1, 50)
+    payout = svc.request_creator_payout(
+        1, 50, phone="+79001112233", recipient_name="Иван"
+    )
     db_session.commit()
     assert payout.status == "pending"
     assert svc.star_balance(1) == 150
@@ -214,7 +216,9 @@ def test_payout_escrows_spendable_stars(db_session):
     assert svc.creator_balance(1).available_stars == 80
     assert svc.creator_balance(1).pending_stars == 0
 
-    payout2 = svc.request_creator_payout(1, 40)
+    payout2 = svc.request_creator_payout(
+        1, 40, phone="+79001112233", recipient_name="Иван"
+    )
     db_session.commit()
     approved = svc.review_payout(payout2.id, reviewer_user_id=1, approve=True)
     db_session.commit()
@@ -970,6 +974,46 @@ def test_subscribe_paid_group_and_join_gate(db_session):
         .all()
     )
     assert {m.user_id for m in members} == {1, 2}
+
+
+def test_admin_payout_queue_lists_pending(db_session):
+    _user(db_session, 1)
+    _credit(db_session, 1, 100)
+    svc = PaidFeaturesService(db_session)
+    bal = svc.creator_balance(1)
+    bal.available_stars = 80
+    db_session.commit()
+
+    assert svc.list_payout_queue() == []
+    payout = svc.request_creator_payout(
+        1, 20, phone="+79001112233", recipient_name="Иван"
+    )
+    db_session.commit()
+    queue = svc.list_payout_queue()
+    assert [row.id for row in queue] == [payout.id]
+    svc.review_payout(payout.id, reviewer_user_id=1, approve=True)
+    db_session.commit()
+    assert svc.list_payout_queue() == []
+
+
+def test_rub_payout_requires_sbp_details(db_session):
+    _user(db_session, 1)
+    _credit(db_session, 1, 100)
+    svc = PaidFeaturesService(db_session)
+    bal = svc.creator_balance(1)
+    bal.available_stars = 80
+    db_session.commit()
+
+    with pytest.raises(HTTPException) as missing:
+        svc.request_creator_payout(1, 20)
+    assert missing.value.status_code == 400
+
+    payout = svc.request_creator_payout(
+        1, 20, phone="+79001112233", recipient_name="Иван"
+    )
+    db_session.commit()
+    assert payout.phone == "+79001112233"
+    assert payout.recipient_name == "Иван"
 
 
 def test_ton_payout_requires_address(db_session):

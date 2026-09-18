@@ -418,6 +418,8 @@ async def request_creator_payout(
         note=request.note,
         method=request.method,
         ton_address=request.ton_address,
+        phone=request.phone,
+        recipient_name=request.recipient_name,
     )
     db.commit()
     db.refresh(payout)
@@ -432,6 +434,39 @@ async def list_my_payouts(
 ):
     service = PaidFeaturesService(db)
     return service.list_creator_payouts(current_user.id, limit=limit)
+
+
+def _creator_payout_out(
+    payout,
+    user: Optional[User] = None,
+) -> CreatorPayoutResponse:
+    data = CreatorPayoutResponse.model_validate(payout)
+    if user is None:
+        return data
+    return data.model_copy(update={"user_name": user.name, "user_email": user.email})
+
+
+@router.get("/payouts/queue", response_model=list[CreatorPayoutResponse])
+async def admin_creator_payout_queue(
+    status: Optional[str] = "pending",
+    limit: int = 100,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    service = PaidFeaturesService(db)
+    rows = service.list_payout_queue(status=status, limit=limit)
+    user_ids = {row.creator_user_id for row in rows}
+    users = (
+        {
+            user.id: user
+            for user in db.query(User).filter(User.id.in_(user_ids)).all()
+        }
+        if user_ids
+        else {}
+    )
+    return [_creator_payout_out(row, users.get(row.creator_user_id)) for row in rows]
 
 
 @router.post("/payouts/{payout_id}/review", response_model=CreatorPayoutResponse)

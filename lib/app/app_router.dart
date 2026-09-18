@@ -74,6 +74,7 @@ import '../features/analytics/presentation/analytics_screen.dart';
 import '../features/moderation/presentation/moderation_dashboard_screen.dart';
 import '../features/admin/presentation/admin_refund_queue_screen.dart';
 import '../features/admin/presentation/admin_partner_payouts_screen.dart';
+import '../features/admin/presentation/admin_creator_payouts_screen.dart';
 import '../features/moderation/presentation/moderation_queue_screen.dart';
 import '../features/moderation/presentation/miniapps_moderation_screen.dart';
 import '../features/search/application/search_scope.dart';
@@ -1232,6 +1233,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) =>
             const MaterialPage(child: AdminPartnerPayoutsScreen()),
       ),
+      GoRoute(
+        path: AdminCreatorPayoutsRoute.path,
+        name: AdminCreatorPayoutsRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: AdminCreatorPayoutsScreen()),
+      ),
       // Легаси: /community → главная лента; избранное — отдельный маршрут
       GoRoute(
         path: CommunityRoute.path,
@@ -1503,6 +1510,11 @@ class AdminRefundQueueRoute {
 class AdminPartnerPayoutsRoute {
   static const path = '/admin/partner-payouts';
   static const name = 'admin_partner_payouts';
+}
+
+class AdminCreatorPayoutsRoute {
+  static const path = '/admin/creator-payouts';
+  static const name = 'admin_creator_payouts';
 }
 
 

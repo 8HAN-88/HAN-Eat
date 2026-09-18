@@ -95,7 +95,7 @@ class _ChannelSuggestedPostsScreenState
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Как в Telegram: звёзды спишутся сразу. Если админ отклонит — вернутся.',
+                    'Звёзды спишутся сразу. Если админ отклонит — вернутся.',
                     style: TextStyle(
                       color: Theme.of(ctx).colorScheme.onSurfaceVariant,
                     ),

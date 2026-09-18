@@ -81,7 +81,8 @@ class PartnerPayout {
     }
   }
 
-  String get kindLabel => kind == 'stars' ? 'В звёзды' : 'На карту / СБП';
+  String get kindLabel =>
+      kind == 'stars' ? 'Обменять на звёзды' : 'На карту / СБП';
 
   static DateTime? _parseTime(Object? raw) {
     if (raw is! String || raw.isEmpty) return null;

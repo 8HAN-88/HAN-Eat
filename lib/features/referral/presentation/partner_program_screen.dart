@@ -101,9 +101,8 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
     await AppInviteService.shareInvite(
       context,
       ref: snap.referralCode,
-      shareOrigin: box == null
-          ? null
-          : box.localToGlobal(Offset.zero) & box.size,
+      shareOrigin:
+          box == null ? null : box.localToGlobal(Offset.zero) & box.size,
     );
   }
 
@@ -115,7 +114,7 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('В звёзды'),
+        title: const Text('Обменять на звёзды'),
         content: Text(
           'Зачислить $stars ★ за ${RevenueShareSnapshot.rub(amount)}? '
           'Сразу на баланс, без банка. Остаток меньше 0,80 ₽ останется.',
@@ -167,7 +166,8 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
       all,
     }.toList()
       ..sort();
-    final payload = await showDialog<({int? amount, String phone, String name})>(
+    final payload =
+        await showDialog<({int? amount, String phone, String name})>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocal) => AlertDialog(
@@ -190,7 +190,9 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
                       ChoiceChip(
                         selected: packet == value,
                         label: Text(
-                          value == all && value != snap.minCardKopecks && value != 100000
+                          value == all &&
+                                  value != snap.minCardKopecks &&
+                                  value != 100000
                               ? 'Всё ${RevenueShareSnapshot.rub(value)}'
                               : RevenueShareSnapshot.rub(value),
                         ),
@@ -227,7 +229,18 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
               onPressed: () {
                 final phone = _cardPhone.text.trim();
                 final name = _cardName.text.trim();
-                if (phone.length < 10 || name.length < 2) return;
+                String? error;
+                if (phone.length < 10) {
+                  error = 'Укажите телефон СБП (не меньше 10 цифр)';
+                } else if (name.length < 2) {
+                  error = 'Укажите имя получателя';
+                }
+                if (error != null) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    SnackBar(content: Text(error)),
+                  );
+                  return;
+                }
                 Navigator.pop(
                   ctx,
                   (amount: packet, phone: phone, name: name),
@@ -312,9 +325,8 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
                 label: const Text('Поделиться'),
               ),
               OutlinedButton(
-                onPressed: snap == null || link == '…'
-                    ? null
-                    : () => _copy(link),
+                onPressed:
+                    snap == null || link == '…' ? null : () => _copy(link),
                 child: const Text('Скопировать'),
               ),
             ],
@@ -366,7 +378,7 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
               'У каждого своя ссылка. Друг открывает её, регистрируется — '
               'и мы точно знаем, что он пришёл от вас. '
               'Делим только чистую прибыль с рекламы и подписки. '
-              'Звёзды, подарки и TON не входят. Сначала вычитаются расходы '
+              'Звёзды и подарки не входят. Сначала вычитаются расходы '
               '(остаётся 70% нетто).',
             ),
             const SizedBox(height: 16),
@@ -397,7 +409,7 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
                   Text('Мне как рефералу: ${snap?.referrerRub ?? '—'}'),
                   const SizedBox(height: 12),
                   Text(
-                    'В звёзды — сразу, 1 ★ = 0,80 ₽. '
+                    'Обмен на звёзды — сразу, 1 ★ = 0,80 ₽. '
                     'На карту / СБП — от 500 ₽, после проверки.',
                   ),
                   const SizedBox(height: 12),
@@ -406,21 +418,23 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
                     runSpacing: 8,
                     children: [
                       FilledButton.icon(
-                        onPressed: _busy || snap == null || !snap.canConvertStars
-                            ? null
-                            : _convertStars,
+                        onPressed:
+                            _busy || snap == null || !snap.canConvertStars
+                                ? null
+                                : _convertStars,
                         icon: const Icon(Icons.star_outline, size: 18),
                         label: Text(
                           snap == null || snap.convertibleStars <= 0
-                              ? 'В звёзды'
-                              : 'В звёзды · ${snap.convertibleStars} ★',
+                              ? 'Обменять на звёзды'
+                              : 'Обменять · ${snap.convertibleStars} ★',
                         ),
                       ),
                       OutlinedButton.icon(
                         onPressed: _busy || snap == null || !snap.canRequestCard
                             ? null
                             : _requestCard,
-                        icon: const Icon(Icons.account_balance_wallet_outlined, size: 18),
+                        icon: const Icon(Icons.account_balance_wallet_outlined,
+                            size: 18),
                         label: const Text('На карту / СБП'),
                       ),
                     ],
@@ -436,7 +450,8 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
                   children: [
                     const Text(
                       'Заявки',
-                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                      style:
+                          TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
                     ),
                     const SizedBox(height: 8),
                     for (final payout in snap.payouts) ...[

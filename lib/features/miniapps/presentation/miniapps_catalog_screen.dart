@@ -89,7 +89,7 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = '$e';
+        _error = userVisibleError(e, fallback: 'Не удалось загрузить каталог');
         _loading = false;
         _hasLoadedOnce = true;
       });
@@ -182,7 +182,7 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
         builder: (ctx) => AlertDialog(
           title: const Text('Сначала нужен бот'),
           content: const Text(
-            'Как в Telegram: создайте бота в BotFather, затем New Mini App.',
+            'Сначала создайте бота в «Мои боты», затем опубликуйте мини-приложение.',
           ),
           actions: [
             TextButton(
@@ -317,8 +317,8 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
       actions.add(
         TelegramActionSheetAction(
           icon: Icons.smart_toy_outlined,
-          title: 'Manage in Bot',
-          subtitle: 'Edit / Delete App в BotFather',
+          title: 'Управление в боте',
+          subtitle: 'Изменить или удалить в карточке бота',
           onTap: () => _openBotMiniApps(app),
         ),
       );
@@ -362,8 +362,8 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
                     ),
                     TelegramActionSheetAction(
                       icon: Icons.publish_outlined,
-                      title: 'New Mini App',
-                      subtitle: 'Через бота, как в BotFather',
+                      title: 'Новое мини-приложение',
+                      subtitle: 'Через своего бота',
                       onTap: _publishMiniApp,
                     ),
                   ],
@@ -412,7 +412,7 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
                     ? FilledButton.icon(
                         onPressed: _publishMiniApp,
                         icon: const Icon(Icons.add_rounded),
-                        label: const Text('New Mini App'),
+                        label: const Text('Новое мини-приложение'),
                       )
                     : (_searchQuery.isNotEmpty
                         ? TextButton(
@@ -422,7 +422,7 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
                         : TextButton.icon(
                             onPressed: _publishMiniApp,
                             icon: const Icon(Icons.add_rounded),
-                            label: const Text('New Mini App'),
+                            label: const Text('Новое мини-приложение'),
                           )),
               ),
             ),
@@ -462,9 +462,9 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
       return 'Попробуйте другой запрос.';
     }
     if (_tabs.index == 1) {
-      return 'Нажмите «New Mini App» — выберите бота и заполните форму. После проверки приложение появится здесь и в каталоге.';
+      return 'Нажмите «Новое мини-приложение» — выберите бота и заполните форму. После проверки приложение появится здесь и в каталоге.';
     }
-    return 'Каталог приложений ботов. Чтобы выложить своё — как в Telegram через бота (BotFather).';
+    return 'Каталог приложений ботов. Чтобы выложить своё — создайте бота и опубликуйте мини-приложение.';
   }
 }
 

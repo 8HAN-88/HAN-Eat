@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../services/paid_features_service.dart';
+import '../../../utils/api_error_parser.dart';
 import '../../../widgets/telegram_ui.dart';
 
 class CreatorRevenueScreen extends StatefulWidget {
@@ -25,6 +26,8 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
   CreatorRevenuePeriod _period = CreatorRevenuePeriod.days30;
   CreatorRevenueSource _source = CreatorRevenueSource.all;
   CreatorRevenueChartMode _chartMode = CreatorRevenueChartMode.line;
+  final _payoutPhone = TextEditingController();
+  final _payoutName = TextEditingController();
 
   @override
   void initState() {
@@ -32,6 +35,13 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
     _future = _load();
     _payoutsFuture = _loadPayouts();
     _restoreRevenuePrefs();
+  }
+
+  @override
+  void dispose() {
+    _payoutPhone.dispose();
+    _payoutName.dispose();
+    super.dispose();
   }
 
   Future<void> _restoreRevenuePrefs() async {
@@ -144,26 +154,24 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
   Future<void> _requestPayout() async {
     final amountController = TextEditingController();
     final noteController = TextEditingController();
-    final tonController = TextEditingController();
-    var method = 'rub';
-    try {
-      final saved = await PaidFeaturesService.getTonAddress();
-      if (saved != null) tonController.text = saved;
-    } catch (_) {}
     if (!mounted) {
       amountController.dispose();
       noteController.dispose();
-      tonController.dispose();
       return;
     }
-    final payload = await showDialog<({int amount, String? note, String method, String? ton})>(
+    final payload = await showDialog<
+        ({int amount, String? note, String phone, String name})>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) => AlertDialog(
-          title: const Text('Запросить выплату'),
-          content: Column(
+      builder: (ctx) => AlertDialog(
+        title: const Text('Запросить выплату'),
+        content: SingleChildScrollView(
+          child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              const Text(
+                'На карту / СБП. Заявка в очередь, звёзды сразу в холде.',
+              ),
+              const SizedBox(height: 12),
               TextField(
                 controller: amountController,
                 keyboardType: TextInputType.number,
@@ -173,89 +181,91 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                children: [
-                  ChoiceChip(
-                    selected: method == 'rub',
-                    label: const Text('RUB'),
-                    onSelected: (_) => setLocal(() => method = 'rub'),
-                  ),
-                  ChoiceChip(
-                    selected: method == 'ton',
-                    label: const Text('TON'),
-                    onSelected: (_) => setLocal(() => method = 'ton'),
-                  ),
-                ],
-              ),
-              if (method == 'ton') ...[
-                const SizedBox(height: 8),
-                TextField(
-                  controller: tonController,
-                  decoration: const InputDecoration(
-                    labelText: 'TON-адрес',
-                  ),
+              TextField(
+                controller: _payoutPhone,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'Телефон СБП',
+                  hintText: '+7 900 000-00-00',
                 ),
-              ],
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _payoutName,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(
+                  labelText: 'Имя получателя',
+                ),
+              ),
               const SizedBox(height: 8),
               TextField(
                 textCapitalization: TextCapitalization.sentences,
                 controller: noteController,
                 maxLines: 2,
                 decoration: const InputDecoration(
-                  labelText: 'Комментарий (опционально)',
+                  labelText: 'Комментарий (необязательно)',
                 ),
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Отмена'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final amount = int.tryParse(amountController.text.trim()) ?? 0;
-                if (amount <= 0) return;
-                Navigator.pop(
-                  ctx,
-                  (
-                    amount: amount,
-                    note: noteController.text.trim().isEmpty
-                        ? null
-                        : noteController.text.trim(),
-                    method: method,
-                    ton: tonController.text.trim().isEmpty
-                        ? null
-                        : tonController.text.trim(),
-                  ),
-                );
-              },
-              child: const Text('Отправить'),
-            ),
-          ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final amount = int.tryParse(amountController.text.trim()) ?? 0;
+              final phone = _payoutPhone.text.trim();
+              final name = _payoutName.text.trim();
+              String? error;
+              if (amount <= 0) {
+                error = 'Укажите сумму в звёздах';
+              } else if (phone.length < 10) {
+                error = 'Укажите телефон СБП (не меньше 10 цифр)';
+              } else if (name.length < 2) {
+                error = 'Укажите имя получателя';
+              }
+              if (error != null) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  SnackBar(content: Text(error)),
+                );
+                return;
+              }
+              Navigator.pop(
+                ctx,
+                (
+                  amount: amount,
+                  note: noteController.text.trim().isEmpty
+                      ? null
+                      : noteController.text.trim(),
+                  phone: phone,
+                  name: name,
+                ),
+              );
+            },
+            child: const Text('Отправить'),
+          ),
+        ],
       ),
     );
     amountController.dispose();
     noteController.dispose();
-    tonController.dispose();
     if (payload == null) return;
     await _submitPayoutRequest(payload);
   }
 
   Future<void> _submitPayoutRequest(
-    ({int amount, String? note, String method, String? ton}) payload,
+    ({int amount, String? note, String phone, String name}) payload,
   ) async {
     try {
-      if (payload.method == 'ton' && payload.ton != null) {
-        await PaidFeaturesService.setTonAddress(payload.ton);
-      }
       final payout = await PaidFeaturesService.requestCreatorPayout(
         amountStars: payload.amount,
         note: payload.note,
-        method: payload.method,
-        tonAddress: payload.ton,
+        method: 'rub',
+        phone: payload.phone,
+        recipientName: payload.name,
       );
       if (!mounted) return;
       setState(() => _payoutsFuture = _loadPayouts());
@@ -270,7 +280,8 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          content: Text(
+              userVisibleError(e, fallback: 'Не удалось запросить выплату')),
           action: SnackBarAction(
             label: 'Повторить',
             onPressed: () => unawaited(_submitPayoutRequest(payload)),
@@ -294,7 +305,8 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
 
   String _buildCsv(List<StarTransaction> items) {
     final b = StringBuffer()
-      ..writeln('created_at,type,amount_stars,counterparty_user_id,reference_type,reference_id');
+      ..writeln(
+          'created_at,type,amount_stars,counterparty_user_id,reference_type,reference_id');
     for (final tx in items) {
       b.writeln(
         '${tx.createdAt.toIso8601String()},${tx.type},${tx.amount},'
@@ -308,7 +320,8 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
     final text = _buildCsv(items);
     await Share.share(
       text,
-      subject: 'creator_revenue_${_period.days}d_${DateTime.now().toIso8601String()}',
+      subject:
+          'creator_revenue_${_period.days}d_${DateTime.now().toIso8601String()}',
     );
   }
 
@@ -436,7 +449,8 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
 
           final filtered = _filteredIncomeTx(snapshot.data!);
           final total = _sumAmount(filtered);
-          final sales = _sumAmount(filtered.where((t) => t.type == 'content_sale'));
+          final sales =
+              _sumAmount(filtered.where((t) => t.type == 'content_sale'));
           final donations =
               _sumAmount(filtered.where((t) => t.type == 'donation_received'));
           final subscriptions = _sumAmount(
@@ -541,7 +555,8 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          for (final mode in CreatorRevenueChartMode.values) ...[
+                          for (final mode
+                              in CreatorRevenueChartMode.values) ...[
                             ChoiceChip(
                               label: Text(mode.label),
                               selected: _chartMode == mode,
@@ -637,10 +652,11 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
                             iconColor: scheme.secondary,
                             title: '${p.amountStars} ★',
                             subtitle:
-                                '${_payoutStatusLabel(p.status)}${p.createdAt != null ? ' · ${_date(p.createdAt!)}' : ''}',
+                                '${_payoutStatusLabel(p.status)}${p.phone != null && p.phone!.isNotEmpty ? ' · ${p.phone}' : ''}${p.createdAt != null ? ' · ${_date(p.createdAt!)}' : ''}',
                             trailing: Text(
                               '~${p.amountRub.toStringAsFixed(0)} ₽',
-                              style: const TextStyle(fontWeight: FontWeight.w700),
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w700),
                             ),
                           ),
                         ),
@@ -702,13 +718,15 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
                                 children: [
                                   Text(
                                     _txTitle(tx.type),
-                                    style: Theme.of(context).textTheme.titleMedium,
+                                    style:
+                                        Theme.of(context).textTheme.titleMedium,
                                   ),
                                   const SizedBox(height: 8),
                                   Text('Дата: ${_date(tx.createdAt)}'),
                                   Text('Сумма: +${tx.amount} ★'),
                                   if (tx.counterpartyUserId != null)
-                                    Text('Контрагент: #${tx.counterpartyUserId}'),
+                                    Text(
+                                        'Контрагент: #${tx.counterpartyUserId}'),
                                   if (tx.referenceType != null)
                                     Text('Тип ссылки: ${tx.referenceType}'),
                                   if (tx.referenceId != null)
@@ -772,7 +790,8 @@ class _RevenueLineChartState extends State<_RevenueLineChart> {
       return Center(
         child: Text(
           'Нет данных',
-          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+          style:
+              TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
       );
     }
@@ -798,21 +817,24 @@ class _RevenueLineChartState extends State<_RevenueLineChart> {
                       children: [
                         Text(
                           '$maxY',
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.labelSmall?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                  ),
                         ),
                         Text(
                           '$midY',
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.labelSmall?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                  ),
                         ),
                         Text(
                           '0',
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.labelSmall?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                  ),
                         ),
                       ],
                     ),
@@ -840,7 +862,7 @@ class _RevenueLineChartState extends State<_RevenueLineChart> {
                       child: CustomPaint(
                         painter: _RevenueLinePainter(
                           points: points,
-                    mode: widget.mode,
+                          mode: widget.mode,
                           lineColor: scheme.primary,
                           fillColor: scheme.primary.withValues(alpha: 0.14),
                           axisColor: scheme.outlineVariant,
@@ -918,11 +940,13 @@ class _RevenueLinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (points.isEmpty) return;
-    final maxY = math.max(1, points.map((p) => p.amount).fold<int>(0, math.max));
+    final maxY =
+        math.max(1, points.map((p) => p.amount).fold<int>(0, math.max));
     const topPad = 8.0;
     const bottomPad = 14.0;
     final h = size.height - topPad - bottomPad;
-    final stepX = points.length <= 1 ? size.width : size.width / (points.length - 1);
+    final stepX =
+        points.length <= 1 ? size.width : size.width / (points.length - 1);
 
     final axisPaint = Paint()
       ..color = axisColor

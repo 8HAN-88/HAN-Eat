@@ -141,7 +141,7 @@ class _StarGiftPickerSheetState extends State<_StarGiftPickerSheet> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Как в Telegram: выберите подарок — звёзды спишутся с кошелька',
+              'Выберите подарок — звёзды спишутся с кошелька',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: scheme.onSurfaceVariant,
                   ),

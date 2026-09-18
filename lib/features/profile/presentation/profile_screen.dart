@@ -398,7 +398,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     final draft = await pickStarsTipDraft(
       context,
       title: 'Отправить звёзды ${user.name}',
-      subtitle: 'Звёзды появятся сообщением в личке, как в Telegram.',
+      subtitle: 'Звёзды придут отдельным сообщением в личку.',
     );
     if (draft == null || !mounted) return;
     setState(() => _isSendingTip = true);

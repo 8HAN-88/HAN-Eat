@@ -384,7 +384,7 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Как в Telegram: можно не выбирать чаты вручную — '
+                  'Можно не выбирать чаты вручную — '
                   'папка соберётся по правилам ниже.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: scheme.onSurfaceVariant,

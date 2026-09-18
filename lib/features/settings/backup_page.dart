@@ -107,6 +107,13 @@ class _BackupPageState extends State<BackupPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          Text(
+            'Это копия профиля (имя, описание, ссылки), не чаты и не медиа.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
+          const SizedBox(height: 12),
           ListTile(
             leading: const Icon(Icons.upload_outlined),
             title: const Text('Экспорт профиля'),
@@ -117,17 +124,15 @@ class _BackupPageState extends State<BackupPage> {
             leading: const Icon(Icons.download_outlined),
             title: const Text('Импорт (заменить)'),
             subtitle: const Text('Вставить JSON из буфера'),
-            onTap: _isImporting
-                ? null
-                : () => _importFromClipboard(merge: false),
+            onTap:
+                _isImporting ? null : () => _importFromClipboard(merge: false),
           ),
           ListTile(
             leading: const Icon(Icons.merge_outlined),
             title: const Text('Импорт (объединить)'),
             subtitle: const Text('Вставить JSON из буфера'),
-            onTap: _isImporting
-                ? null
-                : () => _importFromClipboard(merge: true),
+            onTap:
+                _isImporting ? null : () => _importFromClipboard(merge: true),
           ),
           if (_isImporting)
             const Padding(
@@ -152,9 +157,8 @@ class _BackupPageState extends State<BackupPage> {
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
             FilledButton.tonal(
-              onPressed: _isImporting
-                  ? null
-                  : () => _importFromClipboard(merge: true),
+              onPressed:
+                  _isImporting ? null : () => _importFromClipboard(merge: true),
               child: const Text('Повторить импорт'),
             ),
           ],

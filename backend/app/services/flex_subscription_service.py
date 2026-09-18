@@ -242,7 +242,7 @@ class FlexSubscriptionService:
     ) -> tuple[bool, str]:
         level = int(target_level)
         if level < MIN_LEVEL or level > MAX_LEVEL:
-            return False, "Уровень вне диапазона 1–10"
+            return False, f"Уровень вне диапазона {MIN_LEVEL}–{MAX_LEVEL}"
         if moving and (feature.feature_type == "fixed" or not feature.movable or feature.required and feature.feature_type == "fixed"):
             if feature.feature_type == "fixed" or not bool(feature.movable):
                 return False, "Эту функцию нельзя перемещать"
@@ -310,6 +310,13 @@ class FlexSubscriptionService:
                         code="flex_fixed",
                     )
         return resolved
+
+    def require_active_for_layout(self, user_id: int) -> None:
+        if not self.is_flex_active(user_id):
+            raise FlexMoveError(
+                "Оформите подписку, чтобы сохранять раскладку",
+                code="flex_inactive",
+            )
 
     def save_layout(self, user_id: int, slots: list[dict[str, int]]) -> list[dict[str, Any]]:
         resolved = self.validate_layout(slots, user_id=user_id)

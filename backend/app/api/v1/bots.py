@@ -32,7 +32,7 @@ def _normalize_bot_username(raw: str) -> str:
     if not value.endswith("bot"):
         raise HTTPException(
             status_code=400,
-            detail="Username must end with 'bot' (like Telegram)",
+            detail="Username must end with 'bot'",
         )
     if not re.fullmatch(r"[a-z][a-z0-9_]*", value):
         raise HTTPException(

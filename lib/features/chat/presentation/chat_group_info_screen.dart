@@ -546,7 +546,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
           children: [
             const ListTile(
               leading: Icon(Icons.timer_outlined),
-              title: Text('Slow mode'),
+              title: Text('Медленный режим'),
               subtitle:
                   Text('Интервал между сообщениями для обычных участников'),
             ),
@@ -930,7 +930,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                   dense: true,
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Настройки чата'),
-                  subtitle: const Text('Slow mode, «только админы» и т.п.'),
+                  subtitle: const Text('Медленный режим, «только админы» и т.п.'),
                   value: canManagePostingPermissions,
                   onChanged: (v) => setModalState(
                     () => canManagePostingPermissions = v,
@@ -1955,7 +1955,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                           title: const Text('Темы (форум)'),
                           subtitle: Text(
                             _canChangeInfo
-                                ? 'Разделить группу на темы вроде Telegram Topics'
+                                ? 'Разделить группу на отдельные темы'
                                 : 'Нет права менять информацию группы',
                           ),
                           value: _conversation.isForum,
@@ -2008,7 +2008,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                         ),
                         ListTile(
                           leading: const Icon(Icons.timer_outlined),
-                          title: const Text('Slow mode'),
+                          title: const Text('Медленный режим'),
                           subtitle: Text(
                             _conversation.slowModeSeconds <= 0
                                 ? 'Выключен'

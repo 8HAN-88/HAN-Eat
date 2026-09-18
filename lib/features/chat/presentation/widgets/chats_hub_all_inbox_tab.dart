@@ -83,12 +83,15 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
   bool _appPaused = false;
   List<ChatFolder> _folders = [];
   int? _selectedFolderId;
+
   /// Peer user ids from the Contacts list (for folder contacts/non_contacts).
   Set<int> _contactUserIds = {};
   bool _showGesturesHint = false;
   Map<int, ChatDraft> _drafts = {};
+
   /// conversationId → (userId → typing expires at, local clock).
   final Map<int, Map<int, DateTime>> _typingUntilByUser = {};
+
   /// conversationId → (userId → typing|recording).
   final Map<int, Map<int, String>> _typingActivityByUser = {};
   Timer? _typingTicker;
@@ -230,7 +233,8 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(userVisibleError(e, fallback: 'Не удалось удалить папку')),
+          content:
+              Text(userVisibleError(e, fallback: 'Не удалось удалить папку')),
           action: SnackBarAction(
             label: 'Повторить',
             onPressed: () => unawaited(_deleteFolder(folder)),
@@ -333,8 +337,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
           final isBotDm = !chat.isGroup && (chat.peer?.isBot ?? false);
           final isDirectPerson = !chat.isGroup && !isBotDm;
           final peerId = chat.peer?.id;
-          final inContacts =
-              peerId != null && _contactUserIds.contains(peerId);
+          final inContacts = peerId != null && _contactUserIds.contains(peerId);
           final typeOk = (filters.groups && chat.isGroup) ||
               (filters.direct && !chat.isGroup) ||
               (filters.contacts && isDirectPerson && inContacts) ||
@@ -351,9 +354,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       }
       if (filters.excludeMuted && chat.muted) return false;
       if (filters.excludeArchived && chat.archived) return false;
-      if (filters.excludeBots &&
-          !chat.isGroup &&
-          (chat.peer?.isBot ?? false)) {
+      if (filters.excludeBots && !chat.isGroup && (chat.peer?.isBot ?? false)) {
         return false;
       }
       return true;
@@ -563,8 +564,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         final cid = event.conversationId;
         if (cid == null) return;
         final uid = event.userId ?? 0;
-        final activity =
-            event.activity == 'recording' ? 'recording' : 'typing';
+        final activity = event.activity == 'recording' ? 'recording' : 'typing';
         setState(() {
           final byUser = _typingUntilByUser.putIfAbsent(cid, () => {});
           byUser[uid] = DateTime.now().add(const Duration(seconds: 5));
@@ -599,8 +599,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         final cleared = event.draftCleared == true;
         final text = event.draftText ?? '';
         final replyId = event.draftReplyToMessageId;
-        final empty = text.trim().isEmpty &&
-            (replyId == null || replyId <= 0);
+        final empty = text.trim().isEmpty && (replyId == null || replyId <= 0);
         setState(() {
           if (cleared || empty) {
             _drafts.remove(cid);
@@ -1072,6 +1071,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     var favoriteIds = <int>{};
     var mutedChannelIds = <int>{};
     var archivedChannelIds = <int>{};
+    var hiddenFromFeedIds = <int>{};
 
     final channelsFuture = () async {
       try {
@@ -1079,6 +1079,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         favoriteIds = (await ChannelSheetPrefs.listFavoriteIds()).toSet();
         mutedChannelIds = await ChannelSheetPrefs.listMutedIds();
         archivedChannelIds = await ChannelSheetPrefs.listArchivedIds();
+        hiddenFromFeedIds = await ChannelSheetPrefs.listHiddenFromFeedIds();
         final owned = await ChannelService.listChannels(
           limit: 50,
           offset: 0,
@@ -1092,7 +1093,12 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
           withLastPost: true,
         );
         channels = _uniqueChannels([...owned.items, ...subscribed.items])
-            .where((c) => !archivedChannelIds.contains(c.id))
+            .where(
+              (c) =>
+                  !archivedChannelIds.contains(c.id) &&
+                  c.showInFeed &&
+                  !hiddenFromFeedIds.contains(c.id),
+            )
             .toList();
       } catch (e) {
         channelsError = e;
@@ -1252,10 +1258,10 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
               !isTransientRateLimitError(chatsError)
           ? chatsError
           : null;
-      _joinRequestsInbox = joinInbox.isNotEmpty ||
-              !isTransientRateLimitError(joinInboxError)
-          ? joinInbox
-          : _joinRequestsInbox;
+      _joinRequestsInbox =
+          joinInbox.isNotEmpty || !isTransientRateLimitError(joinInboxError)
+              ? joinInbox
+              : _joinRequestsInbox;
       _joinInboxPartialError =
           joinInboxError != null && !isTransientRateLimitError(joinInboxError)
               ? joinInboxError
@@ -1537,7 +1543,8 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                         ),
                         onTap: () {
                           Navigator.pop(ctx);
-                          unawaited(ChatThreadPrefetch.warm(item.conversation.id));
+                          unawaited(
+                              ChatThreadPrefetch.warm(item.conversation.id));
                           context.push(
                             ChatThreadRoute.pathFor(item.conversation),
                             extra: item.conversation,
@@ -1766,9 +1773,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
           icon: notificationsEnabled
               ? Icons.notifications_off_outlined
               : Icons.notifications_outlined,
-          title: notificationsEnabled
-              ? 'Без звука'
-              : 'Включить уведомления',
+          title: notificationsEnabled ? 'Без звука' : 'Включить уведомления',
           onTap: () => _toggleChannelMuteFromHub(channel),
         ),
         TelegramActionSheetAction(
@@ -2175,9 +2180,8 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                   icon: chat.peerBlockedByMe
                       ? Icons.lock_open_outlined
                       : Icons.block_outlined,
-                  title: chat.peerBlockedByMe
-                      ? 'Разблокировать'
-                      : 'Заблокировать',
+                  title:
+                      chat.peerBlockedByMe ? 'Разблокировать' : 'Заблокировать',
                   destructive: !chat.peerBlockedByMe,
                   onTap: () => _toggleBlockFromHub(chat),
                 ),
@@ -2212,8 +2216,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                 CheckboxListTile(
                   contentPadding: EdgeInsets.zero,
                   value: deleteHistory,
-                  onChanged: (v) =>
-                      setLocal(() => deleteHistory = v ?? false),
+                  onChanged: (v) => setLocal(() => deleteHistory = v ?? false),
                   title: const Text('Удалить историю переписки'),
                   subtitle: const Text(
                     'Чат исчезнет из списка, сообщения будут скрыты у вас',
@@ -2540,7 +2543,8 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                   ChatHubTile(
                     chat: _savedChatTile,
                     draftText: _drafts[_savedChatTile.id]?.hubPreview,
-                    draftHasReply: _drafts[_savedChatTile.id]?.hasReply ?? false,
+                    draftHasReply:
+                        _drafts[_savedChatTile.id]?.hasReply ?? false,
                     onTap: _openSavedChat,
                     onLongPress: () => _showChatHubActions(_savedChatTile),
                   ),

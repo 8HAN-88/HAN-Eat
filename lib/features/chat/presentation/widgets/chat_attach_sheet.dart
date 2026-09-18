@@ -1565,7 +1565,7 @@ class _GifPickPanelState extends State<_GifPickPanel> {
           decoration: InputDecoration(
             hintText: _catalogConfigured
                 ? 'Поиск GIF'
-                : 'Каталог GIF недоступен',
+                : 'Поиск каталога выключен',
             prefixIcon: const Icon(Icons.search),
             suffixIcon: _searchController.text.isEmpty
                 ? null
@@ -1623,7 +1623,7 @@ class _GifPickPanelState extends State<_GifPickPanel> {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 16),
             child: Text(
-              'Каталог GIF пока недоступен. Можно выбрать файл с устройства '
+              'Онлайн-поиск GIF выключен. Выберите файл с устройства '
               'или недавние GIF ниже.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -1981,8 +1981,8 @@ class _VideoNotePickPanel extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           kIsWeb
-              ? 'Выберите короткое видео из галереи — оно отправится кружком, как в Telegram.'
-              : 'Запишите короткое видео — оно отправится кружком, как в Telegram.',
+              ? 'Выберите короткое видео из галереи — оно отправится кружком.'
+              : 'Запишите короткое видео — оно отправится кружком.',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: scheme.onSurfaceVariant,

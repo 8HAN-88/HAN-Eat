@@ -21,24 +21,26 @@ Future<bool?> showFlexPreviewSheet(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  confirmDowngrade ? 'Понизить уровень?' : 'Твоя подписка',
+                  confirmDowngrade ? 'Понизить уровень?' : 'Ваша подписка',
                   style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w800,
                       ),
                 ),
                 const SizedBox(height: 6),
-                Text('Уровень ${preview.level} · ${preview.priceRub} ₽ / месяц'),
+                Text(
+                    'Уровень ${preview.level} · ${preview.priceRub} ₽ / месяц'),
                 const SizedBox(height: 12),
                 Text(
-                  confirmDowngrade ? 'Станут недоступны' : 'Ты получишь',
+                  confirmDowngrade ? 'Станут недоступны' : 'Вы получите',
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 6),
                 if (confirmDowngrade)
-                  for (final f in preview.disabled)
-                    Text('⚠️ ${f.title}')
+                  for (final f in preview.disabled) Text('⚠️ ${f.title}')
                 else
-                  for (final f in preview.features)
+                  for (final f in (preview.added.isNotEmpty
+                      ? preview.added
+                      : preview.features))
                     Text('✅ ${f.title}'),
                 if (!confirmDowngrade &&
                     (preview.nextFeatures.isNotEmpty ||

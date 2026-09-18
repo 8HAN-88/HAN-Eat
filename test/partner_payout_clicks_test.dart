@@ -199,7 +199,7 @@ void main() {
     );
     await _pumpUntil(tester, find.text('Доступно: 560.00 ₽'));
     expect(find.text('На выплате: 0.00 ₽'), findsOneWidget);
-    expect(find.textContaining('В звёзды · 700 ★'), findsOneWidget);
+    expect(find.textContaining('Обменять · 700 ★'), findsOneWidget);
 
     final cardBtn = find.widgetWithText(OutlinedButton, 'На карту / СБП');
     await tester.tap(cardBtn);
@@ -216,15 +216,15 @@ void main() {
     expect(find.text('На выплате: 500.00 ₽'), findsOneWidget);
     expect(find.textContaining('На карту / СБП · 500.00 ₽'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(FilledButton, 'В звёзды · 75 ★'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Обменять · 75 ★'));
     await tester.pump();
     await _pumpUntil(tester, find.widgetWithText(FilledButton, 'Зачислить'));
     await tester.tap(find.widgetWithText(FilledButton, 'Зачислить'));
     await tester.pump();
-    await _pumpUntil(tester, find.textContaining('В звёзды · 60.00 ₽'));
+    await _pumpUntil(tester, find.textContaining('Обменять на звёзды · 60.00 ₽'));
     expect(find.text('Доступно: 0.00 ₽'), findsOneWidget);
     expect(find.text('Уже выплачено: 60.00 ₽'), findsOneWidget);
-    expect(find.textContaining('В звёзды · 60.00 ₽'), findsOneWidget);
+    expect(find.textContaining('Обменять на звёзды · 60.00 ₽'), findsOneWidget);
 
     await tester.pumpWidget(
       const MaterialApp(home: AdminPartnerPayoutsScreen()),

@@ -1161,6 +1161,7 @@ class Channel {
   final String? lastPostPreview;
   final DateTime? lastPostAt;
   final int? seenPostsCount;
+  final bool showInFeed;
 
   bool get isPending => membershipStatus == 'pending';
   bool get isActiveMember => membershipStatus == 'active';
@@ -1196,6 +1197,7 @@ class Channel {
     this.lastPostPreview,
     this.lastPostAt,
     this.seenPostsCount,
+    this.showInFeed = true,
   });
 
   factory Channel.fromJson(Map<String, dynamic> json) {
@@ -1225,6 +1227,7 @@ class Channel {
           ? DateTime.tryParse(json['last_post_at'] as String)?.toLocal()
           : null,
       seenPostsCount: json['seen_posts_count'] as int?,
+      showInFeed: json['show_in_feed'] as bool? ?? true,
     );
   }
 }
@@ -1268,6 +1271,7 @@ class ChannelDetail extends Channel {
     required super.autoPublishReels,
     super.membershipStatus = 'none',
     super.pendingJoinRequestsCount,
+    super.showInFeed,
     this.adminUser,
     required this.isMember,
     required this.isAdmin,
@@ -1323,6 +1327,7 @@ class ChannelDetail extends Channel {
       membershipStatus: json['membership_status'] as String? ?? 'none',
       canViewPosts: json['can_view_posts'] as bool? ?? true,
       pendingJoinRequestsCount: json['pending_join_requests_count'] as int?,
+      showInFeed: json['show_in_feed'] as bool? ?? true,
     );
   }
 

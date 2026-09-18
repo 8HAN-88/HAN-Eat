@@ -1,23 +1,24 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import '../../../utils/api_error_parser.dart';
 import 'package:intl/intl.dart';
-import '../../../services/payment_service.dart';
+
+import '../../../services/paid_features_service.dart';
+import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_empty_state.dart';
 
-/// Очередь запросов на возврат (только is_admin).
-class AdminRefundQueueScreen extends StatefulWidget {
-  const AdminRefundQueueScreen({super.key});
+class AdminCreatorPayoutsScreen extends StatefulWidget {
+  const AdminCreatorPayoutsScreen({super.key});
 
   @override
-  State<AdminRefundQueueScreen> createState() => _AdminRefundQueueScreenState();
+  State<AdminCreatorPayoutsScreen> createState() =>
+      _AdminCreatorPayoutsScreenState();
 }
 
-class _AdminRefundQueueScreenState extends State<AdminRefundQueueScreen> {
+class _AdminCreatorPayoutsScreenState extends State<AdminCreatorPayoutsScreen> {
   bool _loading = true;
   String? _error;
-  List<AdminRefundQueueItem> _items = [];
+  List<CreatorPayoutRequest> _items = [];
 
   @override
   void initState() {
@@ -31,7 +32,7 @@ class _AdminRefundQueueScreenState extends State<AdminRefundQueueScreen> {
       _error = null;
     });
     try {
-      final items = await PaymentService.getAdminRefundQueue();
+      final items = await PaidFeaturesService.adminPayoutQueue();
       if (!mounted) return;
       setState(() {
         _items = items;
@@ -46,15 +47,16 @@ class _AdminRefundQueueScreenState extends State<AdminRefundQueueScreen> {
     }
   }
 
-  Future<void> _approve(AdminRefundQueueItem item) async {
+  Future<void> _review(CreatorPayoutRequest item,
+      {required bool approve}) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Подтвердить возврат'),
+        title: Text(approve ? 'Подтвердить выплату' : 'Отклонить заявку'),
         content: Text(
-          'Вернуть ${item.amount.toStringAsFixed(0)} ₽ пользователю '
-          '${item.userEmail ?? "id:${item.id}"}?\n'
-          'Операция необратима.',
+          approve
+              ? 'Отметить ${item.amountStars} ★ (~${item.amountRub.toStringAsFixed(2)} ₽) для ${item.userName ?? item.userEmail ?? 'id:${item.creatorUserId}'} как выплаченные? Перевод на СБП делается вручную.'
+              : 'Вернуть ${item.amountStars} ★ на доступный баланс автора?',
         ),
         actions: [
           TextButton(
@@ -63,22 +65,24 @@ class _AdminRefundQueueScreenState extends State<AdminRefundQueueScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Вернуть'),
+            child: Text(approve ? 'Выплачено' : 'Отклонить'),
           ),
         ],
       ),
     );
     if (ok != true || !mounted) return;
-
     setState(() => _loading = true);
     try {
-      await PaymentService.adminProcessRefund(subscriptionId: item.id);
+      await PaidFeaturesService.reviewCreatorPayout(
+        payoutId: item.id,
+        approve: approve,
+      );
       await _load();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Возврат проведён'),
-          backgroundColor: Colors.green,
+        SnackBar(
+          content:
+              Text(approve ? 'Отмечено как выплаченное' : 'Заявка отклонена'),
         ),
       );
     } catch (e) {
@@ -87,56 +91,9 @@ class _AdminRefundQueueScreenState extends State<AdminRefundQueueScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(userVisibleError(e)),
-          backgroundColor: Colors.red,
           action: SnackBarAction(
             label: 'Повторить',
-            onPressed: () => unawaited(_approve(item)),
-          ),
-        ),
-      );
-    }
-  }
-
-  Future<void> _reject(AdminRefundQueueItem item) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Отклонить возврат'),
-        content: Text(
-          'Отклонить запрос от ${item.userEmail ?? "пользователя"}?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Отклонить'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true || !mounted) return;
-
-    setState(() => _loading = true);
-    try {
-      await PaymentService.adminRejectRefund(subscriptionId: item.id);
-      await _load();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Запрос отклонён')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(userVisibleError(e)),
-          backgroundColor: Colors.red,
-          action: SnackBarAction(
-            label: 'Повторить',
-            onPressed: () => unawaited(_reject(item)),
+            onPressed: () => unawaited(_review(item, approve: approve)),
           ),
         ),
       );
@@ -147,7 +104,7 @@ class _AdminRefundQueueScreenState extends State<AdminRefundQueueScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Возвраты'),
+        title: const Text('Выплаты авторам'),
         actions: [
           IconButton(
             onPressed: _loading ? null : _load,
@@ -163,7 +120,6 @@ class _AdminRefundQueueScreenState extends State<AdminRefundQueueScreen> {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
-
     if (_error != null) {
       return AppEmptyState(
         icon: Icons.cloud_off_rounded,
@@ -175,19 +131,17 @@ class _AdminRefundQueueScreenState extends State<AdminRefundQueueScreen> {
         ),
       );
     }
-
     if (_items.isEmpty) {
       return AppEmptyState(
         icon: Icons.inbox_outlined,
         title: 'Очередь пуста',
-        subtitle: 'Нет ожидающих запросов на возврат',
+        subtitle: 'Нет заявок авторов на карту или СБП',
         action: FilledButton(
           onPressed: _load,
           child: const Text('Обновить'),
         ),
       );
     }
-
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: _items.length,
@@ -204,7 +158,7 @@ class _AdminRefundQueueScreenState extends State<AdminRefundQueueScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  item.productName,
+                  '${item.amountStars} ★ · ${item.amountRub.toStringAsFixed(2)} ₽',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -212,11 +166,16 @@ class _AdminRefundQueueScreenState extends State<AdminRefundQueueScreen> {
                 const SizedBox(height: 4),
                 Text(
                   [
-                    if (item.userName != null) item.userName!,
-                    if (item.userEmail != null) item.userEmail!,
-                    '${item.amount.toStringAsFixed(0)} ₽',
+                    if (item.userName != null && item.userName!.isNotEmpty)
+                      item.userName!,
+                    if (item.userEmail != null && item.userEmail!.isNotEmpty)
+                      item.userEmail!,
+                    if (item.phone != null && item.phone!.isNotEmpty)
+                      item.phone!,
+                    if (item.recipientName != null &&
+                        item.recipientName!.isNotEmpty)
+                      item.recipientName!,
                     if (date.isNotEmpty) date,
-                    if (item.ticketId != null) 'тикет #${item.ticketId}',
                   ].join(' · '),
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
@@ -225,15 +184,15 @@ class _AdminRefundQueueScreenState extends State<AdminRefundQueueScreen> {
                   children: [
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: () => _reject(item),
+                        onPressed: () => _review(item, approve: false),
                         child: const Text('Отклонить'),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: FilledButton(
-                        onPressed: () => _approve(item),
-                        child: const Text('Вернуть'),
+                        onPressed: () => _review(item, approve: true),
+                        child: const Text('Выплачено'),
                       ),
                     ),
                   ],

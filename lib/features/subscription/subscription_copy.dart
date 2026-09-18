@@ -7,9 +7,9 @@ class SubscriptionCopy {
 
   static const paymentsComingSoonTitle = 'Оплата скоро';
   static const paymentsComingSoonBody =
-      'Подключим оплату по СБП сразу после публикации в App Store. '
-      'Сейчас можно оформить бесплатный пробный период, если он вам доступен.';
-  static const paymentsComingSoonCta = 'Оплата появится после релиза';
+      'Оплата по СБП сейчас выключена. Когда шлюз включат, '
+      'кнопка «Оформить» заработает сама.';
+  static const paymentsComingSoonCta = 'Оплата появится после включения';
 
   static const screenTitle = 'Подписка';
   static const heroTitle = 'Больше возможностей\nдля авторов и общения';
@@ -78,7 +78,7 @@ class SubscriptionCopy {
     'Ускоренная работа AI в приложении',
     'Сохранённые посты офлайн',
     'Расширенные рекомендации в ленте',
-    'Без рекламы (когда появится в приложении)',
+    'Без рекламы в ленте и каналах',
   ];
 
   static const List<String> _creatorBenefits = [
@@ -88,7 +88,7 @@ class SubscriptionCopy {
     'Отложенная публикация',
     'Оформление и бейдж канала',
     'Инструменты для авторов',
-    'Без рекламы (когда появится в приложении)',
+    'Без рекламы в ленте и каналах',
   ];
 
   static const List<String> _proBenefits = [

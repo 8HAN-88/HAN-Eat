@@ -38,7 +38,7 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
   String _selectedType = 'other';
   bool _isSubmitting = false;
   String? _submitError;
-  
+
   @override
   void initState() {
     super.initState();
@@ -62,22 +62,22 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
     _messageController.dispose();
     super.dispose();
   }
-  
+
   Future<void> _submitTicket() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     setState(() {
       _isSubmitting = true;
       _submitError = null;
     });
-    
+
     try {
       final response = await SupportService.createTicket(
         type: _selectedType,
         subject: _subjectController.text.trim(),
         message: _messageController.text.trim(),
       );
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -85,7 +85,7 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
             backgroundColor: Colors.green,
           ),
         );
-        
+
         // Очищаем форму
         _subjectController.clear();
         _messageController.clear();
@@ -104,7 +104,7 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
       }
     }
   }
-  
+
   Future<void> _requestCancelSubscription() async {
     setState(() => _isSubmitting = true);
     try {
@@ -115,7 +115,7 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
       }
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     final hasPro = ref.watch(hasProSubscriptionProvider);
@@ -148,7 +148,7 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            'HanWe Pro: ваши обращения обрабатываются в приоритетной очереди.',
+                            'Уровень 18: ваши обращения обрабатываются в приоритетной очереди.',
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
                         ),
@@ -163,7 +163,7 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
                     leading: const Icon(Icons.workspace_premium_outlined),
                     title: const Text('Приоритетная поддержка'),
                     subtitle: const Text(
-                      'С HanWe Pro обращения обрабатываются быстрее.',
+                      'С подпиской уровня 18 обращения обрабатываются быстрее.',
                     ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () =>
@@ -187,7 +187,8 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
                       ),
                       const SizedBox(height: 12),
                       FilledButton.icon(
-                        onPressed: _isSubmitting ? null : _requestCancelSubscription,
+                        onPressed:
+                            _isSubmitting ? null : _requestCancelSubscription,
                         icon: const Icon(Icons.cancel_outlined),
                         label: const Text('Запросить отмену подписки'),
                       ),
@@ -305,4 +306,3 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
     );
   }
 }
-

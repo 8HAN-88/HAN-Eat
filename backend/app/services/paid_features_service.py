@@ -688,7 +688,7 @@ class PaidFeaturesService:
             return user
         if len(clean) < 10 or len(clean) > 128:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid TON address"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid payout address"
             )
         user.ton_address = clean
         self.db.flush()
@@ -835,6 +835,8 @@ class PaidFeaturesService:
         note: Optional[str] = None,
         method: str = "rub",
         ton_address: Optional[str] = None,
+        phone: Optional[str] = None,
+        recipient_name: Optional[str] = None,
         stars_to_rub_rate: float = 0.8,
     ) -> CreatorPayoutRequest:
         if amount_stars <= 0:
@@ -862,13 +864,21 @@ class PaidFeaturesService:
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid payout method"
             )
         dest = (ton_address or "").strip()
+        payout_phone = (phone or "").strip()
+        payout_name = (recipient_name or "").strip()
         if kind == "ton":
             user = self.db.query(User).filter(User.id == user_id).first()
             dest = dest or (getattr(user, "ton_address", None) or "").strip()
             if len(dest) < 10:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="TON address required",
+                    detail="Payout address required",
+                )
+        else:
+            if len(payout_phone) < 10 or len(payout_name) < 2:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Укажите телефон СБП и имя получателя",
                 )
         amount_rub = round(float(amount_stars) * float(stars_to_rub_rate), 2)
         payout = CreatorPayoutRequest(
@@ -879,6 +889,8 @@ class PaidFeaturesService:
             note=(note or "").strip() or None,
             method=kind,
             ton_address=dest or None,
+            phone=payout_phone or None,
+            recipient_name=payout_name or None,
         )
         self.db.add(payout)
         self.db.flush()
@@ -899,6 +911,24 @@ class PaidFeaturesService:
             self.db.query(CreatorPayoutRequest)
             .filter(CreatorPayoutRequest.creator_user_id == user_id)
             .order_by(CreatorPayoutRequest.created_at.desc(), CreatorPayoutRequest.id.desc())
+            .limit(max(1, min(limit, 200)))
+            .all()
+        )
+
+    def list_payout_queue(
+        self,
+        *,
+        status: Optional[str] = "pending",
+        limit: int = 100,
+    ) -> list[CreatorPayoutRequest]:
+        q = self.db.query(CreatorPayoutRequest)
+        if status:
+            q = q.filter(CreatorPayoutRequest.status == status)
+        return (
+            q.order_by(
+                CreatorPayoutRequest.created_at.asc(),
+                CreatorPayoutRequest.id.asc(),
+            )
             .limit(max(1, min(limit, 200)))
             .all()
         )
@@ -2117,6 +2147,12 @@ class PaidFeaturesService:
         user.subscription_status = "active"
         user.subscription_expires_at = start + timedelta(days=30 * int(months))
         user.subscription_auto_renew = False
+        try:
+            from app.services.flex_subscription_service import FlexSubscriptionService
+
+            FlexSubscriptionService(self.db).activate(user_id, 18, months=int(months))
+        except Exception:
+            pass
 
     def set_user_star_gift_displayed(
         self, owner_id: int, user_gift_id: int, *, displayed: bool
