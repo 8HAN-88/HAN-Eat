@@ -52,6 +52,25 @@ void main() {
     );
   });
 
+  test('localizeKnownEnglishDetail maps channel and support leftovers', () {
+    expect(
+      parseApiErrorMessage('Already a member of this channel'),
+      'Вы уже в канале',
+    );
+    expect(
+      parseApiErrorMessage('Cannot access saved posts'),
+      'Нет доступа к сохранённым постам',
+    );
+    expect(
+      userVisibleError(Exception('Failed to load receipt')),
+      'Не удалось загрузить чек',
+    );
+    expect(
+      localizeKnownEnglishDetail('Request processed successfully'),
+      'Обращение обработано',
+    );
+  });
+
   test('parseApiErrorMessage maps FEATURE_REMOVED and payment English', () {
     expect(
       parseApiErrorMessage({'code': 'FEATURE_REMOVED'}),

@@ -166,7 +166,7 @@ async def get_saved_posts(
     if current_user is None or current_user.id != user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot access saved posts",
+            detail="Нет доступа к сохранённым постам",
         )
     
     # Получаем сохраненные посты (включая рецепты Spoonacular)

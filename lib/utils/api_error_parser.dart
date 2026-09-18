@@ -25,12 +25,52 @@ class ApiClientException implements Exception {
   String toString() => message;
 }
 
+const _knownEnglishDetails = <String, String>{
+  'Authentication required': 'Войдите в аккаунт',
+  'Membership pending approval': 'Заявка на вступление ещё на рассмотрении',
+  'Channel is private': 'Канал закрытый',
+  'Channel with this slug already exists': 'Канал с таким адресом уже есть',
+  'Channel not found': 'Канал не найден',
+  'Not a member of this channel': 'Вы не участник канала',
+  'Already a member of this channel': 'Вы уже в канале',
+  'Owner or admin cannot leave channel. Transfer rights or delete channel.':
+      'Владелец или админ не может выйти. Передайте права или удалите канал.',
+  'Join request not found': 'Заявка не найдена',
+  'Post not found': 'Пост не найден',
+  'Member not found': 'Участник не найден',
+  'Cannot change owner role': 'Роль владельца менять нельзя',
+  'Invalid role. Must be: admin, moderator, or member':
+      'Неверная роль. Допустимо: админ, модератор или участник',
+  'Cannot remove channel owner': 'Нельзя удалить владельца канала',
+  'Only channel owner can delete channel':
+      'Удалить канал может только владелец',
+  'Ticket not found': 'Обращение не найдено',
+  'Ticket already resolved or closed': 'Обращение уже закрыто',
+  'Failed to cancel subscription': 'Не удалось отменить подписку',
+  'Subscription not found': 'Подписка не найдена',
+  'Request processed successfully': 'Обращение обработано',
+  'Ticket resolved successfully': 'Обращение закрыто',
+  'Cannot access saved posts': 'Нет доступа к сохранённым постам',
+  'Failed to load receipt': 'Не удалось загрузить чек',
+  'Could not open receipt URL': 'Не удалось открыть чек',
+  'Failed to request refund': 'Не удалось отправить запрос на возврат',
+  'Refund request already submitted': 'Запрос на возврат уже отправлен',
+  'Refund is not available for this payment':
+      'Возврат для этого платежа недоступен',
+  'Payment not found': 'Платёж не найден',
+};
+
+String? localizeKnownEnglishDetail(String detail) =>
+    _knownEnglishDetails[detail];
+
 String parseApiErrorMessage(
   dynamic detail, {
   String fallback = 'Произошла ошибка',
 }) {
   if (detail == null) return fallback;
   if (detail is String) {
+    final known = localizeKnownEnglishDetail(detail);
+    if (known != null) return known;
     return switch (detail) {
       'network_error' =>
         'Нет подключения к серверу. Проверьте интернет и попробуйте снова.',
@@ -237,6 +277,8 @@ String userVisibleError(Object e, {String fallback = 'Произошла оши�
   }
   final raw = e.toString().replaceAll('Exception: ', '').trim();
   if (raw.isEmpty) return fallback;
+  final known = localizeKnownEnglishDetail(raw);
+  if (known != null) return known;
   if (raw == 'Not authenticated' ||
       raw.toLowerCase().contains('please log in')) {
     return 'Войдите в аккаунт';

@@ -348,11 +348,11 @@ class _ModerationNoteDialog extends StatefulWidget {
 class _ModerationNoteDialogState extends State<_ModerationNoteDialog> {
   final _controller = TextEditingController();
   static const _templates = [
-    'External auth flow is unsafe / data leak risk',
-    'Suspicious redirect or tracking parameters',
-    'HTTP/non-HTTPS transport is not allowed',
-    'Mini app content violates policy',
-    'Brand impersonation / phishing risk',
+    'Внешняя авторизация небезопасна / риск утечки данных',
+    'Подозрительный редирект или параметры слежения',
+    'Разрешён только HTTPS',
+    'Содержание мини-приложения нарушает правила',
+    'Подделка бренда / риск фишинга',
   ];
 
   @override

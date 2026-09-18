@@ -248,8 +248,8 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen> {
         SnackBar(
           content: Text(
             export.truncated
-                ? 'Incident report скопирован (${export.count} ops, обрезано)'
-                : 'Incident report скопирован (${export.count} ops)',
+                ? 'Отчёт об инциденте скопирован (${export.count}, обрезано)'
+                : 'Отчёт об инциденте скопирован (${export.count})',
           ),
         ),
       );
@@ -350,7 +350,7 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen> {
       ),
       dropReason == null
           ? 'Отфильтрованные dead-letter задачи отправлены в очередь'
-          : 'Dead-letter задачи ($dropReason) отправлены в очередь',
+          : 'Задачи с ошибкой ($dropReason) отправлены в очередь',
     );
     if (!mounted) return;
     await _loadDeadLetters(reset: true);
@@ -497,7 +497,7 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen> {
                               if (!confirm) return _data!.botWebhookQueue!;
                               return ModerationService.clearWebhookQueue();
                             },
-                            'Webhook-очередь очищена',
+                            'Очередь вебхуков очищена',
                           ),
                           onResetMetrics: () => _runWebhookAction(
                             ModerationService.resetWebhookMetrics,
@@ -519,7 +519,7 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen> {
                               return ModerationService
                                   .clearWebhookDeadLetters();
                             },
-                            'Dead-letter очищен',
+                            'Очередь ошибок очищена',
                           ),
                           onRunRecoveryPlaybook: () => _runWebhookAction(
                             () async {
@@ -766,14 +766,14 @@ class _WebhookQueueCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = [
-      _StatCard('Webhook queue', '${stats.queueDepth}'),
-      _StatCard('Delayed', '${stats.delayedDepth}'),
-      _StatCard('Dead-letter', '${stats.deadDepth}'),
-      _StatCard('Sent', '${stats.sentTotal}'),
-      _StatCard('Failed', '${stats.failedTotal}'),
-      _StatCard('Retried', '${stats.retriedTotal}'),
-      _StatCard('Dropped', '${stats.droppedTotal}'),
-      _StatCard('Throttled', '${stats.throttledTotal}'),
+      _StatCard('Очередь вебхуков', '${stats.queueDepth}'),
+      _StatCard('Отложено', '${stats.delayedDepth}'),
+      _StatCard('Ошибки', '${stats.deadDepth}'),
+      _StatCard('Отправлено', '${stats.sentTotal}'),
+      _StatCard('Сбои', '${stats.failedTotal}'),
+      _StatCard('Повторы', '${stats.retriedTotal}'),
+      _StatCard('Сброшено', '${stats.droppedTotal}'),
+      _StatCard('Лимит', '${stats.throttledTotal}'),
     ];
     return Card(
       child: Padding(
@@ -782,7 +782,7 @@ class _WebhookQueueCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Bot Webhook Delivery',
+              'Доставка вебхуков ботов',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             if (stats.redisStub)
@@ -821,7 +821,7 @@ class _WebhookQueueCard extends StatelessWidget {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              '${a.message}: ${a.value} (threshold ${a.threshold})',
+                              '${a.message}: ${a.value} (порог ${a.threshold})',
                               style: Theme.of(context)
                                   .textTheme
                                   .bodySmall
@@ -946,8 +946,8 @@ class _WebhookQueueCard extends StatelessWidget {
                         label: Text(
                           selectedVisibleCount == visibleTaskIds.length &&
                                   visibleTaskIds.isNotEmpty
-                              ? 'Unselect page'
-                              : 'Select page',
+                              ? 'Снять выбор'
+                              : 'Выбрать страницу',
                         ),
                       ),
                       OutlinedButton.icon(
@@ -960,7 +960,7 @@ class _WebhookQueueCard extends StatelessWidget {
                                 }
                               },
                         icon: const Icon(Icons.deselect_outlined),
-                        label: const Text('Clear selected'),
+                        label: const Text('Снять выбранные'),
                       ),
                     ],
                   );
@@ -971,7 +971,7 @@ class _WebhookQueueCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      'Dead-letter tasks',
+                      'Задачи с ошибкой',
                       style: Theme.of(context).textTheme.titleSmall,
                     ),
                   ),
@@ -980,7 +980,7 @@ class _WebhookQueueCard extends StatelessWidget {
                       onPressed: loading ? null : onRequeueSelectedDeadLetters,
                       icon: const Icon(Icons.playlist_add_check),
                       label: Text(
-                          'Requeue selected (${selectedDeadTaskIds.length})'),
+                          'Вернуть выбранные (${selectedDeadTaskIds.length})'),
                     ),
                 ],
               ),
@@ -992,17 +992,17 @@ class _WebhookQueueCard extends StatelessWidget {
                   FilledButton.tonalIcon(
                     onPressed: loading ? null : onRequeueMaxAttempts,
                     icon: const Icon(Icons.restore_outlined),
-                    label: const Text('Requeue max_attempts'),
+                    label: const Text('Вернуть после лимита попыток'),
                   ),
                   FilledButton.tonalIcon(
                     onPressed: loading ? null : onRequeueRateLimited,
                     icon: const Icon(Icons.speed_outlined),
-                    label: const Text('Requeue rate_limited'),
+                    label: const Text('Вернуть из лимита'),
                   ),
                   OutlinedButton.icon(
                     onPressed: loading ? null : onRequeueFiltered,
                     icon: const Icon(Icons.filter_alt_outlined),
-                    label: const Text('Requeue filtered'),
+                    label: const Text('Вернуть отфильтрованные'),
                   ),
                 ],
               ),
@@ -1053,14 +1053,14 @@ class _WebhookQueueCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   FilledButton.tonal(
                     onPressed: onApplyDeadLetterFilters,
-                    child: const Text('Apply'),
+                    child: const Text('Применить'),
                   ),
                 ],
               ),
               const SizedBox(height: 6),
               if (deadLetters.isEmpty && !deadLettersLoading)
                 Text(
-                  'Dead-letter пуст',
+                  'Ошибок нет',
                   style: Theme.of(context).textTheme.bodySmall,
                 )
               else
@@ -1101,7 +1101,7 @@ class _WebhookQueueCard extends StatelessWidget {
                   child: TextButton.icon(
                     onPressed: onLoadMoreDeadLetters,
                     icon: const Icon(Icons.expand_more),
-                    label: const Text('Load more dead-letter'),
+                    label: const Text('Показать ещё ошибки'),
                   ),
                 ),
             ],
@@ -1111,19 +1111,19 @@ class _WebhookQueueCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      'Recent webhook ops',
+                      'Последние операции',
                       style: Theme.of(context).textTheme.titleSmall,
                     ),
                   ),
                   TextButton.icon(
                     onPressed: onExportOps,
                     icon: const Icon(Icons.copy, size: 16),
-                    label: const Text('Copy'),
+                    label: const Text('Копировать'),
                   ),
                   TextButton.icon(
                     onPressed: onExportIncidentReport,
                     icon: const Icon(Icons.warning_amber_outlined, size: 16),
-                    label: const Text('Incident'),
+                    label: const Text('Инцидент'),
                   ),
                 ],
               ),
@@ -1180,7 +1180,7 @@ class _WebhookQueueCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   FilledButton.tonal(
                     onPressed: onApplyOpsFilters,
-                    child: const Text('Apply'),
+                    child: const Text('Применить'),
                   ),
                 ],
               ),
@@ -1214,7 +1214,7 @@ class _WebhookQueueCard extends StatelessWidget {
                   child: TextButton.icon(
                     onPressed: onLoadMoreOps,
                     icon: const Icon(Icons.expand_more),
-                    label: const Text('Load more'),
+                    label: const Text('Показать ещё'),
                   ),
                 ),
             ],
@@ -1254,39 +1254,38 @@ class _WebhookRunbookSection extends StatelessWidget {
     final hasIncident = deadBacklog || delayedBacklog || throttling;
     final runbookSteps = <_RunbookStepData>[
       _RunbookStepData(
-        title: '1) Capture incident snapshot',
-        description:
-            'Скопируйте incident report и зафиксируйте текущее состояние.',
+        title: '1) Снимок инцидента',
+        description: 'Скопируйте отчёт и зафиксируйте текущее состояние.',
         isActive: true,
-        buttonLabel: 'Copy incident',
+        buttonLabel: 'Скопировать отчёт',
         onPressed: onCopyIncident,
       ),
       _RunbookStepData(
-        title: '2) Requeue max attempts',
-        description: 'Вернуть задачи после исчерпания retry-лимита.',
+        title: '2) Вернуть после лимита попыток',
+        description: 'Вернуть задачи после исчерпания лимита повторов.',
         isActive: deadBacklog,
-        buttonLabel: 'Requeue max_attempts',
+        buttonLabel: 'Вернуть после лимита',
         onPressed: onRequeueMaxAttempts,
       ),
       _RunbookStepData(
-        title: '3) Requeue rate limited',
-        description: 'Вернуть задачи, отброшенные из-за per-bot quota.',
+        title: '3) Вернуть из лимита',
+        description: 'Вернуть задачи, отброшенные из-за лимита бота.',
         isActive: throttling,
-        buttonLabel: 'Requeue rate_limited',
+        buttonLabel: 'Вернуть из лимита',
         onPressed: onRequeueRateLimited,
       ),
       _RunbookStepData(
-        title: '4) Promote delayed',
-        description: 'Перенести delayed backlog в активную очередь.',
+        title: '4) Продвинуть отложенные',
+        description: 'Перенести отложенные задачи в активную очередь.',
         isActive: delayedBacklog,
-        buttonLabel: 'Promote delayed',
+        buttonLabel: 'Продвинуть отложенные',
         onPressed: onPromoteDelayed,
       ),
       _RunbookStepData(
         title: '5) Recovery playbook',
         description: 'Финальный шаг массового восстановления.',
         isActive: hasIncident,
-        buttonLabel: 'Run playbook',
+        buttonLabel: 'Запустить восстановление',
         onPressed: onRunRecoveryPlaybook,
       ),
     ];
@@ -1304,13 +1303,12 @@ class _WebhookRunbookSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Incident runbook',
-              style: Theme.of(context).textTheme.titleSmall),
+          Text('План при сбое', style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 6),
           Text(
             hasIncident
                 ? 'Есть признаки деградации. Выполняйте шаги последовательно.'
-                : 'Инцидентных сигналов нет, но runbook доступен для проверки.',
+                : 'Сигналов сбоя нет, но план проверки доступен.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 8),

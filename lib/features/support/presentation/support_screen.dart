@@ -261,7 +261,8 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
                           _ticketStatusLabel(t.status),
                           if (t.resolutionComment != null &&
                               t.resolutionComment!.isNotEmpty)
-                            t.resolutionComment!,
+                            localizeKnownEnglishDetail(t.resolutionComment!) ??
+                                t.resolutionComment!,
                         ].join(' · '),
                       ),
                     ),

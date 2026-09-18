@@ -166,7 +166,7 @@ async def get_ticket(
     if not ticket:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Ticket not found"
+            detail="Обращение не найдено"
         )
     
     return {
@@ -199,13 +199,13 @@ async def resolve_ticket(
     if not ticket:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Ticket not found"
+            detail="Обращение не найдено"
         )
     
     if ticket.status in ["resolved", "closed"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Ticket already resolved or closed"
+            detail="Обращение уже закрыто"
         )
     
     # Автоматическая обработка для cancel_subscription
@@ -223,18 +223,18 @@ async def resolve_ticket(
             if not cancelled_subscription:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Failed to cancel subscription"
+                    detail="Не удалось отменить подписку"
                 )
         else:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Subscription not found"
+                detail="Подписка не найдена"
             )
     
     # Обновляем статус обращения
     ticket.status = "resolved"
     ticket.resolved_by_user_id = current_user.id
-    ticket.resolution_comment = request.resolution_comment or "Request processed successfully"
+    ticket.resolution_comment = request.resolution_comment or "Обращение обработано"
     ticket.resolved_at = datetime.utcnow()
     
     db.commit()
@@ -244,7 +244,7 @@ async def resolve_ticket(
         "status": ticket.status,
         "resolution_comment": ticket.resolution_comment,
         "resolved_at": ticket.resolved_at.isoformat() if ticket.resolved_at else None,
-        "message": "Ticket resolved successfully"
+        "message": "Обращение закрыто"
     }
 
 

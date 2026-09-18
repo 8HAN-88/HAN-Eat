@@ -138,7 +138,7 @@ class PaymentService {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return data['receipt_url'] as String?;
     }
-    throw Exception('Failed to load receipt');
+    throw Exception('Не удалось загрузить чек');
   }
 
   static Future<int> requestRefund({
@@ -168,7 +168,8 @@ class PaymentService {
       return data['ticket_id'] as int? ?? 0;
     }
     final error = jsonDecode(response.body) as Map<String, dynamic>;
-    throw Exception(error['detail'] ?? 'Failed to request refund');
+    throw Exception(
+        error['detail'] ?? 'Не удалось отправить запрос на возврат');
   }
 
   static Future<void> openReceiptUrl(String url) async {
@@ -176,7 +177,7 @@ class PaymentService {
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
-      throw Exception('Could not open receipt URL');
+      throw Exception('Не удалось открыть чек');
     }
   }
 
@@ -201,8 +202,7 @@ class PaymentService {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       final list = data['items'] as List<dynamic>? ?? [];
       return list
-          .map((e) =>
-              AdminRefundQueueItem.fromJson(e as Map<String, dynamic>))
+          .map((e) => AdminRefundQueueItem.fromJson(e as Map<String, dynamic>))
           .toList();
     }
     if (response.statusCode == 403) {
@@ -425,7 +425,8 @@ class AdminRefundQueueItem {
   });
 
   factory AdminRefundQueueItem.fromJson(Map<String, dynamic> json) {
-    DateTime? parse(String? s) => s != null ? DateTime.parse(s).toLocal() : null;
+    DateTime? parse(String? s) =>
+        s != null ? DateTime.parse(s).toLocal() : null;
     final user = json['user'] as Map<String, dynamic>?;
     return AdminRefundQueueItem(
       id: json['id'] as int,
@@ -477,7 +478,8 @@ class PaymentHistoryItem {
   });
 
   factory PaymentHistoryItem.fromJson(Map<String, dynamic> json) {
-    DateTime? parse(String? s) => s != null ? DateTime.parse(s).toLocal() : null;
+    DateTime? parse(String? s) =>
+        s != null ? DateTime.parse(s).toLocal() : null;
     return PaymentHistoryItem(
       id: json['id'] as int,
       product: json['product'] as String? ?? 'pro',
