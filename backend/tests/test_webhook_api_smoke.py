@@ -83,7 +83,7 @@ async def test_bot_webhook_test_endpoint_requires_configured_webhook(monkeypatch
         )
 
     assert exc.value.status_code == 400
-    assert "Webhook is not configured" in str(exc.value.detail)
+    assert "Вебхук не настроен" in str(exc.value.detail)
 
 
 @pytest.mark.asyncio
