@@ -445,7 +445,7 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
                 controller: _webhookController,
                 decoration: const InputDecoration(
                   labelText: 'URL',
-                  hintText: 'https://your-server.com/webhook',
+                  hintText: 'https://example.com/webhook',
                 ),
               ),
               const SizedBox(height: 8),

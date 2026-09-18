@@ -33,4 +33,13 @@ void main() {
     expect(me.canCheckout, isFalse);
     expect(me.legalConsentRequired, isTrue);
   });
+
+  test('FlexBlock without max_level defaults to 79', () {
+    final block = FlexBlock.fromJson({
+      'key': 'A',
+      'title': 'Базовые',
+      'min_level': 1,
+    });
+    expect(block.maxLevel, 79);
+  });
 }

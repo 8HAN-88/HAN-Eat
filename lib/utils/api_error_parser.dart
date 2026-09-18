@@ -98,6 +98,24 @@ const _knownEnglishDetails = <String, String>{
   'Could not launch checkout URL': 'Не удалось открыть оплату',
   'Poll not found': 'Опрос не найден',
   'URL is required': 'Нужна ссылка',
+  'Post already liked': 'Пост уже в избранном',
+  'Like not found': 'Лайк не найден',
+  'Recipient not found': 'Получатель не найден',
+  'Cannot donate to yourself': 'Нельзя отправить донат себе',
+  'Invalid channel': 'Неверный канал',
+  'Invalid post': 'Неверный пост',
+  'Rate limit exceeded': 'Слишком много запросов',
+  'Bot not found': 'Бот не найден',
+  'Webhook URL is required': 'Укажите адрес вебхука',
+  'Webhook is not configured or disabled': 'Вебхук не настроен или выключен',
+  'Mini app is not approved yet': 'Мини-приложение ещё не одобрено',
+  'Mini app not found': 'Мини-приложение не найдено',
+  'URL must start with http:// or https://':
+      'Адрес должен начинаться с http:// или https://',
+  'Only https URLs are allowed in production':
+      'В продакшене разрешён только https',
+  'Command already exists': 'Такая команда уже есть',
+  'Command not found': 'Команда не найдена',
 };
 
 String? localizeKnownEnglishDetail(String detail) =>

@@ -30,7 +30,7 @@ class _ReportContentDialogState extends State<_ReportContentDialog> {
   static const _reasons = <String, String>{
     'spam': 'Спам',
     'harassment': 'Оскорбления',
-    'nsfw': 'NSFW',
+    'nsfw': 'Контент 18+',
     'violence': 'Насилие',
     'misinformation': 'Ложная информация',
     'scam': 'Мошенничество',
@@ -195,7 +195,8 @@ Future<void> reportPostWithDialog(BuildContext context, int postId) async {
 }
 
 /// Жалоба на комментарий через API.
-Future<void> reportCommentWithDialog(BuildContext context, int commentId) async {
+Future<void> reportCommentWithDialog(
+    BuildContext context, int commentId) async {
   String? submittedReason;
   final ok = await showReportContentDialog(
     context,
@@ -240,7 +241,8 @@ Future<void> reportReelOrVideoWithDialog(
 }
 
 /// Жалоба на канал через API.
-Future<void> reportChannelWithDialog(BuildContext context, int channelId) async {
+Future<void> reportChannelWithDialog(
+    BuildContext context, int channelId) async {
   String? submittedReason;
   final ok = await showReportContentDialog(
     context,

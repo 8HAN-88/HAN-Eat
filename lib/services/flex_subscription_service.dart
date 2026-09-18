@@ -220,7 +220,7 @@ class FlexBlock {
         key: json['key'] as String? ?? '',
         title: json['title'] as String? ?? '',
         minLevel: json['min_level'] as int? ?? 1,
-        maxLevel: json['max_level'] as int? ?? 3,
+        maxLevel: json['max_level'] as int? ?? 79,
       );
 }
 

@@ -407,7 +407,7 @@ class AdCampaign {
         'rejected' => 'Отклонена',
         'paused' => 'Пауза',
         'archived' => 'Архив',
-        _ => status,
+        _ => 'Статус: $status',
       };
 
   String get clientNextStep {

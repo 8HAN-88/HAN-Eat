@@ -238,7 +238,7 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen> {
       );
       if (export.content.trim().isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Нет данных для incident report')),
+          const SnackBar(content: Text('Нет данных для отчёта')),
         );
         return;
       }
@@ -259,7 +259,7 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen> {
         SnackBar(
           content: Text(
             userVisibleError(e,
-                fallback: 'Не удалось экспортировать incident report'),
+                fallback: 'Не удалось экспортировать отчёт'),
           ),
           action: SnackBarAction(
             label: 'Повторить',
@@ -1043,7 +1043,7 @@ class _WebhookQueueCard extends StatelessWidget {
                       initialValue: deadLettersQuery,
                       decoration: const InputDecoration(
                         isDense: true,
-                        hintText: 'Фильтр: task_id / bot_id / reason',
+                        hintText: 'Фильтр: задача, бот или причина',
                         prefixIcon: Icon(Icons.search, size: 18),
                       ),
                       onChanged: onDeadLettersQueryChanged,
@@ -1072,20 +1072,20 @@ class _WebhookQueueCard extends StatelessWidget {
                         onChanged: (selected) =>
                             onToggleDeadTask(item.taskId, selected == true),
                         title: Text(
-                          item.taskId.isEmpty ? '(no task_id)' : item.taskId,
+                          item.taskId.isEmpty ? 'Без номера задачи' : item.taskId,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                         subtitle: Text(
                           [
-                            'bot:${item.botId ?? '-'}',
+                            'бот: ${item.botId ?? '—'}',
                             item.updateType.isEmpty
-                                ? 'unknown'
+                                ? 'тип неизвестен'
                                 : item.updateType,
                             item.dropReason.isEmpty
-                                ? 'drop:unknown'
+                                ? 'причина неизвестна'
                                 : item.dropReason,
-                            'dropped:${_formatEpochToLocalShort(item.droppedAt)}',
+                            'сброс: ${_formatEpochToLocalShort(item.droppedAt)}',
                           ].join(' · '),
                         ),
                       ),
@@ -1146,32 +1146,32 @@ class _WebhookQueueCard extends StatelessWidget {
                       value: opsEventType,
                       decoration: const InputDecoration(
                         isDense: true,
-                        labelText: 'Event type',
+                        labelText: 'Тип события',
                       ),
                       items: const [
                         DropdownMenuItem<String?>(
                           value: null,
-                          child: Text('All'),
+                          child: Text('Все'),
                         ),
                         DropdownMenuItem<String?>(
                           value: 'bot_webhook_recovery_playbook_run',
-                          child: Text('recovery_playbook'),
+                          child: Text('Восстановление'),
                         ),
                         DropdownMenuItem<String?>(
                           value: 'bot_webhook_queue_clear',
-                          child: Text('queue_clear'),
+                          child: Text('Очистка очереди'),
                         ),
                         DropdownMenuItem<String?>(
                           value: 'bot_webhook_dead_letter_requeue',
-                          child: Text('dead_letter_requeue'),
+                          child: Text('Вернуть ошибки'),
                         ),
                         DropdownMenuItem<String?>(
                           value: 'bot_webhook_dead_letter_clear',
-                          child: Text('dead_letter_clear'),
+                          child: Text('Очистить ошибки'),
                         ),
                         DropdownMenuItem<String?>(
                           value: 'bot_webhook_metrics_reset',
-                          child: Text('metrics_reset'),
+                          child: Text('Сброс метрик'),
                         ),
                       ],
                       onChanged: onOpsEventTypeChanged,
