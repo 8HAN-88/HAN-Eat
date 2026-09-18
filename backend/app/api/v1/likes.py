@@ -31,7 +31,7 @@ async def like_post(
     if not post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post not found"
+            detail="Пост не найден"
         )
     
     # Проверяем, не лайкнул ли уже
@@ -43,7 +43,7 @@ async def like_post(
     if existing_like:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Post already liked"
+            detail="Пост уже в избранном"
         )
     
     # Создаем лайк
@@ -111,7 +111,7 @@ async def unlike_post(
     if not like:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Like not found"
+            detail="Лайк не найден"
         )
     
     db.delete(like)
@@ -173,7 +173,7 @@ async def list_post_likes(
         .first()
     )
     if not post:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Post not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Пост не найден")
 
     total = (
         db.query(func.count(Like.id)).filter(Like.post_id == post_id).scalar()

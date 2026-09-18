@@ -99,13 +99,13 @@ def _url_risk_summary(url: str) -> dict:
 def _ensure_url(url: str) -> str:
     clean = (url or "").strip()
     if not (clean.startswith("https://") or clean.startswith("http://")):
-        raise HTTPException(status_code=400, detail="URL must start with http:// or https://")
+        raise HTTPException(status_code=400, detail="Адрес должен начинаться с http:// или https://")
     if len(clean) > 2000:
-        raise HTTPException(status_code=400, detail="URL is too long")
+        raise HTTPException(status_code=400, detail="Ссылка слишком длинная")
     parsed = urlparse(clean)
     host = (parsed.hostname or "").lower()
     if not host:
-        raise HTTPException(status_code=400, detail="URL host is required")
+        raise HTTPException(status_code=400, detail="Укажите хост ссылки")
     if parsed.username or parsed.password:
         raise HTTPException(status_code=400, detail="URL credentials are not allowed")
     if parsed.fragment:
@@ -117,7 +117,7 @@ def _ensure_url(url: str) -> str:
         if not _host_allowed(host, allowed):
             raise HTTPException(status_code=400, detail="URL host is not allowed")
     elif settings.APP_ENV != "development" and parsed.scheme != "https":
-        raise HTTPException(status_code=400, detail="Only https URLs are allowed in production")
+        raise HTTPException(status_code=400, detail="В продакшене разрешён только https")
     return clean
 
 
@@ -512,7 +512,7 @@ async def update_miniapp(
 ):
     app = db.query(BotMiniApp).filter(BotMiniApp.id == miniapp_id).first()
     if not app:
-        raise HTTPException(status_code=404, detail="Mini app not found")
+        raise HTTPException(status_code=404, detail="Мини-приложение не найдено")
     bot = db.query(User).filter(User.id == app.bot_id, User.is_bot == True).first()
     if not bot or bot.created_by_user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
@@ -556,7 +556,7 @@ async def delete_miniapp(
 ):
     app = db.query(BotMiniApp).filter(BotMiniApp.id == miniapp_id).first()
     if not app:
-        raise HTTPException(status_code=404, detail="Mini app not found")
+        raise HTTPException(status_code=404, detail="Мини-приложение не найдено")
     bot = db.query(User).filter(User.id == app.bot_id, User.is_bot == True).first()
     if not bot or bot.created_by_user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
@@ -573,7 +573,7 @@ async def install_miniapp(
 ):
     app = db.query(BotMiniApp).filter(BotMiniApp.id == miniapp_id, BotMiniApp.is_active == True).first()
     if not app:
-        raise HTTPException(status_code=404, detail="Mini app not found")
+        raise HTTPException(status_code=404, detail="Мини-приложение не найдено")
     bot = db.query(User).filter(User.id == app.bot_id, User.is_bot == True).first()
     if not bot:
         raise HTTPException(status_code=404, detail="Bot not found")
@@ -582,7 +582,7 @@ async def install_miniapp(
         and app.moderation_status != "approved"
         and not _can_user_access_non_approved_app(app, current_user, bot)
     ):
-        raise HTTPException(status_code=403, detail="Mini app is not approved yet")
+        raise HTTPException(status_code=403, detail="Мини-приложение ещё не одобрено")
     install = (
         db.query(MiniAppInstall)
         .filter(MiniAppInstall.miniapp_id == miniapp_id, MiniAppInstall.user_id == current_user.id)
@@ -626,7 +626,7 @@ async def launch_miniapp_init_data(
     )
     app = db.query(BotMiniApp).filter(BotMiniApp.id == miniapp_id, BotMiniApp.is_active == True).first()
     if not app:
-        raise HTTPException(status_code=404, detail="Mini app not found")
+        raise HTTPException(status_code=404, detail="Мини-приложение не найдено")
     bot = db.query(User).filter(User.id == app.bot_id, User.is_bot == True).first()
     if not bot or not bot.bot_token:
         raise HTTPException(status_code=400, detail="Bot token is missing")
@@ -635,7 +635,7 @@ async def launch_miniapp_init_data(
         and app.moderation_status != "approved"
         and not _can_user_access_non_approved_app(app, current_user, bot)
     ):
-        raise HTTPException(status_code=403, detail="Mini app is not approved yet")
+        raise HTTPException(status_code=403, detail="Мини-приложение ещё не одобрено")
 
     auth_date = int(time.time())
     unsafe = {
@@ -706,7 +706,7 @@ async def send_miniapp_web_app_data(
     )
     app = db.query(BotMiniApp).filter(BotMiniApp.id == miniapp_id, BotMiniApp.is_active == True).first()
     if not app:
-        raise HTTPException(status_code=404, detail="Mini app not found")
+        raise HTTPException(status_code=404, detail="Мини-приложение не найдено")
     bot = db.query(User).filter(User.id == app.bot_id, User.is_bot == True).first()
     if not bot:
         raise HTTPException(status_code=400, detail="Bot not found")
@@ -715,7 +715,7 @@ async def send_miniapp_web_app_data(
         and app.moderation_status != "approved"
         and not _can_user_access_non_approved_app(app, current_user, bot)
     ):
-        raise HTTPException(status_code=403, detail="Mini app is not approved yet")
+        raise HTTPException(status_code=403, detail="Мини-приложение ещё не одобрено")
 
     data = (payload.data or "").strip()
     if not data:
@@ -855,7 +855,7 @@ async def verify_miniapp_init_data(
 ):
     app = db.query(BotMiniApp).filter(BotMiniApp.id == miniapp_id, BotMiniApp.is_active == True).first()
     if not app:
-        raise HTTPException(status_code=404, detail="Mini app not found")
+        raise HTTPException(status_code=404, detail="Мини-приложение не найдено")
     bot = db.query(User).filter(User.id == app.bot_id, User.is_bot == True).first()
     if not bot or not bot.bot_token:
         raise HTTPException(status_code=400, detail="Bot token is missing")
@@ -927,7 +927,7 @@ async def moderate_miniapp(
 ):
     app = db.query(BotMiniApp).filter(BotMiniApp.id == miniapp_id).first()
     if not app:
-        raise HTTPException(status_code=404, detail="Mini app not found")
+        raise HTTPException(status_code=404, detail="Мини-приложение не найдено")
     note = (payload.moderation_note or "").strip()
     if payload.moderation_status == "rejected" and len(note) < 5:
         raise HTTPException(

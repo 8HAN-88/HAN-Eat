@@ -372,7 +372,16 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: Text(userVisibleError(_error!)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(userVisibleError(_error!)),
+                    TextButton(
+                      onPressed: _load,
+                      child: const Text('Повторить'),
+                    ),
+                  ],
+                ),
               ),
             const Text(
               'У каждого своя ссылка. Друг открывает её, регистрируется — '

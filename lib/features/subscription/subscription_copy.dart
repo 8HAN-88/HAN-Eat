@@ -52,7 +52,7 @@ class SubscriptionCopy {
       case 'creator':
         return 'Канал, аналитика, отложенные посты, продвижение';
       case 'pro':
-        return 'AI, автор и приоритетная поддержка';
+        return 'AI, автор, приоритет с 17 и полный доступ';
       default:
         return '';
     }
@@ -96,7 +96,7 @@ class SubscriptionCopy {
   static const List<String> _proBenefits = [
     'Всё из уровня 9 (AI)',
     'Всё из уровня 16 (автор)',
-    'Приоритетная поддержка',
+    'Приоритетная поддержка с уровня 17',
     'Максимальный доступ ко всем функциям',
   ];
 }

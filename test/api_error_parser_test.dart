@@ -52,6 +52,20 @@ void main() {
     );
   });
 
+  test('localizeKnownEnglishDetail maps likes donations and miniapps', () {
+    expect(parseApiErrorMessage('Post already liked'), 'Пост уже в избранном');
+    expect(
+      parseApiErrorMessage('Cannot donate to yourself'),
+      'Нельзя отправить донат себе',
+    );
+    expect(
+      parseApiErrorMessage('Mini app is not approved yet'),
+      'Мини-приложение ещё не одобрено',
+    );
+    expect(
+        parseApiErrorMessage('Rate limit exceeded'), 'Слишком много запросов');
+  });
+
   test('localizeKnownEnglishDetail maps report and publish leftovers', () {
     expect(
       parseApiErrorMessage('Cannot report your own post'),

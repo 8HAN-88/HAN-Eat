@@ -27,17 +27,17 @@ def _normalize_bot_username(raw: str) -> str:
     if not (5 <= len(value) <= 32):
         raise HTTPException(
             status_code=400,
-            detail="Username must be 5–32 characters",
+            detail="Имя бота: от 5 до 32 символов",
         )
     if not value.endswith("bot"):
         raise HTTPException(
             status_code=400,
-            detail="Username must end with 'bot'",
+            detail="Имя бота должно заканчиваться на bot",
         )
     if not re.fullmatch(r"[a-z][a-z0-9_]*", value):
         raise HTTPException(
             status_code=400,
-            detail="Username: start with a letter; only a-z, 0-9, underscore",
+            detail="Имя бота: с буквы, только латиница, цифры и _",
         )
     return value
 
@@ -116,7 +116,7 @@ def _button_item_from_inline(btn: BotInlineButton) -> dict:
     ):
         raise HTTPException(
             status_code=400,
-            detail="Each inline button requires callback_data, url, or web_app/miniapp_id",
+            detail="У каждой кнопки нужен callback, ссылка или мини-приложение",
         )
     return item
 
@@ -193,7 +193,7 @@ class BotListItem(BaseModel):
 def _bot_or_404(db: Session, bot_id: int, owner_id: int) -> User:
     bot = db.query(User).filter(User.id == bot_id, User.is_bot == True).first()
     if not bot or bot.created_by_user_id != owner_id:
-        raise HTTPException(status_code=404, detail="Bot not found")
+        raise HTTPException(status_code=404, detail="Бот не найден")
     return bot
 
 
@@ -201,9 +201,9 @@ def _validate_webhook_url(url: str) -> str:
     clean = (url or "").strip()
     parsed = urlparse(clean)
     if parsed.scheme not in ("http", "https"):
-        raise HTTPException(status_code=400, detail="Webhook URL must start with http/https")
+        raise HTTPException(status_code=400, detail="Адрес вебхука должен начинаться с http/https")
     if not parsed.netloc:
-        raise HTTPException(status_code=400, detail="Webhook URL host is required")
+        raise HTTPException(status_code=400, detail="Укажите хост вебхука")
     return clean
 
 
@@ -420,7 +420,7 @@ async def set_webhook(
 ):
     bot = _bot_or_404(db, bot_id, current_user.id)
     if not payload.url:
-        raise HTTPException(status_code=400, detail="Webhook URL is required")
+        raise HTTPException(status_code=400, detail="Укажите адрес вебхука")
     bot.bot_webhook_url = _validate_webhook_url(payload.url)
     bot.bot_webhook_secret = (payload.secret_token or "").strip()[:128] or None
     bot.bot_webhook_enabled = True
@@ -488,7 +488,7 @@ async def test_webhook_delivery(
     if not bot.bot_webhook_enabled or not bot.bot_webhook_url:
         raise HTTPException(
             status_code=400,
-            detail="Webhook is not configured or disabled",
+            detail="Вебхук не настроен или выключен",
         )
 
     delivered = deliver_webhook_update(
@@ -523,7 +523,7 @@ async def list_bot_commands(
 ):
     bot = db.query(User).filter(User.id == bot_id, User.is_bot == True).first()
     if not bot or bot.created_by_user_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Bot not found")
+        raise HTTPException(status_code=404, detail="Бот не найден")
 
     cmds = db.query(BotCommand).filter(BotCommand.bot_id == bot_id).all()
     result: List[BotCommandCreate] = []
@@ -603,7 +603,7 @@ async def add_bot_command(
 ):
     bot = db.query(User).filter(User.id == bot_id, User.is_bot == True).first()
     if not bot or bot.created_by_user_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Bot not found")
+        raise HTTPException(status_code=404, detail="Бот не найден")
 
     # Проверка дубликата
     existing = db.query(BotCommand).filter(
@@ -611,7 +611,7 @@ async def add_bot_command(
         BotCommand.command == cmd.command
     ).first()
     if existing:
-        raise HTTPException(status_code=400, detail="Command already exists")
+        raise HTTPException(status_code=400, detail="Такая команда уже есть")
 
     inline_buttons = _normalize_inline_buttons(
         cmd.inline_buttons,
@@ -669,13 +669,13 @@ async def update_bot_command(
 ):
     bot = db.query(User).filter(User.id == bot_id, User.is_bot == True).first()
     if not bot or bot.created_by_user_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Bot not found")
+        raise HTTPException(status_code=404, detail="Бот не найден")
     cmd = db.query(BotCommand).filter(
         BotCommand.bot_id == bot_id,
         BotCommand.command == command,
     ).first()
     if not cmd:
-        raise HTTPException(status_code=404, detail="Command not found")
+        raise HTTPException(status_code=404, detail="Команда не найдена")
     if payload.description is not None:
         cmd.description = payload.description.strip()
     if payload.response_text is not None:
@@ -723,7 +723,7 @@ async def delete_bot_command(
 ):
     bot = db.query(User).filter(User.id == bot_id, User.is_bot == True).first()
     if not bot or bot.created_by_user_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Bot not found")
+        raise HTTPException(status_code=404, detail="Бот не найден")
 
     deleted = db.query(BotCommand).filter(
         BotCommand.bot_id == bot_id,
@@ -731,7 +731,7 @@ async def delete_bot_command(
     ).delete()
     db.commit()
     if deleted == 0:
-        raise HTTPException(status_code=404, detail="Command not found")
+        raise HTTPException(status_code=404, detail="Команда не найдена")
     return {"status": "ok"}
 
 

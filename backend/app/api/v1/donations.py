@@ -55,22 +55,22 @@ async def create_donation(
     # Проверка получателя
     recipient = db.query(User).filter(User.id == payload.recipient_id).first()
     if not recipient:
-        raise HTTPException(status_code=404, detail="Recipient not found")
+        raise HTTPException(status_code=404, detail="Получатель не найден")
 
     if recipient.id == current_user.id:
-        raise HTTPException(status_code=400, detail="Cannot donate to yourself")
+        raise HTTPException(status_code=400, detail="Нельзя отправить донат себе")
 
     # Проверка канала (если указан)
     if payload.channel_id:
         channel = db.query(Channel).filter(Channel.id == payload.channel_id).first()
         if not channel or int(channel.admin_user_id) != int(payload.recipient_id):
-            raise HTTPException(status_code=400, detail="Invalid channel")
+            raise HTTPException(status_code=400, detail="Неверный канал")
 
     # Проверка поста (если указан)
     if payload.post_id:
         post = db.query(Post).filter(Post.id == payload.post_id).first()
         if not post or post.user_id != payload.recipient_id:
-            raise HTTPException(status_code=400, detail="Invalid post")
+            raise HTTPException(status_code=400, detail="Неверный пост")
 
     from app.api.v1.paid_features import _publish_tip_message
     from app.services.paid_features_service import PaidFeaturesService

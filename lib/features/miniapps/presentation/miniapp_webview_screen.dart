@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../utils/api_error_parser.dart';
 import '../data/miniapps_service.dart';
 
 /// Полноценный экран запуска мини-приложения с WebView + JS bridge (как Telegram WebApp).
@@ -69,7 +70,8 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
     final controller = _controller;
     if (controller == null) return;
     if (widget.url != null) {
-      await controller.loadUrl(urlRequest: URLRequest(url: WebUri(widget.url!)));
+      await controller.loadUrl(
+          urlRequest: URLRequest(url: WebUri(widget.url!)));
       return;
     }
     if (widget.htmlContent != null) {
@@ -142,9 +144,7 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
         leading: IconButton(
           tooltip: _backButtonVisible ? 'Назад' : 'Закрыть',
           icon: Icon(
-            _backButtonVisible
-                ? Icons.arrow_back_rounded
-                : Icons.close_rounded,
+            _backButtonVisible ? Icons.arrow_back_rounded : Icons.close_rounded,
           ),
           onPressed: () {
             if (_backButtonVisible) {
@@ -363,9 +363,7 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
       );
       return;
     }
-    final data = raw is String
-        ? raw
-        : (raw == null ? '' : jsonEncode(raw));
+    final data = raw is String ? raw : (raw == null ? '' : jsonEncode(raw));
     if (data.trim().isEmpty) return;
     setState(() => _sendingData = true);
     try {
@@ -382,7 +380,9 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
       setState(() => _sendingData = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Не удалось отправить данные: $e'),
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось отправить данные'),
+          ),
           action: SnackBarAction(
             label: 'Повторить',
             onPressed: () => unawaited(_handleSendData(raw)),

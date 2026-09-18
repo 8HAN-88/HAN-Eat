@@ -440,7 +440,7 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
       case 'harassment':
         return 'Оскорбления';
       case 'nsfw':
-        return 'NSFW';
+        return 'Контент 18+';
       case 'violence':
         return 'Насилие';
       case 'misinformation':

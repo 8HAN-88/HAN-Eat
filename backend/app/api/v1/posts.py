@@ -294,7 +294,7 @@ async def create_post(
     if not ok:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=spam_msg or "Rate limit exceeded",
+            detail=spam_msg or "Слишком много запросов",
         )
 
     db.add(post)
