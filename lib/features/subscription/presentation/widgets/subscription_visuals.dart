@@ -263,7 +263,7 @@ class SubscriptionTierCard extends StatelessWidget {
                 ] else if (!trialEligible && !isOwned && tierId == 'creator') ...[
                   const SizedBox(height: 6),
                   Text(
-                    'Пробный период для Creator недоступен',
+                    'Пробный период для уровня 16 недоступен',
                     style: TextStyle(
                       fontSize: 12,
                       color: cs.onSurfaceVariant,

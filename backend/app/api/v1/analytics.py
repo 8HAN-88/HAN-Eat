@@ -44,7 +44,7 @@ async def log_client_event(
     if not any(request.event_type.startswith(p) for p in allowed_prefixes):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Event type not allowed",
+            detail="Этот тип события недоступен",
         )
     author_id = None
     if request.entity_type == "post" and request.entity_id > 0:
@@ -85,7 +85,7 @@ async def get_post_analytics(
         db,
         current_user.id,
         "creator_analytics",
-        "Аналитика доступна с тарифом Creator или Pro",
+        "Аналитика доступна с подпиской уровня 16",
     )
     
     # Проверяем, что пост существует и пользователь является автором
@@ -97,7 +97,7 @@ async def get_post_analytics(
     if not post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post not found or access denied"
+            detail="Пост не найден или нет доступа"
         )
     
     analytics_service = AnalyticsService(db)
@@ -130,7 +130,7 @@ async def get_profile_analytics(
         db,
         current_user.id,
         "creator_analytics",
-        "Аналитика доступна с тарифом Creator или Pro",
+        "Аналитика доступна с подпиской уровня 16",
     )
     analytics_service = AnalyticsService(db)
     analytics = analytics_service.get_profile_analytics(
@@ -158,7 +158,7 @@ async def get_chat_channel_analytics(
         db,
         current_user.id,
         "creator_analytics",
-        "Аналитика доступна с тарифом Creator или Pro",
+        "Аналитика доступна с подпиской уровня 16",
     )
     analytics_service = AnalyticsService(db)
     return analytics_service.get_chat_channel_insights(

@@ -194,7 +194,7 @@ async def repost_to_channel(
     if not channel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Channel not found"
+            detail="Канал не найден"
         )
 
     member = get_membership(db, channel.id, current_user.id)

@@ -420,7 +420,7 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
                                 : null,
                             trailing: Text(
                               g.isPremiumPrize
-                                  ? 'Pro · ${g.premiumMonths} мес.'
+                                  ? 'Уровень 18 · ${g.premiumMonths} мес.'
                                   : '+${w.prizeStars} ★',
                               style: TextStyle(
                                 color: scheme.secondary,

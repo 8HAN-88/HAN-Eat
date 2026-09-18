@@ -158,6 +158,24 @@ void main() {
     );
   });
 
+  test(
+      'localizeKnownEnglishDetail maps leftover Creator analytics and previews',
+      () {
+    expect(
+      parseApiErrorMessage('Аналитика доступна с тарифом Creator или Pro'),
+      'Аналитика доступна с подпиской уровня 16',
+    );
+    expect(
+      parseApiErrorMessage('Post not found or access denied'),
+      'Пост не найден или нет доступа',
+    );
+    expect(
+      parseApiErrorMessage('Could not fetch preview'),
+      'Не удалось получить предпросмотр',
+    );
+    expect(parseApiErrorMessage('Group not found'), 'Группа не найдена');
+  });
+
   test('localizeKnownEnglishDetail maps auth subscription and repost leftovers',
       () {
     expect(

@@ -357,7 +357,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         notification.type == 'subscription_refund_approved' ||
         notification.type == 'subscription_refund_rejected' ||
         notification.data?['route'] == 'subscription') {
-      context.push(SubscriptionRoute.path);
+      final rawLevel =
+          notification.data?['level'] ?? notification.data?['flex_level'];
+      final level =
+          rawLevel is int ? rawLevel : int.tryParse('${rawLevel ?? ''}');
+      context.push(
+        level != null && level > 0
+            ? FlexSubscriptionRoute.pathWithLevel(level)
+            : FlexSubscriptionRoute.path,
+      );
     } else if (notification.type == 'message' ||
         notification.entityType == 'conversation' ||
         notification.data?['route'] == 'chat') {

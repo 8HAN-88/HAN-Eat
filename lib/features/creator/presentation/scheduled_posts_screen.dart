@@ -62,7 +62,8 @@ class _ScheduledPostsScreenState extends ConsumerState<ScheduledPostsScreen> {
   }
 
   Future<void> _reschedule(ScheduledPostSummary post) async {
-    final initial = post.scheduledPublishAt ?? DateTime.now().add(const Duration(days: 1));
+    final initial =
+        post.scheduledPublishAt ?? DateTime.now().add(const Duration(days: 1));
     final date = await showDatePicker(
       context: context,
       initialDate: initial,
@@ -266,7 +267,7 @@ class _ScheduledPostsScreenState extends ConsumerState<ScheduledPostsScreen> {
               ),
               subtitle: Text(
                 '${_formatDate(post.scheduledPublishAt)}\n'
-                '${post.type}${post.channelId != null ? ' · канал #${post.channelId}' : ''}',
+                '${_labelForType(post.type)}${post.channelId != null ? ' · канал #${post.channelId}' : ''}',
               ),
               isThreeLine: true,
               onTap: () => _reschedule(post),
@@ -290,6 +291,23 @@ class _ScheduledPostsScreenState extends ConsumerState<ScheduledPostsScreen> {
         },
       ),
     );
+  }
+
+  String _labelForType(String type) {
+    switch (type) {
+      case 'photo':
+        return 'Фото';
+      case 'reel':
+        return 'Рилс';
+      case 'recipe':
+        return 'Пост';
+      case 'text':
+        return 'Текст';
+      case 'video':
+        return 'Видео';
+      default:
+        return 'Пост';
+    }
   }
 
   IconData _iconForType(String type) {
