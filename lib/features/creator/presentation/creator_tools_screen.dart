@@ -105,7 +105,7 @@ class _CreatorToolsScreenState extends State<CreatorToolsScreen> {
               if (stats.canPromote) {
                 context.push(PromotedPostsRoute.path);
               } else {
-                context.push(SubscriptionRoute.pathWithProduct('creator'));
+                context.push(FlexSubscriptionRoute.pathWithLevel(16));
               }
             },
             borderRadius: BorderRadius.circular(12),
@@ -165,7 +165,7 @@ class _CreatorToolsScreenState extends State<CreatorToolsScreen> {
               if (stats.canSchedule) {
                 context.push(ScheduledPostsRoute.path);
               } else {
-                context.push(SubscriptionRoute.pathWithProduct('creator'));
+                context.push(FlexSubscriptionRoute.pathWithLevel(16));
               }
             },
           ),
@@ -181,7 +181,7 @@ class _CreatorToolsScreenState extends State<CreatorToolsScreen> {
               if (stats.canAnalytics) {
                 context.pushNamed('analytics');
               } else {
-                context.push(SubscriptionRoute.pathWithProduct('creator'));
+                context.push(FlexSubscriptionRoute.pathWithLevel(16));
               }
             },
           ),
@@ -193,7 +193,7 @@ class _CreatorToolsScreenState extends State<CreatorToolsScreen> {
             title: const Text('Подписка'),
             subtitle: const Text('Уровень 16 и выше — продвижение и аналитика'),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () => context.push(SubscriptionRoute.pathWithProduct('creator')),
+            onTap: () => context.push(FlexSubscriptionRoute.pathWithLevel(16)),
           ),
         ),
         const SizedBox(height: 12),
@@ -232,7 +232,7 @@ class _CreatorToolsScreenState extends State<CreatorToolsScreen> {
             const SizedBox(height: 20),
             FilledButton(
               onPressed: () =>
-                  context.push(SubscriptionRoute.pathWithProduct('creator')),
+                  context.push(FlexSubscriptionRoute.pathWithLevel(16)),
               child: const Text('Открыть подписку'),
             ),
           ],

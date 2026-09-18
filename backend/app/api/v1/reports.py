@@ -59,10 +59,10 @@ async def report_post(
     """Пожаловаться на пост"""
     post = db.query(Post).filter(Post.id == post_id, Post.deleted_at.is_(None)).first()
     if not post:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пост не найден")
     if post.user_id == current_user.id:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot report your own post"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Нельзя пожаловаться на свой пост"
         )
 
     svc = ContentReportService(db)
@@ -102,11 +102,11 @@ async def report_comment(
         Comment.id == comment_id, Comment.deleted_at.is_(None)
     ).first()
     if not comment:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comment not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Комментарий не найден")
     if comment.user_id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot report your own comment",
+            detail="Нельзя пожаловаться на свой комментарий",
         )
 
     svc = ContentReportService(db)
@@ -144,11 +144,11 @@ async def report_channel(
     """Пожаловаться на канал."""
     channel = db.query(Channel).filter(Channel.id == channel_id).first()
     if not channel:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Канал не найден")
     if channel.admin_user_id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot report your own channel",
+            detail="Нельзя пожаловаться на свой канал",
         )
 
     svc = ContentReportService(db)
@@ -183,7 +183,7 @@ async def report_user(
     if user_id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot report yourself",
+            detail="Нельзя пожаловаться на себя",
         )
     user = (
         db.query(User)
@@ -191,7 +191,7 @@ async def report_user(
         .first()
     )
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
 
     svc = ContentReportService(db)
     _, burst = svc.create_report(
@@ -232,7 +232,7 @@ async def report_chat_message(
         .first()
     )
     if not member:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа")
     msg = (
         db.query(Message)
         .filter(
@@ -243,11 +243,11 @@ async def report_chat_message(
         .first()
     )
     if not msg:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Сообщение не найдено")
     if msg.sender_id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot report your own message",
+            detail="Нельзя пожаловаться на своё сообщение",
         )
 
     svc = ContentReportService(db)

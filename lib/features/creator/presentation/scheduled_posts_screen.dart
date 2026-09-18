@@ -211,7 +211,7 @@ class _ScheduledPostsScreenState extends ConsumerState<ScheduledPostsScreen> {
               const SizedBox(height: 20),
               FilledButton(
                 onPressed: () =>
-                    context.push(SubscriptionRoute.pathWithProduct('creator')),
+                    context.push(FlexSubscriptionRoute.pathWithLevel(16)),
                 child: const Text('Открыть уровень 16'),
               ),
             ],

@@ -182,7 +182,7 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            'Уровень 17: ваши обращения обрабатываются в приоритетной очереди.',
+                            'Приоритетная очередь: обращения обрабатываются быстрее.',
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
                         ),
@@ -197,7 +197,7 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
                     leading: const Icon(Icons.workspace_premium_outlined),
                     title: const Text('Приоритетная поддержка'),
                     subtitle: const Text(
-                      'С подпиской уровня 17 обращения обрабатываются быстрее.',
+                      'С уровня 17 обращения обрабатываются в приоритетной очереди.',
                     ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () =>

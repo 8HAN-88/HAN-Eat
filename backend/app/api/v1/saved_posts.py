@@ -36,7 +36,7 @@ async def save_post(
     if not post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post not found"
+            detail="Пост не найден"
         )
     
     # Проверяем, не сохранен ли уже
@@ -48,7 +48,7 @@ async def save_post(
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Post already saved"
+            detail="Пост уже сохранён"
         )
     
     # Создаем запись о сохранении
@@ -97,7 +97,7 @@ async def unsave_post(
     if not saved_post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Post not saved"
+            detail="Пост не был сохранён"
         )
     
     db.delete(saved_post)

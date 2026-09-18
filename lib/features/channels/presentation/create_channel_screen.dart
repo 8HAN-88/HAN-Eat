@@ -404,7 +404,7 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
                               ),
                             );
                             context.push(
-                              SubscriptionRoute.pathWithProduct('creator'),
+                              FlexSubscriptionRoute.pathWithLevel(16),
                             );
                             return;
                           }

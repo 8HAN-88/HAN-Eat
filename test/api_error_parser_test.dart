@@ -52,6 +52,25 @@ void main() {
     );
   });
 
+  test('localizeKnownEnglishDetail maps report and publish leftovers', () {
+    expect(
+      parseApiErrorMessage('Cannot report your own post'),
+      'Нельзя пожаловаться на свой пост',
+    );
+    expect(
+      parseApiErrorMessage('Post already saved'),
+      'Пост уже сохранён',
+    );
+    expect(
+      parseApiErrorMessage('Требуется тариф Creator или Pro'),
+      'Доступно с подпиской уровня 16',
+    );
+    expect(
+      parseApiErrorMessage('Only published posts can be promoted'),
+      'Продвигать можно только опубликованные посты',
+    );
+  });
+
   test('localizeKnownEnglishDetail maps channel and support leftovers', () {
     expect(
       parseApiErrorMessage('Already a member of this channel'),

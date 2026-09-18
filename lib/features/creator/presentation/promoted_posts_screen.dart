@@ -118,7 +118,7 @@ class _PromotedPostsScreenState extends State<PromotedPostsScreen> {
               const SizedBox(height: 16),
               FilledButton(
                 onPressed: () =>
-                    context.push(SubscriptionRoute.pathWithProduct('creator')),
+                    context.push(FlexSubscriptionRoute.pathWithLevel(16)),
                 child: const Text('Открыть уровень 16'),
               ),
             ],
