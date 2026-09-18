@@ -212,6 +212,11 @@ void main() {
       'В запросе нужно минимум 2 символа',
     );
     expect(parseApiErrorMessage('Video not found'), 'Видео не найдено');
+    expect(parseApiErrorMessage('Call not found'), 'Звонок не найден');
+    expect(
+      parseApiErrorMessage('Cannot call this user'),
+      'Этому пользователю нельзя позвонить',
+    );
   });
 
   test('userVisibleAuthError prefers auth message for 401', () {

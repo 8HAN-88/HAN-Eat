@@ -246,6 +246,14 @@ const _knownEnglishDetails = <String, String>{
   'Amount must be positive': 'Сумма должна быть больше нуля',
   'Gift is not for sale': 'Подарок не продаётся',
   'Cannot buy your own gift': 'Нельзя купить свой подарок',
+  'Call not found': 'Звонок не найден',
+  'Calls only supported in direct chats':
+      'Звонки доступны только в личных чатах',
+  'Cannot call this user': 'Этому пользователю нельзя позвонить',
+  'Call is not ringing': 'Звонок уже не идёт',
+  'Call is not active': 'Звонок не активен',
+  'Yandex OAuth is not configured': 'Вход через Яндекс не настроен',
+  'Yandex account has no email': 'В аккаунте Яндекса нет email',
 };
 
 String? localizeKnownEnglishDetail(String detail) =>
