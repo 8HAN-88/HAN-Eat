@@ -1617,7 +1617,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       await ChannelSheetPrefs.setArchived(channel.id, true);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('«${channel.name}» в архиве')),
+        SnackBar(
+          content: Text('«${channel.name}» в архиве'),
+          action: SnackBarAction(
+            label: 'Отменить',
+            onPressed: () => unawaited(_undoArchiveChannelFromHub(channel)),
+          ),
+        ),
       );
       unawaited(_load(silent: true));
     } catch (e) {
@@ -1634,6 +1640,24 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
           action: SnackBarAction(
             label: 'Повторить',
             onPressed: () => unawaited(_archiveChannelFromHub(channel)),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _undoArchiveChannelFromHub(Channel channel) async {
+    try {
+      await ChannelSheetPrefs.setArchived(channel.id, false);
+      if (mounted) unawaited(_load(silent: true));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(userVisibleError(e)),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_undoArchiveChannelFromHub(channel)),
           ),
         ),
       );
@@ -1779,7 +1803,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         TelegramActionSheetAction(
           icon: Icons.archive_outlined,
           title: 'В архив',
-          subtitle: 'Скрыть из списка чатов',
+          subtitle: 'Перенести в архив, не скрывать навсегда',
           onTap: () => _archiveChannelFromHub(channel),
         ),
         TelegramActionSheetAction(

@@ -568,8 +568,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: FlexSubscriptionRoute.path,
         name: FlexSubscriptionRoute.name,
-        pageBuilder: (context, state) =>
-            const MaterialPage(child: FlexSubscriptionScreen()),
+        pageBuilder: (context, state) {
+          final level = int.tryParse(state.uri.queryParameters['level'] ?? '');
+          return MaterialPage(
+            child: FlexSubscriptionScreen(initialLevel: level ?? 0),
+          );
+        },
       ),
       GoRoute(
         path: FlexConstructorRoute.path,
@@ -1738,6 +1742,9 @@ class SubscriptionRoute {
 class FlexSubscriptionRoute {
   static const path = '/subscription/flex';
   static const name = 'flex_subscription';
+
+  static String pathWithLevel(int level) =>
+      '$path?level=${Uri.encodeComponent('$level')}';
 }
 
 class FlexConstructorRoute {

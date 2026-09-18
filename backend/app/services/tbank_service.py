@@ -43,9 +43,9 @@ class TBankService:
 
     @staticmethod
     def receipt_item_description(product: str, plan: str = "monthly") -> str:
-        names = {"ai": "HanWe AI", "creator": "HanWe Creator", "pro": "HanWe Pro"}
-        period = "1 мес." if plan == "monthly" else "1 год"
-        return f"Подписка {names.get(product, product)} ({period})"
+        from app.core.receipt_copy import receipt_item_description as _receipt
+
+        return _receipt(product, plan)
 
     @staticmethod
     def make_order_id(user_id: int) -> str:

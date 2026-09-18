@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from typing import Optional, List
 from datetime import datetime
 from app.core.database import get_db
+from app.core.retired import KITCHEN_GONE_DETAIL
 from app.api.dependencies import get_current_user, get_current_user_required
 from app.models.user import User
 from app.services.search_service import SearchService
@@ -115,10 +116,7 @@ async def search_recipes_retired():
     """Recipe search retired — HanWe is a messenger."""
     raise HTTPException(
         status_code=status.HTTP_410_GONE,
-        detail={
-            "detail": "Kitchen features were removed. HanWe is a messenger.",
-            "code": "kitchen_retired",
-        },
+        detail=KITCHEN_GONE_DETAIL,
     )
 
 

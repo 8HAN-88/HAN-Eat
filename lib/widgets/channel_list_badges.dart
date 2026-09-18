@@ -20,7 +20,7 @@ class ChannelListBadges extends StatelessWidget {
       final accent = _parseAccent(channel.accentColor);
       chips.add(_badge(
         context,
-        label: 'Creator',
+        label: 'Автор',
         icon: Icons.verified_outlined,
         color: accent?.withValues(alpha: 0.18) ??
             Theme.of(context).colorScheme.primaryContainer,

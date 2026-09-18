@@ -9,6 +9,7 @@ from sqlalchemy import String, and_, cast, func, or_
 from typing import Optional, List
 from redis.exceptions import ConnectionError as RedisConnectionError, TimeoutError as RedisTimeoutError
 from app.core.database import get_db
+from app.core.retired import KITCHEN_GONE_DETAIL
 from app.core.redis_client import redis_client
 from app.api.dependencies import get_current_user_required, get_current_user
 from app.models.user import User
@@ -1428,10 +1429,7 @@ async def create_channel_recipe_retired(channel_id: int):
     """Channel recipe create retired — HanWe is a messenger."""
     raise HTTPException(
         status_code=status.HTTP_410_GONE,
-        detail={
-            "detail": "Kitchen features were removed. HanWe is a messenger.",
-            "code": "kitchen_retired",
-        },
+        detail=KITCHEN_GONE_DETAIL,
     )
 
 
@@ -1473,10 +1471,7 @@ async def create_channel_post(
     if request.type == "recipe":
         raise HTTPException(
             status_code=status.HTTP_410_GONE,
-            detail={
-                "detail": "Kitchen features were removed. HanWe is a messenger.",
-                "code": "kitchen_retired",
-            },
+            detail=KITCHEN_GONE_DETAIL,
         )
     
     # Формируем body для поста
@@ -1834,10 +1829,7 @@ async def get_channel_recipes_retired(channel_id: int):
     """Channel recipe listing retired — HanWe is a messenger."""
     raise HTTPException(
         status_code=status.HTTP_410_GONE,
-        detail={
-            "detail": "Kitchen features were removed. HanWe is a messenger.",
-            "code": "kitchen_retired",
-        },
+        detail=KITCHEN_GONE_DETAIL,
     )
 
 

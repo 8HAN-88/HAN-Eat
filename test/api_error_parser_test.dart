@@ -52,6 +52,22 @@ void main() {
     );
   });
 
+  test('parseApiErrorMessage maps FEATURE_REMOVED and payment English', () {
+    expect(
+      parseApiErrorMessage({'code': 'FEATURE_REMOVED'}),
+      'Этот раздел удалён. HanWe — мессенджер.',
+    );
+    expect(
+      parseApiErrorMessage('T-Bank unavailable'),
+      'Оплата подписок временно недоступна',
+    );
+    expect(
+      parseApiErrorMessage(
+          'Kitchen features were removed. HanWe is a messenger.'),
+      'Этот раздел удалён. HanWe — мессенджер.',
+    );
+  });
+
   test('userVisibleError maps FlutterWebRTC MissingPluginException', () {
     expect(
       userVisibleError(

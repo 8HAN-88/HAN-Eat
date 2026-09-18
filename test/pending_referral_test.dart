@@ -44,7 +44,8 @@ void main() {
       'ABC12XYZ',
     );
     expect(
-      PendingReferral.extract('https://haneat.app/invite?ref=https://haneat.app/invite?ref=ABC12XYZ'),
+      PendingReferral.extract(
+          'https://haneat.app/invite?ref=https://haneat.app/invite?ref=ABC12XYZ'),
       'ABC12XYZ',
     );
     expect(
@@ -131,6 +132,11 @@ void main() {
     final resolved = await AppInviteService.resolvedRef(ref: 'OTHERCD1');
     expect(resolved, 'OTHERCD1');
     expect(AppInviteService.inviteRef(), 'ABC12XYZ');
+  });
+
+  test('inviteRef never falls back to username or u{id}', () {
+    expect(AppInviteService.inviteRef(), '');
+    expect(AppInviteService.webInviteUrl(), PendingReferral.webInviteBase);
   });
 
   test('invite service prefers the official 8-char code', () {

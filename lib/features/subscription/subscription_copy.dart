@@ -52,7 +52,7 @@ class SubscriptionCopy {
       case 'creator':
         return 'Канал, аналитика, отложенные посты, продвижение';
       case 'pro':
-        return 'AI + Creator и приоритетная поддержка';
+        return 'AI, автор и приоритетная поддержка';
       default:
         return '';
     }

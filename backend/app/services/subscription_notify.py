@@ -10,17 +10,12 @@ from app.services.notification_service import NotificationService
 
 logger = logging.getLogger(__name__)
 
-_PRODUCT_NAMES = {
-    "ai": "HanWe AI",
-    "creator": "HanWe Creator",
-    "pro": "HanWe Pro",
-}
-
-
 def _product_label(product: Optional[str]) -> str:
+    from app.core.receipt_copy import product_label
+
     if not product:
         return "подписка"
-    return _PRODUCT_NAMES.get(str(product).lower(), product)
+    return product_label(product)
 
 
 def notify_refund_requested(

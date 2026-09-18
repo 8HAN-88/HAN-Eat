@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import Optional, Dict, Any
 from app.core.database import get_db
+from app.core.retired import KITCHEN_GONE_DETAIL
 from app.api.dependencies import get_current_user_required, get_current_user
 from app.models.user import User
 from app.models.post import Post
@@ -130,10 +131,7 @@ async def is_post_saved(
 def _kitchen_recipe_save_gone() -> None:
     raise HTTPException(
         status_code=status.HTTP_410_GONE,
-        detail={
-            "detail": "Kitchen features were removed. HanWe is a messenger.",
-            "code": "kitchen_retired",
-        },
+        detail=KITCHEN_GONE_DETAIL,
     )
 
 

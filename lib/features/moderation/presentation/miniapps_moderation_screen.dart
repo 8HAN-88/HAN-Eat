@@ -45,7 +45,8 @@ class _MiniAppsModerationScreenState extends State<MiniAppsModerationScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = userVisibleError(e, fallback: 'Не удалось загрузить mini apps');
+        _error =
+            userVisibleError(e, fallback: 'Не удалось загрузить mini apps');
       });
     }
   }
@@ -192,8 +193,11 @@ class _MiniAppsModerationScreenState extends State<MiniAppsModerationScreen> {
                                     ],
                                   ),
                                   const SizedBox(height: 6),
-                                  Text('@${app.botUsername} · ${app.shortName}'),
-                                  if ((app.description ?? '').trim().isNotEmpty) ...[
+                                  Text(
+                                      '@${app.botUsername} · ${app.shortName}'),
+                                  if ((app.description ?? '')
+                                      .trim()
+                                      .isNotEmpty) ...[
                                     const SizedBox(height: 6),
                                     Text(app.description!.trim()),
                                   ],
@@ -204,19 +208,20 @@ class _MiniAppsModerationScreenState extends State<MiniAppsModerationScreen> {
                                     children: [
                                       _RiskChip(
                                         label:
-                                            'Host: ${(app.urlHost ?? '-').isEmpty ? '-' : app.urlHost!}',
+                                            'Хост: ${(app.urlHost ?? '-').isEmpty ? '-' : app.urlHost!}',
                                         level: app.urlRiskLevel,
                                       ),
                                       _RiskChip(
-                                        label: 'Scheme: ${app.urlScheme ?? '-'}',
+                                        label: 'Схема: ${app.urlScheme ?? '-'}',
                                         level: app.urlScheme == 'https'
                                             ? 'low'
                                             : 'medium',
                                       ),
                                       if (app.urlRiskReasons.isNotEmpty)
                                         _RiskChip(
-                                          label:
-                                              app.urlRiskReasons.take(2).join(', '),
+                                          label: app.urlRiskReasons
+                                              .take(2)
+                                              .join(', '),
                                           level: app.urlRiskLevel,
                                         ),
                                     ],
@@ -227,15 +232,19 @@ class _MiniAppsModerationScreenState extends State<MiniAppsModerationScreen> {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
-                                      color: Theme.of(context).colorScheme.outline,
+                                      color:
+                                          Theme.of(context).colorScheme.outline,
                                     ),
                                   ),
-                                  if ((app.moderationNote ?? '').trim().isNotEmpty) ...[
+                                  if ((app.moderationNote ?? '')
+                                      .trim()
+                                      .isNotEmpty) ...[
                                     const SizedBox(height: 8),
                                     Text(
                                       'Note: ${app.moderationNote}',
                                       style: TextStyle(
-                                        color: Theme.of(context).colorScheme.error,
+                                        color:
+                                            Theme.of(context).colorScheme.error,
                                       ),
                                     ),
                                   ],
@@ -245,22 +254,26 @@ class _MiniAppsModerationScreenState extends State<MiniAppsModerationScreen> {
                                     runSpacing: 8,
                                     children: [
                                       FilledButton.icon(
-                                        onPressed: app.moderationStatus == 'approved'
+                                        onPressed: app.moderationStatus ==
+                                                'approved'
                                             ? null
                                             : () => _moderate(app, 'approved'),
                                         icon: const Icon(Icons.check),
                                         label: const Text('Одобрить'),
                                       ),
                                       OutlinedButton.icon(
-                                        onPressed: app.moderationStatus == 'rejected'
+                                        onPressed: app.moderationStatus ==
+                                                'rejected'
                                             ? null
                                             : () => _moderate(app, 'rejected'),
                                         icon: const Icon(Icons.close),
                                         label: const Text('Отклонить'),
                                       ),
                                       TextButton(
-                                        onPressed: () => _moderate(app, 'pending'),
-                                        child: const Text('Вернуть на проверку'),
+                                        onPressed: () =>
+                                            _moderate(app, 'pending'),
+                                        child:
+                                            const Text('Вернуть на проверку'),
                                       ),
                                     ],
                                   ),

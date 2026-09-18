@@ -41,12 +41,18 @@ from app.services.subscription_notify import (
     notify_refund_requested,
 )
 from app.core.payments_startup import collect_payments_issues
+from app.core.receipt_copy import product_label
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-_TIER_LABELS = {"ai": "HanWe AI", "creator": "HanWe Creator", "pro": "HanWe Pro", "free": "Free"}
+_TIER_LABELS = {
+    "ai": product_label("ai"),
+    "creator": product_label("creator"),
+    "pro": product_label("pro"),
+    "free": product_label("free"),
+}
 
 
 def _tier_label(tier: Optional[str]) -> str:
@@ -75,7 +81,7 @@ def _ru_subscription_prices_response(
         "checkout_available": checkout_available,
         "tiers": {
             "ai": {
-                "name": "HanWe AI",
+                "name": product_label("ai"),
                 "monthly": {
                     "price": settings.AI_MONTHLY_PRICE_RUB,
                     "currency": "RUB",
@@ -90,7 +96,7 @@ def _ru_subscription_prices_response(
                 ],
             },
             "creator": {
-                "name": "HanWe Creator",
+                "name": product_label("creator"),
                 "monthly": {
                     "price": settings.CREATOR_MONTHLY_PRICE_RUB,
                     "currency": "RUB",
@@ -108,7 +114,7 @@ def _ru_subscription_prices_response(
                 ],
             },
             "pro": {
-                "name": "HanWe Pro",
+                "name": product_label("pro"),
                 "monthly": {
                     "price": settings.PRO_MONTHLY_PRICE_RUB,
                     "currency": "RUB",
@@ -117,8 +123,8 @@ def _ru_subscription_prices_response(
                 "trial_eligible": True,
                 "recommended": True,
                 "benefits": [
-                    "Всё из тарифа HanWe AI",
-                    "Всё из тарифа HanWe Creator",
+                    "Всё из уровня 9 (AI)",
+                    "Всё из уровня 16 (автор)",
                     "Приоритетная поддержка",
                     "Максимальный доступ ко всем функциям",
                 ],
@@ -244,7 +250,10 @@ async def create_stars_checkout(
             if not tbank_service.enabled:
                 raise HTTPException(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="Payment service (T-Bank) is not available",
+                    detail={
+                        "code": "PAYMENTS_UNAVAILABLE",
+                        "message": "Оплата подписок временно недоступна",
+                    },
                 )
             result = tbank_service.create_payment(
                 user_id=current_user.id,
@@ -263,7 +272,10 @@ async def create_stars_checkout(
             if not yookassa_service.enabled:
                 raise HTTPException(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="Payment service (YooKassa) is not available",
+                    detail={
+                        "code": "PAYMENTS_UNAVAILABLE",
+                        "message": "Оплата подписок временно недоступна",
+                    },
                 )
             result = yookassa_service.create_payment(
                 user_id=current_user.id,
@@ -393,11 +405,13 @@ async def create_checkout_session(
             if not tbank_service.enabled:
                 raise HTTPException(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="Payment service (T-Bank) is not available",
+                    detail={
+                        "code": "PAYMENTS_UNAVAILABLE",
+                        "message": "Оплата подписок временно недоступна",
+                    },
                 )
 
-            tier_names = {"ai": "HanWe AI", "creator": "HanWe Creator", "pro": "HanWe Pro"}
-            description = f"Подписка {tier_names.get(product, product)} (месяц)"
+            description = f"Подписка {product_label(product)} (месяц)"
             if estimate.get("is_upgrade"):
                 description += (
                     f", апгрейд с {_tier_label(estimate.get('from_tier'))}, "
@@ -469,11 +483,13 @@ async def create_checkout_session(
             if not yookassa_service.enabled:
                 raise HTTPException(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="Payment service (YooKassa) is not available"
+                    detail={
+                        "code": "PAYMENTS_UNAVAILABLE",
+                        "message": "Оплата подписок временно недоступна",
+                    },
                 )
             
-            tier_names = {"ai": "HanWe AI", "creator": "HanWe Creator", "pro": "HanWe Pro"}
-            description = f"Подписка {tier_names.get(product, product)} (месяц)"
+            description = f"Подписка {product_label(product)} (месяц)"
             if estimate.get("is_upgrade"):
                 description += (
                     f", апгрейд с {_tier_label(estimate.get('from_tier'))}, "
@@ -547,7 +563,10 @@ async def create_checkout_session(
             if not payment_service.enabled:
                 raise HTTPException(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="Payment service (Stripe) is not available"
+                    detail={
+                        "code": "PAYMENTS_UNAVAILABLE",
+                        "message": "Оплата подписок временно недоступна",
+                    },
                 )
             
             result = payment_service.create_checkout_session(
@@ -570,7 +589,10 @@ async def create_checkout_session(
             # Платежи не поддерживаются для этой страны
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Payment is not available for your country ({country_code}). Currently supported: Russia, Belarus, Kazakhstan."
+                detail={
+                    "code": "PAYMENTS_UNAVAILABLE",
+                    "message": "Оплата подписок временно недоступна",
+                },
             )
         
     except ValueError as e:
@@ -1175,13 +1197,21 @@ async def get_subscription_prices(
         # Платежи не поддерживаются
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Payment is not available for your country ({country_code})"
+            detail={
+                "code": "PAYMENTS_UNAVAILABLE",
+                "message": "Оплата подписок временно недоступна",
+            },
         )
 
 
 def _subscription_payment_dict(s: Subscription, svc: SubscriptionService) -> dict:
     product = getattr(s, "product", "pro") or "pro"
-    product_names = {"ai": "HanWe AI", "creator": "HanWe Creator", "pro": "HanWe Pro"}
+    product_names = {
+        "ai": product_label("ai"),
+        "creator": product_label("creator"),
+        "pro": product_label("pro"),
+        "flex": product_label("flex"),
+    }
     refund_status = getattr(s, "refund_status", None) or "none"
     receipt_url = getattr(s, "receipt_url", None)
     if (
@@ -1505,11 +1535,14 @@ async def request_payment_refund(
         .first()
     )
     if not sub:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payment not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Платёж не найден",
+        )
     if not _can_request_refund(sub):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Refund is not available for this payment",
+            detail="Возврат для этого платежа недоступен",
         )
 
     existing_ticket = (
@@ -1526,16 +1559,15 @@ async def request_payment_refund(
     if existing_ticket:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Refund request already submitted",
+            detail="Запрос на возврат уже отправлен",
         )
 
-    product_names = {"ai": "HanWe AI", "creator": "HanWe Creator", "pro": "HanWe Pro"}
     product = getattr(sub, "product", "pro") or "pro"
     reason = (body.reason or "").strip() or "Прошу оформить возврат оплаты подписки."
     ticket = SupportTicket(
         user_id=current_user.id,
         type="billing_refund",
-        subject=f"Возврат: {product_names.get(product, product)}",
+        subject=f"Возврат: {product_label(product)}",
         message=reason,
         status="open",
         related_entity_type="subscription",
