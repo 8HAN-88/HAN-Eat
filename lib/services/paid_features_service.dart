@@ -371,6 +371,44 @@ class PaidFeaturesService {
     _throwForResponse(response, 'Не удалось загрузить выплаты');
   }
 
+  static Future<List<CreatorPayoutRequest>> adminPayoutQueue({
+    String status = 'pending',
+    int limit = 100,
+  }) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/paid/payouts/queue?status=$status&limit=$limit'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as List<dynamic>;
+      return data
+          .map((e) => CreatorPayoutRequest.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+    _throwForResponse(response, 'Не удалось загрузить очередь выплат');
+  }
+
+  static Future<CreatorPayoutRequest> reviewCreatorPayout({
+    required int payoutId,
+    required bool approve,
+    String? note,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/paid/payouts/$payoutId/review'),
+      headers: await _headers(),
+      body: jsonEncode({
+        'approve': approve,
+        if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+      }),
+    );
+    if (response.statusCode == 200) {
+      return CreatorPayoutRequest.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось обработать выплату');
+  }
+
   static Future<RefundPaidMediaResult> refundPaidMedia(int messageId) async {
     final response = await http.post(
       Uri.parse('$baseUrl/paid/messages/$messageId/refund'),
@@ -1050,6 +1088,8 @@ class CreatorPayoutRequest {
     this.tonAddress,
     this.phone,
     this.recipientName,
+    this.userName,
+    this.userEmail,
     this.createdAt,
   });
 
@@ -1063,6 +1103,8 @@ class CreatorPayoutRequest {
   final String? tonAddress;
   final String? phone;
   final String? recipientName;
+  final String? userName;
+  final String? userEmail;
   final DateTime? createdAt;
 
   factory CreatorPayoutRequest.fromJson(Map<String, dynamic> json) =>
@@ -1077,6 +1119,8 @@ class CreatorPayoutRequest {
         tonAddress: json['ton_address'] as String?,
         phone: json['phone'] as String?,
         recipientName: json['recipient_name'] as String?,
+        userName: json['user_name'] as String?,
+        userEmail: json['user_email'] as String?,
         createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
       );
 }

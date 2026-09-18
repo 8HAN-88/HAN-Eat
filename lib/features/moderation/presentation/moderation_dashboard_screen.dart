@@ -23,7 +23,8 @@ String _formatIsoToLocalShort(String? value) {
 
 String _formatEpochToLocalShort(int? epochSeconds) {
   if (epochSeconds == null || epochSeconds <= 0) return '-';
-  final local = DateTime.fromMillisecondsSinceEpoch(epochSeconds * 1000).toLocal();
+  final local =
+      DateTime.fromMillisecondsSinceEpoch(epochSeconds * 1000).toLocal();
   return '${_two(local.day)}.${_two(local.month)} ${_two(local.hour)}:${_two(local.minute)}';
 }
 
@@ -257,7 +258,8 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            userVisibleError(e, fallback: 'Не удалось экспортировать incident report'),
+            userVisibleError(e,
+                fallback: 'Не удалось экспортировать incident report'),
           ),
           action: SnackBarAction(
             label: 'Повторить',
@@ -467,7 +469,8 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen> {
                               }
                             });
                           },
-                          onRequeueSelectedDeadLetters: _requeueSelectedDeadLetters,
+                          onRequeueSelectedDeadLetters:
+                              _requeueSelectedDeadLetters,
                           onRequeueMaxAttempts: () => _requeueDeadLettersPreset(
                             dropReason: 'max_attempts_exhausted',
                           ),
@@ -513,7 +516,8 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen> {
                                 confirmLabel: 'Очистить dead-letter',
                               );
                               if (!confirm) return _data!.botWebhookQueue!;
-                              return ModerationService.clearWebhookDeadLetters();
+                              return ModerationService
+                                  .clearWebhookDeadLetters();
                             },
                             'Dead-letter очищен',
                           ),
@@ -526,7 +530,8 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen> {
                                 confirmLabel: 'Запустить recovery',
                               );
                               if (!confirm) return _data!.botWebhookQueue!;
-                              return ModerationService.runWebhookRecoveryPlaybook();
+                              return ModerationService
+                                  .runWebhookRecoveryPlaybook();
                             },
                             'Recovery playbook выполнен',
                           ),
@@ -557,11 +562,11 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen> {
                           (a) => ListTile(
                             dense: true,
                             leading: Icon(_iconForAction(a.action)),
-                            title: Text(a.action),
+                            title: Text(_labelForAction(a.action)),
                             subtitle: Text(
                               [
                                 if (a.contentType != null)
-                                  '${a.contentType} #${a.contentId}',
+                                  '${_labelForContentType(a.contentType!)} #${a.contentId}',
                                 if (a.createdAt != null)
                                   _formatIsoToLocalShort(a.createdAt),
                               ].join(' · '),
@@ -586,6 +591,39 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen> {
         return Icons.block;
       default:
         return Icons.history;
+    }
+  }
+
+  String _labelForAction(String action) {
+    switch (action) {
+      case 'approve':
+        return 'Одобрено';
+      case 'reject':
+        return 'Отклонено';
+      case 'warn_user':
+        return 'Предупреждение';
+      case 'ban_user':
+        return 'Блокировка';
+      default:
+        return action;
+    }
+  }
+
+  String _labelForContentType(String type) {
+    switch (type) {
+      case 'post':
+        return 'Пост';
+      case 'comment':
+        return 'Комментарий';
+      case 'channel':
+        return 'Канал';
+      case 'user':
+      case 'user_profile':
+        return 'Профиль';
+      case 'message':
+        return 'Сообщение';
+      default:
+        return type;
     }
   }
 }
@@ -776,13 +814,18 @@ class _WebhookQueueCard extends StatelessWidget {
                             size: 16,
                             color: a.severity == 'critical'
                                 ? Theme.of(context).colorScheme.onErrorContainer
-                                : Theme.of(context).colorScheme.onSecondaryContainer,
+                                : Theme.of(context)
+                                    .colorScheme
+                                    .onSecondaryContainer,
                           ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               '${a.message}: ${a.value} (threshold ${a.threshold})',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
                                     color: a.severity == 'critical'
                                         ? Theme.of(context)
                                             .colorScheme
@@ -814,17 +857,21 @@ class _WebhookQueueCard extends StatelessWidget {
               runSpacing: 8,
               children: [
                 FilledButton.tonalIcon(
-                  onPressed: !controlsEnabled || loading ? null : onPromoteDelayed,
+                  onPressed:
+                      !controlsEnabled || loading ? null : onPromoteDelayed,
                   icon: const Icon(Icons.playlist_add_check_circle_outlined),
                   label: const Text('Promote delayed'),
                 ),
                 FilledButton.icon(
-                  onPressed: !controlsEnabled || loading ? null : onRunRecoveryPlaybook,
+                  onPressed: !controlsEnabled || loading
+                      ? null
+                      : onRunRecoveryPlaybook,
                   icon: const Icon(Icons.medical_services_outlined),
                   label: const Text('Run recovery playbook'),
                 ),
                 OutlinedButton.icon(
-                  onPressed: !controlsEnabled || loading ? null : onResetMetrics,
+                  onPressed:
+                      !controlsEnabled || loading ? null : onResetMetrics,
                   icon: const Icon(Icons.restart_alt),
                   label: const Text('Reset metrics'),
                 ),
@@ -834,12 +881,14 @@ class _WebhookQueueCard extends StatelessWidget {
                   label: const Text('Clear queue'),
                 ),
                 OutlinedButton.icon(
-                  onPressed: !controlsEnabled || loading ? null : onRequeueDropped,
+                  onPressed:
+                      !controlsEnabled || loading ? null : onRequeueDropped,
                   icon: const Icon(Icons.replay_outlined),
                   label: const Text('Requeue dropped'),
                 ),
                 OutlinedButton.icon(
-                  onPressed: !controlsEnabled || loading ? null : onClearDropped,
+                  onPressed:
+                      !controlsEnabled || loading ? null : onClearDropped,
                   icon: const Icon(Icons.delete_outline),
                   label: const Text('Clear dead-letter'),
                 ),
@@ -872,9 +921,8 @@ class _WebhookQueueCard extends StatelessWidget {
                       .map((item) => item.taskId.trim())
                       .where((taskId) => taskId.isNotEmpty)
                       .toList(growable: false);
-                  final selectedVisibleCount = visibleTaskIds
-                      .where(selectedDeadTaskIds.contains)
-                      .length;
+                  final selectedVisibleCount =
+                      visibleTaskIds.where(selectedDeadTaskIds.contains).length;
                   return Wrap(
                     spacing: 8,
                     runSpacing: 8,
@@ -883,8 +931,8 @@ class _WebhookQueueCard extends StatelessWidget {
                         onPressed: visibleTaskIds.isEmpty
                             ? null
                             : () {
-                                final shouldSelectAll =
-                                    selectedVisibleCount < visibleTaskIds.length;
+                                final shouldSelectAll = selectedVisibleCount <
+                                    visibleTaskIds.length;
                                 for (final taskId in visibleTaskIds) {
                                   onToggleDeadTask(taskId, shouldSelectAll);
                                 }
@@ -906,7 +954,8 @@ class _WebhookQueueCard extends StatelessWidget {
                         onPressed: selectedDeadTaskIds.isEmpty
                             ? null
                             : () {
-                                for (final taskId in selectedDeadTaskIds.toList()) {
+                                for (final taskId
+                                    in selectedDeadTaskIds.toList()) {
                                   onToggleDeadTask(taskId, false);
                                 }
                               },
@@ -930,7 +979,8 @@ class _WebhookQueueCard extends StatelessWidget {
                     FilledButton.tonalIcon(
                       onPressed: loading ? null : onRequeueSelectedDeadLetters,
                       icon: const Icon(Icons.playlist_add_check),
-                      label: Text('Requeue selected (${selectedDeadTaskIds.length})'),
+                      label: Text(
+                          'Requeue selected (${selectedDeadTaskIds.length})'),
                     ),
                 ],
               ),
@@ -1029,8 +1079,12 @@ class _WebhookQueueCard extends StatelessWidget {
                         subtitle: Text(
                           [
                             'bot:${item.botId ?? '-'}',
-                            item.updateType.isEmpty ? 'unknown' : item.updateType,
-                            item.dropReason.isEmpty ? 'drop:unknown' : item.dropReason,
+                            item.updateType.isEmpty
+                                ? 'unknown'
+                                : item.updateType,
+                            item.dropReason.isEmpty
+                                ? 'drop:unknown'
+                                : item.dropReason,
                             'dropped:${_formatEpochToLocalShort(item.droppedAt)}',
                           ].join(' · '),
                         ),
@@ -1131,9 +1185,7 @@ class _WebhookQueueCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 6),
-              ...recentOps
-                  .take(7)
-                  .map(
+              ...recentOps.take(7).map(
                     (op) => ListTile(
                       dense: true,
                       contentPadding: EdgeInsets.zero,
@@ -1141,7 +1193,8 @@ class _WebhookQueueCard extends StatelessWidget {
                       title: Text(op.eventType),
                       subtitle: Text(
                         [
-                          if ((op.actorName ?? '').trim().isNotEmpty) op.actorName!,
+                          if ((op.actorName ?? '').trim().isNotEmpty)
+                            op.actorName!,
                           if ((op.actorUsername ?? '').trim().isNotEmpty)
                             '@${op.actorUsername}',
                           if ((op.createdAt ?? '').trim().isNotEmpty)
@@ -1202,7 +1255,8 @@ class _WebhookRunbookSection extends StatelessWidget {
     final runbookSteps = <_RunbookStepData>[
       _RunbookStepData(
         title: '1) Capture incident snapshot',
-        description: 'Скопируйте incident report и зафиксируйте текущее состояние.',
+        description:
+            'Скопируйте incident report и зафиксируйте текущее состояние.',
         isActive: true,
         buttonLabel: 'Copy incident',
         onPressed: onCopyIncident,
@@ -1241,13 +1295,17 @@ class _WebhookRunbookSection extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.35),
+        color: Theme.of(context)
+            .colorScheme
+            .surfaceContainerHighest
+            .withOpacity(0.35),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Incident runbook', style: Theme.of(context).textTheme.titleSmall),
+          Text('Incident runbook',
+              style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 6),
           Text(
             hasIncident
@@ -1261,7 +1319,9 @@ class _WebhookRunbookSection extends StatelessWidget {
               dense: true,
               contentPadding: EdgeInsets.zero,
               leading: Icon(
-                step.isActive ? Icons.priority_high_rounded : Icons.check_circle_outline,
+                step.isActive
+                    ? Icons.priority_high_rounded
+                    : Icons.check_circle_outline,
                 size: 18,
               ),
               title: Text(step.title),

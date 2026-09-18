@@ -242,16 +242,16 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
             title: 'Вовлеченность',
             metrics: [
               _MetricItem(
-                label: 'CTR',
+                label: 'Клики / показы',
                 value: '${(analytics.ctr * 100).toStringAsFixed(2)}%',
-                subtitle: 'Click-Through Rate',
+                subtitle: 'Доля нажатий от показов',
                 icon: Icons.touch_app,
                 color: Colors.teal,
               ),
               _MetricItem(
-                label: 'Engagement Rate',
+                label: 'Вовлечённость',
                 value: '${(analytics.engagementRate * 100).toStringAsFixed(2)}%',
-                subtitle: 'Уровень вовлеченности',
+                subtitle: 'Уровень вовлечённости',
                 icon: Icons.trending_up,
                 color: Colors.indigo,
               ),
@@ -396,9 +396,9 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
             title: 'Вовлеченность',
             metrics: [
               _MetricItem(
-                label: 'Средний Engagement Rate',
+                label: 'Средняя вовлечённость',
                 value: '${analytics.engagementRatePercent.toStringAsFixed(2)}%',
-                subtitle: 'Средний уровень вовлеченности',
+                subtitle: 'Средний уровень вовлечённости',
                 icon: Icons.trending_up,
                 color: Colors.indigo,
               ),

@@ -273,6 +273,18 @@ async def create_story(
     visibility = (payload.visibility or "public").strip().lower()
     if visibility not in _VALID_VISIBILITY:
         raise HTTPException(status_code=400, detail="Invalid visibility")
+    if visibility == "close_friends":
+        close_count = (
+            db.query(func.count(CloseFriend.id))
+            .filter(CloseFriend.user_id == current_user.id)
+            .scalar()
+            or 0
+        )
+        if int(close_count) < 1:
+            raise HTTPException(
+                status_code=400,
+                detail="Список близких пуст. Добавьте хотя бы одного человека.",
+            )
     story = Story(
         user_id=current_user.id,
         media_url=payload.media_url,

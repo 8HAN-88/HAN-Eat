@@ -915,6 +915,24 @@ class PaidFeaturesService:
             .all()
         )
 
+    def list_payout_queue(
+        self,
+        *,
+        status: Optional[str] = "pending",
+        limit: int = 100,
+    ) -> list[CreatorPayoutRequest]:
+        q = self.db.query(CreatorPayoutRequest)
+        if status:
+            q = q.filter(CreatorPayoutRequest.status == status)
+        return (
+            q.order_by(
+                CreatorPayoutRequest.created_at.asc(),
+                CreatorPayoutRequest.id.asc(),
+            )
+            .limit(max(1, min(limit, 200)))
+            .all()
+        )
+
     def review_payout(
         self,
         payout_id: int,
@@ -2129,6 +2147,12 @@ class PaidFeaturesService:
         user.subscription_status = "active"
         user.subscription_expires_at = start + timedelta(days=30 * int(months))
         user.subscription_auto_renew = False
+        try:
+            from app.services.flex_subscription_service import FlexSubscriptionService
+
+            FlexSubscriptionService(self.db).activate(user_id, 18, months=int(months))
+        except Exception:
+            pass
 
     def set_user_star_gift_displayed(
         self, owner_id: int, user_gift_id: int, *, displayed: bool

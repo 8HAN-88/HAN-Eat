@@ -311,6 +311,13 @@ class FlexSubscriptionService:
                     )
         return resolved
 
+    def require_active_for_layout(self, user_id: int) -> None:
+        if not self.is_flex_active(user_id):
+            raise FlexMoveError(
+                "Оформите подписку, чтобы сохранять раскладку",
+                code="flex_inactive",
+            )
+
     def save_layout(self, user_id: int, slots: list[dict[str, int]]) -> list[dict[str, Any]]:
         resolved = self.validate_layout(slots, user_id=user_id)
         (

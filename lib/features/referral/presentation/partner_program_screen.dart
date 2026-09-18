@@ -229,7 +229,18 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
               onPressed: () {
                 final phone = _cardPhone.text.trim();
                 final name = _cardName.text.trim();
-                if (phone.length < 10 || name.length < 2) return;
+                String? error;
+                if (phone.length < 10) {
+                  error = 'Укажите телефон СБП (не меньше 10 цифр)';
+                } else if (name.length < 2) {
+                  error = 'Укажите имя получателя';
+                }
+                if (error != null) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    SnackBar(content: Text(error)),
+                  );
+                  return;
+                }
                 Navigator.pop(
                   ctx,
                   (amount: packet, phone: phone, name: name),

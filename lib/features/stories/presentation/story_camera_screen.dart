@@ -2,6 +2,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import 'package:go_router/go_router.dart';
+
+import '../../../app/app_router.dart';
+import '../../../services/close_friends_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../data/story_service.dart';
 
@@ -55,7 +59,6 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
       _selectedFile = video;
       _isVideo = true;
     });
-
   }
 
   Future<void> _publish() async {
@@ -65,6 +68,17 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
       _publishError = null;
     });
     try {
+      if (_visibility == 'close_friends') {
+        final friends = await CloseFriendsService.list();
+        if (friends.isEmpty) {
+          if (!mounted) return;
+          setState(() {
+            _publishError =
+                'Список близких пуст. Добавьте хотя бы одного человека.';
+          });
+          return;
+        }
+      }
       await StoryService.uploadAndCreateStory(
         file: _selectedFile!,
         isVideo: _isVideo,
@@ -109,7 +123,8 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
         appBar: AppBar(
           backgroundColor: Colors.black,
           iconTheme: const IconThemeData(color: Colors.white),
-          title: const Text('Предпросмотр', style: TextStyle(color: Colors.white)),
+          title:
+              const Text('Предпросмотр', style: TextStyle(color: Colors.white)),
         ),
         body: Center(
           child: _isVideo
@@ -132,7 +147,8 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
                   future: _selectedFile!.readAsBytes(),
                   builder: (context, snapshot) {
                     if (!snapshot.hasData) {
-                      return const CircularProgressIndicator(color: Colors.white);
+                      return const CircularProgressIndicator(
+                          color: Colors.white);
                     }
                     return Image.memory(
                       Uint8List.fromList(snapshot.data!),
@@ -206,7 +222,8 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
                     Expanded(
                       child: OutlinedButton(
                         onPressed: _isPublishing ? null : _retake,
-                        style: OutlinedButton.styleFrom(foregroundColor: Colors.white),
+                        style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white),
                         child: const Text('Переснять'),
                       ),
                     ),
@@ -218,7 +235,8 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
                             ? const SizedBox(
                                 width: 18,
                                 height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
                               )
                             : Text(
                                 _publishError == null
@@ -247,6 +265,11 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
                     onPressed: _publish,
                     child: const Text('Повторить'),
                   ),
+                  if (_visibility == 'close_friends')
+                    TextButton(
+                      onPressed: () => context.push(CloseFriendsRoute.path),
+                      child: const Text('Добавить близких'),
+                    ),
                 ],
               ],
             ),
@@ -261,7 +284,8 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
       appBar: AppBar(
         backgroundColor: Colors.black,
         iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text('Создать сторис', style: TextStyle(color: Colors.white)),
+        title:
+            const Text('Создать сторис', style: TextStyle(color: Colors.white)),
       ),
       body: Center(
         child: Column(

@@ -62,6 +62,7 @@ class _FlexConstructorScreenState extends State<FlexConstructorScreen> {
   }
 
   Future<void> _drop(FlexFeature feature, int level) async {
+    if (!(_me?.active ?? false)) return;
     if (feature.assignedLevel == level) return;
     setState(() => _saving = true);
     try {
@@ -98,11 +99,12 @@ class _FlexConstructorScreenState extends State<FlexConstructorScreen> {
 
   Future<void> _save() async {
     final me = _me;
-    if (me == null) return;
+    if (me == null || !me.active) return;
     setState(() => _saving = true);
     try {
       final next = await FlexSubscriptionApi.saveLayout([
-        for (final f in me.levels) FlexSlot(featureId: f.id, level: f.assignedLevel),
+        for (final f in me.levels)
+          FlexSlot(featureId: f.id, level: f.assignedLevel),
       ]);
       if (!mounted) return;
       setState(() => _me = next);
@@ -133,7 +135,7 @@ class _FlexConstructorScreenState extends State<FlexConstructorScreen> {
         title: const Text('Настроить подписку'),
         actions: [
           TextButton(
-            onPressed: _saving ? null : _save,
+            onPressed: _saving || me == null || !me.active ? null : _save,
             child: const Text('Сохранить'),
           ),
         ],
@@ -169,6 +171,18 @@ class _FlexConstructorScreenState extends State<FlexConstructorScreen> {
                                   .onSurfaceVariant,
                             ),
                       ),
+                      if (me != null && !me.active) ...[
+                        const SizedBox(height: 12),
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                            child: Text(
+                              'Оформите подписку, чтобы сохранять раскладку.',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 16),
                       for (final band in flexBoundaryBands(
                         blocks: me!.blocks,
@@ -183,7 +197,9 @@ class _FlexConstructorScreenState extends State<FlexConstructorScreen> {
                             level: level,
                             features: _featuresAt(me, level),
                             color: _zoneColor(level),
+                            canEdit: me.active,
                             onWillAccept: (feature) {
+                              if (!me.active) return false;
                               setState(() {
                                 _hoverLevel = level;
                                 _dragging = feature;
@@ -238,6 +254,7 @@ class _LevelDropZone extends StatelessWidget {
     required this.level,
     required this.features,
     required this.color,
+    required this.canEdit,
     required this.onWillAccept,
     required this.onLeave,
     required this.onAccept,
@@ -246,6 +263,7 @@ class _LevelDropZone extends StatelessWidget {
   final int level;
   final List<FlexFeature> features;
   final Color color;
+  final bool canEdit;
   final bool Function(FlexFeature feature) onWillAccept;
   final VoidCallback onLeave;
   final ValueChanged<FlexFeature> onAccept;
@@ -285,7 +303,7 @@ class _LevelDropZone extends StatelessWidget {
                 const Text('Свободный слот')
               else
                 for (final feature in features)
-                  _DraggableFeature(feature: feature),
+                  _DraggableFeature(feature: feature, canDrag: canEdit),
             ],
           ),
         );
@@ -295,8 +313,9 @@ class _LevelDropZone extends StatelessWidget {
 }
 
 class _DraggableFeature extends StatelessWidget {
-  const _DraggableFeature({required this.feature});
+  const _DraggableFeature({required this.feature, required this.canDrag});
   final FlexFeature feature;
+  final bool canDrag;
 
   @override
   Widget build(BuildContext context) {
@@ -311,7 +330,7 @@ class _DraggableFeature extends StatelessWidget {
             : 'Можно на ${feature.minLevel}–${feature.maxLevel}',
       ),
     );
-    if (locked) return tile;
+    if (locked || !canDrag) return tile;
     return LongPressDraggable<FlexFeature>(
       data: feature,
       feedback: Material(

@@ -30,6 +30,23 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen>
   bool _loading = true;
   bool _busy = false;
   bool _awaitingCheckoutReturn = false;
+  final Map<int, GlobalKey> _levelKeys = {};
+  bool _didScrollToInitial = false;
+
+  GlobalKey _keyForLevel(int level) =>
+      _levelKeys.putIfAbsent(level, GlobalKey.new);
+
+  void _scrollToInitialLevel() {
+    if (_didScrollToInitial || widget.initialLevel <= 0) return;
+    final ctx = _keyForLevel(widget.initialLevel).currentContext;
+    if (ctx == null) return;
+    _didScrollToInitial = true;
+    Scrollable.ensureVisible(
+      ctx,
+      alignment: 0.12,
+      duration: const Duration(milliseconds: 280),
+    );
+  }
 
   @override
   void initState() {
@@ -63,6 +80,9 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen>
       setState(() {
         _me = me;
         _loading = false;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _scrollToInitialLevel();
       });
     } catch (e) {
       if (!mounted) return;
@@ -169,6 +189,7 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen>
                         const SizedBox(height: 10),
                         for (var level = 1; level <= me.maxLevel; level++)
                           _LevelCard(
+                            key: _keyForLevel(level),
                             level: level,
                             last: level == me.maxLevel,
                             price: FlexPurchaseLadder.priceRub(level),
@@ -177,6 +198,8 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen>
                             highlight: widget.initialLevel == level,
                             busy: _busy,
                             canBuy: me.canCheckout,
+                            legalConsentRequired: me.legalConsentRequired,
+                            checkoutAvailable: me.checkoutAvailable,
                             onBuy: () => _buyLevel(level),
                           ),
                         const SizedBox(height: 12),
@@ -241,6 +264,7 @@ class _StatusLine extends StatelessWidget {
 
 class _LevelCard extends StatelessWidget {
   const _LevelCard({
+    super.key,
     required this.level,
     required this.last,
     required this.price,
@@ -249,6 +273,8 @@ class _LevelCard extends StatelessWidget {
     required this.highlight,
     required this.busy,
     required this.canBuy,
+    required this.legalConsentRequired,
+    required this.checkoutAvailable,
     required this.onBuy,
   });
 
@@ -260,7 +286,16 @@ class _LevelCard extends StatelessWidget {
   final bool highlight;
   final bool busy;
   final bool canBuy;
+  final bool legalConsentRequired;
+  final bool checkoutAvailable;
   final VoidCallback onBuy;
+
+  String get _buyLabel {
+    if (canBuy) return 'Оформить';
+    if (legalConsentRequired) return 'Сначала документы';
+    if (!checkoutAvailable) return 'Оплата недоступна';
+    return 'Оплата недоступна';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -349,7 +384,7 @@ class _LevelCard extends StatelessWidget {
                 else
                   TextButton(
                     onPressed: busy || !canBuy ? null : onBuy,
-                    child: Text(canBuy ? 'Оформить' : 'Скоро'),
+                    child: Text(_buyLabel),
                   ),
               ],
             ),

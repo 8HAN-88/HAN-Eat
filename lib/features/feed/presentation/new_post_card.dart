@@ -13,6 +13,7 @@ import '../../../services/repost_service.dart';
 import '../../../widgets/report_content_dialog.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/comment_service.dart';
+import '../../../utils/api_error_parser.dart';
 import '../../../utils/session_snackbar.dart';
 import '../../../widgets/telegram_photo_grid.dart';
 import '../../../utils/number_formatter.dart';
@@ -627,7 +628,9 @@ class _NewPostCardState extends State<NewPostCard>
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString().replaceFirst('Exception: ', '')),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось отправить донат'),
+            ),
             action: SnackBarAction(
               label: 'Повторить',
               onPressed: () => unawaited(_showDonateDialog()),
@@ -730,7 +733,9 @@ class _NewPostCardState extends State<NewPostCard>
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString().replaceFirst('Exception: ', '')),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось запустить буст'),
+            ),
             action: SnackBarAction(
               label: 'Повторить',
               onPressed: () => unawaited(_showBoostDialog()),

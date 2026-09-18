@@ -83,6 +83,7 @@ def save_flex_layout(
     db: Session = Depends(get_db),
 ):
     service = _svc(db)
+    service.require_active_for_layout(current_user.id)
     service.save_layout(
         current_user.id,
         [s.model_dump() for s in request.slots],
@@ -98,6 +99,7 @@ def move_flex_feature(
     db: Session = Depends(get_db),
 ):
     service = _svc(db)
+    service.require_active_for_layout(current_user.id)
     service.move_feature(current_user.id, request.feature_id, request.target_level)
     db.commit()
     return service.me_payload(current_user.id)

@@ -976,6 +976,26 @@ def test_subscribe_paid_group_and_join_gate(db_session):
     assert {m.user_id for m in members} == {1, 2}
 
 
+def test_admin_payout_queue_lists_pending(db_session):
+    _user(db_session, 1)
+    _credit(db_session, 1, 100)
+    svc = PaidFeaturesService(db_session)
+    bal = svc.creator_balance(1)
+    bal.available_stars = 80
+    db_session.commit()
+
+    assert svc.list_payout_queue() == []
+    payout = svc.request_creator_payout(
+        1, 20, phone="+79001112233", recipient_name="Иван"
+    )
+    db_session.commit()
+    queue = svc.list_payout_queue()
+    assert [row.id for row in queue] == [payout.id]
+    svc.review_payout(payout.id, reviewer_user_id=1, approve=True)
+    db_session.commit()
+    assert svc.list_payout_queue() == []
+
+
 def test_rub_payout_requires_sbp_details(db_session):
     _user(db_session, 1)
     _credit(db_session, 1, 100)

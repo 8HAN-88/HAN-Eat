@@ -105,8 +105,7 @@ class ChannelSheetPrefs {
         isFavorite: isFavorite ?? prev.isFavorite,
         inboxArchived: inboxArchived ?? prev.inboxArchived,
         showInFeed: showInFeed ?? prev.showInFeed,
-        notificationsEnabled:
-            notificationsEnabled ?? prev.notificationsEnabled,
+        notificationsEnabled: notificationsEnabled ?? prev.notificationsEnabled,
       );
       cache[channelId] = next;
       await _saveCache(cache);
@@ -137,6 +136,15 @@ class ChannelSheetPrefs {
     final cache = await _loadCache();
     return cache.entries
         .where((e) => e.value.inboxArchived)
+        .map((e) => e.key)
+        .toSet();
+  }
+
+  static Future<Set<int>> listHiddenFromFeedIds() async {
+    await syncFromServer();
+    final cache = await _loadCache();
+    return cache.entries
+        .where((e) => !e.value.showInFeed)
         .map((e) => e.key)
         .toSet();
   }

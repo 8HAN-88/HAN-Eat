@@ -1652,10 +1652,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   String get _autoRetryReasonLabel {
     if (_autoRetrySlowCount > 0 && _autoRetryFloodCount > 0) {
-      return 'Slow mode и антифлуд';
+      return 'Медленный режим и антифлуд';
     }
     if (_autoRetryFloodCount > 0) return 'Антифлуд';
-    return 'Slow mode';
+    return 'Медленный режим';
   }
 
   bool get _isAnyCooldownActive => _activeCooldownRemainingSeconds > 0;
@@ -1826,7 +1826,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           children: [
             if (slowModeOn)
               Text(
-                '• Slow mode: ${_formatSlowModeCountdown(_conversation.slowModeSeconds)} между сообщениями для обычных участников.',
+                '• Медленный режим: ${_formatSlowModeCountdown(_conversation.slowModeSeconds)} между сообщениями для обычных участников.',
               ),
             if (antiFloodOn) ...[
               if (slowModeOn) const SizedBox(height: 8),
@@ -15045,7 +15045,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final activeCooldownSeconds = _activeCooldownRemainingSeconds;
     final floodCooldownActive = floodRemainingSeconds > 0 &&
         floodRemainingSeconds >= slowModeRemainingSeconds;
-    final activeCooldownLabel = floodCooldownActive ? 'Антифлуд' : 'Slow mode';
+    final activeCooldownLabel =
+        floodCooldownActive ? 'Антифлуд' : 'Медленный режим';
     final activeCooldownIcon =
         floodCooldownActive ? Icons.speed_outlined : Icons.timer_outlined;
     final activeCooldownProgress = floodCooldownActive &&
@@ -15068,7 +15069,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         : null;
     final postingLimitsHint = [
       if (_conversation.slowModeSeconds > 0)
-        'Slow mode: ${formatSlowMode(_conversation.slowModeSeconds)}',
+        'Медленный режим: ${formatSlowMode(_conversation.slowModeSeconds)}',
       if (_conversation.antiFloodMaxMessagesPerMinute > 0)
         'Антифлуд: ${_conversation.antiFloodMaxMessagesPerMinute}/мин',
       if (activeCooldownSeconds > 0)

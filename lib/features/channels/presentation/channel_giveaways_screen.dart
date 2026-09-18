@@ -116,12 +116,12 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
                     children: [
                       ChoiceChip(
                         selected: prizeType == 'stars',
-                        label: const Text('Stars'),
+                        label: const Text('Звёзды'),
                         onSelected: (_) => setLocal(() => prizeType = 'stars'),
                       ),
                       ChoiceChip(
                         selected: prizeType == 'premium',
-                        label: const Text('HanWe Pro'),
+                        label: const Text('Подписка · 18'),
                         onSelected: (_) =>
                             setLocal(() => prizeType = 'premium'),
                       ),
@@ -174,7 +174,7 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
                   const SizedBox(height: 12),
                   Text(
                     prizeType == 'premium'
-                        ? 'К списанию: $total ★ · $premiumMonths мес. Pro × $winners'
+                        ? 'К списанию: $total ★ · $premiumMonths мес. уровня 18 × $winners'
                         : 'К списанию: $total ★',
                     style: const TextStyle(fontWeight: FontWeight.w800),
                   ),
@@ -190,9 +190,8 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: FilledButton(
-                          onPressed: total > 0
-                              ? () => Navigator.pop(ctx, true)
-                              : null,
+                          onPressed:
+                              total > 0 ? () => Navigator.pop(ctx, true) : null,
                           child: const Text('Создать'),
                         ),
                       ),
@@ -219,7 +218,7 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
       context,
       title: 'Создать розыгрыш',
       body: prizeType == 'premium'
-          ? 'С баланса спишется $escrow ★. Победители получат HanWe Pro на $premiumMonths мес.'
+          ? 'С баланса спишется $escrow ★. Победители получат подписку уровня 18 на $premiumMonths мес.'
           : 'С баланса спишется $escrow ★ в эскроу до конца розыгрыша.',
       amountStars: escrow,
       confirmLabel: 'Создать',
@@ -280,7 +279,8 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Отменить розыгрыш?'),
-        content: const Text('Эскроу вернётся на баланс. Участники не получат приз.'),
+        content:
+            const Text('Эскроу вернётся на баланс. Участники не получат приз.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -369,7 +369,7 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
                   const SizedBox(height: 4),
                   Text(
                     g.isPremiumPrize
-                        ? 'HanWe Pro · ${g.premiumMonths} мес. · ${result.winners.length} из ${result.winnersCount}'
+                        ? 'Уровень 18 · ${g.premiumMonths} мес. · ${result.winners.length} из ${result.winnersCount}'
                         : '${result.prizeStars} ★ каждому · ${result.winners.length} из ${result.winnersCount}',
                     style: TextStyle(color: scheme.onSurfaceVariant),
                   ),
@@ -411,7 +411,8 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
                             ),
                             title: Text(
                               w.name,
-                              style: const TextStyle(fontWeight: FontWeight.w700),
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w700),
                             ),
                             subtitle: w.username != null &&
                                     w.username!.trim().isNotEmpty
@@ -496,7 +497,8 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
           Text(_error!, textAlign: TextAlign.center),
           const SizedBox(height: 12),
           Center(
-            child: FilledButton(onPressed: _load, child: const Text('Повторить')),
+            child:
+                FilledButton(onPressed: _load, child: const Text('Повторить')),
           ),
         ],
       );
@@ -515,7 +517,7 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
           const SizedBox(height: 12),
           Text(
             widget.canManage
-                ? 'Пока нет розыгрышей. Разыграйте Stars или HanWe Pro среди подписчиков.'
+                ? 'Пока нет розыгрышей. Разыграйте звёзды или подписку уровня 18 среди подписчиков.'
                 : 'Активных розыгрышей нет.',
             textAlign: TextAlign.center,
           ),
@@ -553,7 +555,8 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
       itemBuilder: (context, index) {
         final g = _items[index];
         final busy = _busy.contains(g.id);
-        final ends = DateFormat('d MMM, HH:mm', 'ru').format(g.endsAt.toLocal());
+        final ends =
+            DateFormat('d MMM, HH:mm', 'ru').format(g.endsAt.toLocal());
         final scheme = Theme.of(context).colorScheme;
         return Card(
           child: Padding(
@@ -565,14 +568,14 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
                   g.title?.trim().isNotEmpty == true
                       ? g.title!.trim()
                       : (g.isPremiumPrize
-                          ? 'Розыгрыш HanWe Pro'
-                          : 'Розыгрыш Stars'),
+                          ? 'Розыгрыш подписки · уровень 18'
+                          : 'Розыгрыш звёзд'),
                   style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   g.isPremiumPrize
-                      ? '${g.premiumMonths} мес. Pro × ${g.winnersCount} · ${g.participantsCount} уч. · до $ends'
+                      ? '${g.premiumMonths} мес. уровня 18 × ${g.winnersCount} · ${g.participantsCount} уч. · до $ends'
                       : '${g.prizeStars} ★ × ${g.winnersCount} · ${g.participantsCount} уч. · до $ends',
                   style: TextStyle(color: scheme.onSurfaceVariant),
                 ),

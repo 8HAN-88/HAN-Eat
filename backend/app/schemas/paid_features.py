@@ -142,6 +142,8 @@ class CreatorPayoutResponse(BaseModel):
     reviewed_at: Optional[datetime] = None
     paid_at: Optional[datetime] = None
     created_at: datetime
+    user_name: Optional[str] = None
+    user_email: Optional[str] = None
 
     class Config:
         from_attributes = True

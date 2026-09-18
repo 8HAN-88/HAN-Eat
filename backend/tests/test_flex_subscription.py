@@ -148,6 +148,17 @@ def test_downgrade_preview_lists_disabled(db_session):
     assert preview["price_rub"] == 99
 
 
+def test_layout_edit_requires_active(db_session):
+    _user(db_session)
+    svc = FlexSubscriptionService(db_session)
+    with pytest.raises(FlexMoveError) as exc:
+        svc.require_active_for_layout(1)
+    assert exc.value.detail["code"] == "flex_inactive"
+    svc.activate(1, 5)
+    db_session.commit()
+    svc.require_active_for_layout(1)
+
+
 def test_save_custom_layout(db_session):
     _user(db_session)
     svc = FlexSubscriptionService(db_session)

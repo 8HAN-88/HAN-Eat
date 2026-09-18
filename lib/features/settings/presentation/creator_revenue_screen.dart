@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../services/paid_features_service.dart';
+import '../../../utils/api_error_parser.dart';
 import '../../../widgets/telegram_ui.dart';
 
 class CreatorRevenueScreen extends StatefulWidget {
@@ -218,7 +219,20 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
               final amount = int.tryParse(amountController.text.trim()) ?? 0;
               final phone = _payoutPhone.text.trim();
               final name = _payoutName.text.trim();
-              if (amount <= 0 || phone.length < 10 || name.length < 2) return;
+              String? error;
+              if (amount <= 0) {
+                error = 'Укажите сумму в звёздах';
+              } else if (phone.length < 10) {
+                error = 'Укажите телефон СБП (не меньше 10 цифр)';
+              } else if (name.length < 2) {
+                error = 'Укажите имя получателя';
+              }
+              if (error != null) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  SnackBar(content: Text(error)),
+                );
+                return;
+              }
               Navigator.pop(
                 ctx,
                 (
@@ -266,7 +280,8 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          content: Text(
+              userVisibleError(e, fallback: 'Не удалось запросить выплату')),
           action: SnackBarAction(
             label: 'Повторить',
             onPressed: () => unawaited(_submitPayoutRequest(payload)),

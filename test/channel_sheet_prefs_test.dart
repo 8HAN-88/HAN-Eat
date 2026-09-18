@@ -29,4 +29,19 @@ void main() {
 
     expect(await ChannelSheetPrefs.listFavoriteIds(), isEmpty);
   });
+
+  test('listHiddenFromFeedIds returns channels hidden from inbox', () async {
+    await ChannelSheetPrefs.seedForTest({
+      1: const ChannelInboxPrefs(channelId: 1, showInFeed: false),
+      2: const ChannelInboxPrefs(channelId: 2, showInFeed: true),
+      3: const ChannelInboxPrefs(
+        channelId: 3,
+        showInFeed: false,
+        inboxArchived: true,
+      ),
+    });
+
+    expect(await ChannelSheetPrefs.listHiddenFromFeedIds(), {1, 3});
+    expect(await ChannelSheetPrefs.getShowInFeed(2), isTrue);
+  });
 }

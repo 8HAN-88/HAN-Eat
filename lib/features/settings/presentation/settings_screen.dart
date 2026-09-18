@@ -400,6 +400,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
       if (_isAdmin)
         _SettingsItem(
+          title: 'Выплаты авторам',
+          icon: Icons.account_balance_wallet_outlined,
+          subtitle: 'Заявки авторов на карту / СБП',
+          onTap: () => context.push(AdminCreatorPayoutsRoute.path),
+        ),
+      if (_isAdmin)
+        _SettingsItem(
           title: 'Функции подписки',
           icon: Icons.extension_outlined,
           subtitle: 'Каталог уровней, блоки и типы функций',
