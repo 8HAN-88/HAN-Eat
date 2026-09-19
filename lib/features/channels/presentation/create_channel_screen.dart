@@ -311,10 +311,10 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
                   TextFormField(
                     controller: _slugController,
                     decoration: const InputDecoration(
-                      labelText: 'URL идентификатор',
+                      labelText: 'Адрес канала',
                       hintText: 'news_channel',
                       prefixIcon: Icon(Icons.link),
-                      helperText: 'Используется в URL канала',
+                      helperText: 'Короткое имя в ссылке на канал',
                     ),
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) {

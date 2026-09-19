@@ -153,7 +153,7 @@ Future<void> showEmailManageSheet(
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  emailVerified ? 'Email подтверждён' : 'Email не подтверждён',
+                  emailVerified ? 'Почта подтверждена' : 'Почта не подтверждена',
                   style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
                         color: emailVerified
                             ? Theme.of(ctx).colorScheme.primary
@@ -165,7 +165,7 @@ Future<void> showEmailManageSheet(
           ),
           ListTile(
             leading: const Icon(Icons.edit_outlined),
-            title: const Text('Изменить email'),
+            title: const Text('Изменить почту'),
             onTap: () => Navigator.pop(ctx, _EmailAction.change),
           ),
           if (!emailVerified)

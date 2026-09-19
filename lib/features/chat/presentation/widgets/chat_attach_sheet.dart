@@ -987,7 +987,7 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
           controller: controller,
           autofocus: true,
           decoration: const InputDecoration(
-            hintText: 'Вставьте ссылку или slug',
+            hintText: 'Вставьте ссылку или короткое имя',
           ),
         ),
         actions: [

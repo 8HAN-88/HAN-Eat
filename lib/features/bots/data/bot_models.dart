@@ -46,10 +46,10 @@ class BotUpdateRequest {
 String? validateBotUsername(String raw) {
   final value = raw.trim().replaceFirst(RegExp(r'^@'), '').toLowerCase();
   if (value.length < 5 || value.length > 32) {
-    return 'Username: 5–32 символа';
+    return 'Имя: 5–32 символа';
   }
   if (!value.endsWith('bot')) {
-    return 'Username должен заканчиваться на bot';
+    return 'Имя должно заканчиваться на bot';
   }
   if (!RegExp(r'^[a-z][a-z0-9_]*$').hasMatch(value)) {
     return 'Только a-z, 0-9, _; начинаться с буквы';
