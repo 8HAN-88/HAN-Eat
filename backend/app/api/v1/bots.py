@@ -222,7 +222,7 @@ async def create_bot(
     username = _normalize_bot_username(payload.username)
     existing = db.query(User).filter(User.bot_username == username).first()
     if existing:
-        raise HTTPException(status_code=400, detail="Бот с таким username уже существует")
+        raise HTTPException(status_code=400, detail="Бот с таким именем уже есть")
 
     # Генерация токена
     bot_token = secrets.token_urlsafe(32)

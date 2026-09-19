@@ -196,6 +196,14 @@ void main() {
       parseApiErrorMessage('Cannot repost your own post'),
       'Нельзя репостнуть свой пост',
     );
+    expect(
+      parseApiErrorMessage('Yandex account has no email'),
+      'В аккаунте Яндекса нет почты',
+    );
+    expect(
+      parseApiErrorMessage('Бот с таким username уже существует'),
+      'Бот с таким именем уже есть',
+    );
   });
 
   test(

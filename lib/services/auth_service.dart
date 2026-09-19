@@ -843,7 +843,7 @@ class AuthService {
         jsonDecode(response.body) as Map<String, dynamic>,
       );
     }
-    throw _authExceptionFromResponse(response, 'Не удалось подтвердить email');
+    throw _authExceptionFromResponse(response, 'Не удалось подтвердить почту');
   }
 
   static Future<MessageResponse> resendVerification({String? email}) async {
@@ -921,7 +921,7 @@ class AuthService {
         jsonDecode(response.body) as Map<String, dynamic>,
       );
     }
-    throw _authExceptionFromResponse(response, 'Не удалось сменить email');
+    throw _authExceptionFromResponse(response, 'Не удалось сменить почту');
   }
 
   static Future<MessageResponse> confirmEmailChange({
@@ -939,7 +939,7 @@ class AuthService {
         jsonDecode(response.body) as Map<String, dynamic>,
       );
     }
-    throw _authExceptionFromResponse(response, 'Не удалось подтвердить email');
+    throw _authExceptionFromResponse(response, 'Не удалось подтвердить почту');
   }
 
   /// Выход

@@ -26,7 +26,7 @@ Future<bool> showChangeEmailDialog(
             children: [
               Text(
                 'На новый адрес придёт письмо с подтверждением. '
-                'До подтверждения вход остаётся по текущему email.',
+                'До подтверждения вход остаётся по текущей почте.',
                 style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
                       color: Theme.of(ctx).colorScheme.onSurfaceVariant,
                     ),

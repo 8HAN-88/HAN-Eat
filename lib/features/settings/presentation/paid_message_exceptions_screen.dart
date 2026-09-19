@@ -293,7 +293,7 @@ class _UserSearchSheetState extends State<_UserSearchSheet> {
                   controller: _controller,
                   autofocus: true,
                   decoration: const InputDecoration(
-                    hintText: 'Поиск по имени или @username',
+                    hintText: 'Поиск по имени или @нику',
                     prefixIcon: Icon(Icons.search),
                   ),
                   onChanged: _onQueryChanged,

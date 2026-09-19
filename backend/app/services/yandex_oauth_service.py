@@ -87,7 +87,7 @@ async def exchange_code_and_fetch_profile(
     if not email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="В аккаунте Яндекса нет email",
+            detail="В аккаунте Яндекса нет почты",
         )
     name = (
         info.get("display_name")
