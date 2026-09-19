@@ -117,7 +117,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Укажите почту — отправим письмо со ссылкой для нового пароля.',
+            'Укажите почту — отправим письмо с шестизначным кодом.',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -158,7 +158,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           const SizedBox(height: 16),
           Center(
             child: TextButton(
-              onPressed: () => context.push(AuthPaths.resetPassword),
+              onPressed: () => context.push(
+                AuthPaths.resetPasswordWith(
+                  email: _emailController.text.trim(),
+                ),
+              ),
               child: const Text('Уже есть код из письма?'),
             ),
           ),
@@ -242,26 +246,32 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         const SizedBox(height: 20),
         _InstructionStep(
           number: 1,
-          text: 'Откройте письмо «Сброс пароля — HanWe» (проверьте «Спам»).',
+          text:
+              'Откройте письмо HanWe и найдите шесть цифр (проверьте «Спам»).',
         ),
         const SizedBox(height: 10),
         _InstructionStep(
           number: 2,
-          text:
-              'Нажмите оранжевую кнопку в письме — откроется страница, затем приложение.',
+          text: 'Введите код на следующем экране и задайте новый пароль.',
         ),
         const SizedBox(height: 10),
         _InstructionStep(
           number: 3,
-          text:
-              'На экране «Новый пароль» задайте пароль. Если ссылка не открылась — «Ввести код вручную».',
+          text: 'Код действует 15 минут. Если письма нет — отправьте снова.',
         ),
         const SizedBox(height: 28),
         FilledButton(
-          onPressed: _loading ? null : _submit,
+          onPressed: () => context.push(
+            AuthPaths.resetPasswordWith(email: email),
+          ),
           style: FilledButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 14),
           ),
+          child: const Text('Ввести код'),
+        ),
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: _loading ? null : _submit,
           child: _loading
               ? const SizedBox(
                   height: 22,
@@ -270,14 +280,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 )
               : const Text('Отправить письмо снова'),
         ),
-        const SizedBox(height: 8),
         TextButton(
           onPressed: _useAnotherEmail,
           child: const Text('Указать другую почту'),
-        ),
-        TextButton(
-          onPressed: () => context.push(AuthPaths.resetPassword),
-          child: const Text('Ввести код вручную'),
         ),
         TextButton(
           onPressed: () => context.go(AuthPaths.login),

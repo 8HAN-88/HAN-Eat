@@ -11,28 +11,44 @@ _BRAND = "#FF6B35"
 _BG = "#0E1116"
 
 
-def email_web_link(purpose: str, raw_token: str) -> str:
+def _with_email(url: str, email: str | None) -> str:
+    if not email:
+        return url
+    sep = "&" if "?" in url else "?"
+    return f"{url}{sep}email={quote(email.strip(), safe='')}"
+
+
+def email_web_link(purpose: str, raw_token: str, email: str | None = None) -> str:
     """HTTPS-ссылка для кнопки в письме (открывается в браузере Gmail)."""
     base = (settings.AUTH_EMAIL_WEB_BASE_URL or "").strip()
     if not base:
         base = f"{settings.API_PUBLIC_BASE_URL.rstrip('/')}/api/v1/auth/open"
-    return f"{base.rstrip('/')}/{purpose}?token={quote(raw_token, safe='')}"
+    url = f"{base.rstrip('/')}/{purpose}?token={quote(raw_token, safe='')}"
+    return _with_email(url, email)
 
 
-def deep_link(purpose: str, raw_token: str) -> str:
+def deep_link(purpose: str, raw_token: str, email: str | None = None) -> str:
     base = settings.AUTH_LINK_BASE_URL.rstrip("/")
-    return f"{base}/{purpose}?token={quote(raw_token, safe='')}"
+    url = f"{base}/{purpose}?token={quote(raw_token, safe='')}"
+    return _with_email(url, email)
 
 
-def render_open_link_page(purpose: str, raw_token: str) -> str:
-    deep = deep_link(purpose, raw_token)
+def render_open_link_page(
+    purpose: str, raw_token: str, email: str | None = None
+) -> str:
+    deep = deep_link(purpose, raw_token, email=email)
     safe_deep = html.escape(deep, quote=True)
-    safe_token = html.escape(raw_token, quote=False)
+    digits = "".join(ch for ch in (raw_token or "") if ch.isdigit())
+    is_otp = len(digits) == 6 and digits == "".join(
+        ch for ch in (raw_token or "").strip() if not ch.isspace() and ch != "-"
+    )
+    grouped = f"{digits[:3]} {digits[3:]}" if is_otp else raw_token
+    safe_code = html.escape(grouped, quote=False)
 
     titles = {
         "reset-password": "Сброс пароля",
         "verify-email": "Подтверждение почты",
-        "confirm-email-change": "Смена email",
+        "confirm-email-change": "Смена почты",
     }
     cta = {
         "reset-password": "Открыть в HanWe",
@@ -42,6 +58,19 @@ def render_open_link_page(purpose: str, raw_token: str) -> str:
     title = titles.get(purpose, "HanWe")
     button = cta.get(purpose, "Открыть приложение")
     deep_js = json.dumps(deep)
+    code_style = (
+        "display:block;text-align:center;font-size:32px;font-weight:700;"
+        "letter-spacing:8px;background:#f3f5f8;padding:16px 12px;"
+        "border-radius:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;"
+        if is_otp
+        else "display:block;word-break:break-all;background:#f3f5f8;padding:12px;"
+        "border-radius:8px;font-size:12px;margin-top:8px;"
+    )
+    hint = (
+        "Если кнопка не сработала, откройте HanWe и введите этот код:"
+        if is_otp
+        else "Если кнопка не сработала, откройте приложение вручную и введите код из письма:"
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="ru">
@@ -70,10 +99,7 @@ def render_open_link_page(purpose: str, raw_token: str) -> str:
       text-decoration: none; padding: 14px 20px; border-radius: 10px;
       font-weight: 600; font-size: 16px; margin: 20px 0;
     }}
-    code {{
-      display: block; word-break: break-all; background: #f3f5f8; padding: 12px;
-      border-radius: 8px; font-size: 12px; margin-top: 8px;
-    }}
+    code {{ {code_style} }}
   </style>
 </head>
 <body>
@@ -82,8 +108,8 @@ def render_open_link_page(purpose: str, raw_token: str) -> str:
     <h1>{html.escape(title)}</h1>
     <p>Нажмите кнопку ниже — откроется приложение HanWe на этом телефоне.</p>
     <a class="btn" href="{safe_deep}" id="open-app">{html.escape(button)}</a>
-    <p style="font-size:13px;">Если кнопка не сработала, откройте приложение вручную → «Новый пароль» / «Код из письма» и вставьте:</p>
-    <code id="token">{safe_token}</code>
+    <p style="font-size:13px;">{html.escape(hint)}</p>
+    <code id="token">{safe_code}</code>
   </div>
   <script>
     (function() {{

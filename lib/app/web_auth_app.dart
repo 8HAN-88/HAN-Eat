@@ -68,13 +68,21 @@ final GoRouter _authRouter = GoRouter(
     ),
     GoRoute(
       path: AuthPaths.resetPassword,
-      builder: (context, state) => const ResetPasswordScreen(),
+      builder: (context, state) {
+        final token = state.uri.queryParameters['token'];
+        final email = state.uri.queryParameters['email'];
+        return ResetPasswordScreen(
+          initialToken: token,
+          initialEmail: email,
+        );
+      },
     ),
     GoRoute(
       path: AuthPaths.verifyEmail,
       builder: (context, state) {
         final email = state.uri.queryParameters['email'] ?? '';
-        return VerifyEmailScreen(email: email);
+        final token = state.uri.queryParameters['token'];
+        return VerifyEmailScreen(email: email, initialToken: token);
       },
     ),
     GoRoute(

@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 
 import '../../../services/totp_auth_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/otp_code_input.dart';
+import '../../auth/otp_code.dart';
 
 /// Enable or disable TOTP 2FA from Account Security.
 class TwoFactorSetupScreen extends StatefulWidget {
@@ -83,8 +85,8 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
   }
 
   Future<void> _enable() async {
-    final code = _codeController.text.trim();
-    if (code.length < 6) {
+    final code = normalizeOtpInput(_codeController.text);
+    if (!isOtpCode(code)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Введите 6-значный код')),
       );
@@ -116,8 +118,8 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
 
   Future<void> _disable() async {
     final password = _passwordController.text;
-    final code = _disableCodeController.text.trim();
-    if (password.isEmpty || code.length < 6) {
+    final code = normalizeOtpInput(_disableCodeController.text);
+    if (password.isEmpty || !isOtpCode(code)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Укажите пароль и код из приложения')),
       );
@@ -178,9 +180,7 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
                     ListTile(
                       contentPadding: EdgeInsets.zero,
                       leading: Icon(
-                        _enabled
-                            ? Icons.verified_user
-                            : Icons.shield_outlined,
+                        _enabled ? Icons.verified_user : Icons.shield_outlined,
                         color: _enabled
                             ? Theme.of(context).colorScheme.primary
                             : null,
@@ -224,10 +224,11 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
                       const SizedBox(height: 12),
                       SelectableText(
                         _setup!.secret,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontFamily: 'monospace',
-                              letterSpacing: 1.2,
-                            ),
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontFamily: 'monospace',
+                                  letterSpacing: 1.2,
+                                ),
                       ),
                       const SizedBox(height: 8),
                       OutlinedButton.icon(
@@ -244,19 +245,16 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
                         label: const Text('Скопировать ключ'),
                       ),
                       const SizedBox(height: 16),
-                      TextField(
+                      Text(
+                        'Код из приложения',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                      const SizedBox(height: 10),
+                      OtpCodeInput(
                         controller: _codeController,
                         enabled: !_busy,
-                        keyboardType: TextInputType.number,
-                        maxLength: 8,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                        ],
-                        decoration: const InputDecoration(
-                          labelText: 'Код из приложения',
-                          border: OutlineInputBorder(),
-                          counterText: '',
-                        ),
+                        autofocus: false,
+                        onCompleted: (_) => unawaited(_enable()),
                       ),
                       const SizedBox(height: 12),
                       FilledButton(
@@ -280,26 +278,21 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      TextField(
+                      Text(
+                        'Код из приложения',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                      const SizedBox(height: 10),
+                      OtpCodeInput(
                         controller: _disableCodeController,
                         enabled: !_busy,
-                        keyboardType: TextInputType.number,
-                        maxLength: 8,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                        ],
-                        decoration: const InputDecoration(
-                          labelText: 'Код из приложения',
-                          border: OutlineInputBorder(),
-                          counterText: '',
-                        ),
+                        autofocus: false,
                       ),
                       const SizedBox(height: 12),
                       FilledButton(
                         onPressed: _busy ? null : _disable,
                         style: FilledButton.styleFrom(
-                          backgroundColor:
-                              Theme.of(context).colorScheme.error,
+                          backgroundColor: Theme.of(context).colorScheme.error,
                         ),
                         child: const Text('Отключить защиту'),
                       ),

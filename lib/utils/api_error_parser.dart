@@ -207,6 +207,10 @@ const _knownEnglishDetails = <String, String>{
   'Invalid authenticator code': 'Неверный код из приложения',
   'Incorrect password': 'Неверный пароль',
   'Invalid or expired 2FA pending token': 'Код входа устарел. Войдите снова',
+  'Invalid token': 'Неверный код',
+  'Invalid or expired token': 'Неверный или устаревший код',
+  'Token already used': 'Этот код уже использован',
+  'Token expired': 'Код устарел. Запросите новый',
   'No active subscription found': 'Активная подписка не найдена',
   'You already have an open request to cancel subscription.':
       'Запрос на отмену уже отправлен',

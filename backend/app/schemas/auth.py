@@ -35,7 +35,8 @@ class MessageResponse(BaseModel):
 
 
 class TokenBody(BaseModel):
-    token: str = Field(..., min_length=16)
+    token: str = Field(..., min_length=6, max_length=128)
+    email: EmailStr | None = None
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -43,8 +44,9 @@ class ForgotPasswordRequest(BaseModel):
 
 
 class ResetPasswordRequest(BaseModel):
-    token: str = Field(..., min_length=16)
+    token: str = Field(..., min_length=6, max_length=128)
     new_password: str = Field(..., min_length=8)
+    email: EmailStr | None = None
 
 
 class ChangePasswordRequest(BaseModel):

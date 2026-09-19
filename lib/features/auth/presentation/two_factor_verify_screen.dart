@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/auth_navigation.dart';
@@ -10,6 +9,8 @@ import '../../../features/referral/pending_referral_binder.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/push_notification_service.dart' deferred as push_svc;
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/otp_code_input.dart';
+import '../otp_code.dart';
 
 /// Enter TOTP code after password/OAuth when server requires 2FA.
 class TwoFactorVerifyScreen extends StatefulWidget {
@@ -28,8 +29,8 @@ class TwoFactorVerifyScreen extends StatefulWidget {
 
 class _TwoFactorVerifyScreenState extends State<TwoFactorVerifyScreen> {
   final _codeController = TextEditingController();
-  final _formKey = GlobalKey<FormState>();
   bool _loading = false;
+  bool _codeError = false;
   Timer? _postLoginFallbackTimer;
 
   @override
@@ -40,12 +41,19 @@ class _TwoFactorVerifyScreenState extends State<TwoFactorVerifyScreen> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _loading = true);
+    final digits = normalizeOtpInput(_codeController.text);
+    if (!isOtpCode(digits)) {
+      setState(() => _codeError = true);
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _codeError = false;
+    });
     try {
       await AuthService.verifyTwoFactorLogin(
         pendingToken: widget.pendingToken,
-        code: _codeController.text,
+        code: digits,
       );
       unawaited(() async {
         try {
@@ -75,6 +83,7 @@ class _TwoFactorVerifyScreenState extends State<TwoFactorVerifyScreen> {
       });
     } on AuthException catch (e) {
       if (!mounted) return;
+      setState(() => _codeError = true);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -118,52 +127,33 @@ class _TwoFactorVerifyScreenState extends State<TwoFactorVerifyScreen> {
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Введите 6-значный код из приложения-аутентификатора'
-                  '${emailHint.isEmpty ? '' : ' для $emailHint'}.',
-                  style: Theme.of(context).textTheme.bodyLarge,
-                ),
-                const SizedBox(height: 24),
-                TextFormField(
-                  controller: _codeController,
-                  enabled: !_loading,
-                  keyboardType: TextInputType.number,
-                  textInputAction: TextInputAction.done,
-                  autofocus: true,
-                  maxLength: 8,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: const InputDecoration(
-                    labelText: 'Код',
-                    counterText: '',
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (v) {
-                    final digits = (v ?? '').replaceAll(RegExp(r'\D'), '');
-                    if (digits.length != 6) {
-                      return 'Введите 6 цифр';
-                    }
-                    return null;
-                  },
-                  onFieldSubmitted: (_) => _submit(),
-                ),
-                const SizedBox(height: 20),
-                FilledButton(
-                  onPressed: _loading ? null : _submit,
-                  child: _loading
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Подтвердить'),
-                ),
-              ],
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Введите код из приложения-аутентификатора'
+                '${emailHint.isEmpty ? '' : ' для $emailHint'}.',
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+              const SizedBox(height: 24),
+              OtpCodeInput(
+                controller: _codeController,
+                enabled: !_loading,
+                error: _codeError,
+                onCompleted: (_) => unawaited(_submit()),
+              ),
+              const SizedBox(height: 20),
+              FilledButton(
+                onPressed: _loading ? null : _submit,
+                child: _loading
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Подтвердить'),
+              ),
+            ],
           ),
         ),
       ),

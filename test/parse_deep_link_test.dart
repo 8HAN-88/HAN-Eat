@@ -5,7 +5,8 @@ void main() {
   test('PWA /app/ is not a GoRouter location', () {
     expect(parseDeepLinkToGoPath('https://haneat.app/app/'), isNull);
     expect(parseDeepLinkToGoPath('https://haneat.app/app/?go=1'), isNull);
-    expect(parseDeepLinkToGoPath('https://www.haneat.app/app/index.html'), isNull);
+    expect(
+        parseDeepLinkToGoPath('https://www.haneat.app/app/index.html'), isNull);
     expect(parseDeepLinkToGoPath('https://haneat.app/'), isNull);
     expect(parseDeepLinkToGoPath('https://haneat.app/?go=1'), isNull);
   });
@@ -75,6 +76,21 @@ void main() {
     expect(
       parseDeepLinkToGoPath('https://haneat.app/app/#/stories'),
       '/stories',
+    );
+  });
+
+  test('auth email links keep the six-digit code and mailbox', () {
+    expect(
+      parseDeepLinkToGoPath(
+        'haneat://auth/verify-email?token=123456&email=user@test.local',
+      ),
+      '/verify-email?token=123456&email=user%40test.local',
+    );
+    expect(
+      parseDeepLinkToGoPath(
+        'haneat://auth/reset-password?token=654321&email=user@test.local',
+      ),
+      '/reset-password?token=654321&email=user%40test.local',
     );
   });
 

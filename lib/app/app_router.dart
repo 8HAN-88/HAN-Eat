@@ -211,15 +211,18 @@ String? parseDeepLinkToGoPath(String raw) {
     if (uri.host == 'auth' && uri.pathSegments.isNotEmpty) {
       final action = uri.pathSegments.first;
       final token = uri.queryParameters['token'];
+      final email = uri.queryParameters['email'];
       if (token != null && token.isNotEmpty) {
-        final encoded = Uri.encodeComponent(token);
         switch (action) {
           case 'verify-email':
-            return '${VerifyEmailRoute.path}?token=$encoded';
+            return AuthPaths.verifyEmailWith(token: token, email: email);
           case 'reset-password':
-            return '${ResetPasswordRoute.path}?token=$encoded';
+            return AuthPaths.resetPasswordWith(token: token, email: email);
           case 'confirm-email-change':
-            return '${ConfirmEmailChangeRoute.path}?token=$encoded';
+            return AuthPaths.confirmEmailChangeWith(
+              token: token,
+              email: email,
+            );
         }
       }
     }
@@ -809,8 +812,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: ResetPasswordRoute.name,
         pageBuilder: (context, state) {
           final token = state.uri.queryParameters['token'];
+          final email = state.uri.queryParameters['email'];
           return MaterialPage(
-            child: ResetPasswordScreen(initialToken: token),
+            child: ResetPasswordScreen(
+              initialToken: token,
+              initialEmail: email,
+            ),
           );
         },
       ),
@@ -852,8 +859,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: ConfirmEmailChangeRoute.name,
         pageBuilder: (context, state) {
           final token = state.uri.queryParameters['token'] ?? '';
+          final email = state.uri.queryParameters['email'];
           return MaterialPage(
-            child: ConfirmEmailChangeScreen(token: token),
+            child: ConfirmEmailChangeScreen(token: token, email: email),
           );
         },
       ),
@@ -1941,8 +1949,11 @@ class TwoFactorVerifyRoute {
 }
 
 class ConfirmEmailChangeRoute {
-  static const path = '/confirm-email-change';
+  static const path = AuthPaths.confirmEmailChange;
   static const name = 'confirm_email_change';
+
+  static String withEmail(String email) =>
+      AuthPaths.confirmEmailChangeWith(email: email);
 }
 
 class AccountSecurityRoute {

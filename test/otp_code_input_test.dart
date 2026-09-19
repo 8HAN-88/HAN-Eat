@@ -1,0 +1,50 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:han_eat/features/auth/otp_code.dart';
+import 'package:han_eat/features/auth/presentation/verify_email_screen.dart';
+import 'package:han_eat/widgets/otp_code_input.dart';
+
+void main() {
+  test('otp helpers accept spaced six digits and legacy tokens', () {
+    expect(isOtpCode('123456'), isTrue);
+    expect(isOtpCode('123 456'), isTrue);
+    expect(isOtpCode('12-34-56'), isTrue);
+    expect(isOtpCode('12345'), isFalse);
+    expect(isLegacyAuthToken('short'), isFalse);
+    expect(
+      isLegacyAuthToken('abcdefghijklmnop'),
+      isTrue,
+    );
+  });
+
+  testWidgets('digit boxes complete after six numbers', (tester) async {
+    String? completed;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: OtpCodeInput(
+            onCompleted: (code) => completed = code,
+          ),
+        ),
+      ),
+    );
+    await tester.enterText(find.byType(TextField), '123456');
+    await tester.pump();
+    expect(completed, '123456');
+    expect(find.text('1'), findsOneWidget);
+    expect(find.text('6'), findsOneWidget);
+  });
+
+  testWidgets('verify email asks for a six-digit code', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: VerifyEmailScreen(email: 'user@test.local'),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('Подтверждение почты'), findsOneWidget);
+    expect(find.text('Введите код из письма'), findsOneWidget);
+    expect(find.byType(OtpCodeInput), findsOneWidget);
+    expect(find.text('Код из письма'), findsNothing);
+  });
+}

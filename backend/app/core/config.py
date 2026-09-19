@@ -140,6 +140,11 @@ class Settings(BaseSettings):
     AUTH_VERIFY_EMAIL_HOURS: int = 48
     AUTH_RESET_PASSWORD_HOURS: int = 2
     AUTH_CHANGE_EMAIL_HOURS: int = 24
+    # Короткий OTP как у Apple / Google / банков. Часы выше — только для
+    # старых длинных ссылок, которые ещё могли уйти в письмах.
+    AUTH_OTP_MINUTES: int = 15
+    AUTH_OTP_MAX_ATTEMPTS: int = 5
+    AUTH_OTP_RESEND_SECONDS: int = 45
 
     EMAIL_SMTP_HOST: str = ""
     EMAIL_SMTP_PORT: int = 587
