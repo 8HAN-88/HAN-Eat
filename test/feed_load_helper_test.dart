@@ -15,6 +15,15 @@ void main() {
       expect(msg, contains('обновите'));
     });
 
+    test('feedLoadErrorMessage does not leak English API text', () {
+      final msg = FeedLoadHelper.feedLoadErrorMessage(
+        Exception('API error 500: Internal Server Error'),
+      );
+      expect(msg, isNot(contains('API error')));
+      expect(msg, isNot(contains('Internal Server Error')));
+      expect(msg, contains('Не удалось'));
+    });
+
     test('cacheSnackMessage for session', () {
       expect(
         FeedLoadHelper.cacheSnackMessage(Exception('Сессия истекла')),
@@ -27,7 +36,8 @@ void main() {
         FeedLoadHelper.cacheBannerMessage(''),
         contains('Не удалось обновить'),
       );
-      expect(FeedLoadHelper.cacheBannerMessage('offline'), contains('интернета'));
+      expect(
+          FeedLoadHelper.cacheBannerMessage('offline'), contains('интернета'));
       expect(
         FeedLoadHelper.cacheBannerMessage('Обновляем ленту'),
         isNot(contains('Обновляем ленту')),

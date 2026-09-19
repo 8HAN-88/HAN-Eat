@@ -253,6 +253,26 @@ void main() {
     );
   });
 
+  test('userVisibleError maps leftover media and auth fallbacks', () {
+    expect(parseApiErrorMessage('Invalid post ID'), 'Неверный пост');
+    expect(
+      parseApiErrorMessage('Invalid poll response'),
+      'Неверный ответ опроса',
+    );
+    expect(
+      userVisibleError(Exception('API error 400: nope')),
+      'Не удалось выполнить действие. Попробуйте ещё раз.',
+    );
+    expect(
+      userVisibleError(Exception('video init failed: timeout')),
+      'Не удалось запустить видео',
+    );
+    expect(
+      parseApiErrorMessage('Not authenticated. Please log in first.'),
+      'Войдите в аккаунт',
+    );
+  });
+
   test('userVisibleAuthError prefers auth message for 401', () {
     expect(
       userVisibleAuthError(

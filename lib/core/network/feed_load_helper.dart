@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
+import '../../utils/api_error_parser.dart';
 
 /// Сообщения при показе [FeedApiCache] после ошибки загрузки.
 class FeedLoadHelper {
@@ -60,11 +61,10 @@ class FeedLoadHelper {
     if (e is TimeoutException || isNetworkError(e)) {
       return 'Сервер недоступен. Проверьте сеть и обновите ленту.';
     }
-    final raw = e.toString().replaceAll('Exception: ', '');
-    if (raw.length > 120) {
-      return 'Не удалось загрузить ленту. Потяните вниз, чтобы обновить.';
-    }
-    return 'Не удалось загрузить ленту: $raw';
+    return userVisibleError(
+      e,
+      fallback: 'Не удалось загрузить ленту. Потяните вниз, чтобы обновить.',
+    );
   }
 
   static String cacheBannerMessage(Object e) {

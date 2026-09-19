@@ -18,6 +18,7 @@ import '../../../utils/api_error_parser.dart';
 import '../../../utils/session_snackbar.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/app_gradient_background.dart';
+import '../../calls/presentation/call_coordinator.dart';
 import '../../comments/presentation/show_post_comments_sheet.dart';
 import '../application/unread_notifications_provider.dart';
 import 'notification_formatters.dart';
@@ -386,6 +387,23 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         context.push(
           ChatThreadRoute.pathForId(conversationId),
           extra: peer,
+        );
+      }
+    } else if (notification.type == 'call.incoming' ||
+        notification.entityType == 'call' ||
+        notification.data?['route'] == 'call') {
+      final callId = _parseNotificationId(
+            notification.data?['call_id'] ?? notification.data?['callId'],
+          ) ??
+          _parseNotificationId(notification.entityId);
+      if (callId != null) {
+        unawaited(
+          CallCoordinator.instance.openIncomingFromPush(
+            callId: callId,
+            callerName:
+                notification.actor?.name ?? notification.title,
+            media: notification.data?['media']?.toString(),
+          ),
         );
       }
     } else if (notification.type == 'follow' && notification.actor != null) {

@@ -131,7 +131,7 @@ class SavedPostsService {
   /// Сохранить пост (с синхронизацией)
   static Future<void> savePost(dynamic postId) async {
     final postIdInt = postId is int ? postId : int.tryParse(postId.toString());
-    if (postIdInt == null) throw Exception('Invalid post ID');
+    if (postIdInt == null) throw Exception('Неверный пост');
     await savePostById(postIdInt);
   }
   
@@ -249,7 +249,7 @@ class SavedPostsService {
   /// Удалить пост из сохраненных (с синхронизацией)
   static Future<void> unsavePost(dynamic postId) async {
     final postIdInt = postId is int ? postId : int.tryParse(postId.toString());
-    if (postIdInt == null) throw Exception('Invalid post ID');
+    if (postIdInt == null) throw Exception('Неверный пост');
     await unsavePostById(postIdInt);
   }
   

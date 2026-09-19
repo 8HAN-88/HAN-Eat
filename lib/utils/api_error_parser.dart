@@ -300,6 +300,12 @@ const _knownEnglishDetails = <String, String>{
   'invalid_ban_until': 'Неверная дата блокировки',
   'not_a_forum': 'В этой группе темы выключены',
   'cannot_close_general': 'Общую тему закрыть нельзя',
+  'Invalid post ID': 'Неверный пост',
+  'Invalid poll response': 'Неверный ответ опроса',
+  'no video url': 'Нет ссылки на видео',
+  'video init failed': 'Не удалось запустить видео',
+  'Authentication failed. Please log in again.': 'Войдите в аккаунт',
+  'Not authenticated. Please log in first.': 'Войдите в аккаунт',
 };
 
 String? localizeKnownEnglishDetail(String detail) =>
@@ -546,8 +552,11 @@ String userVisibleError(Object e, {String fallback = 'Произошла оши�
   if (lower.contains('level must be')) {
     return 'Выберите уровень от 1 до 79';
   }
-  if (lower.startsWith('failed to')) {
+  if (lower.startsWith('failed to') || lower.startsWith('api error')) {
     return 'Не удалось выполнить действие. Попробуйте ещё раз.';
+  }
+  if (lower.contains('video init failed') || lower.contains('no video url')) {
+    return 'Не удалось запустить видео';
   }
   if (lower.contains('too many requests') ||
       lower.contains('rate_limit') ||

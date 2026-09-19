@@ -1078,6 +1078,18 @@ async def stripe_webhook(
                 
                 if subscription:
                     logger.warning(f"Payment failed for subscription {subscription_id}")
+                    failed_data = {
+                        "action": "payment_failed",
+                        "route": "subscription",
+                        "payment_provider_subscription_id": subscription_id,
+                    }
+                    failed_level = {
+                        "ai": 9,
+                        "creator": 16,
+                        "pro": 18,
+                    }.get((subscription.product or "").lower())
+                    if failed_level is not None:
+                        failed_data["level"] = failed_level
                     NotificationService(db).create_notification(
                         user_id=subscription.user_id,
                         type="system",
@@ -1085,11 +1097,7 @@ async def stripe_webhook(
                         body="Проверьте способ оплаты или продлите подписку в разделе «Подписка».",
                         entity_type="subscription",
                         entity_id=subscription.id,
-                        data={
-                            "action": "payment_failed",
-                            "route": "subscription",
-                            "payment_provider_subscription_id": subscription_id,
-                        },
+                        data=failed_data,
                     )
 
         db.commit()

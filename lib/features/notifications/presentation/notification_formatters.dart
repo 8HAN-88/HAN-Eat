@@ -185,6 +185,8 @@ String notificationActionText(NotificationDisplayItem group) {
       return 'возврат одобрен';
     case 'subscription_refund_rejected':
       return 'возврат отклонён';
+    case 'call.incoming':
+      return 'входящий звонок';
     default:
       final body = notification.body?.trim();
       if (body != null && body.isNotEmpty) return body;
@@ -235,8 +237,7 @@ List<NotificationDisplayItem> _groupSectionItems(
         for (var j = i + 1; j < sectionItems.length; j++) {
           if (used.contains(j)) continue;
           final other = sectionItems[j];
-          if (other.type == item.type &&
-              notificationPostId(other) == postId) {
+          if (other.type == item.type && notificationPostId(other) == postId) {
             cluster.add(other);
             used.add(j);
           }
@@ -279,7 +280,8 @@ List<NotificationListEntry> buildNotificationSections(
     final sectionItems = buckets[key];
     if (sectionItems == null || sectionItems.isEmpty) continue;
 
-    entries.add(NotificationSectionHeader(label: notificationSectionLabel(key)));
+    entries
+        .add(NotificationSectionHeader(label: notificationSectionLabel(key)));
     for (final group in _groupSectionItems(sectionItems)) {
       entries.add(NotificationRowItem(group));
     }

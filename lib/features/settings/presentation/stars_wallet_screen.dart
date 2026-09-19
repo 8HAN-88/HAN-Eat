@@ -383,12 +383,16 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
         return 'Платная реакция получена';
       case 'payout':
         return 'Выплата';
+      case 'payout_hold':
+        return 'Выплата на удержании';
+      case 'payout_refund':
+        return 'Возврат выплаты';
       case 'group_subscription':
         return 'Подписка на группу';
       case 'group_subscription_received':
         return 'Подписка на вашу группу';
       default:
-        return type;
+        return 'Операция';
     }
   }
 

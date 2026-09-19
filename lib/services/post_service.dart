@@ -168,7 +168,7 @@ class PostService {
       if (poll != null) {
         return PollData.fromJson(poll);
       }
-      throw Exception('Invalid poll response');
+      throw Exception('Неверный ответ опроса');
     }
     final error = jsonDecode(response.body) as Map<String, dynamic>;
     throw apiExceptionFromResponse(
@@ -200,7 +200,7 @@ class PostService {
       if (poll != null) {
         return PollData.fromJson(poll);
       }
-      throw Exception('Invalid poll response');
+      throw Exception('Неверный ответ опроса');
     }
 
     final error = jsonDecode(response.body) as Map<String, dynamic>;

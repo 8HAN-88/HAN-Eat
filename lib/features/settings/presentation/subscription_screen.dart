@@ -331,7 +331,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
           .firstOrNull;
       if (opt != null) {
         if (opt.isUpgrade && opt.amountDue > 0) {
-          return 'Улучшить за ${opt.amountDue.toStringAsFixed(0)} ₽';
+          return 'Оформить за ${opt.amountDue.toStringAsFixed(0)} ₽';
         }
         return 'Оформить уровень выше';
       }
@@ -409,7 +409,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
                   margin: const EdgeInsets.only(bottom: 8),
                   child: TelegramActionRow(
                     icon: Icons.upgrade_rounded,
-                    title: 'Улучшить до ${opt.name}',
+                    title: 'Оформить ${opt.name}',
                     subtitle: [
                       if (opt.reason != null) opt.reason!,
                       if (opt.isUpgrade && opt.creditRub > 0)
