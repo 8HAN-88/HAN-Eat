@@ -133,7 +133,7 @@ class _AdminFlexFeaturesScreenState extends State<AdminFlexFeaturesScreen> {
                     Expanded(
                       child: TextFormField(
                         initialValue: '$minLevel',
-                        decoration: const InputDecoration(labelText: 'мин'),
+                        decoration: const InputDecoration(labelText: 'Мин.'),
                         keyboardType: TextInputType.number,
                         onChanged: (v) =>
                             minLevel = int.tryParse(v) ?? minLevel,
@@ -143,7 +143,7 @@ class _AdminFlexFeaturesScreenState extends State<AdminFlexFeaturesScreen> {
                     Expanded(
                       child: TextFormField(
                         initialValue: '$maxLevel',
-                        decoration: const InputDecoration(labelText: 'макс'),
+                        decoration: const InputDecoration(labelText: 'Макс.'),
                         keyboardType: TextInputType.number,
                         onChanged: (v) =>
                             maxLevel = int.tryParse(v) ?? maxLevel,
@@ -153,7 +153,7 @@ class _AdminFlexFeaturesScreenState extends State<AdminFlexFeaturesScreen> {
                     Expanded(
                       child: TextFormField(
                         initialValue: '$defaultLevel',
-                        decoration: const InputDecoration(labelText: 'уровень'),
+                        decoration: const InputDecoration(labelText: 'Уровень'),
                         keyboardType: TextInputType.number,
                         onChanged: (v) =>
                             defaultLevel = int.tryParse(v) ?? defaultLevel,

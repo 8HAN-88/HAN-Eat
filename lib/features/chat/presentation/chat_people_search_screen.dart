@@ -151,7 +151,7 @@ class _ChatPeopleSearchScreenState extends State<ChatPeopleSearchScreen> {
               controller: _query,
               autofocus: true,
               decoration: InputDecoration(
-                hintText: 'Имя или @username',
+                hintText: 'Имя или @ник',
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _query.text.isEmpty
                     ? null
@@ -204,7 +204,7 @@ class _ChatPeopleSearchScreenState extends State<ChatPeopleSearchScreen> {
                             ? 'Найти людей'
                             : 'Никого не нашли',
                         subtitle: _query.text.trim().length < 2
-                            ? 'Введите имя или @username'
+                            ? 'Введите имя или @ник'
                             : 'Попробуйте другой запрос',
                         action: _query.text.trim().length >= 2
                             ? TextButton(

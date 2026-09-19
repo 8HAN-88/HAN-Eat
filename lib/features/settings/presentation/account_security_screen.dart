@@ -155,7 +155,7 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
                   leading: const Icon(Icons.password_outlined),
                   title: const Text('Пароль и вход'),
                   subtitle:
-                      const Text('Смена пароля, email и вход через провайдеры'),
+                      const Text('Смена пароля, почты и вход через сервисы'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => context.push(ProfileAuthRoute.path),
                 ),

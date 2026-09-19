@@ -300,7 +300,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       _SettingsItem(
         title: 'Настройки профиля',
         icon: Icons.manage_accounts_outlined,
-        subtitle: 'Имя, аватар, email, телефон, пароль',
+        subtitle: 'Имя, аватар, почта, телефон, пароль',
         onTap: () => context.push(ProfileAuthRoute.path),
       ),
       _SettingsItem(
