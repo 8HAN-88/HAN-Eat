@@ -121,8 +121,6 @@ import 'widgets/paid_media_lock_bubble.dart';
 import 'widgets/star_gift_picker_sheet.dart';
 import '../widgets/chat_voice_mic_button.dart';
 import '../widgets/chat_voice_waveform.dart';
-import 'chat_group_info_screen.dart';
-import 'chat_media_gallery_screen.dart';
 import 'manual_retry_utils.dart';
 import 'chat_voice_bubble.dart';
 
@@ -7402,14 +7400,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _openMediaGallery() async {
-    final messageId = await Navigator.of(context).push<int>(
-      MaterialPageRoute(
-        builder: (_) => ChatMediaGalleryScreen(
-          conversationId: widget.conversationId,
-          seedMessages: _messages,
-          protectContent: _conversation.protectContent,
-        ),
-      ),
+    final messageId = await context.push<int>(
+      ChatMediaGalleryRoute.pathFor(widget.conversationId),
     );
     if (messageId == null || messageId <= 0 || !mounted) return;
     await _scrollToReplyMessage(messageId);
@@ -8893,36 +8885,36 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
-  void _openGroupInfo() {
-    Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) => ChatGroupInfoScreen(
-          conversation: _conversation,
-          onConversationChanged: (conv) {
-            if (!mounted) return;
-            final forumChanged = conv.isForum != _conversation.isForum;
-            setState(() {
-              _conversation = conv;
-              _muted = conv.muted;
-            });
-            _reconcileSlowModeCooldownWithConversation();
-            if (forumChanged || conv.isForum) {
-              unawaited(
-                _loadForumTopics(
-                  selectGeneralIfNeeded: forumChanged && conv.isForum,
-                ),
-              );
-            }
-            if (forumChanged && !conv.isForum) {
-              unawaited(_load(refresh: true));
-            }
-          },
-          onLeftGroup: () {
-            if (mounted) Navigator.of(context).pop();
-          },
-        ),
-      ),
+  Future<void> _openGroupInfo() async {
+    final result = await context.push<Object?>(
+      ChatGroupInfoRoute.pathFor(_conversation.id),
+      extra: _conversation,
     );
+    if (!mounted) return;
+    if (result == 'left') {
+      if (context.canPop()) context.pop();
+      return;
+    }
+    try {
+      final conv = await ChatService.getConversation(_conversation.id);
+      if (!mounted) return;
+      final forumChanged = conv.isForum != _conversation.isForum;
+      setState(() {
+        _conversation = conv;
+        _muted = conv.muted;
+      });
+      _reconcileSlowModeCooldownWithConversation();
+      if (forumChanged || conv.isForum) {
+        unawaited(
+          _loadForumTopics(
+            selectGeneralIfNeeded: forumChanged && conv.isForum,
+          ),
+        );
+      }
+      if (forumChanged && !conv.isForum) {
+        unawaited(_load(refresh: true));
+      }
+    } catch (_) {}
   }
 
   Future<void> _leaveGroup() async {

@@ -15,11 +15,13 @@ class ChatFolderEditScreen extends StatefulWidget {
   const ChatFolderEditScreen({
     super.key,
     this.folder,
+    this.folderId,
     this.initialConversationIds = const [],
     this.initialChannelIds = const [],
   });
 
   final ChatFolder? folder;
+  final int? folderId;
   final List<int> initialConversationIds;
   final List<int> initialChannelIds;
 
@@ -63,18 +65,24 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
   _FolderPickTab _tab = _FolderPickTab.all;
   String _searchQuery = '';
 
-  bool get _isEdit => widget.folder != null;
+  ChatFolder? _folder;
+  bool _folderMissing = false;
+
+  bool get _isEdit => _folder != null;
 
   @override
   void initState() {
     super.initState();
-    final folder = widget.folder;
+    _folder = widget.folder;
+    final folder = _folder;
     if (folder != null) {
       _nameController.text = folder.name;
       if (folder.icon != null) _iconController.text = folder.icon!;
       _selectedConv.addAll(folder.conversationIds);
       _selectedCh.addAll(folder.channelIds);
       _filters = folder.filters;
+    } else if (widget.folderId != null) {
+      unawaited(_hydrateFolder(widget.folderId!));
     } else {
       _selectedConv.addAll(widget.initialConversationIds);
       _selectedCh.addAll(widget.initialChannelIds);
@@ -83,6 +91,40 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
       setState(() => _searchQuery = _searchController.text.trim().toLowerCase());
     });
     unawaited(_loadPickList());
+  }
+
+  Future<void> _hydrateFolder(int folderId) async {
+    try {
+      final folders = await ChatFolderStore.listFolders();
+      if (!mounted) return;
+      ChatFolder? found;
+      for (final item in folders) {
+        if (item.id == folderId) {
+          found = item;
+          break;
+        }
+      }
+      final match = found;
+      if (match == null) {
+        setState(() => _folderMissing = true);
+        return;
+      }
+      setState(() {
+        _folder = match;
+        _nameController.text = match.name;
+        if (match.icon != null) _iconController.text = match.icon!;
+        _selectedConv
+          ..clear()
+          ..addAll(match.conversationIds);
+        _selectedCh
+          ..clear()
+          ..addAll(match.channelIds);
+        _filters = match.filters;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _folderMissing = true);
+    }
   }
 
   @override
@@ -225,7 +267,7 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
       ChatFolder result;
       if (_isEdit) {
         result = await ChatFolderStore.updateFolder(
-          widget.folder!.copyWith(
+          _folder!.copyWith(
             name: name,
             icon: icon.isEmpty ? null : icon,
             conversationIds: conv,
@@ -261,7 +303,7 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
   }
 
   Future<void> _deleteFolder() async {
-    final folder = widget.folder;
+    final folder = _folder;
     if (folder == null) return;
     final ok = await showDialog<bool>(
       context: context,
@@ -323,6 +365,31 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_folderMissing) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Папка')),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Папка не найдена'),
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: () => Navigator.of(context).maybePop(),
+                child: const Text('Назад'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    if (widget.folderId != null && !_isEdit) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Папка')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     final scheme = Theme.of(context).colorScheme;
     final visible = _visibleItems;
 

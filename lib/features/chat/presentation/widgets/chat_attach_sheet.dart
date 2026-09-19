@@ -34,8 +34,6 @@ import '../../application/chat_recent_stickers_store.dart';
 import '../../application/chats_hub_refresh_provider.dart';
 import '../../../../widgets/chat_sticker_tile.dart';
 import '../../../../services/auth_service.dart';
-import '../sticker_pack_manage_screen.dart';
-import '../sticker_pack_preview_screen.dart';
 import 'chat_location_bubble.dart';
 import 'chat_poll_form_panel.dart';
 import 'chats_hub_contacts_tab.dart';
@@ -962,11 +960,7 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
   }
 
   Future<void> _openPackManager(int packId) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => StickerPackManageScreen(packId: packId),
-      ),
-    );
+    await context.push(StickerPackManageRoute.pathFor(packId));
     if (!mounted) return;
     await _loadStickerPacks();
   }
@@ -1010,10 +1004,8 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
       );
       return;
     }
-    final installed = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => StickerPackPreviewScreen(slug: slug),
-      ),
+    final installed = await context.push<bool>(
+      StickerPackPreviewRoute.pathFor(slug),
     );
     if (installed == true && mounted) {
       await _loadStickerPacks();
@@ -1026,9 +1018,11 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
     final uri = Uri.tryParse(text);
     if (uri == null) return '';
     if (uri.pathSegments.isEmpty) return '';
-    final idx = uri.pathSegments.indexOf('stickers');
-    if (idx >= 0 && idx + 1 < uri.pathSegments.length) {
-      return uri.pathSegments[idx + 1].toLowerCase();
+    for (final key in ['addstickers', 'stickers']) {
+      final idx = uri.pathSegments.indexOf(key);
+      if (idx >= 0 && idx + 1 < uri.pathSegments.length) {
+        return uri.pathSegments[idx + 1].toLowerCase();
+      }
     }
     return uri.pathSegments.last.toLowerCase();
   }

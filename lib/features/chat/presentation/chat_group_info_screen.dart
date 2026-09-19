@@ -18,13 +18,94 @@ import '../../../services/server_config.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../utils/presence_format.dart';
 import '../../../widgets/app_avatar.dart';
+import '../../../widgets/app_empty_state.dart';
 import '../application/chat_inbox_optimistic.dart';
 import '../application/chats_hub_refresh_provider.dart';
 import '../application/join_requests_bulk.dart';
 import 'chat_group_moderation_log_screen.dart';
-import 'chat_media_gallery_screen.dart';
 import 'widgets/chat_mute_duration_sheet.dart';
 import 'widgets/chats_hub_contacts_tab.dart';
+
+class ChatGroupInfoLoaderScreen extends StatefulWidget {
+  const ChatGroupInfoLoaderScreen({
+    super.key,
+    required this.conversationId,
+    this.initialConversation,
+  });
+
+  final int conversationId;
+  final ChatConversation? initialConversation;
+
+  @override
+  State<ChatGroupInfoLoaderScreen> createState() =>
+      _ChatGroupInfoLoaderScreenState();
+}
+
+class _ChatGroupInfoLoaderScreenState extends State<ChatGroupInfoLoaderScreen> {
+  ChatConversation? _conversation;
+  bool _loading = true;
+  Object? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _conversation = widget.initialConversation;
+    unawaited(_hydrate());
+  }
+
+  Future<void> _hydrate() async {
+    if (_conversation == null) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
+    try {
+      final conv = await ChatService.getConversation(widget.conversationId);
+      if (!mounted) return;
+      setState(() {
+        _conversation = conv;
+        _loading = false;
+        _error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      if (_conversation != null) {
+        setState(() => _loading = false);
+        return;
+      }
+      setState(() {
+        _error = e;
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final conv = _conversation;
+    if (conv != null) {
+      return ChatGroupInfoScreen(conversation: conv);
+    }
+    final err = _error;
+    return Scaffold(
+      appBar: AppBar(title: const Text('О группе')),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : AppEmptyState(
+              icon: Icons.group_off_outlined,
+              title: 'Чат не найден',
+              subtitle: err == null
+                  ? 'Ссылка устарела или диалог недоступен'
+                  : userVisibleError(err),
+              action: FilledButton(
+                onPressed: () => context.go(ChatsRoute.path),
+                child: const Text('К чатам'),
+              ),
+            ),
+    );
+  }
+}
 
 class ChatGroupInfoScreen extends StatefulWidget {
   const ChatGroupInfoScreen({
@@ -1774,7 +1855,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       await ChatService.leaveGroup(conversationId: _conversation.id);
       if (!mounted) return;
       widget.onLeftGroup?.call();
-      Navigator.of(context).pop();
+      Navigator.of(context).pop('left');
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1912,13 +1993,9 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                           onTap: _busy
                               ? null
                               : () {
-                                  Navigator.of(context).push<void>(
-                                    MaterialPageRoute(
-                                      builder: (_) => ChatMediaGalleryScreen(
-                                        conversationId: _conversation.id,
-                                        protectContent:
-                                            _conversation.protectContent,
-                                      ),
+                                  context.push(
+                                    ChatMediaGalleryRoute.pathFor(
+                                      _conversation.id,
                                     ),
                                   );
                                 },
