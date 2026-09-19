@@ -36,6 +36,7 @@ class _ChannelSettingsScreenState extends ConsumerState<ChannelSettingsScreen> {
   bool _loadFailed = false;
   bool _isDeleting = false;
   bool _isPublic = true;
+  ChannelDetail? _channel;
 
   /// Текущий slug с сервера — если название только кириллица, подставляем его (иначе slug из имени пустой).
   String _savedSlug = '';
@@ -66,6 +67,7 @@ class _ChannelSettingsScreenState extends ConsumerState<ChannelSettingsScreen> {
       final channel = await ChannelService.getChannel(widget.channelId);
       if (!mounted) return;
       setState(() {
+        _channel = channel;
         _savedSlug = channel.slug;
         _nameController.text = channel.name;
         _descriptionController.text = channel.description ?? '';
@@ -205,6 +207,8 @@ class _ChannelSettingsScreenState extends ConsumerState<ChannelSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final canManage = _channel?.canManageChannelSettings ?? false;
+    final canDelete = _channel?.isOwner ?? false;
 
     return Scaffold(
       appBar: AppBar(
@@ -219,7 +223,7 @@ class _ChannelSettingsScreenState extends ConsumerState<ChannelSettingsScreen> {
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
             )
-          else if (!_loadFailed && !_isLoadingData)
+          else if (!_loadFailed && !_isLoadingData && canManage)
             TextButton(
               onPressed: _isDeleting ? null : _handleSave,
               child: const Text('Сохранить'),
@@ -248,6 +252,23 @@ class _ChannelSettingsScreenState extends ConsumerState<ChannelSettingsScreen> {
                     ],
                   ),
                 )
+              : !canManage
+                  ? AppEmptyState(
+                      icon: Icons.lock_outline,
+                      title: 'Нет доступа',
+                      subtitle:
+                          'Изменять настройки и удалять канал может только владелец или админ.',
+                      action: FilledButton(
+                        onPressed: () {
+                          if (context.canPop()) {
+                            context.pop();
+                          } else {
+                            context.go(ChatsRoute.path);
+                          }
+                        },
+                        child: const Text('Назад'),
+                      ),
+                    )
               : Stack(
         children: [
           Form(
@@ -309,6 +330,7 @@ class _ChannelSettingsScreenState extends ConsumerState<ChannelSettingsScreen> {
                   const SizedBox(height: 32),
 
                   // Раздел "Опасная зона"
+                  if (canDelete) ...[
                   const Divider(),
                   const SizedBox(height: 16),
                   Text(
@@ -361,6 +383,7 @@ class _ChannelSettingsScreenState extends ConsumerState<ChannelSettingsScreen> {
                       style: TextStyle(color: theme.colorScheme.error),
                     ),
                   ),
+                  ],
                 ],
               ),
             ),
