@@ -114,6 +114,18 @@ bool _isAppHttpHost(String host) {
       h == '[::1]';
 }
 
+/// Paid channel screens live under `/channels/:id/...`.
+/// Keep `/channel/:id/giveaways` in the same family as info/settings.
+String? channelPaidPathAlias(String path, [String query = '']) {
+  final clean = path.split('?').first;
+  final segs = clean.split('/').where((s) => s.isNotEmpty).toList();
+  if (segs.length != 3 || segs[0] != 'channel') return null;
+  if (int.tryParse(segs[1]) == null) return null;
+  if (segs[2] != 'giveaways' && segs[2] != 'suggested-posts') return null;
+  final q = query.isEmpty ? '' : '?$query';
+  return '/channels/${segs[1]}/${segs[2]}$q';
+}
+
 /// Преобразует `haneat://...` или `https://haneat.app/...` в путь для [GoRouter].
 String? parseDeepLinkToGoPath(String raw) {
   try {
@@ -158,6 +170,10 @@ String? parseDeepLinkToGoPath(String raw) {
           final reelPath = ReelByIdRoute.goPathFromBrowserPath(path);
           if (reelPath != null) {
             return reelPath;
+          }
+          final paidAlias = channelPaidPathAlias(path, query ?? '');
+          if (paidAlias != null) {
+            return paidAlias;
           }
           return query == null ? path : '$path?$query';
         }
@@ -1193,6 +1209,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             child: ChannelManagementScreen(channelId: channelId),
           );
         },
+      ),
+      GoRoute(
+        path: '/channel/:channelId/giveaways',
+        redirect: (context, state) =>
+            channelPaidPathAlias(state.uri.path, state.uri.query) ??
+            FeedRoute.path,
+      ),
+      GoRoute(
+        path: '/channel/:channelId/suggested-posts',
+        redirect: (context, state) =>
+            channelPaidPathAlias(state.uri.path, state.uri.query) ??
+            FeedRoute.path,
       ),
       // Notifications List (удален дубликат - используется NotificationsRoute выше)
       // Support

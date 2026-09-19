@@ -94,6 +94,29 @@ void main() {
     );
   });
 
+  test('singular channel paid paths alias to /channels/:id', () {
+    expect(
+      channelPaidPathAlias('/channel/1/giveaways'),
+      '/channels/1/giveaways',
+    );
+    expect(
+      channelPaidPathAlias('/channel/7/suggested-posts', 'manage=1'),
+      '/channels/7/suggested-posts?manage=1',
+    );
+    expect(channelPaidPathAlias('/channel/1/info'), isNull);
+    expect(channelPaidPathAlias('/channels/1/giveaways'), isNull);
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/channel/1/giveaways'),
+      '/channels/1/giveaways',
+    );
+    expect(
+      parseDeepLinkToGoPath(
+        'https://haneat.app/app/#/channel/4/suggested-posts?name=HAN',
+      ),
+      '/channels/4/suggested-posts?name=HAN',
+    );
+  });
+
   test('reel share links open /reel/:id', () {
     expect(parseDeepLinkToGoPath('https://haneat.app/reel/28'), '/reel/28');
     expect(parseDeepLinkToGoPath('https://haneat.app/app/reel/28'), '/reel/28');

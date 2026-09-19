@@ -198,6 +198,9 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
                     if (!_enabled && _setup == null) ...[
                       FilledButton.icon(
                         onPressed: _busy ? null : _startSetup,
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                        ),
                         icon: _busy
                             ? const SizedBox(
                                 width: 18,
