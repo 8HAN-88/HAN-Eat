@@ -1292,9 +1292,13 @@ class _PostsListWidgetState extends State<_PostsListWidget> {
         onRefresh: () => _loadPosts(refresh: true),
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: EdgeInsets.only(bottom: floatingBottomPadding(context)),
+          padding: EdgeInsets.fromLTRB(
+            0,
+            12,
+            0,
+            floatingBottomPadding(context),
+          ),
           children: [
-            const SizedBox(height: 80),
             AppEmptyState(
               icon: isReel
                   ? Icons.video_library_outlined

@@ -102,6 +102,32 @@ void main() {
     );
   });
 
+  test('short leftover paths alias to live screens', () {
+    expect(shortcutPathAlias('/stars'), StarsWalletRoute.path);
+    expect(shortcutPathAlias('/wallet'), StarsWalletRoute.path);
+    expect(shortcutPathAlias('/gifts'), StarGiftsInventoryRoute.path);
+    expect(shortcutPathAlias('/premium'), FlexSubscriptionRoute.path);
+    expect(shortcutPathAlias('/referral'), PartnerProgramRoute.path);
+    expect(shortcutPathAlias('/partner'), PartnerProgramRoute.path);
+    expect(shortcutPathAlias('/bots'), MyBotsRoute.path);
+    expect(shortcutPathAlias('/security'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/settings/security'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/settings/sessions'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/settings/privacy'), SettingsRoute.path);
+    expect(shortcutPathAlias('/blocked'), BlockedUsersRoute.path);
+    expect(shortcutPathAlias('/saved'), ProfileTabRoute.path);
+    expect(shortcutPathAlias('/extra-ads'), ExtraAdsRoute.path);
+    expect(shortcutPathAlias('/feed'), isNull);
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/stars'),
+      StarsWalletRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/gifts'),
+      StarGiftsInventoryRoute.path,
+    );
+  });
+
   test('blocked list has a settings path', () {
     expect(BlockedUsersRoute.path, '/settings/blocked');
     expect(

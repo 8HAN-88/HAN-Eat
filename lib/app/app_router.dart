@@ -127,6 +127,40 @@ String? channelPaidPathAlias(String path, [String query = '']) {
   return '/channels/${segs[1]}/${segs[2]}$q';
 }
 
+/// Short leftover paths people type from Telegram muscle memory.
+String? shortcutPathAlias(String path, [String query = '']) {
+  final clean = path.split('?').first;
+  final q = query.isEmpty ? '' : '?$query';
+  switch (clean) {
+    case '/stars':
+    case '/wallet':
+      return '${StarsWalletRoute.path}$q';
+    case '/gifts':
+      return '${StarGiftsInventoryRoute.path}$q';
+    case '/premium':
+      return '${FlexSubscriptionRoute.path}$q';
+    case '/referral':
+    case '/partner':
+      return '${PartnerProgramRoute.path}$q';
+    case '/bots':
+      return '${MyBotsRoute.path}$q';
+    case '/security':
+    case '/settings/security':
+    case '/settings/sessions':
+      return '${AccountSecurityRoute.path}$q';
+    case '/settings/privacy':
+      return '${SettingsRoute.path}$q';
+    case '/blocked':
+      return '${BlockedUsersRoute.path}$q';
+    case '/saved':
+      return '${ProfileTabRoute.path}$q';
+    case '/extra-ads':
+      return '${ExtraAdsRoute.path}$q';
+    default:
+      return null;
+  }
+}
+
 /// Преобразует `haneat://...` или `https://haneat.app/...` в путь для [GoRouter].
 String? parseDeepLinkToGoPath(String raw) {
   try {
@@ -175,6 +209,10 @@ String? parseDeepLinkToGoPath(String raw) {
           final paidAlias = channelPaidPathAlias(path, query ?? '');
           if (paidAlias != null) {
             return paidAlias;
+          }
+          final shortAlias = shortcutPathAlias(path, query ?? '');
+          if (shortAlias != null) {
+            return shortAlias;
           }
           return query == null ? path : '$path?$query';
         }
@@ -609,6 +647,90 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ? FlexSubscriptionRoute.path
               : '${FlexSubscriptionRoute.path}?$q';
         },
+      ),
+      GoRoute(
+        path: '/stars',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            StarsWalletRoute.path,
+      ),
+      GoRoute(
+        path: '/wallet',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            StarsWalletRoute.path,
+      ),
+      GoRoute(
+        path: '/gifts',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            StarGiftsInventoryRoute.path,
+      ),
+      GoRoute(
+        path: '/premium',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            FlexSubscriptionRoute.path,
+      ),
+      GoRoute(
+        path: '/referral',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            PartnerProgramRoute.path,
+      ),
+      GoRoute(
+        path: '/partner',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            PartnerProgramRoute.path,
+      ),
+      GoRoute(
+        path: '/bots',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            MyBotsRoute.path,
+      ),
+      GoRoute(
+        path: '/security',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            AccountSecurityRoute.path,
+      ),
+      GoRoute(
+        path: '/settings/security',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            AccountSecurityRoute.path,
+      ),
+      GoRoute(
+        path: '/settings/sessions',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            AccountSecurityRoute.path,
+      ),
+      GoRoute(
+        path: '/settings/privacy',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SettingsRoute.path,
+      ),
+      GoRoute(
+        path: '/blocked',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            BlockedUsersRoute.path,
+      ),
+      GoRoute(
+        path: '/saved',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            ProfileTabRoute.path,
+      ),
+      GoRoute(
+        path: '/extra-ads',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            ExtraAdsRoute.path,
       ),
       GoRoute(
         path: FlexSubscriptionRoute.path,

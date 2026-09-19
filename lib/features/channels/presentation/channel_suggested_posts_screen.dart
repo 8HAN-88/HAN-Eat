@@ -116,8 +116,9 @@ class _ChannelSuggestedPostsScreenState
                   TextField(
                     controller: starsController,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Оплата ★',
+                      helperText: stars < 10 ? 'Минимум 10 ★' : null,
                     ),
                     onChanged: (_) => setLocal(() {}),
                   ),
