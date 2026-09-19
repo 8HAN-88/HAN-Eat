@@ -746,7 +746,7 @@ async def yandex_auth(request: YandexAuthRequest, http_request: Request, db: Ses
         logger.exception("Yandex authentication failed")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Yandex authentication failed: {str(e)}",
+            detail="Не удалось войти через Яндекс. Попробуйте снова.",
         )
 
 

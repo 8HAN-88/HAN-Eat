@@ -357,7 +357,11 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
     } on PhoneContactsInvalidInput catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось сохранить контакт'),
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;

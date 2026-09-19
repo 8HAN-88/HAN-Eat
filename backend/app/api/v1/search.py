@@ -145,6 +145,6 @@ async def get_search_suggestions(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Suggestions error: {str(e)}"
+            detail="Не удалось загрузить подсказки поиска",
         )
 
