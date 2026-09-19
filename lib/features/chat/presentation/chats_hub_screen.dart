@@ -15,8 +15,6 @@ import '../../../widgets/telegram_connection_chrome.dart';
 import '../../../widgets/telegram_ui.dart';
 import '../../channels/application/channels_list_refresh_provider.dart';
 import '../application/chats_hub_refresh_provider.dart';
-import 'chat_archived_screen.dart';
-import 'chat_create_group_screen.dart';
 import 'chat_people_search_screen.dart';
 import 'widgets/chats_hub_all_inbox_tab.dart';
 import 'widgets/chats_hub_contacts_tab.dart';
@@ -90,16 +88,12 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
   }
 
   Future<void> _openCreateGroup() async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(builder: (_) => const ChatCreateGroupScreen()),
-    );
+    await context.push(ChatCreateGroupRoute.path);
     if (mounted) setState(() {});
   }
 
   Future<void> _openArchived() async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(builder: (_) => const ChatArchivedScreen()),
-    );
+    await context.push(ChatArchivedRoute.path);
     if (mounted) setState(() {});
   }
 

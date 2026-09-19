@@ -428,7 +428,12 @@ class _ChannelManagementScreenState
   }
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Заполните название и адрес')),
+      );
+      return;
+    }
 
     setState(() => _isSaving = true);
 

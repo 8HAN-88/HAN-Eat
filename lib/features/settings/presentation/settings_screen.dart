@@ -21,7 +21,6 @@ import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/stars_pay_helper.dart';
 import '../../../widgets/telegram_ui.dart';
 import '../application/last_seen_privacy.dart';
-import 'paid_message_exceptions_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -578,13 +577,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         'Кто может писать вам без оплаты звёздами',
                       ),
                       trailing: const Icon(Icons.chevron_right_rounded),
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => const PaidMessageExceptionsScreen(),
-                          ),
-                        );
-                      },
+                      onTap: () =>
+                          context.push(PaidMessageExceptionsRoute.path),
                     ),
                   ],
                 ],

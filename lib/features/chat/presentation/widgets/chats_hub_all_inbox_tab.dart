@@ -35,7 +35,6 @@ import '../../application/inbox_cache_keep.dart';
 import '../../application/chats_hub_refresh_provider.dart';
 import '../../application/join_requests_bulk.dart';
 import '../../widgets/inbox_slidable_tile.dart';
-import '../chat_archived_screen.dart';
 import '../chat_folder_edit_screen.dart';
 import '../chat_folders_manage_sheet.dart';
 import 'chat_mute_duration_sheet.dart';
@@ -1346,9 +1345,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
   }
 
   Future<void> _openArchivedFromHub() async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(builder: (_) => const ChatArchivedScreen()),
-    );
+    await context.push(ChatArchivedRoute.path);
     if (mounted) unawaited(_load(silent: true));
   }
 
