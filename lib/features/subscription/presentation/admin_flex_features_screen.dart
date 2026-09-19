@@ -90,7 +90,10 @@ class _AdminFlexFeaturesScreenState extends State<AdminFlexFeaturesScreen> {
                 ),
                 TextField(
                   controller: slug,
-                  decoration: const InputDecoration(labelText: 'slug'),
+                  textCapitalization: TextCapitalization.none,
+                  decoration: const InputDecoration(
+                    labelText: 'Идентификатор',
+                  ),
                 ),
                 TextField(
                   textCapitalization: TextCapitalization.sentences,

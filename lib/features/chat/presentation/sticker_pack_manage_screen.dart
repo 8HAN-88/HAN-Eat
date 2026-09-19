@@ -300,7 +300,7 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
             ListTile(
               leading: const Icon(Icons.gif_box_outlined),
               title: const Text('Анимированный стикер'),
-              subtitle: const Text('GIF, WebP, WebM, Lottie…'),
+              subtitle: const Text('Форматы: GIF, WebP, WebM, Lottie'),
               onTap: () => Navigator.pop(ctx, 'animated'),
             ),
             const SizedBox(height: 8),

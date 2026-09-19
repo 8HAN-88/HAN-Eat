@@ -65,7 +65,7 @@ class _ConfirmEmailChangeScreenState extends State<ConfirmEmailChangeScreen> {
       setState(() {
         _message = userVisibleError(
           e,
-          fallback: 'Не удалось подтвердить смену email',
+          fallback: 'Не удалось подтвердить смену почты',
         );
         _success = false;
         _loading = false;
@@ -76,7 +76,7 @@ class _ConfirmEmailChangeScreenState extends State<ConfirmEmailChangeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Смена email')),
+      appBar: AppBar(title: const Text('Смена почты')),
       body: _buildBody(),
     );
   }
@@ -101,7 +101,7 @@ class _ConfirmEmailChangeScreenState extends State<ConfirmEmailChangeScreen> {
     if (_success) {
       return AppEmptyState(
         icon: Icons.mark_email_read_outlined,
-        title: 'Email обновлён',
+        title: 'Почта обновлена',
         subtitle: _message ?? 'Войдите с новым адресом',
         action: FilledButton(
           onPressed: () => context.go(LoginRoute.path),

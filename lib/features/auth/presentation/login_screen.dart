@@ -167,7 +167,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           SnackBar(
             content: Text(
               userVisibleError(e,
-                  fallback: 'Не удалось войти. Проверьте email и пароль.'),
+                  fallback: 'Не удалось войти. Проверьте почту и пароль.'),
             ),
             action: SnackBarAction(
               label: 'Повторить',
@@ -225,16 +225,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
                           decoration: const InputDecoration(
-                            labelText: 'Email',
-                            hintText: 'example@mail.com',
+                            labelText: 'Почта',
+                            hintText: 'name@mail.com',
                             prefixIcon: Icon(Icons.email_outlined),
                           ),
                           validator: (value) {
                             if (value == null || value.isEmpty) {
-                              return 'Введите email';
+                              return 'Введите почту';
                             }
                             if (!value.contains('@')) {
-                              return 'Введите корректный email';
+                              return 'Введите корректный адрес почты';
                             }
                             return null;
                           },

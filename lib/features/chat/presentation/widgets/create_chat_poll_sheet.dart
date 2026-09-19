@@ -187,7 +187,7 @@ class _CreateChatPollSheetState extends State<CreateChatPollSheet> {
                         ScrollViewKeyboardDismissBehavior.onDrag,
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                     children: [
-                      _SectionLabel('ВОПРОС', color: labelColor),
+                      _SectionLabel('Вопрос', color: labelColor),
                       const SizedBox(height: 8),
                       _GroupedCard(
                         color: groupBg,
@@ -211,7 +211,7 @@ class _CreateChatPollSheetState extends State<CreateChatPollSheet> {
                         ],
                       ),
                       const SizedBox(height: 24),
-                      _SectionLabel('ВАРИАНТЫ ОТВЕТА', color: labelColor),
+                      _SectionLabel('Варианты ответа', color: labelColor),
                       const SizedBox(height: 8),
                       _GroupedCard(
                         color: groupBg,
@@ -304,7 +304,7 @@ class _CreateChatPollSheetState extends State<CreateChatPollSheet> {
                           ),
                         ),
                       const SizedBox(height: 24),
-                      _SectionLabel('НАСТРОЙКИ', color: labelColor),
+                      _SectionLabel('Настройки', color: labelColor),
                       const SizedBox(height: 8),
                       _GroupedCard(
                         color: groupBg,
@@ -655,10 +655,14 @@ class _PollSettingTile extends StatelessWidget {
       ),
       title: Text(
         title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
       ),
       subtitle: Text(
         subtitle,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),

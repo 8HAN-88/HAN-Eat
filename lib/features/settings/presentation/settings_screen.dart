@@ -181,15 +181,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               for (final value in lastSeenPrivacyValues)
                 ListTile(
-                  title: Text(lastSeenPrivacyLabel(value)),
+                  title: Text(
+                    lastSeenPrivacyLabel(value),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   subtitle: Text(
                     switch (value) {
                       lastSeenPrivacyContacts =>
                         'Только люди из ваших контактов',
                       lastSeenPrivacyNobody =>
-                        'Статус «в сети» и last seen скрыты',
+                        'Статус «в сети» и время посещения скрыты',
                       _ => 'Все пользователи HanWe',
                     },
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   trailing: _lastSeenPrivacy == value
                       ? const Icon(Icons.check)
@@ -725,7 +731,13 @@ class _SettingsTile extends StatelessWidget {
       ),
       title: Row(
         children: [
-          Expanded(child: Text(item.title)),
+          Expanded(
+            child: Text(
+              item.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
           if (item.badge != null && item.badge! > 0)
             Padding(
               padding: const EdgeInsets.only(left: 8),
@@ -737,6 +749,8 @@ class _SettingsTile extends StatelessWidget {
         padding: const EdgeInsets.only(top: 4),
         child: Text(
           item.subtitle,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: scheme.onSurfaceVariant,
               ),

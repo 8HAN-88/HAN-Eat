@@ -297,6 +297,8 @@ class _ChannelSettingsBottomSheetState
                         widget.channel.canManageChannelSettings
                     ? 'Создать или управлять розыгрышем'
                     : 'Участвовать в розыгрыше канала',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
               onTap: () {
                 Navigator.of(context).pop();
@@ -318,6 +320,8 @@ class _ChannelSettingsBottomSheetState
                         widget.channel.canManageChannelSettings
                     ? 'Модерация предложенных постов за ★'
                     : 'Отправить пост в канал за ★',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
               onTap: () {
                 Navigator.of(context).pop();

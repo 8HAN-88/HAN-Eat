@@ -45,7 +45,7 @@ class RootShell extends ConsumerStatefulWidget {
       hasChatUnread: true,
     ),
     _NavDestination(
-      label: 'Мини-приложения',
+      label: 'Приложения',
       icon: Icons.apps_outlined,
       selectedIcon: Icons.apps_rounded,
     ),

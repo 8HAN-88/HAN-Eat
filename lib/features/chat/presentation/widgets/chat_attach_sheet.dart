@@ -2212,7 +2212,7 @@ class _FilePanel extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 8),
           child: Text(
-            'НЕДАВНО ОТПРАВЛЕННЫЕ',
+            'Недавно отправленные',
             style: theme.textTheme.labelSmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.75),
               letterSpacing: 0.5,
