@@ -95,6 +95,9 @@ const _knownEnglishDetails = <String, String>{
   'Internal server error during login': 'Не удалось войти. Попробуйте позже.',
   'Google authentication failed':
       'Не удалось войти через Google. Попробуйте снова.',
+  'Yandex authentication failed':
+      'Не удалось войти через Яндекс. Попробуйте снова.',
+  'Suggestions error': 'Не удалось загрузить подсказки поиска',
   'Failed to create channel': 'Не удалось создать канал. Попробуйте позже.',
   'Dead-letter backlog is high': 'Высокая очередь недоставленных вебхуков',
   'Bots auto-disabled due to webhook failures':
@@ -592,6 +595,12 @@ String userVisibleError(Object e, {String fallback = 'Произошла оши�
   }
   if (lower.startsWith('google authentication failed')) {
     return 'Не удалось войти через Google. Попробуйте снова.';
+  }
+  if (lower.startsWith('yandex authentication failed')) {
+    return 'Не удалось войти через Яндекс. Попробуйте снова.';
+  }
+  if (lower.startsWith('suggestions error')) {
+    return 'Не удалось загрузить подсказки поиска';
   }
   if (lower.startsWith('user data validation failed')) {
     return 'Данные профиля не прошли проверку';

@@ -310,6 +310,14 @@ void main() {
       ),
       'Неверная сортировка. Допустимо: по релевантности, по дате или по популярности.',
     );
+    expect(
+      userVisibleError(Exception('Yandex authentication failed: boom')),
+      'Не удалось войти через Яндекс. Попробуйте снова.',
+    );
+    expect(
+      userVisibleError(Exception('Suggestions error: boom')),
+      'Не удалось загрузить подсказки поиска',
+    );
   });
 
   test('userVisibleAuthError prefers auth message for 401', () {
