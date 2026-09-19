@@ -1,4 +1,4 @@
-// Сервис для работы с подписками HanWe (тарифы AI / Creator / Pro)
+// Сервис для работы с подписками HanWe (уровни 9 / 16 / 18)
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';

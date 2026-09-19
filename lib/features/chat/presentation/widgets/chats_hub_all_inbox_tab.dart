@@ -119,7 +119,20 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
           unawaited(ChatHubUiPrefs.saveSelectedFolderId(null));
         }
       });
-    } catch (_) {}
+    } catch (e) {
+      if (!mounted || _folders.isNotEmpty) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось загрузить папки'),
+          ),
+          action: SnackBarAction(
+            label: 'Повторить',
+            onPressed: () => unawaited(_loadFolders()),
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _restoreHubUiPrefs() async {

@@ -2054,6 +2054,23 @@ class ChatService:
                     Message.content.ilike("%changed group title%"),
                     Message.content.ilike("%Sending mode changed%"),
                     Message.content.ilike("%Join mode changed%"),
+                    Message.content.ilike("%Slow mode changed%"),
+                    Message.content.ilike("%Anti-flood changed%"),
+                    Message.content.ilike("%Content protection%"),
+                    Message.content.ilike("%Auto-delete%"),
+                    Message.content.ilike("%Topics enabled%"),
+                    Message.content.ilike("%Topics disabled%"),
+                    Message.content.ilike("%changed group photo%"),
+                    Message.content.ilike("%название группы%"),
+                    Message.content.ilike("%фото группы%"),
+                    Message.content.ilike("%Режим отправки%"),
+                    Message.content.ilike("%Вступление:%"),
+                    Message.content.ilike("%Медленный режим%"),
+                    Message.content.ilike("%Антифлуд%"),
+                    Message.content.ilike("%Защита контента%"),
+                    Message.content.ilike("%Автоудаление%"),
+                    Message.content.ilike("%Темы включены%"),
+                    Message.content.ilike("%Темы выключены%"),
                 )
             )
         elif action_filter == "roles":
@@ -2061,6 +2078,8 @@ class ChatService:
                 or_(
                     Message.content.ilike("%moderator role%"),
                     Message.content.ilike("%moderator permissions%"),
+                    Message.content.ilike("%модератором%"),
+                    Message.content.ilike("%права модератора%"),
                 )
             )
         elif action_filter == "restrictions":
@@ -2068,6 +2087,8 @@ class ChatService:
                 or_(
                     Message.content.ilike("%restricted messaging%"),
                     Message.content.ilike("%removed messaging restriction%"),
+                    Message.content.ilike("%ограничил%"),
+                    Message.content.ilike("%ограничение на отправку%"),
                 )
             )
         elif action_filter == "bans":
@@ -2075,10 +2096,17 @@ class ChatService:
                 or_(
                     Message.content.ilike("% banned %"),
                     Message.content.ilike("% unbanned %"),
+                    Message.content.ilike("%заблокировал%"),
+                    Message.content.ilike("%разблокировал%"),
                 )
             )
         elif action_filter == "joins":
-            q = q.filter(Message.content.ilike("%join request%"))
+            q = q.filter(
+                or_(
+                    Message.content.ilike("%join request%"),
+                    Message.content.ilike("%заявку%"),
+                )
+            )
         rows = (
             q.order_by(Message.id.desc())
             .limit(limit)

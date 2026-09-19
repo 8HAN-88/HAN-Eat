@@ -1,4 +1,4 @@
-// Экран аналитики для авторов (тариф Creator / Pro).
+// Экран аналитики для авторов (уровень 16).
 import 'package:flutter/material.dart';
 import '../../../utils/api_error_parser.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

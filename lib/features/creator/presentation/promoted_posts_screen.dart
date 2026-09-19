@@ -8,7 +8,7 @@ import '../../../services/channel_service.dart';
 import '../../../services/subscription_service.dart';
 import '../../../widgets/app_empty_state.dart';
 
-/// Продвигаемые посты (Creator / Pro), до 5 одновременно.
+/// Продвигаемые посты (уровень 16), до 5 одновременно.
 class PromotedPostsScreen extends StatefulWidget {
   const PromotedPostsScreen({super.key});
 

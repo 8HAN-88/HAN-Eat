@@ -1725,7 +1725,7 @@ class ChatService {
       uri,
       body: jsonEncode({'slow_mode_seconds': seconds}),
     );
-    _ensureOk(response, 'Не удалось обновить slow mode');
+    _ensureOk(response, 'Не удалось обновить медленный режим');
     return ChatConversation.fromJson(
       jsonDecode(response.body) as Map<String, dynamic>,
     );

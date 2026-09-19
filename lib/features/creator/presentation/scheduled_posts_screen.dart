@@ -11,7 +11,7 @@ import '../../../services/subscription_service.dart';
 import '../../settings/application/subscription_status_provider.dart';
 import '../../../widgets/app_empty_state.dart';
 
-/// Запланированные публикации (Creator / Pro).
+/// Запланированные публикации (уровень 16).
 class ScheduledPostsScreen extends ConsumerStatefulWidget {
   const ScheduledPostsScreen({super.key});
 

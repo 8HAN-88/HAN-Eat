@@ -219,6 +219,40 @@ void main() {
     );
   });
 
+  test('localizeKnownEnglishDetail maps leftover chat and block errors', () {
+    expect(parseApiErrorMessage('Access denied'), 'Нет доступа');
+    expect(parseApiErrorMessage('Folder not found'), 'Папка не найдена');
+    expect(
+      parseApiErrorMessage('Cannot chat with yourself'),
+      'Нельзя написать себе',
+    );
+    expect(
+      parseApiErrorMessage('User blocked'),
+      'Пользователь в чёрном списке',
+    );
+    expect(
+      parseApiErrorMessage('Content is protected'),
+      'Контент защищён от пересылки',
+    );
+    expect(
+      parseApiErrorMessage('Cannot block yourself'),
+      'Нельзя заблокировать себя',
+    );
+    expect(
+        parseApiErrorMessage('cannot_ban_self'), 'Нельзя заблокировать себя');
+    expect(
+      parseApiErrorMessage({
+        'code': 'CHAT_RATE_LIMIT_EXCEEDED',
+        'message': 'Too many chat actions. Please try again later.',
+      }),
+      'Слишком много действий в чате. Подождите немного.',
+    );
+    expect(
+      parseApiErrorMessage('group_slow_mode'),
+      'Слишком часто. В этом чате включен медленный режим, подождите немного.',
+    );
+  });
+
   test('userVisibleAuthError prefers auth message for 401', () {
     expect(
       userVisibleAuthError(

@@ -143,7 +143,7 @@ def _enforce_chat_action_rate_limit(user_id: int, action: str, limit: int) -> No
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail={
                     "code": "CHAT_RATE_LIMIT_EXCEEDED",
-                    "message": "Too many chat actions. Please try again later.",
+                    "message": "Слишком много действий в чате. Подождите немного.",
                 },
                 headers={"Retry-After": "60"},
             )
@@ -494,18 +494,45 @@ def _invite_link_response(row: GroupInviteLink) -> GroupInviteLinkResponse:
 
 def _moderation_action_from_text(text: str) -> str:
     t = (text or "").lower()
-    if "join request" in t:
+    if "join request" in t or "заявк" in t:
         return "joins"
-    if "banned" in t or "unbanned" in t:
+    if "unbanned" in t or "banned" in t or "разблокировал" in t or "заблокировал" in t:
         return "bans"
-    if "restricted messaging" in t or "messaging restriction" in t:
+    if (
+        "restricted messaging" in t
+        or "messaging restriction" in t
+        or "ограничил" in t
+        or "ограничение на отправку" in t
+    ):
         return "restrictions"
-    if "moderator role" in t or "moderator permissions" in t:
+    if (
+        "moderator role" in t
+        or "moderator permissions" in t
+        or "модератор" in t
+        or "права модератора" in t
+    ):
         return "roles"
     if (
         "changed group title" in t
         or "sending mode changed" in t
         or "join mode changed" in t
+        or "slow mode" in t
+        or "anti-flood" in t
+        or "content protection" in t
+        or "auto-delete" in t
+        or "topics enabled" in t
+        or "topics disabled" in t
+        or "changed group photo" in t
+        or "название группы" in t
+        or "фото группы" in t
+        or "режим отправки" in t
+        or "вступление:" in t
+        or "медленный режим" in t
+        or "антифлуд" in t
+        or "защита контента" in t
+        or "автоудаление" in t
+        or "темы включены" in t
+        or "темы выключены" in t
     ):
         return "settings"
     return "other"
@@ -578,10 +605,10 @@ def _user_label(user: Optional[User], fallback_id: Optional[int] = None) -> str:
             return user.name.strip()
         if user.username and user.username.strip():
             return f"@{user.username.strip()}"
-        return f"User {user.id}"
+        return f"Пользователь {user.id}"
     if fallback_id is not None:
-        return f"User {fallback_id}"
-    return "User"
+        return f"Пользователь {fallback_id}"
+    return "Пользователь"
 
 
 def _normalize_inline_keyboard(raw: Any) -> Optional[List[List[Dict[str, Any]]]]:
@@ -1096,7 +1123,7 @@ async def upsert_chat_draft(
         db.rollback()
         code = str(e)
         if code == "forbidden":
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
     publish_user_event(
         current_user.id,
@@ -1152,10 +1179,10 @@ async def get_saved_chat(
     db.commit()
     row = svc.get_conversation_row(conv.id, current_user.id)
     if not row:
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Saved chat failed")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Не удалось открыть избранное")
     item = _conversation_response(row, svc, db, current_user)
     if not item:
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Saved chat failed")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Не удалось открыть избранное")
     return item
 
 
@@ -1226,7 +1253,7 @@ async def update_chat_folder(
         db.rollback()
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e
     if not row:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Folder not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Папка не найдена")
     db.commit()
     return ChatFolderResponse(**row)
 
@@ -1241,7 +1268,7 @@ async def delete_chat_folder(
     ok = svc.delete_folder(current_user.id, folder_id)
     db.commit()
     if not ok:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Folder not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Папка не найдена")
     return {"ok": True}
 
 
@@ -1264,7 +1291,7 @@ async def add_chat_folder_item(
         db.rollback()
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e
     if not row:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Folder not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Папка не найдена")
     db.commit()
     return ChatFolderResponse(**row)
 
@@ -1289,7 +1316,7 @@ async def remove_chat_folder_item(
         db.rollback()
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e
     if not row:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Folder not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Папка не найдена")
     db.commit()
     return ChatFolderResponse(**row)
 
@@ -1303,10 +1330,10 @@ async def get_chat(
     svc = ChatService(db)
     row = svc.get_conversation_row(conversation_id, current_user.id)
     if not row:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversation not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Чат не найден")
     item = _conversation_response(row, svc, db, current_user)
     if not item:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversation not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Чат не найден")
     return item
 
 
@@ -1325,21 +1352,21 @@ async def open_direct_chat(
         db.rollback()
         code = str(e)
         if code == "user_not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Пользователь не найден")
         if code == "self_chat":
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot chat with yourself")
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Нельзя написать себе")
         if code == "user_blocked":
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "User blocked")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Пользователь в чёрном списке")
         raise
 
     peer_id = svc.peer_user_id(conv, current_user.id)
     peer = db.query(User).filter(User.id == peer_id).first()
     if not peer:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Пользователь не найден")
     row = svc.get_conversation_row(conv.id, current_user.id)
     item = _conversation_response(row, svc, db, current_user) if row else None
     if not item:
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Chat create failed")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Не удалось создать чат")
     return item
 
 
@@ -1358,16 +1385,16 @@ async def create_group_chat(
         db.rollback()
         code = str(e)
         if code == "user_not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Пользователь не найден")
         if code in ("empty_title", "need_members"):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code == "user_blocked":
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "User blocked")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Пользователь в чёрном списке")
         raise
     row = svc.get_conversation_row(conv.id, current_user.id)
     item = _conversation_response(row, svc, db, current_user) if row else None
     if not item:
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Group create failed")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Не удалось создать группу")
     return item
 
 
@@ -1392,11 +1419,11 @@ async def get_group_invite_link(
         db.rollback()
         code = str(e)
         if code in ("forbidden", "not_group"):
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         raise
     row = db.query(GroupInviteLink).filter(GroupInviteLink.token == token).first()
     if not row:
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Invite link error")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Не удалось создать ссылку-приглашение")
     return _invite_link_response(row)
 
 
@@ -1421,11 +1448,11 @@ async def rotate_group_invite_link(
         db.rollback()
         code = str(e)
         if code in ("forbidden", "not_group"):
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         raise
     row = db.query(GroupInviteLink).filter(GroupInviteLink.token == token).first()
     if not row:
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Invite link error")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Не удалось создать ссылку-приглашение")
     return _invite_link_response(row)
 
 
@@ -1453,7 +1480,7 @@ async def list_group_invite_links(
         db.rollback()
         code = str(e)
         if code in ("forbidden", "not_group"):
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         raise
     return GroupInviteLinkListResponse(items=[_invite_link_response(r) for r in rows])
 
@@ -1482,7 +1509,7 @@ async def create_group_invite_link(
         db.rollback()
         code = str(e)
         if code in ("forbidden", "not_group"):
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         if code in ("invalid_invite_expiry", "invalid_invite_max_uses"):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         raise
@@ -1508,9 +1535,9 @@ async def revoke_group_invite_link(
         db.rollback()
         code = str(e)
         if code == "not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Invite link not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Ссылка-приглашение не найдена")
         if code in ("forbidden", "not_group"):
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         raise
     return {"ok": True}
 
@@ -1538,7 +1565,7 @@ async def join_group_by_invite(
         if code == "group_member_banned":
             raise HTTPException(status.HTTP_403_FORBIDDEN, code)
         if code == "user_not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Пользователь не найден")
         raise
     if result["status"] == "requested":
         for manager_id in svc.group_member_manager_user_ids(conv.id):
@@ -1556,7 +1583,7 @@ async def join_group_by_invite(
     row = svc.get_conversation_row(conv.id, current_user.id)
     item = _conversation_response(row, svc, db, current_user) if row else None
     if not item:
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Join failed")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Не удалось вступить")
     return JoinByInviteResponse(status="joined", conversation=item)
 
 
@@ -1573,7 +1600,7 @@ async def list_chat_members(
     try:
         members = svc.list_members(conversation_id, current_user.id)
     except ValueError:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
     return ConversationMembersResponse(
         items=[
             _brief(
@@ -1629,7 +1656,7 @@ async def list_messages(
         code = str(e)
         if code == "topic_not_found":
             raise HTTPException(status.HTTP_404_NOT_FOUND, code)
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
 
     if purged_ids:
         db.commit()
@@ -1823,7 +1850,7 @@ async def list_chat_media(
             sender_id=sender_id,
         )
     except ValueError:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
 
     member = (
         db.query(ConversationMember)
@@ -1952,7 +1979,7 @@ async def search_messages_global(
             limit=limit,
         )
     except ValueError:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
     return _search_response_items(db, svc, current_user, hits)
 
 
@@ -2000,7 +2027,7 @@ async def search_messages_in_chat(
             limit=limit,
         )
     except ValueError:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
     return _search_response_items(db, svc, current_user, hits)
 
 
@@ -2089,7 +2116,7 @@ async def send_message(
         db.rollback()
         code = str(e)
         if code == "forbidden":
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         if code == "anonymous_not_allowed":
             raise HTTPException(status.HTTP_403_FORBIDDEN, code)
         if code in (
@@ -2109,7 +2136,7 @@ async def send_message(
         if code == "topic_not_found":
             raise HTTPException(status.HTTP_404_NOT_FOUND, code)
         if code == "user_blocked":
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "User blocked")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Пользователь в чёрном списке")
         if code == "group_write_restricted":
             raise HTTPException(status.HTTP_403_FORBIDDEN, code)
         if code == "group_user_restricted":
@@ -2219,9 +2246,9 @@ async def forward_message(
         db.rollback()
         code = str(e)
         if code == "forbidden":
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         if code == "not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Сообщение не найдено")
         if code in (
             "empty_message",
             "missing_media",
@@ -2235,11 +2262,11 @@ async def forward_message(
         ):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code == "user_blocked":
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "User blocked")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Пользователь в чёрном списке")
         if code == "protect_content":
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
-                "Content is protected",
+                "Контент защищён от пересылки",
             )
         if code == "paid_media_locked":
             raise HTTPException(
@@ -2376,7 +2403,7 @@ async def schedule_message(
         db.rollback()
         code = str(e)
         if code == "forbidden":
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         if code in (
             "empty_message",
             "missing_media",
@@ -2391,7 +2418,7 @@ async def schedule_message(
         ):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code == "user_blocked":
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "User blocked")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Пользователь в чёрном списке")
         if code == "group_write_restricted":
             raise HTTPException(status.HTTP_403_FORBIDDEN, code)
         if code == "group_user_restricted":
@@ -2436,7 +2463,7 @@ async def list_scheduled_messages(
     try:
         items = svc.list_scheduled_messages(conversation_id, current_user.id, limit=limit)
     except ValueError:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
     return ScheduledMessageListResponse(
         items=[_scheduled_message_response(i) for i in items]
     )
@@ -2465,10 +2492,10 @@ async def cancel_scheduled_message(
         db.rollback()
         code = str(e)
         if code == "not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Scheduled message not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Отложенное сообщение не найдено")
         if code == "already_processed":
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
     return _scheduled_message_response(item)
 
 
@@ -2500,7 +2527,7 @@ async def reschedule_scheduled_message(
         db.rollback()
         code = str(e)
         if code == "not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Scheduled message not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Отложенное сообщение не найдено")
         if code in (
             "already_processed",
             "invalid_send_at",
@@ -2511,7 +2538,7 @@ async def reschedule_scheduled_message(
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code == "online_delivery_locked":
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
     return _scheduled_message_response(item)
 
 
@@ -2536,7 +2563,7 @@ async def callback_query(
         .first()
     )
     if not member:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
     msg = (
         db.query(Message)
         .filter(
@@ -2547,7 +2574,7 @@ async def callback_query(
         .first()
     )
     if not msg:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Сообщение не найдено")
     if not msg.inline_keyboard_json:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
@@ -2753,7 +2780,7 @@ async def update_live_location(
         .first()
     )
     if not member:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
 
     msg = (
         db.query(Message)
@@ -2765,9 +2792,9 @@ async def update_live_location(
         .first()
     )
     if not msg:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Сообщение не найдено")
     if msg.sender_id != current_user.id:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only sender can update")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Обновить может только отправитель")
     if msg.type != "location":
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "not_live_location")
 
@@ -2827,7 +2854,7 @@ async def stop_live_location(
         .first()
     )
     if not member:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
 
     msg = (
         db.query(Message)
@@ -2839,9 +2866,9 @@ async def stop_live_location(
         .first()
     )
     if not msg:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Сообщение не найдено")
     if msg.sender_id != current_user.id:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only sender can stop")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Остановить может только отправитель")
     if msg.type != "location":
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "not_live_location")
 
@@ -2889,7 +2916,7 @@ async def vote_chat_poll(
         .first()
     )
     if not member:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
 
     from app.services.chat_poll_service import vote_on_message_poll
 
@@ -2908,7 +2935,7 @@ async def vote_chat_poll(
             .first()
         )
         if not msg:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Сообщение не найдено")
         msg.content = enriched
         db.commit()
         db.refresh(msg)
@@ -2976,7 +3003,7 @@ async def add_chat_poll_option(
         .first()
     )
     if not member:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
 
     from app.services.chat_poll_service import add_option_to_message_poll
 
@@ -2995,7 +3022,7 @@ async def add_chat_poll_option(
             .first()
         )
         if not msg:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Сообщение не найдено")
         msg.content = enriched
         db.commit()
         db.refresh(msg)
@@ -3068,7 +3095,7 @@ async def get_chat_poll_voters(
     except ValueError as e:
         code = str(e)
         if code == "forbidden":
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         if code == "not_poll_message":
             raise HTTPException(status.HTTP_404_NOT_FOUND, code)
         if code == "voters_hidden":
@@ -3098,7 +3125,7 @@ async def close_chat_poll(
         .first()
     )
     if not member:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
 
     from app.services.chat_poll_service import close_message_poll
 
@@ -3115,7 +3142,7 @@ async def close_chat_poll(
             .first()
         )
         if not msg:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Сообщение не найдено")
         msg.content = enriched
         db.commit()
         db.refresh(msg)
@@ -3185,15 +3212,15 @@ async def delete_message(
         db.rollback()
         code = str(e)
         if code == "not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Сообщение не найдено")
         if code == "forbidden":
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         if code == "bad_scope":
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid scope")
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Неверная область удаления")
         if code == "too_old":
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                "Message is too old to delete for everyone",
+                "Сообщение слишком старое, чтобы удалить у всех",
             )
         raise
     if applied == "all":
@@ -3238,9 +3265,9 @@ async def edit_message(
         db.rollback()
         code = str(e)
         if code == "not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Сообщение не найдено")
         if code in ("forbidden", "not_editable"):
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         if code == "empty_message":
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         raise
@@ -3300,9 +3327,9 @@ async def list_message_edits(
     except ValueError as e:
         code = str(e)
         if code == "not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Сообщение не найдено")
         if code == "forbidden":
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         raise
     return MessageEditHistoryResponse(
         current_content=msg.content or "",
@@ -3401,9 +3428,9 @@ async def add_message_reaction(
         db.rollback()
         code = str(e)
         if code == "not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Сообщение не найдено")
         if code == "forbidden":
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         if code == "invalid_emoji":
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         raise
@@ -3460,9 +3487,9 @@ async def remove_message_reaction(
         db.rollback()
         code = str(e)
         if code == "not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Сообщение не найдено")
         if code == "forbidden":
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         raise
     reactions = _reaction_summaries(svc, [message_id], current_user.id).get(
         message_id, []
@@ -3517,9 +3544,9 @@ async def pin_message(
         db.rollback()
         code = str(e)
         if code in ("not_found", "missing_message"):
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Сообщение не найдено")
         if code == "forbidden":
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         if code == "pin_limit":
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
@@ -3594,9 +3621,9 @@ async def clear_pinned_messages(
         db.rollback()
         code = str(e)
         if code == "not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversation not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Чат не найден")
         if code == "forbidden":
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         raise
     _emit(
         conversation_id,
@@ -3619,7 +3646,7 @@ async def send_typing(
 ):
     svc = ChatService(db)
     if not svc._is_member(conversation_id, current_user.id):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
     activity = (body.activity if body is not None else "typing") or "typing"
     if activity not in ("typing", "recording"):
         activity = "typing"
@@ -3661,7 +3688,7 @@ async def chat_event_stream(
 ):
     svc = ChatService(db)
     if not svc._is_member(conversation_id, current_user.id):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
 
     async def generate():
         yield ": connected\n\n"
@@ -3708,7 +3735,7 @@ async def mark_delivered(
         db.commit()
     except ValueError:
         db.rollback()
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
     _emit(
         conversation_id,
         {
@@ -3732,7 +3759,7 @@ async def list_conversation_bot_commands(
     """Public slash-commands for the bot in this chat (command + description)."""
     svc = ChatService(db)
     if not svc._is_member(conversation_id, current_user.id):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
     bot = _find_chat_bot(db, conversation_id)
     if not bot:
         return ChatBotCommandsResponse(bot_id=0, items=[])
@@ -3774,8 +3801,8 @@ async def list_message_readers(
     except ValueError as e:
         code = str(e)
         if code == "not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Сообщение не найдено")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
     return MessageReadersResponse(
         items=[
             MessageReaderItem(
@@ -3807,8 +3834,8 @@ async def list_message_reactions(
     except ValueError as e:
         code = str(e)
         if code == "not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Сообщение не найдено")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
     return MessageReactionsDetailResponse(
         items=[
             MessageReactionUserItem(
@@ -3835,7 +3862,7 @@ async def mark_read(
         db.commit()
     except ValueError:
         db.rollback()
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
     _emit(
         conversation_id,
         {
@@ -3869,7 +3896,7 @@ async def mark_unread(
         db.commit()
     except ValueError:
         db.rollback()
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
     _emit(
         conversation_id,
         {
@@ -3910,9 +3937,9 @@ async def delete_conversation(
         db.rollback()
         code = str(e)
         if code == "not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversation not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Чат не найден")
         if code == "forbidden":
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         if code == "cannot_delete_saved":
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST, "Cannot delete saved messages chat"
@@ -3967,14 +3994,14 @@ async def clear_chat_history(
         db.rollback()
         code = str(e)
         if code == "forbidden":
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         if code == "also_for_peer_direct_only":
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 "also_for_peer is only available in direct chats",
             )
         if code == "not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversation not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Чат не найден")
         raise
     # Multi-device + optional peer wipe (Telegram "Also delete for …").
     publish_user_event(
@@ -4024,7 +4051,7 @@ async def list_common_groups(
     except ValueError as e:
         code = str(e)
         if code == "user_not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Пользователь не найден")
         raise
     items = []
     for conv in groups:
@@ -4057,7 +4084,7 @@ async def archive_chat(
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST, "Cannot archive saved messages chat"
             )
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
     publish_user_event(
         current_user.id,
         {
@@ -4082,7 +4109,7 @@ async def pin_chat(
         db.commit()
     except ValueError:
         db.rollback()
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
     publish_user_event(
         current_user.id,
         {
@@ -4118,7 +4145,7 @@ async def mute_chat(
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST, "invalid_muted_until"
             )
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
     publish_user_event(
         current_user.id,
         {
@@ -4168,7 +4195,7 @@ async def set_chat_wallpaper(
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST, "bad_wallpaper_url"
             )
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
     return {
         "ok": True,
         "wallpaper_style": style,
@@ -4200,7 +4227,7 @@ async def set_chat_bubble_accent(
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST, "bad_bubble_accent"
             )
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
     return {
         "ok": True,
         "bubble_accent": accent,
@@ -4237,7 +4264,7 @@ async def update_group_chat(
                 svc.create_group_system_note(
                     conversation_id,
                     current_user.id,
-                    f"🛡 { _user_label(current_user) } changed group title.",
+                    f"🛡 {_user_label(current_user)} изменил(а) название группы.",
                 )
             )
         if body.avatar_url is not None:
@@ -4250,7 +4277,7 @@ async def update_group_chat(
                 svc.create_group_system_note(
                     conversation_id,
                     current_user.id,
-                    f"🛡 { _user_label(current_user) } changed group photo.",
+                    f"🛡 {_user_label(current_user)} изменил(а) фото группы.",
                 )
             )
         if body.only_admins_can_post is not None:
@@ -4263,11 +4290,11 @@ async def update_group_chat(
                 svc.create_group_system_note(
                     conversation_id,
                     current_user.id,
-                    "🛡 Sending mode changed: "
+                    "🛡 Режим отправки: "
                     + (
-                        "only admins can post."
+                        "только администраторы."
                         if body.only_admins_can_post
-                        else "all members can post."
+                        else "все участники могут писать."
                     ),
                 )
             )
@@ -4283,9 +4310,9 @@ async def update_group_chat(
                     current_user.id,
                     "🛡 "
                     + (
-                        "Topics enabled (forum mode)."
+                        "Темы включены."
                         if body.is_forum
-                        else "Topics disabled."
+                        else "Темы выключены."
                     ),
                 )
             )
@@ -4299,11 +4326,11 @@ async def update_group_chat(
                 svc.create_group_system_note(
                     conversation_id,
                     current_user.id,
-                    "🛡 Join mode changed: "
+                    "🛡 Вступление: "
                     + (
-                        "join requests are required."
+                        "по заявке."
                         if body.join_by_request_enabled
-                        else "direct join by invite enabled."
+                        else "по ссылке-приглашению."
                     ),
                 )
             )
@@ -4317,11 +4344,11 @@ async def update_group_chat(
                 svc.create_group_system_note(
                     conversation_id,
                     current_user.id,
-                    "🛡 Slow mode changed: "
+                    "🛡 Медленный режим: "
                     + (
-                        "disabled."
+                        "выключен."
                         if int(body.slow_mode_seconds) <= 0
-                        else f"{int(body.slow_mode_seconds)} sec between messages."
+                        else f"{int(body.slow_mode_seconds)} сек. между сообщениями."
                     ),
                 )
             )
@@ -4335,11 +4362,11 @@ async def update_group_chat(
                 svc.create_group_system_note(
                     conversation_id,
                     current_user.id,
-                    "🛡 Anti-flood changed: "
+                    "🛡 Антифлуд: "
                     + (
-                        "disabled."
+                        "выключен."
                         if int(body.anti_flood_max_messages_per_minute) <= 0
-                        else f"max {int(body.anti_flood_max_messages_per_minute)} messages/min."
+                        else f"не больше {int(body.anti_flood_max_messages_per_minute)} сообщений в минуту."
                     ),
                 )
             )
@@ -4353,11 +4380,11 @@ async def update_group_chat(
                 svc.create_group_system_note(
                     conversation_id,
                     current_user.id,
-                    "🛡 Content protection: "
+                    "🛡 Защита контента: "
                     + (
-                        "enabled (forwarding restricted)."
+                        "включена (пересылка ограничена)."
                         if body.protect_content
-                        else "disabled."
+                        else "выключена."
                     ),
                 )
             )
@@ -4375,11 +4402,11 @@ async def update_group_chat(
                     svc.create_group_system_note(
                         conversation_id,
                         current_user.id,
-                        "🛡 Auto-delete: "
+                        "🛡 Автоудаление: "
                         + (
-                            "disabled."
+                            "выключено."
                             if auto_delete_fanout <= 0
-                            else f"messages older than {auto_delete_fanout} sec."
+                            else f"сообщения старше {auto_delete_fanout} сек."
                         ),
                     )
                 )
@@ -4388,18 +4415,18 @@ async def update_group_chat(
         db.rollback()
         code = str(e)
         if code == "not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversation not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Чат не найден")
         if code == "not_group":
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Not a group chat")
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Это не группа")
         if code in ("forbidden", "empty_title"):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         raise
     row = svc.get_conversation_row(conversation_id, current_user.id)
     if not row:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversation not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Чат не найден")
     item = _conversation_response(row, svc, db, current_user)
     if not item:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversation not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Чат не найден")
     for note in notes:
         _emit(
             conversation_id,
@@ -4467,9 +4494,9 @@ async def list_forum_topics(
         db.rollback()
         code = str(e)
         if code == "forbidden":
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         if code == "not_group":
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Not a group chat")
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Это не группа")
         raise
     return ForumTopicListResponse(items=[_topic_response(t) for t in topics])
 
@@ -4498,7 +4525,7 @@ async def create_forum_topic(
         db.rollback()
         code = str(e)
         if code == "forbidden":
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         if code in ("not_a_forum", "empty_title", "not_group"):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         raise
@@ -4535,9 +4562,9 @@ async def update_forum_topic(
         db.rollback()
         code = str(e)
         if code == "forbidden":
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         if code == "topic_not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Topic not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Тема не найдена")
         if code in (
             "not_a_forum",
             "empty_title",
@@ -4572,13 +4599,13 @@ async def add_group_members(
         db.rollback()
         code = str(e)
         if code == "user_not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Пользователь не найден")
         if code == "user_blocked":
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "User blocked")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Пользователь в чёрном списке")
         if code == "group_member_banned":
             raise HTTPException(status.HTTP_403_FORBIDDEN, code)
         if code in ("forbidden", "not_group"):
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         raise
     return {"ok": True, "added": added}
 
@@ -4600,9 +4627,9 @@ async def remove_group_member(
         db.rollback()
         code = str(e)
         if code == "not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Member not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Участник не найден")
         if code in ("forbidden", "not_group"):
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         raise
     return {"ok": True}
 
@@ -4630,7 +4657,11 @@ async def set_group_member_admin(
             current_user.id,
             "🛡 "
             + _user_label(current_user)
-            + (" granted moderator role to " if body.is_admin else " revoked moderator role from ")
+            + (
+                " назначил(а) модератором "
+                if body.is_admin
+                else " снял(а) права модератора с "
+            )
             + _user_label(target_user, member_user_id)
             + ".",
         )
@@ -4639,11 +4670,11 @@ async def set_group_member_admin(
         db.rollback()
         code = str(e)
         if code == "not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Member not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Участник не найден")
         if code == "cannot_change_self_role":
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code in ("forbidden", "not_group"):
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         raise
     if note is not None:
         _emit(
@@ -4680,24 +4711,24 @@ async def set_group_member_permissions(
         target_user = db.query(User).filter(User.id == member_user_id).first()
         scopes = []
         if body.can_manage_members:
-            scopes.append("members")
+            scopes.append("участники")
         if body.can_manage_posting_permissions:
-            scopes.append("chat settings")
+            scopes.append("настройки чата")
         if body.can_change_info:
-            scopes.append("info")
+            scopes.append("информация")
         if body.can_delete_messages:
-            scopes.append("delete")
+            scopes.append("удаление")
         if body.can_pin_messages:
-            scopes.append("pin")
+            scopes.append("закреп")
         if body.can_invite_users:
-            scopes.append("invite")
+            scopes.append("приглашения")
         if body.can_manage_video_chats:
-            scopes.append("calls")
-        scope_text = ", ".join(scopes) if scopes else "no extra scopes"
+            scopes.append("звонки")
+        scope_text = ", ".join(scopes) if scopes else "без дополнительных прав"
         note = svc.create_group_system_note(
             conversation_id,
             current_user.id,
-            f"🛡 {_user_label(current_user)} updated moderator permissions for "
+            f"🛡 {_user_label(current_user)} обновил(а) права модератора для "
             f"{_user_label(target_user, member_user_id)} ({scope_text}).",
         )
         db.commit()
@@ -4705,11 +4736,11 @@ async def set_group_member_permissions(
         db.rollback()
         code = str(e)
         if code == "not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Member not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Участник не найден")
         if code in ("cannot_change_self_role", "target_not_admin"):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code in ("forbidden", "not_group"):
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         raise
     if note is not None:
         _emit(
@@ -4743,18 +4774,18 @@ async def set_group_member_send_restriction(
         if body.send_restricted:
             suffix = ""
             if body.send_restricted_until is not None:
-                suffix = f" until {body.send_restricted_until.isoformat()}"
+                suffix = f" до {body.send_restricted_until.isoformat()}"
             note = svc.create_group_system_note(
                 conversation_id,
                 current_user.id,
-                f"🛡 {_user_label(current_user)} restricted messaging for "
+                f"🛡 {_user_label(current_user)} ограничил(а) отправку сообщений для "
                 f"{_user_label(target_user, member_user_id)}{suffix}.",
             )
         else:
             note = svc.create_group_system_note(
                 conversation_id,
                 current_user.id,
-                f"🛡 {_user_label(current_user)} removed messaging restriction for "
+                f"🛡 {_user_label(current_user)} снял(а) ограничение на отправку сообщений с "
                 f"{_user_label(target_user, member_user_id)}.",
             )
         db.commit()
@@ -4762,7 +4793,7 @@ async def set_group_member_send_restriction(
         db.rollback()
         code = str(e)
         if code == "not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Member not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Участник не найден")
         if code in (
             "cannot_restrict_self",
             "cannot_restrict_creator",
@@ -4771,7 +4802,7 @@ async def set_group_member_send_restriction(
         ):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code in ("forbidden", "not_group"):
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         raise
     if note is not None:
         _emit(
@@ -4793,7 +4824,7 @@ async def list_group_bans(
     try:
         rows = svc.list_group_bans(conversation_id, current_user.id, limit=limit)
     except ValueError:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
     return GroupMemberBanListResponse(
         items=[_group_ban_response(r) for r in rows],
     )
@@ -4821,15 +4852,15 @@ async def ban_group_member(
         note = svc.create_group_system_note(
             conversation_id,
             current_user.id,
-            f"🛡 {_user_label(current_user)} banned "
-            f"{_user_label(target_user, target_user_id)} from the group.",
+            f"🛡 {_user_label(current_user)} заблокировал(а) "
+            f"{_user_label(target_user, target_user_id)} в группе.",
         )
         db.commit()
     except ValueError as e:
         db.rollback()
         code = str(e)
         if code == "user_not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Пользователь не найден")
         if code in (
             "cannot_ban_self",
             "cannot_ban_creator",
@@ -4838,7 +4869,7 @@ async def ban_group_member(
         ):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code in ("forbidden", "not_group"):
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         raise
     if note is not None:
         _emit(
@@ -4868,7 +4899,7 @@ async def unban_group_member(
         note = svc.create_group_system_note(
             conversation_id,
             current_user.id,
-            f"🛡 {_user_label(current_user)} unbanned "
+            f"🛡 {_user_label(current_user)} разблокировал(а) "
             f"{_user_label(target_user, target_user_id)}.",
         )
         db.commit()
@@ -4876,9 +4907,9 @@ async def unban_group_member(
         db.rollback()
         code = str(e)
         if code == "not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Ban not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Блокировка не найдена")
         if code in ("forbidden", "not_group"):
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         raise
     if note is not None:
         _emit(
@@ -4911,7 +4942,7 @@ async def list_group_join_requests(
         db.commit()
     except ValueError:
         db.rollback()
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
     return GroupJoinRequestListResponse(
         items=[_group_join_request_response(r) for r in rows]
     )
@@ -4941,7 +4972,11 @@ async def review_group_join_request(
             conversation_id,
             current_user.id,
             f"🛡 {_user_label(current_user)} "
-            + ("approved join request from " if body.approve else "rejected join request from ")
+            + (
+                " одобрил(а) заявку от "
+                if body.approve
+                else " отклонил(а) заявку от "
+            )
             + _user_label(requester_user, requester_user_id)
             + ".",
         )
@@ -4953,11 +4988,11 @@ async def review_group_join_request(
         db.rollback()
         code = str(e)
         if code == "not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Request not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Заявка не найдена")
         if code in ("already_reviewed", "group_member_banned"):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code in ("forbidden", "not_group"):
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         raise
     if note is not None:
         _emit(
@@ -5025,7 +5060,7 @@ async def list_group_moderation_log(
             limit=limit,
         )
     except ValueError:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
     if not rows:
         return GroupModerationLogResponse(items=[])
     actor_ids = {m.sender_id for m in rows}
@@ -5062,7 +5097,7 @@ async def leave_group_chat(
         db.rollback()
         code = str(e)
         if code in ("forbidden", "not_group", "not_found"):
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
         raise
     return {"ok": True}
 
@@ -5098,9 +5133,9 @@ async def add_contact(
     except ValueError as e:
         db.rollback()
         if str(e) == "user_not_found":
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Пользователь не найден")
         if str(e) == "self_contact":
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot add yourself")
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Нельзя добавить себя")
         raise
     user = db.query(User).filter(User.id == row.contact_user_id).first()
     return ContactResponse(id=row.id, user=_brief(user), created_at=row.created_at)
@@ -5142,7 +5177,7 @@ async def remove_contact(
     ok = svc.remove_contact(current_user.id, contact_user_id)
     db.commit()
     if not ok:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Contact not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Контакт не найден")
     return {"ok": True}
 
 
