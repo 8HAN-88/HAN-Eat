@@ -865,7 +865,12 @@ class _CreateChannelPostScreenState
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Заполните поля поста')),
+      );
+      return;
+    }
 
     if (_isPlainComposerMode) {
       final hasText = _titleController.text.trim().isNotEmpty ||

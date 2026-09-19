@@ -2,13 +2,14 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../app/app_router.dart';
 import '../../../../services/auth_service.dart';
 import '../../../../services/server_config.dart';
 import '../../../../services/story_feed_cache.dart';
 import '../../../stories/data/story_models.dart';
 import '../../../stories/data/story_service.dart';
-import '../../../stories/presentation/story_camera_screen.dart';
 import '../../../stories/presentation/story_viewer_screen.dart';
 
 /// Instagram-style horizontal stories row for the home feed.
@@ -76,9 +77,7 @@ class _FeedStoriesStripState extends State<FeedStoriesStrip> {
   }
 
   Future<void> _createStory() async {
-    final created = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => const StoryCameraScreen()),
-    );
+    final created = await context.push<bool>(StoryCreateRoute.path);
     if (created == true) {
       await _load();
       if (!mounted) return;

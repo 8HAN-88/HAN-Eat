@@ -87,6 +87,8 @@ import '../features/reels/presentation/reel_by_id_screen.dart';
 import '../features/chat/presentation/chats_hub_screen.dart';
 import '../features/chat/presentation/chat_archived_screen.dart';
 import '../features/chat/presentation/chat_create_group_screen.dart';
+import '../features/chat/presentation/chat_people_search_screen.dart';
+import '../features/stories/presentation/story_camera_screen.dart';
 import '../features/chat/presentation/chat_invite_join_screen.dart';
 import '../features/settings/presentation/paid_message_exceptions_screen.dart';
 import '../features/chat/application/chat_private_reply.dart';
@@ -181,6 +183,28 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/archive':
     case '/archived':
       return '${ChatArchivedRoute.path}$q';
+    case '/new-group':
+      return '${ChatCreateGroupRoute.path}$q';
+    case '/new-message':
+    case '/people':
+    case '/contacts':
+      return '${ChatNewMessageRoute.path}$q';
+    case '/new-channel':
+      return '${CreateChannelRoute.path}$q';
+    case '/new-post':
+      return '${CreatePostRoute.path}$q';
+    case '/new-reel':
+      return '${CreateReelRoute.path}$q';
+    case '/new-story':
+      return '${StoryCreateRoute.path}$q';
+    case '/moments':
+      return '${StoriesRoute.path}$q';
+    case '/constructor':
+      return '${FlexConstructorRoute.path}$q';
+    case '/shop':
+      return '${FlexShopRoute.path}$q';
+    case '/admin':
+      return '${ModerationDashboardRoute.path}$q';
     default:
       return null;
   }
@@ -557,6 +581,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             const MaterialPage(child: StoriesHubScreen()),
       ),
       GoRoute(
+        path: StoryCreateRoute.path,
+        name: StoryCreateRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: StoryCameraScreen()),
+      ),
+      GoRoute(
         path: ChannelsListRoute.path,
         name: ChannelsListRoute.name,
         redirect: (context, state) => ChatsRoute.path,
@@ -846,6 +876,84 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: ChatCreateGroupRoute.name,
         pageBuilder: (context, state) =>
             const MaterialPage(child: ChatCreateGroupScreen()),
+      ),
+      GoRoute(
+        path: ChatNewMessageRoute.path,
+        name: ChatNewMessageRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: ChatPeopleSearchScreen()),
+      ),
+      GoRoute(
+        path: '/new-group',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            ChatCreateGroupRoute.path,
+      ),
+      GoRoute(
+        path: '/new-message',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            ChatNewMessageRoute.path,
+      ),
+      GoRoute(
+        path: '/people',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            ChatNewMessageRoute.path,
+      ),
+      GoRoute(
+        path: '/contacts',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            ChatNewMessageRoute.path,
+      ),
+      GoRoute(
+        path: '/new-channel',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            CreateChannelRoute.path,
+      ),
+      GoRoute(
+        path: '/new-post',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            CreatePostRoute.path,
+      ),
+      GoRoute(
+        path: '/new-reel',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            CreateReelRoute.path,
+      ),
+      GoRoute(
+        path: '/new-story',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            StoryCreateRoute.path,
+      ),
+      GoRoute(
+        path: '/moments',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            StoriesRoute.path,
+      ),
+      GoRoute(
+        path: '/constructor',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            FlexConstructorRoute.path,
+      ),
+      GoRoute(
+        path: '/shop',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            FlexShopRoute.path,
+      ),
+      GoRoute(
+        path: '/admin',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            ModerationDashboardRoute.path,
       ),
       GoRoute(
         path: PaidMessageExceptionsRoute.path,
@@ -1879,6 +1987,11 @@ class ChatCreateGroupRoute {
   static const name = 'chat_create_group';
 }
 
+class ChatNewMessageRoute {
+  static const path = '/chats/new';
+  static const name = 'chat_new_message';
+}
+
 class MiniAppsRoute {
   static const path = '/mini-apps';
   static const name = 'mini_apps';
@@ -1887,6 +2000,11 @@ class MiniAppsRoute {
 class StoriesRoute {
   static const path = '/stories';
   static const name = 'stories';
+}
+
+class StoryCreateRoute {
+  static const path = '/stories/create';
+  static const name = 'story_create';
 }
 
 class ChatThreadRoute {

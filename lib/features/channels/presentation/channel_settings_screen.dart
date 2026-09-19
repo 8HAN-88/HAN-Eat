@@ -85,7 +85,12 @@ class _ChannelSettingsScreenState extends ConsumerState<ChannelSettingsScreen> {
   }
 
   Future<void> _handleSave() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Заполните название')),
+      );
+      return;
+    }
 
     setState(() => _isLoading = true);
 
