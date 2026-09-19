@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -222,22 +224,29 @@ class OtpResendControl extends StatefulWidget {
 class _OtpResendControlState extends State<OtpResendControl> {
   DateTime? _until;
   bool _busy = false;
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
     if (widget.startCooldown) {
       _until = DateTime.now().add(widget.cooldown);
-      WidgetsBinding.instance.addPostFrameCallback((_) => _tick());
+      _timer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
     }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
   }
 
   void _tick() {
     if (!mounted) return;
     setState(() {});
-    final left = _remaining;
-    if (left > Duration.zero) {
-      Future<void>.delayed(const Duration(seconds: 1), _tick);
+    if (_remaining == Duration.zero) {
+      _timer?.cancel();
+      _timer = null;
     }
   }
 
@@ -257,7 +266,8 @@ class _OtpResendControlState extends State<OtpResendControl> {
         _until = DateTime.now().add(widget.cooldown);
         _busy = false;
       });
-      _tick();
+      _timer?.cancel();
+      _timer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
     } catch (_) {
       if (mounted) setState(() => _busy = false);
       rethrow;
