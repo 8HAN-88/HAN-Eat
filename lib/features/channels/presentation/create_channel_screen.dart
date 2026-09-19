@@ -157,7 +157,12 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
   }
 
   Future<void> _handleCreate() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Введите название')),
+      );
+      return;
+    }
 
     if (_isUploadingAvatar) {
       ScaffoldMessenger.of(context).showSnackBar(

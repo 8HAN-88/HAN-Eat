@@ -384,7 +384,12 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
             final name = _nameController.text.trim();
             final username = normalizeBotUsername(_usernameController.text);
             final err = validateBotUsername(username);
-            if (name.isEmpty) return;
+            if (name.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Введите имя бота')),
+              );
+              return;
+            }
             if (err != null) {
               setState(() => _usernameError = err);
               return;

@@ -6013,6 +6013,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           title: _threadSearchOpen ? 'Закрыть поиск' : 'Поиск в чате',
           onTap: _toggleThreadSearch,
         ),
+        if (!isSaved) ...[
+          TelegramActionSheetAction(
+            icon: _muted
+                ? Icons.notifications_off_outlined
+                : Icons.notifications_outlined,
+            title: _muted ? 'Включить уведомления' : 'Без звука',
+            onTap: _toggleMute,
+          ),
+          TelegramActionSheetAction(
+            icon: _pinned ? Icons.push_pin : Icons.push_pin_outlined,
+            title: _pinned ? 'Открепить' : 'Закрепить',
+            onTap: _togglePin,
+          ),
+        ],
         TelegramActionSheetAction(
           icon: _showOnlyFailedMessages
               ? Icons.filter_alt_off_outlined
@@ -6172,18 +6186,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           ),
         ],
         if (!isSaved) ...[
-          TelegramActionSheetAction(
-            icon: _pinned ? Icons.push_pin : Icons.push_pin_outlined,
-            title: _pinned ? 'Открепить' : 'Закрепить',
-            onTap: _togglePin,
-          ),
-          TelegramActionSheetAction(
-            icon: _muted
-                ? Icons.notifications_off_outlined
-                : Icons.notifications_outlined,
-            title: _muted ? 'Включить уведомления' : 'Без звука',
-            onTap: _toggleMute,
-          ),
           if (isGroup)
             TelegramActionSheetAction(
               icon: Icons.info_outline,

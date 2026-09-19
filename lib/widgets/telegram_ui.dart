@@ -506,7 +506,7 @@ Future<T?> showTelegramActionSheet<T>({
   required BuildContext context,
   required String title,
   required List<TelegramActionSheetAction> actions,
-  bool isScrollControlled = false,
+  bool isScrollControlled = true,
 }) {
   return showModalBottomSheet<T>(
     context: context,
@@ -542,79 +542,84 @@ class TelegramActionSheet extends StatelessWidget {
         ? Colors.white.withValues(alpha: 0.05)
         : scheme.outlineVariant.withValues(alpha: 0.55);
 
+    final maxH = MediaQuery.sizeOf(context).height * 0.78;
     return Padding(
       padding: const EdgeInsets.fromLTRB(6, 0, 6, 8),
-      child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: fill,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(28)),
-              border: Border.all(color: border, width: 0.5),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: dark ? 0.38 : 0.14),
-                  blurRadius: 28,
-                  offset: const Offset(0, -8),
-                ),
-              ],
-            ),
-            child: SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 42,
-                        height: 5,
-                        decoration: BoxDecoration(
-                          color: scheme.onSurface.withValues(alpha: 0.32),
-                          borderRadius: BorderRadius.circular(999),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxH),
+        child: ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: fill,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(28)),
+                border: Border.all(color: border, width: 0.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: dark ? 0.38 : 0.14),
+                    blurRadius: 28,
+                    offset: const Offset(0, -8),
+                  ),
+                ],
+              ),
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 42,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: scheme.onSurface.withValues(alpha: 0.32),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 22),
-                    Text(
-                      title,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.1,
+                      const SizedBox(height: 22),
+                      Text(
+                        title,
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.1,
+                                ),
+                      ),
+                      const SizedBox(height: 18),
+                      Flexible(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: dark
+                                ? Colors.white.withValues(alpha: 0.025)
+                                : scheme.surfaceContainerHighest
+                                    .withValues(alpha: 0.42),
+                            borderRadius: BorderRadius.circular(18),
                           ),
-                    ),
-                    const SizedBox(height: 18),
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: dark
-                            ? Colors.white.withValues(alpha: 0.025)
-                            : scheme.surfaceContainerHighest
-                                .withValues(alpha: 0.42),
-                        borderRadius: BorderRadius.circular(18),
+                          child: ListView.separated(
+                            shrinkWrap: true,
+                            padding: EdgeInsets.zero,
+                            itemCount: actions.length,
+                            separatorBuilder: (_, __) => Divider(
+                              height: 1,
+                              thickness: 0.5,
+                              indent: 54,
+                              color: scheme.outlineVariant
+                                  .withValues(alpha: dark ? 0.16 : 0.7),
+                            ),
+                            itemBuilder: (context, i) =>
+                                _TelegramActionSheetRow(action: actions[i]),
+                          ),
+                        ),
                       ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          for (var i = 0; i < actions.length; i++) ...[
-                            _TelegramActionSheetRow(action: actions[i]),
-                            if (i != actions.length - 1)
-                              Divider(
-                                height: 1,
-                                thickness: 0.5,
-                                indent: 54,
-                                color: scheme.outlineVariant
-                                    .withValues(alpha: dark ? 0.16 : 0.7),
-                              ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

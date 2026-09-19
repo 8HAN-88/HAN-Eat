@@ -108,7 +108,12 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
   }
 
   Future<void> _submitTicket() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Заполните тему и сообщение')),
+      );
+      return;
+    }
 
     setState(() {
       _isSubmitting = true;

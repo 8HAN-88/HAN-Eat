@@ -24,6 +24,17 @@ import '../application/search_scope.dart';
 
 enum _MainSearchTab { all, posts, people, channels, messages }
 
+/// Exact slug/name match so «han» surfaces the HAN channel above people.
+bool channelMatchesSearchExactly(
+  String query, {
+  required String slug,
+  required String name,
+}) {
+  final q = query.trim().toLowerCase();
+  if (q.isEmpty) return false;
+  return slug.toLowerCase() == q || name.toLowerCase() == q;
+}
+
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({
     super.key,
@@ -1039,6 +1050,32 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     }
 
     final children = <Widget>[];
+    final pinChannels = showChannels &&
+        query.isNotEmpty &&
+        _channels.any(
+          (c) => channelMatchesSearchExactly(
+            query,
+            slug: c.slug,
+            name: c.name,
+          ),
+        );
+
+    if (pinChannels) {
+      children.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(
+            'Каналы',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
+        ),
+      );
+      for (final channel in _channels) {
+        children.add(_buildChannelTile(channel, query));
+      }
+    }
 
     if (showPeople) {
       children.add(
@@ -1057,7 +1094,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       }
     }
 
-    if (showChannels) {
+    if (showChannels && !pinChannels) {
       if (showPeople || showPosts) {
         children.add(
           Padding(
