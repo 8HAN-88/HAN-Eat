@@ -688,14 +688,6 @@ async def list_channels(
         ).order_by(Channel.created_at.desc())
     elif recommended:
         query = db.query(Channel).filter(Channel.is_public.is_(True))
-    elif search and search.strip():
-        term = f"%{search.strip()}%"
-        query = db.query(Channel).filter(
-            or_(
-                Channel.name.ilike(term),
-                Channel.slug.ilike(term),
-            )
-        )
     else:
         query = db.query(Channel).filter(Channel.is_public.is_(True))
 
@@ -790,12 +782,12 @@ async def list_channels(
     if category:
         query = query.filter(Channel.category == category)
     
-    # Поиск по названию, описанию и тегам
-    if search:
-        search_term = f"%{search}%"
-        # Поиск по названию и описанию
+    # Поиск по названию, адресу, описанию и тегам
+    if search and search.strip():
+        search_term = f"%{search.strip()}%"
         search_filter = (
             (Channel.name.ilike(search_term)) |
+            (Channel.slug.ilike(search_term)) |
             (Channel.description.ilike(search_term))
         )
         # Поиск по тегам (если теги не None)

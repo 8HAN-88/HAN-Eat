@@ -351,19 +351,26 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         return;
       }
 
-      final response = await SearchService.searchPosts(
-        query: query,
-        postType: _selectedPostType,
-        tags: _selectedTags.isNotEmpty ? _selectedTags : null,
-        dateFrom: _dateFrom,
-        dateTo: _dateTo,
-        minLikes: _minLikes,
-        minComments: _minComments,
-        sortBy: _selectedSortBy!,
-        followingOnly: _followingOnly,
-        limit: _limit,
-        offset: _offset,
-      );
+      SearchPostsResponse? response;
+      try {
+        response = await SearchService.searchPosts(
+          query: query,
+          postType: _selectedPostType,
+          tags: _selectedTags.isNotEmpty ? _selectedTags : null,
+          dateFrom: _dateFrom,
+          dateTo: _dateTo,
+          minLikes: _minLikes,
+          minComments: _minComments,
+          sortBy: _selectedSortBy!,
+          followingOnly: _followingOnly,
+          limit: _limit,
+          offset: _offset,
+        );
+      } catch (e) {
+        final hasSide = (peopleResult != null && peopleResult.isNotEmpty) ||
+            (channelsResult != null && channelsResult.isNotEmpty);
+        if (!hasSide) rethrow;
+      }
 
       if (mounted) {
         setState(() {
@@ -373,13 +380,18 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           if (reset && channelsResult != null) {
             _channels = channelsResult;
           }
-          if (reset) {
-            _posts = response.posts;
-          } else {
-            _posts.addAll(response.posts);
+          if (response != null) {
+            if (reset) {
+              _posts = response.posts;
+            } else {
+              _posts.addAll(response.posts);
+            }
+            _total = response.total;
+            _offset = _offset + response.posts.length;
+          } else if (reset) {
+            _posts = [];
+            _total = 0;
           }
-          _total = response.total;
-          _offset = _offset + response.posts.length;
           _isLoading = false;
         });
         if (reset) {
@@ -387,8 +399,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             GlobalSearchCache.save(
               _buildSearchCacheKey(query),
               GlobalSearchCachedResult(
-                posts: response.posts,
-                total: response.total,
+                posts: response?.posts ?? const [],
+                total: response?.total ?? 0,
                 people: peopleResult ?? const [],
                 channels: channelsResult ?? const [],
               ),
