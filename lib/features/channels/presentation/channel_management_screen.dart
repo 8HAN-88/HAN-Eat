@@ -766,13 +766,13 @@ class _ChannelManagementScreenState
         TextFormField(
           controller: _slugController,
           decoration: const InputDecoration(
-            labelText: 'URL-адрес (slug)',
+            labelText: 'Адрес канала',
             hintText: 'healthy_life',
-            helperText: 'Используется в URL канала',
+            helperText: 'Короткое имя в ссылке на канал',
           ),
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
-              return 'Введите slug';
+              return 'Введите адрес канала';
             }
             if (!RegExp(r'^[a-z0-9_]+$').hasMatch(value.trim())) {
               return 'Только латинские буквы, цифры и подчеркивания';

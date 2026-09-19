@@ -188,8 +188,10 @@ const _knownEnglishDetails = <String, String>{
   'Unknown stars package': 'Неизвестный пакет звёзд',
   'Too many mini app requests. Please try again later.':
       'Слишком много запросов к мини-приложению. Подождите немного.',
-  'Incorrect email or password': 'Неверный email или пароль',
-  'Email already registered': 'Email уже занят',
+  'Incorrect email or password': 'Неверная почта или пароль',
+  'Email already registered': 'Почта уже занята',
+  'Email уже занят': 'Почта уже занята',
+  'Неверный email или пароль': 'Неверная почта или пароль',
   'Username already taken': 'Это имя уже занято',
   'Account deleted': 'Аккаунт удалён',
   'Account suspended': 'Аккаунт заблокирован',

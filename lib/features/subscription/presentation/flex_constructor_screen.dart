@@ -295,7 +295,7 @@ class _LevelDropZone extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'УРОВЕНЬ $level — $price ₽',
+                'Уровень $level · $price ₽',
                 style: const TextStyle(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 8),

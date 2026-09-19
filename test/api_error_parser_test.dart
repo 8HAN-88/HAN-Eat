@@ -180,7 +180,7 @@ void main() {
       () {
     expect(
       parseApiErrorMessage('Incorrect email or password'),
-      'Неверный email или пароль',
+      'Неверная почта или пароль',
     );
     expect(parseApiErrorMessage('Account suspended'), 'Аккаунт заблокирован');
     expect(

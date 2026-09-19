@@ -444,7 +444,7 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
               TextField(
                 controller: _webhookController,
                 decoration: const InputDecoration(
-                  labelText: 'URL',
+                  labelText: 'Адрес вебхука',
                   hintText: 'https://example.com/webhook',
                 ),
               ),
@@ -469,7 +469,7 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
                   _webhookController.clear();
                   await _saveWebhook();
                 },
-                child: const Text('Удалить webhook'),
+                child: const Text('Удалить вебхук'),
               ),
             ],
           ),
@@ -2419,7 +2419,7 @@ class _AddCommandDialogState extends State<_AddCommandDialog> {
         final miniAppId = int.tryParse(rawId);
         if (miniAppId == null || miniAppId <= 0) {
           errors
-              .add('Строка ${i + 1}: укажите ID мини-приложения (web_app:123)');
+              .add('Строка ${i + 1}: укажите ID мини-приложения');
           continue;
         }
         btn = BotInlineButton(text: text, miniAppId: miniAppId);
@@ -2432,11 +2432,11 @@ class _AddCommandDialogState extends State<_AddCommandDialog> {
         btn = BotInlineButton(text: text, url: action);
       } else {
         if (action.length > 128) {
-          errors.add('Строка ${i + 1}: callback_data до 128 символов');
+          errors.add('Строка ${i + 1}: данные кнопки до 128 символов');
           continue;
         }
         if (third.length > 300) {
-          errors.add('Строка ${i + 1}: callback text до 300 символов');
+          errors.add('Строка ${i + 1}: текст ответа до 300 символов');
           continue;
         }
         btn = BotInlineButton(

@@ -102,7 +102,7 @@ class _SubscriptionSuccessScreenState
                 const Text('Проверка статуса подписки…'),
                 const SizedBox(height: 8),
                 Text(
-                  'Попытка $_attemptsDone из $_maxAttempts (webhook может задержаться)',
+                  'Попытка $_attemptsDone из $_maxAttempts. Подтверждение может задержаться',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),

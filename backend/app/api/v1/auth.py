@@ -257,7 +257,7 @@ async def _resolve_google_claims(id_token: str) -> dict:
     if str(ev).lower() in ("false", "0"):
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail="Email аккаунта Google не подтверждён",
+            detail="Почта аккаунта Google не подтверждена",
         )
 
     return claims
@@ -276,7 +276,7 @@ async def register(
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email уже занят"
+            detail="Почта уже занята"
         )
     
     # Проверяем username, если указан
@@ -771,7 +771,7 @@ async def verify_email(body: TokenBody, db: Session = Depends(get_db)):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Пользователь не найден")
     mark_email_verified(user)
     db.commit()
-    return MessageResponse(message="Email подтверждён. Теперь можно войти в приложение.")
+    return MessageResponse(message="Почта подтверждена. Теперь можно войти в приложение.")
 
 
 @router.post("/forgot-password", response_model=MessageResponse)
@@ -842,7 +842,7 @@ async def change_email_request(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Это уже ваш текущий email")
     existing = db.query(User).filter(User.email == new_email).first()
     if existing and existing.id != current_user.id:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Email уже занят")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Почта уже занята")
     try:
         send_change_email_confirmation(db, current_user, new_email)
         db.commit()
@@ -879,11 +879,11 @@ async def confirm_email_change(body: TokenBody, db: Session = Depends(get_db)):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Пользователь не найден")
     existing = db.query(User).filter(User.email == new_email, User.id != user.id).first()
     if existing:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Email уже занят")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Почта уже занята")
     user.email = new_email
     mark_email_verified(user)
     db.commit()
-    return MessageResponse(message="Email обновлён")
+    return MessageResponse(message="Почта обновлена")
 
 
 @router.post("/resend-verification", response_model=MessageResponse)
