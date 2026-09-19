@@ -186,7 +186,7 @@ class _CloseFriendsScreenState extends State<CloseFriendsScreen> {
                       enabled: !_busy,
                       decoration: const InputDecoration(
                         labelText: 'Найти пользователя',
-                        hintText: 'Имя или @username',
+                        hintText: 'Имя или @ник',
                         prefixIcon: Icon(Icons.search),
                         border: OutlineInputBorder(),
                       ),

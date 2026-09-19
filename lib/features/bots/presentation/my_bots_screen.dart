@@ -322,7 +322,7 @@ class _CreateBotDialogState extends State<_CreateBotDialog> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Укажите имя и username, который заканчивается на bot.',
+              'Укажите имя и короткое имя, которое заканчивается на bot.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),

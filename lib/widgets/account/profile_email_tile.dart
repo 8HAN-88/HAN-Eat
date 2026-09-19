@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../app/auth_route_paths.dart';
 import '../../services/auth_service.dart';
 import '../../utils/api_error_parser.dart';
 
@@ -25,8 +27,8 @@ Future<bool> showChangeEmailDialog(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'На новый адрес придёт письмо с подтверждением. '
-                'До подтверждения вход остаётся по текущему email.',
+                'На новый адрес придёт письмо с шестизначным кодом. '
+                'До подтверждения вход остаётся по текущей почте.',
                 style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
                       color: Theme.of(ctx).colorScheme.onSurfaceVariant,
                     ),
@@ -90,6 +92,10 @@ Future<bool> showChangeEmailDialog(
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(result.message)),
     );
+    final next = emailController.text.trim();
+    if (next.isNotEmpty) {
+      context.push(AuthPaths.confirmEmailChangeWith(email: next));
+    }
     return true;
   } on AuthException catch (e) {
     if (context.mounted) {
@@ -153,7 +159,9 @@ Future<void> showEmailManageSheet(
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  emailVerified ? 'Почта подтверждена' : 'Почта не подтверждена',
+                  emailVerified
+                      ? 'Почта подтверждена'
+                      : 'Почта не подтверждена',
                   style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
                         color: emailVerified
                             ? Theme.of(ctx).colorScheme.primary
@@ -230,9 +238,7 @@ class ProfileEmailTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final subtitle = emailVerified
-        ? email
-        : '$email · не подтверждён';
+    final subtitle = emailVerified ? email : '$email · не подтверждён';
 
     return Card(
       child: ListTile(

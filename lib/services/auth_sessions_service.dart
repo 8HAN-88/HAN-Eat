@@ -43,8 +43,21 @@ class AuthSessionInfo {
     final name = deviceName?.trim();
     if (name != null && name.isNotEmpty) return name;
     final platform = devicePlatform?.trim();
-    if (platform != null && platform.isNotEmpty) return 'Устройство · $platform';
-    return 'Устройство #$id';
+    if (platform != null && platform.isNotEmpty) {
+      switch (platform) {
+        case 'web':
+          return 'Браузер';
+        case 'ios':
+          return 'iPhone';
+        case 'android':
+          return 'Android';
+        case 'macos':
+          return 'Mac';
+        default:
+          return 'Устройство · $platform';
+      }
+    }
+    return 'Браузер';
   }
 }
 

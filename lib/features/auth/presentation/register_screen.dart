@@ -223,7 +223,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     textCapitalization: TextCapitalization.none,
                     decoration: const InputDecoration(
                       labelText: 'Имя пользователя',
-                      hintText: '@username',
+                      hintText: '@ник',
                       prefixIcon: Icon(Icons.alternate_email),
                     ),
                   ),

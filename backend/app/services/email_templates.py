@@ -29,6 +29,7 @@ def render_branded_email(
     cta_label: str,
     cta_url: str,
     expiry_note: Optional[str] = None,
+    otp_code: Optional[str] = None,
     security_note: str = (
         "Если вы не запрашивали это письмо, просто проигнорируйте его — "
         "пароль и доступ к аккаунту не изменятся."
@@ -53,6 +54,21 @@ def render_branded_email(
         expiry_html = (
             f'<p style="margin:16px 0 0;font-size:13px;line-height:20px;color:{_TEXT_MUTED};">'
             f"⏱ {_esc(expiry_note)}</p>"
+        )
+
+    otp_html = ""
+    digits = "".join(ch for ch in (otp_code or "") if ch.isdigit())
+    if len(digits) == 6:
+        grouped = f"{digits[:3]} {digits[3:]}"
+        otp_html = (
+            f'<div style="margin:8px 0 20px;padding:20px 16px;background:{_BG_PAGE};'
+            f'border-radius:12px;text-align:center;">'
+            f'<div style="font-size:12px;line-height:16px;color:{_TEXT_MUTED};'
+            f'margin:0 0 8px;letter-spacing:0.4px;">Код подтверждения</div>'
+            f'<div style="font-size:32px;line-height:40px;font-weight:700;'
+            f'letter-spacing:10px;color:{_TEXT_MAIN};font-family:ui-monospace,'
+            f'SFMono-Regular,Menlo,Consolas,monospace;">{_esc(grouped)}</div>'
+            f"</div>"
         )
 
     safe_url = _esc(cta_url)
@@ -90,6 +106,7 @@ def render_branded_email(
               </h1>
               {greeting_block}
               {body_paragraphs}
+              {otp_html}
               <table role="presentation" cellspacing="0" cellpadding="0" style="margin:28px 0 8px;">
                 <tr>
                   <td style="border-radius:10px;background:{_BRAND_PRIMARY};">
@@ -134,6 +151,8 @@ def render_branded_email(
     if greeting:
         plain_parts.extend([greeting, ""])
     plain_parts.extend(paragraphs)
+    if len(digits) == 6:
+        plain_parts.extend(["", f"Код подтверждения: {digits}", ""])
     plain_parts.extend(
         [
             "",

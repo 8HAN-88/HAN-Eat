@@ -790,7 +790,7 @@ class _GiftTransferUserPickerState extends State<_GiftTransferUserPicker> {
                   controller: _controller,
                   autofocus: true,
                   decoration: const InputDecoration(
-                    hintText: 'Поиск по имени или @username',
+                    hintText: 'Поиск по имени или @ник',
                     prefixIcon: Icon(Icons.search),
                   ),
                   onChanged: _onQueryChanged,

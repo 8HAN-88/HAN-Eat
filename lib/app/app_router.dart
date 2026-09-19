@@ -104,13 +104,35 @@ import 'web_session_landing_screen.dart';
 import 'invalid_link_screen.dart';
 import '../widgets/app_empty_state.dart';
 
+bool _isAppHttpHost(String host) {
+  final h = host.toLowerCase();
+  return h == 'haneat.app' ||
+      h == 'www.haneat.app' ||
+      h == 'localhost' ||
+      h == '127.0.0.1' ||
+      h == '0.0.0.0' ||
+      h == '[::1]';
+}
+
+/// Paid channel screens live under `/channels/:id/...`.
+/// Keep `/channel/:id/giveaways` in the same family as info/settings.
+String? channelPaidPathAlias(String path, [String query = '']) {
+  final clean = path.split('?').first;
+  final segs = clean.split('/').where((s) => s.isNotEmpty).toList();
+  if (segs.length != 3 || segs[0] != 'channel') return null;
+  if (int.tryParse(segs[1]) == null) return null;
+  if (segs[2] != 'giveaways' && segs[2] != 'suggested-posts') return null;
+  final q = query.isEmpty ? '' : '?$query';
+  return '/channels/${segs[1]}/${segs[2]}$q';
+}
+
 /// Преобразует `haneat://...` или `https://haneat.app/...` в путь для [GoRouter].
 String? parseDeepLinkToGoPath(String raw) {
   try {
     final uri = Uri.parse(raw);
     if (uri.scheme == 'https' || uri.scheme == 'http') {
       final host = uri.host.toLowerCase();
-      if (host == 'haneat.app' || host == 'www.haneat.app') {
+      if (_isAppHttpHost(host)) {
         // PWA живёт на /app/ — это HTML-шелл, не маршрут GoRouter.
         var path = browserPathToGoPath(uri.path) ?? '';
         var query = routerQueryFromUri(uri);
@@ -148,6 +170,10 @@ String? parseDeepLinkToGoPath(String raw) {
           final reelPath = ReelByIdRoute.goPathFromBrowserPath(path);
           if (reelPath != null) {
             return reelPath;
+          }
+          final paidAlias = channelPaidPathAlias(path, query ?? '');
+          if (paidAlias != null) {
+            return paidAlias;
           }
           return query == null ? path : '$path?$query';
         }
@@ -211,15 +237,18 @@ String? parseDeepLinkToGoPath(String raw) {
     if (uri.host == 'auth' && uri.pathSegments.isNotEmpty) {
       final action = uri.pathSegments.first;
       final token = uri.queryParameters['token'];
+      final email = uri.queryParameters['email'];
       if (token != null && token.isNotEmpty) {
-        final encoded = Uri.encodeComponent(token);
         switch (action) {
           case 'verify-email':
-            return '${VerifyEmailRoute.path}?token=$encoded';
+            return AuthPaths.verifyEmailWith(token: token, email: email);
           case 'reset-password':
-            return '${ResetPasswordRoute.path}?token=$encoded';
+            return AuthPaths.resetPasswordWith(token: token, email: email);
           case 'confirm-email-change':
-            return '${ConfirmEmailChangeRoute.path}?token=$encoded';
+            return AuthPaths.confirmEmailChangeWith(
+              token: token,
+              email: email,
+            );
         }
       }
     }
@@ -809,8 +838,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: ResetPasswordRoute.name,
         pageBuilder: (context, state) {
           final token = state.uri.queryParameters['token'];
+          final email = state.uri.queryParameters['email'];
           return MaterialPage(
-            child: ResetPasswordScreen(initialToken: token),
+            child: ResetPasswordScreen(
+              initialToken: token,
+              initialEmail: email,
+            ),
           );
         },
       ),
@@ -852,8 +885,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: ConfirmEmailChangeRoute.name,
         pageBuilder: (context, state) {
           final token = state.uri.queryParameters['token'] ?? '';
+          final email = state.uri.queryParameters['email'];
           return MaterialPage(
-            child: ConfirmEmailChangeScreen(token: token),
+            child: ConfirmEmailChangeScreen(token: token, email: email),
           );
         },
       ),
@@ -1175,6 +1209,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             child: ChannelManagementScreen(channelId: channelId),
           );
         },
+      ),
+      GoRoute(
+        path: '/channel/:channelId/giveaways',
+        redirect: (context, state) =>
+            channelPaidPathAlias(state.uri.path, state.uri.query) ??
+            FeedRoute.path,
+      ),
+      GoRoute(
+        path: '/channel/:channelId/suggested-posts',
+        redirect: (context, state) =>
+            channelPaidPathAlias(state.uri.path, state.uri.query) ??
+            FeedRoute.path,
       ),
       // Notifications List (удален дубликат - используется NotificationsRoute выше)
       // Support
@@ -1941,8 +1987,11 @@ class TwoFactorVerifyRoute {
 }
 
 class ConfirmEmailChangeRoute {
-  static const path = '/confirm-email-change';
+  static const path = AuthPaths.confirmEmailChange;
   static const name = 'confirm_email_change';
+
+  static String withEmail(String email) =>
+      AuthPaths.confirmEmailChangeWith(email: email);
 }
 
 class AccountSecurityRoute {

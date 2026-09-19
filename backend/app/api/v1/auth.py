@@ -77,7 +77,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 _FORGOT_PASSWORD_MSG = (
-    "Если аккаунт с таким email существует, мы отправили письмо со ссылкой для сброса пароля."
+    "Если аккаунт с такой почтой есть, мы отправили письмо с кодом."
 )
 
 _AUTH_OPEN_PURPOSES = frozenset(
@@ -146,10 +146,22 @@ def _issue_auth_tokens(
 
 
 def _session_response(row, *, current_session_id: int | None) -> AuthSessionResponse:
+    from app.services.session_device_label import (
+        display_device_name,
+        display_device_platform,
+    )
+
     return AuthSessionResponse(
         id=row.id,
-        device_name=row.device_name,
-        device_platform=row.device_platform,
+        device_name=display_device_name(
+            device_name=row.device_name,
+            device_platform=row.device_platform,
+            user_agent=row.user_agent,
+        ),
+        device_platform=display_device_platform(
+            device_platform=row.device_platform,
+            user_agent=row.user_agent,
+        ),
         ip_address=row.ip_address,
         created_at=row.created_at.isoformat() if row.created_at else "",
         last_seen_at=row.last_seen_at.isoformat() if row.last_seen_at else "",
@@ -336,7 +348,7 @@ async def register(
         send_verify_email(db, user)
         db.commit()
         verify_msg = (
-            "На вашу почту отправлено письмо для подтверждения email. "
+            "На вашу почту отправлено письмо с кодом. "
             "Проверьте также папку «Спам»."
         )
     except EmailDeliveryError as mail_err:
@@ -383,14 +395,14 @@ async def login(
             logger.warning(f"User not found: {request.email}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Неверный email или пароль"
+                detail="Неверная почта или пароль"
             )
         
         if not verify_password(request.password, user.password_hash):
             logger.warning(f"Invalid password for user: {request.email}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Неверный email или пароль"
+                detail="Неверная почта или пароль"
             )
         
         if user.deleted_at:
@@ -574,7 +586,7 @@ async def google_auth(request: GoogleAuthRequest, http_request: Request, db: Ses
         if not google_email:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="В токене Google нет email"
+                detail="В аккаунте Google нет почты"
             )
         
         # Ищем существующего пользователя по email
@@ -750,22 +762,38 @@ async def yandex_auth(request: YandexAuthRequest, http_request: Request, db: Ses
         )
 
 
+def _consume_or_400(
+    db: Session,
+    raw_token: str,
+    purpose: str,
+    email: str | None = None,
+):
+    row, err = consume_token(db, raw_token, purpose, email=email)
+    if err:
+        db.commit()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=err)
+    return row
+
+
 @router.get("/open/{purpose}", response_class=HTMLResponse)
-async def open_auth_email_link(purpose: str, token: str = ""):
+async def open_auth_email_link(
+    purpose: str, token: str = "", email: str = ""
+):
     """Страница из письма: редирект в приложение (haneat://) + код для ручного ввода."""
     if purpose not in _AUTH_OPEN_PURPOSES:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Не найдено")
     token = token.strip()
-    if len(token) < 16:
+    compact = "".join(ch for ch in token if not ch.isspace() and ch != "-")
+    if len(compact) < 6:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Неверная ссылка")
-    return HTMLResponse(render_open_link_page(purpose, token))
+    return HTMLResponse(render_open_link_page(purpose, token, email=email or None))
 
 
 @router.post("/verify-email", response_model=MessageResponse)
 async def verify_email(body: TokenBody, db: Session = Depends(get_db)):
-    row, err = consume_token(db, body.token.strip(), PURPOSE_VERIFY_EMAIL)
-    if err:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=err)
+    row = _consume_or_400(
+        db, body.token, PURPOSE_VERIFY_EMAIL, email=str(body.email) if body.email else None
+    )
     user = db.query(User).filter(User.id == row.user_id).first()
     if not user or user.deleted_at:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Пользователь не найден")
@@ -800,9 +828,12 @@ async def forgot_password(body: ForgotPasswordRequest, db: Session = Depends(get
 
 @router.post("/reset-password", response_model=MessageResponse)
 async def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_db)):
-    row, err = consume_token(db, body.token.strip(), PURPOSE_RESET_PASSWORD)
-    if err:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=err)
+    row = _consume_or_400(
+        db,
+        body.token,
+        PURPOSE_RESET_PASSWORD,
+        email=str(body.email) if body.email else None,
+    )
     user = db.query(User).filter(User.id == row.user_id).first()
     if not user or user.deleted_at:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Пользователь не найден")
@@ -839,7 +870,7 @@ async def change_email_request(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Неверный пароль")
     new_email = body.new_email.strip().lower()
     if new_email == current_user.email.lower():
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Это уже ваш текущий email")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Это уже ваша текущая почта")
     existing = db.query(User).filter(User.email == new_email).first()
     if existing and existing.id != current_user.id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Почта уже занята")
@@ -854,7 +885,7 @@ async def change_email_request(
             detail="Не удалось отправить письмо. Попробуйте позже.",
         )
     return MessageResponse(
-        message=f"Письмо с подтверждением отправлено на {new_email}",
+        message=f"Код отправлен на {new_email}",
     )
 
 
@@ -862,9 +893,12 @@ async def change_email_request(
 async def confirm_email_change(body: TokenBody, db: Session = Depends(get_db)):
     import json
 
-    row, err = consume_token(db, body.token.strip(), PURPOSE_CHANGE_EMAIL)
-    if err:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=err)
+    row = _consume_or_400(
+        db,
+        body.token,
+        PURPOSE_CHANGE_EMAIL,
+        email=str(body.email) if body.email else None,
+    )
     if not row.extra_data:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Неверные данные ссылки")
     try:

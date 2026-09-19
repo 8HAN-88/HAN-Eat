@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
+import '../../../services/channel_service.dart';
 import '../../../services/chat_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../application/chat_open_direct.dart';
 
-/// Resolves `/u/:username` (or `@username` deep links) into a DM thread.
+/// Resolves `/u/:username` (or `@username` deep links) into a DM.
+/// Public channel slugs fall through to the channel wall.
 class UsernameDeepLinkScreen extends StatefulWidget {
   const UsernameDeepLinkScreen({super.key, required this.username});
 
@@ -28,14 +30,20 @@ class _UsernameDeepLinkScreenState extends State<UsernameDeepLinkScreen> {
   Future<void> _open() async {
     final handle = widget.username.trim().replaceFirst(RegExp(r'^@'), '');
     if (handle.length < 2) {
-      setState(() => _error = 'Некорректный username');
+      setState(() => _error = 'Некорректное имя');
       return;
     }
     try {
       final user = await ChatService.resolveUsername(handle);
       if (!mounted) return;
       if (user == null) {
-        setState(() => _error = 'Пользователь @$handle не найден');
+        final channel = await _channelBySlug(handle);
+        if (!mounted) return;
+        if (channel != null) {
+          context.go(ChannelDetailRoute.pathFor(channel.id));
+          return;
+        }
+        setState(() => _error = 'Не нашли @$handle');
         return;
       }
       final chat = await ChatOpenDirect.openNow(user.id, peer: user);
@@ -45,6 +53,20 @@ class _UsernameDeepLinkScreenState extends State<UsernameDeepLinkScreen> {
       if (!mounted) return;
       setState(() => _error = userVisibleError(e));
     }
+  }
+
+  Future<Channel?> _channelBySlug(String handle) async {
+    final needle = handle.toLowerCase();
+    try {
+      final found = await ChannelService.listChannels(
+        search: handle,
+        limit: 12,
+      );
+      for (final channel in found.items) {
+        if (channel.slug.toLowerCase() == needle) return channel;
+      }
+    } catch (_) {}
+    return null;
   }
 
   @override

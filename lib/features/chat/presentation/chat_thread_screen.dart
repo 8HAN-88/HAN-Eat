@@ -6157,8 +6157,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             onTap: _sendStarGift,
           ),
         ],
-        if ((!isGroup && peer != null) ||
-            (isGroup && _canManageGroupCalls)) ...[
+        if (!isSaved &&
+            ((!isGroup && peer != null) ||
+                (isGroup && _canManageGroupCalls))) ...[
           TelegramActionSheetAction(
             icon: Icons.videocam_outlined,
             title: isGroup ? 'Групповой видеозвонок' : 'Видеозвонок',
@@ -15543,8 +15544,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                       child: const Icon(Icons.schedule_outlined),
                     ),
                   ),
-                  if ((!isGroup && peer != null) ||
-                      (isGroup && _canManageGroupCalls)) ...[
+                  if (!isSaved &&
+                      ((!isGroup && peer != null) ||
+                          (isGroup && _canManageGroupCalls))) ...[
                     IconButton(
                       tooltip: 'Связь',
                       icon: const Icon(Icons.call_outlined),

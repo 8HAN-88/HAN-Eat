@@ -814,12 +814,17 @@ class AuthService {
   static Future<MessageResponse> resetPassword({
     required String token,
     required String newPassword,
+    String? email,
   }) async {
     final response = await http
         .post(
           Uri.parse('$baseUrl/auth/reset-password'),
           headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'token': token, 'new_password': newPassword}),
+          body: jsonEncode({
+            'token': token,
+            'new_password': newPassword,
+            if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
+          }),
         )
         .timeout(const Duration(seconds: 15));
     if (response.statusCode == 200) {
@@ -830,12 +835,18 @@ class AuthService {
     throw _authExceptionFromResponse(response, 'Не удалось сменить пароль');
   }
 
-  static Future<MessageResponse> verifyEmail({required String token}) async {
+  static Future<MessageResponse> verifyEmail({
+    required String token,
+    String? email,
+  }) async {
     final response = await http
         .post(
           Uri.parse('$baseUrl/auth/verify-email'),
           headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'token': token}),
+          body: jsonEncode({
+            'token': token,
+            if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
+          }),
         )
         .timeout(const Duration(seconds: 15));
     if (response.statusCode == 200) {
@@ -926,12 +937,16 @@ class AuthService {
 
   static Future<MessageResponse> confirmEmailChange({
     required String token,
+    String? email,
   }) async {
     final response = await http
         .post(
           Uri.parse('$baseUrl/auth/confirm-email-change'),
           headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'token': token}),
+          body: jsonEncode({
+            'token': token,
+            if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
+          }),
         )
         .timeout(const Duration(seconds: 15));
     if (response.statusCode == 200) {
@@ -1092,9 +1107,16 @@ class AuthService {
     } else {
       platform = 'other';
     }
+    final device = switch (platform) {
+      'web' => 'HanWe browser',
+      'ios' => 'HanWe iPhone',
+      'android' => 'HanWe Android',
+      'macos' => 'HanWe Mac',
+      _ => 'HanWe',
+    };
     return {
       'X-Client-Platform': platform,
-      'X-Client-Device': 'HanWe $platform',
+      'X-Client-Device': device,
     };
   }
 

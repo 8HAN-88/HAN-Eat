@@ -60,7 +60,7 @@ extension SearchScopeLabels on SearchScope {
       case SearchScope.channels:
         return 'Название или описание канала…';
       case SearchScope.chats:
-        return 'Имя, @username или название канала…';
+        return 'Имя, @ник или название канала…';
     }
   }
 
