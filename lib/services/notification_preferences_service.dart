@@ -15,7 +15,8 @@ String _parseErrorDetail(String body) {
         if (first is Map<String, dynamic>) {
           final msg = first['msg'];
           final loc = first['loc'];
-          final field = loc is List && loc.isNotEmpty ? loc.last.toString() : 'field';
+          final field =
+              loc is List && loc.isNotEmpty ? loc.last.toString() : 'field';
           if (msg is String && msg.isNotEmpty) return '$field: $msg';
         }
       }
@@ -50,7 +51,7 @@ class NotificationPreferencesService {
   static Future<NotificationPreferences> getPreferences() async {
     var token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/users/me/notification-preferences');
@@ -65,9 +66,7 @@ class NotificationPreferencesService {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return NotificationPreferences.fromJson(data);
     }
-    throw Exception(
-      '${_parseErrorDetail(response.body)} (${response.statusCode})',
-    );
+    throw Exception(_parseErrorDetail(response.body));
   }
 
   /// Обновить настройки уведомлений
@@ -83,7 +82,7 @@ class NotificationPreferencesService {
   }) async {
     var token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/users/me/notification-preferences');
@@ -116,9 +115,7 @@ class NotificationPreferencesService {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return NotificationPreferences.fromJson(data);
     }
-    throw Exception(
-      '${_parseErrorDetail(response.body)} (${response.statusCode})',
-    );
+    throw Exception(_parseErrorDetail(response.body));
   }
 }
 

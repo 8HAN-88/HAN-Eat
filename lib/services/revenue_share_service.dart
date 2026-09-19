@@ -201,7 +201,7 @@ class RevenueShareApi {
     final token = debugAccessToken != null
         ? await debugAccessToken!()
         : await AuthService.getAccessTokenForApi();
-    if (token == null) throw Exception('Not authenticated');
+    if (token == null) throw Exception('Войдите в аккаунт');
     return {
       'Authorization': 'Bearer $token',
       'Content-Type': 'application/json',

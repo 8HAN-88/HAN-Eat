@@ -27,7 +27,7 @@ class PostService {
   }) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/posts');
@@ -74,7 +74,7 @@ class PostService {
   static Future<Map<String, dynamic>> fetchLinkPreview(String url) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
     final uri = Uri.parse('$baseUrl/posts/link/preview');
     final response = await http.post(
@@ -107,7 +107,7 @@ class PostService {
   }) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/posts');
@@ -149,7 +149,7 @@ class PostService {
   }) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/posts/$postId/poll/vote');
@@ -182,7 +182,7 @@ class PostService {
   static Future<PollData> closePoll({required int postId}) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/posts/$postId/poll/close');
@@ -215,7 +215,7 @@ class PostService {
   static Future<PollVotersResponse> getPollVoters({required int postId}) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/posts/$postId/poll/voters');
@@ -259,7 +259,7 @@ class PostService {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return Post.fromJson(data);
     } else {
-      throw Exception('Failed to load post');
+      throw Exception('Не удалось загрузить пост');
     }
   }
 
@@ -267,7 +267,7 @@ class PostService {
   static Future<void> deletePost(int postId) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/posts/$postId');
@@ -313,7 +313,7 @@ class PostService {
   }) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/posts/$postId');

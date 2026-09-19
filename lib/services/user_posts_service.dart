@@ -59,9 +59,7 @@ class UserPostsService {
       return UserPostsResponse.fromJson(data);
     }
 
-    throw Exception(
-      'Не удалось загрузить посты профиля (${response.statusCode})',
-    );
+    throw Exception('Не удалось загрузить посты профиля');
   }
 }
 

@@ -204,7 +204,7 @@ class ApiService {
 
   static Future<int> likeCommunityVideo(int id) async {
     final token = await AuthService.getAccessTokenForApi();
-    if (token == null) throw Exception('Not authenticated');
+    if (token == null) throw Exception('Войдите в аккаунт');
     final resp = await _post(
       _uri('/community/$id/like'),
       headers: {

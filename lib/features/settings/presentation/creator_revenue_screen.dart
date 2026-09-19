@@ -473,6 +473,18 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
                         'Не удалось загрузить доходы',
                         style: TextStyle(color: scheme.onSurfaceVariant),
                       ),
+                      const SizedBox(height: 8),
+                      Text(
+                        userVisibleError(
+                          snapshot.error!,
+                          fallback: 'Проверьте сеть и попробуйте снова',
+                        ),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: scheme.onSurfaceVariant,
+                          fontSize: 13,
+                        ),
+                      ),
                       const SizedBox(height: 12),
                       FilledButton(
                         onPressed: _refresh,

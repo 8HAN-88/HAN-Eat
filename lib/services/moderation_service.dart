@@ -20,7 +20,7 @@ class ModerationService {
     required int contentId,
   }) async {
     final token = await AuthService.getAccessTokenForApi();
-    if (token == null) throw Exception('Not authenticated');
+    if (token == null) throw Exception('Войдите в аккаунт');
 
     final uri = Uri.parse('$baseUrl/moderation/content-reports').replace(
       queryParameters: {
@@ -47,7 +47,7 @@ class ModerationService {
           [];
     }
     final error = jsonDecode(response.body) as Map<String, dynamic>;
-    throw Exception(error['detail'] ?? 'Failed to load content reports');
+    throw Exception(error['detail'] ?? 'Не удалось загрузить жалобы');
   }
 
   static Future<ModerationListResponse> getPendingItems({
@@ -56,7 +56,7 @@ class ModerationService {
     String? contentType,
   }) async {
     final token = await AuthService.getAccessTokenForApi();
-    if (token == null) throw Exception('Not authenticated');
+    if (token == null) throw Exception('Войдите в аккаунт');
 
     final queryParams = <String, String>{
       'limit': limit.toString(),
@@ -83,7 +83,8 @@ class ModerationService {
       return ModerationListResponse.fromJson(data);
     }
     final error = jsonDecode(response.body) as Map<String, dynamic>;
-    throw Exception(error['detail'] ?? 'Failed to load moderation items');
+    throw Exception(
+        error['detail'] ?? 'Не удалось загрузить очередь модерации');
   }
 
   static Future<void> approveItem({
@@ -91,7 +92,7 @@ class ModerationService {
     String? comment,
   }) async {
     final token = await AuthService.getAccessTokenForApi();
-    if (token == null) throw Exception('Not authenticated');
+    if (token == null) throw Exception('Войдите в аккаунт');
 
     final uri = Uri.parse('$baseUrl/moderation/$itemId/approve');
     final response = await http.post(
@@ -105,13 +106,13 @@ class ModerationService {
 
     if (response.statusCode != 200) {
       final error = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(error['detail'] ?? 'Failed to approve item');
+      throw Exception(error['detail'] ?? 'Не удалось одобрить');
     }
   }
 
   static Future<void> hideContent({required int itemId}) async {
     final token = await AuthService.getAccessTokenForApi();
-    if (token == null) throw Exception('Not authenticated');
+    if (token == null) throw Exception('Войдите в аккаунт');
 
     final uri = Uri.parse('$baseUrl/moderation/$itemId/hide');
     final response = await http.post(
@@ -124,7 +125,7 @@ class ModerationService {
 
     if (response.statusCode != 200) {
       final error = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(error['detail'] ?? 'Failed to hide content');
+      throw Exception(error['detail'] ?? 'Не удалось скрыть');
     }
   }
 
@@ -133,7 +134,7 @@ class ModerationService {
     String? message,
   }) async {
     final token = await AuthService.getAccessTokenForApi();
-    if (token == null) throw Exception('Not authenticated');
+    if (token == null) throw Exception('Войдите в аккаунт');
 
     final uri = Uri.parse('$baseUrl/moderation/users/$userId/warn');
     final response = await http.post(
@@ -142,12 +143,13 @@ class ModerationService {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
       },
-      body: jsonEncode({if (message != null && message.isNotEmpty) 'message': message}),
+      body: jsonEncode(
+          {if (message != null && message.isNotEmpty) 'message': message}),
     );
 
     if (response.statusCode != 200) {
       final error = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(error['detail'] ?? 'Failed to warn user');
+      throw Exception(error['detail'] ?? 'Не удалось отправить предупреждение');
     }
   }
 
@@ -156,7 +158,7 @@ class ModerationService {
     String? reason,
   }) async {
     final token = await AuthService.getAccessTokenForApi();
-    if (token == null) throw Exception('Not authenticated');
+    if (token == null) throw Exception('Войдите в аккаунт');
 
     final uri = Uri.parse('$baseUrl/moderation/users/$userId/ban');
     final response = await http.post(
@@ -165,12 +167,13 @@ class ModerationService {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
       },
-      body: jsonEncode({if (reason != null && reason.isNotEmpty) 'reason': reason}),
+      body: jsonEncode(
+          {if (reason != null && reason.isNotEmpty) 'reason': reason}),
     );
 
     if (response.statusCode != 200) {
       final error = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(error['detail'] ?? 'Failed to ban user');
+      throw Exception(error['detail'] ?? 'Не удалось заблокировать');
     }
   }
 
@@ -180,7 +183,7 @@ class ModerationService {
     String? comment,
   }) async {
     final token = await AuthService.getAccessTokenForApi();
-    if (token == null) throw Exception('Not authenticated');
+    if (token == null) throw Exception('Войдите в аккаунт');
 
     final uri = Uri.parse('$baseUrl/moderation/$itemId/reject');
     final response = await http.post(
@@ -197,7 +200,7 @@ class ModerationService {
 
     if (response.statusCode != 200) {
       final error = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(error['detail'] ?? 'Failed to reject item');
+      throw Exception(error['detail'] ?? 'Не удалось отклонить');
     }
   }
 
@@ -242,7 +245,7 @@ class ModerationService {
 
   static Future<ModerationDashboard> fetchDashboard() async {
     final token = await AuthService.getAccessTokenForApi();
-    if (token == null) throw Exception('Not authenticated');
+    if (token == null) throw Exception('Войдите в аккаунт');
 
     final uri = Uri.parse('$baseUrl/moderation/dashboard');
     final response = await http.get(
@@ -257,7 +260,7 @@ class ModerationService {
         jsonDecode(response.body) as Map<String, dynamic>,
       );
     }
-    throw Exception('Failed to load moderation dashboard');
+    throw Exception('Не удалось загрузить дашборд модерации');
   }
 
   static Future<BotWebhookOpsPage> fetchWebhookOperations({
@@ -267,7 +270,7 @@ class ModerationService {
     String? eventType,
   }) async {
     final token = await AuthService.getAccessTokenForApi();
-    if (token == null) throw Exception('Not authenticated');
+    if (token == null) throw Exception('Войдите в аккаунт');
     final params = <String, String>{
       'limit': '$limit',
       'offset': '$offset',
@@ -289,7 +292,7 @@ class ModerationService {
         jsonDecode(response.body) as Map<String, dynamic>,
       );
     }
-    throw Exception('Failed to load webhook operations');
+    throw Exception('Не удалось загрузить операции вебхуков');
   }
 
   static Future<BotWebhookOpsExport> exportWebhookOperations({
@@ -298,7 +301,7 @@ class ModerationService {
     String? eventType,
   }) async {
     final token = await AuthService.getAccessTokenForApi();
-    if (token == null) throw Exception('Not authenticated');
+    if (token == null) throw Exception('Войдите в аккаунт');
     final params = <String, String>{
       'limit': '$limit',
       if (query != null && query.trim().isNotEmpty) 'query': query.trim(),
@@ -319,7 +322,7 @@ class ModerationService {
         jsonDecode(response.body) as Map<String, dynamic>,
       );
     }
-    throw Exception('Failed to export webhook operations');
+    throw Exception('Не удалось выгрузить операции вебхуков');
   }
 
   static Future<BotWebhookOpsExport> exportWebhookIncidentReport({
@@ -328,15 +331,16 @@ class ModerationService {
     String? eventType,
   }) async {
     final token = await AuthService.getAccessTokenForApi();
-    if (token == null) throw Exception('Not authenticated');
+    if (token == null) throw Exception('Войдите в аккаунт');
     final params = <String, String>{
       'limit': '$limit',
       if (query != null && query.trim().isNotEmpty) 'query': query.trim(),
       if (eventType != null && eventType.trim().isNotEmpty)
         'event_type': eventType.trim(),
     };
-    final uri = Uri.parse('$baseUrl/moderation/system/webhooks/ops/incident-report')
-        .replace(queryParameters: params);
+    final uri =
+        Uri.parse('$baseUrl/moderation/system/webhooks/ops/incident-report')
+            .replace(queryParameters: params);
     final response = await http.get(
       uri,
       headers: {
@@ -349,15 +353,16 @@ class ModerationService {
         jsonDecode(response.body) as Map<String, dynamic>,
       );
     }
-    throw Exception('Failed to export webhook incident report');
+    throw Exception('Не удалось выгрузить отчёт по вебхукам');
   }
 
   static Future<BotWebhookQueueStats> promoteWebhookDelayed({
     int limit = 500,
   }) async {
     final token = await AuthService.getAccessTokenForApi();
-    if (token == null) throw Exception('Not authenticated');
-    final uri = Uri.parse('$baseUrl/moderation/system/webhooks/promote-delayed');
+    if (token == null) throw Exception('Войдите в аккаунт');
+    final uri =
+        Uri.parse('$baseUrl/moderation/system/webhooks/promote-delayed');
     final response = await http.post(
       uri,
       headers: {
@@ -372,14 +377,14 @@ class ModerationService {
         data['stats'] as Map<String, dynamic>? ?? const {},
       );
     }
-    throw Exception('Failed to promote delayed webhooks');
+    throw Exception('Не удалось продвинуть отложенные вебхуки');
   }
 
   static Future<BotWebhookQueueStats> clearWebhookQueue({
     bool includeDelayed = true,
   }) async {
     final token = await AuthService.getAccessTokenForApi();
-    if (token == null) throw Exception('Not authenticated');
+    if (token == null) throw Exception('Войдите в аккаунт');
     final uri = Uri.parse('$baseUrl/moderation/system/webhooks/clear');
     final response = await http.post(
       uri,
@@ -395,12 +400,12 @@ class ModerationService {
         data['stats'] as Map<String, dynamic>? ?? const {},
       );
     }
-    throw Exception('Failed to clear webhook queue');
+    throw Exception('Не удалось очистить очередь вебхуков');
   }
 
   static Future<BotWebhookQueueStats> resetWebhookMetrics() async {
     final token = await AuthService.getAccessTokenForApi();
-    if (token == null) throw Exception('Not authenticated');
+    if (token == null) throw Exception('Войдите в аккаунт');
     final uri = Uri.parse('$baseUrl/moderation/system/webhooks/reset-metrics');
     final response = await http.post(
       uri,
@@ -415,7 +420,7 @@ class ModerationService {
         data['stats'] as Map<String, dynamic>? ?? const {},
       );
     }
-    throw Exception('Failed to reset webhook metrics');
+    throw Exception('Не удалось сбросить метрики вебхуков');
   }
 
   static Future<BotWebhookQueueStats> requeueWebhookDeadLetters({
@@ -425,7 +430,7 @@ class ModerationService {
     String? dropReason,
   }) async {
     final token = await AuthService.getAccessTokenForApi();
-    if (token == null) throw Exception('Not authenticated');
+    if (token == null) throw Exception('Войдите в аккаунт');
     final uri = Uri.parse(
       '$baseUrl/moderation/system/webhooks/dead-letter/requeue',
     );
@@ -449,7 +454,7 @@ class ModerationService {
         data['stats'] as Map<String, dynamic>? ?? const {},
       );
     }
-    throw Exception('Failed to requeue dead-letter webhooks');
+    throw Exception('Не удалось вернуть задачи из очереди ошибок');
   }
 
   static Future<BotWebhookDeadLetterPage> fetchWebhookDeadLetters({
@@ -458,7 +463,7 @@ class ModerationService {
     String? query,
   }) async {
     final token = await AuthService.getAccessTokenForApi();
-    if (token == null) throw Exception('Not authenticated');
+    if (token == null) throw Exception('Войдите в аккаунт');
     final params = <String, String>{
       'limit': '$limit',
       'offset': '$offset',
@@ -478,13 +483,14 @@ class ModerationService {
         jsonDecode(response.body) as Map<String, dynamic>,
       );
     }
-    throw Exception('Failed to fetch dead-letter webhooks');
+    throw Exception('Не удалось загрузить очередь ошибок вебхуков');
   }
 
   static Future<BotWebhookQueueStats> clearWebhookDeadLetters() async {
     final token = await AuthService.getAccessTokenForApi();
-    if (token == null) throw Exception('Not authenticated');
-    final uri = Uri.parse('$baseUrl/moderation/system/webhooks/dead-letter/clear');
+    if (token == null) throw Exception('Войдите в аккаунт');
+    final uri =
+        Uri.parse('$baseUrl/moderation/system/webhooks/dead-letter/clear');
     final response = await http.post(
       uri,
       headers: {
@@ -498,7 +504,7 @@ class ModerationService {
         data['stats'] as Map<String, dynamic>? ?? const {},
       );
     }
-    throw Exception('Failed to clear dead-letter webhooks');
+    throw Exception('Не удалось очистить очередь ошибок вебхуков');
   }
 
   static Future<BotWebhookQueueStats> runWebhookRecoveryPlaybook({
@@ -506,8 +512,9 @@ class ModerationService {
     int promoteDelayedLimit = 500,
   }) async {
     final token = await AuthService.getAccessTokenForApi();
-    if (token == null) throw Exception('Not authenticated');
-    final uri = Uri.parse('$baseUrl/moderation/system/webhooks/recovery-playbook');
+    if (token == null) throw Exception('Войдите в аккаунт');
+    final uri =
+        Uri.parse('$baseUrl/moderation/system/webhooks/recovery-playbook');
     final response = await http.post(
       uri,
       headers: {
@@ -525,7 +532,7 @@ class ModerationService {
         data['stats'] as Map<String, dynamic>? ?? const {},
       );
     }
-    throw Exception('Failed to run webhook recovery playbook');
+    throw Exception('Не удалось запустить восстановление вебхуков');
   }
 
   static bool isModerator(String? userId) {
@@ -687,7 +694,9 @@ class ModerationReport {
   });
 
   String get reporterLine =>
-      reporterDisplayName ?? reporter?.displayLine ?? 'Неизвестный пользователь';
+      reporterDisplayName ??
+      reporter?.displayLine ??
+      'Неизвестный пользователь';
 
   bool get hasComment => comment != null && comment!.trim().isNotEmpty;
 
@@ -707,9 +716,8 @@ class ModerationReport {
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'] as String)
           : null,
-      reporter: reporterJson != null
-          ? ModerationAuthor.fromJson(reporterJson)
-          : null,
+      reporter:
+          reporterJson != null ? ModerationAuthor.fromJson(reporterJson) : null,
       reporterDisplayName: json['reporter_display_name'] as String?,
     );
   }
@@ -764,10 +772,11 @@ class ModerationDashboard {
               json['bot_webhook_alerts'] as Map<String, dynamic>,
             )
           : null,
-      botWebhookRecentOps: ((json['bot_webhook_recent_ops'] as List?) ?? const [])
-          .whereType<Map<String, dynamic>>()
-          .map(BotWebhookOperation.fromJson)
-          .toList(),
+      botWebhookRecentOps:
+          ((json['bot_webhook_recent_ops'] as List?) ?? const [])
+              .whereType<Map<String, dynamic>>()
+              .map(BotWebhookOperation.fromJson)
+              .toList(),
     );
   }
 

@@ -35,7 +35,7 @@ class ChannelService {
   }) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/channels');
@@ -63,7 +63,7 @@ class ChannelService {
       return Channel.fromJson(data);
     } else {
       final error = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(error['detail'] ?? 'Failed to create channel');
+      throw Exception(error['detail'] ?? 'Не удалось создать канал');
     }
   }
 
@@ -89,7 +89,7 @@ class ChannelService {
   }) async {
     var token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/channels/$channelId');
@@ -142,7 +142,7 @@ class ChannelService {
         } catch (_) {}
         return response.body.isNotEmpty
             ? response.body
-            : 'Failed to update channel (${response.statusCode})';
+            : 'Не удалось обновить канал';
       }();
       throw Exception(detail);
     }
@@ -170,7 +170,7 @@ class ChannelService {
     if (response.statusCode == 404) {
       throw ChannelNotFoundException();
     }
-    throw Exception('Failed to load channel (${response.statusCode})');
+    throw Exception('Не удалось загрузить канал');
   }
 
   /// Вкл/выкл уведомления о постах канала (только для подписчика, сервер).
@@ -180,7 +180,7 @@ class ChannelService {
   }) async {
     var token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/channels/$channelId/notifications');
@@ -214,14 +214,14 @@ class ChannelService {
       final err = jsonDecode(response.body) as Map<String, dynamic>?;
       msg = err?['detail']?.toString() ?? msg;
     } catch (_) {}
-    throw Exception('$msg (${response.statusCode})');
+    throw Exception(msg);
   }
 
   /// Отметить посты канала просмотренными в inbox.
   static Future<int> markChannelInboxRead(int channelId) async {
     var token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/channels/$channelId/inbox-read');
@@ -247,7 +247,7 @@ class ChannelService {
       final err = jsonDecode(response.body) as Map<String, dynamic>?;
       msg = err?['detail']?.toString() ?? msg;
     } catch (_) {}
-    throw Exception('$msg (${response.statusCode})');
+    throw Exception(msg);
   }
 
   /// Получить список каналов
@@ -329,7 +329,7 @@ class ChannelService {
       final err = jsonDecode(response.body) as Map<String, dynamic>?;
       detail = err?['detail']?.toString() ?? detail;
     } catch (_) {}
-    throw Exception('$detail (${response.statusCode})');
+    throw Exception(detail);
   }
 
   /// Сумма непрочитанных постов в inbox каналов (один запрос).
@@ -350,7 +350,7 @@ class ChannelService {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return data['count'] as int? ?? 0;
     }
-    throw Exception('Failed to load channel inbox unread count');
+    throw Exception('Не удалось загрузить непрочитанные каналов');
   }
 
   static Future<List<ChannelInboxPrefs>> listInboxPrefs() async {
@@ -374,7 +374,7 @@ class ChannelService {
           .map(ChannelInboxPrefs.fromJson)
           .toList();
     }
-    throw Exception('Failed to load channel inbox prefs');
+    throw Exception('Не удалось загрузить настройки каналов');
   }
 
   static Future<ChannelInboxPrefs> patchInboxPrefs({
@@ -386,7 +386,7 @@ class ChannelService {
   }) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final body = <String, dynamic>{};
@@ -411,14 +411,14 @@ class ChannelService {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return ChannelInboxPrefs.fromJson(data);
     }
-    throw Exception('Failed to update channel inbox prefs');
+    throw Exception('Не удалось сохранить настройки каналов');
   }
 
   /// Присоединиться к каналу
   static Future<JoinChannelResponse> joinChannel(int channelId) async {
     var token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated. Please log in first.');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/channels/$channelId/join');
@@ -442,7 +442,7 @@ class ChannelService {
           },
         );
       } catch (e) {
-        throw Exception('Authentication failed. Please log in again.');
+        throw Exception('Войдите в аккаунт');
       }
     }
 
@@ -452,7 +452,7 @@ class ChannelService {
     } else {
       final error = jsonDecode(response.body) as Map<String, dynamic>?;
       throw Exception(
-          error?['detail'] ?? 'Failed to join channel: ${response.statusCode}');
+          error?['detail'] ?? 'Не удалось вступить в канал');
     }
   }
 
@@ -464,7 +464,7 @@ class ChannelService {
   }) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/channels/$channelId/join-requests')
@@ -487,7 +487,7 @@ class ChannelService {
     final error = jsonDecode(response.body) as Map<String, dynamic>?;
     throw Exception(
       error?['detail'] ??
-          'Failed to load join requests: ${response.statusCode}',
+          'Не удалось загрузить заявки',
     );
   }
 
@@ -497,7 +497,7 @@ class ChannelService {
   ) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse(
@@ -515,7 +515,7 @@ class ChannelService {
       final error = jsonDecode(response.body) as Map<String, dynamic>?;
       throw Exception(
         error?['detail'] ??
-            'Failed to approve join request: ${response.statusCode}',
+            'Не удалось одобрить заявку',
       );
     }
   }
@@ -526,7 +526,7 @@ class ChannelService {
   ) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse(
@@ -544,7 +544,7 @@ class ChannelService {
       final error = jsonDecode(response.body) as Map<String, dynamic>?;
       throw Exception(
         error?['detail'] ??
-            'Failed to reject join request: ${response.statusCode}',
+            'Не удалось отклонить заявку',
       );
     }
   }
@@ -553,7 +553,7 @@ class ChannelService {
   static Future<JoinChannelResponse> leaveChannel(int channelId) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/channels/$channelId/join');
@@ -569,7 +569,7 @@ class ChannelService {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return JoinChannelResponse.fromJson(data);
     } else {
-      throw Exception('Failed to leave channel');
+      throw Exception('Не удалось выйти из канала');
     }
   }
 
@@ -628,7 +628,7 @@ class ChannelService {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return ChannelPostsResponse.fromJson(data);
     } else {
-      throw Exception('Failed to load channel posts');
+      throw Exception('Не удалось загрузить посты канала');
     }
   }
 
@@ -681,7 +681,7 @@ class ChannelService {
   }) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/channels/$channelId/posts/$postId');
@@ -736,7 +736,7 @@ class ChannelService {
   }) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/channels/$channelId/posts/$postId');
@@ -780,7 +780,7 @@ class ChannelService {
   }) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/channels/$channelId/post');
@@ -825,7 +825,7 @@ class ChannelService {
   }) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/channels/$channelId/members/$userId/role');
@@ -840,7 +840,7 @@ class ChannelService {
 
     if (response.statusCode != 200) {
       final error = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(error['detail'] ?? 'Failed to update member role');
+      throw Exception(error['detail'] ?? 'Не удалось изменить роль');
     }
   }
 
@@ -848,7 +848,7 @@ class ChannelService {
   static Future<CreatorStats> getCreatorStats() async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/creator/stats');
@@ -876,7 +876,7 @@ class ChannelService {
   static Future<List<PromotedPostSummary>> getPromotedPosts() async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/creator/posts/promoted');
@@ -906,7 +906,7 @@ class ChannelService {
   static Future<List<ScheduledPostSummary>> getScheduledPosts() async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/creator/posts/scheduled');
@@ -939,7 +939,7 @@ class ChannelService {
   }) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/creator/posts/$postId/schedule');
@@ -967,7 +967,7 @@ class ChannelService {
   static Future<void> cancelScheduledPost(int postId) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/creator/posts/$postId/schedule');
@@ -992,7 +992,7 @@ class ChannelService {
   static Future<Map<String, dynamic>> unpromotePost(int postId) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/creator/posts/$postId/promote');
@@ -1018,7 +1018,7 @@ class ChannelService {
   /// Продвижение поста в ленте (уровень 16).
   static Future<Map<String, dynamic>> pinPost(int postId) async {
     final token = await AuthService.getAccessTokenForApi();
-    if (token == null) throw Exception('Not authenticated');
+    if (token == null) throw Exception('Войдите в аккаунт');
 
     final uri = Uri.parse('$baseUrl/creator/posts/$postId/pin');
     final response = await http.post(
@@ -1042,7 +1042,7 @@ class ChannelService {
 
   static Future<Map<String, dynamic>> unpinPost(int postId) async {
     final token = await AuthService.getAccessTokenForApi();
-    if (token == null) throw Exception('Not authenticated');
+    if (token == null) throw Exception('Войдите в аккаунт');
 
     final uri = Uri.parse('$baseUrl/creator/posts/$postId/pin');
     final response = await http.delete(
@@ -1067,7 +1067,7 @@ class ChannelService {
   static Future<Map<String, dynamic>> promotePost(int postId) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/creator/posts/$postId/promote');
@@ -1096,7 +1096,7 @@ class ChannelService {
   }) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/channels/$channelId/members/$userId');
@@ -1110,7 +1110,7 @@ class ChannelService {
 
     if (response.statusCode != 200) {
       final error = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(error['detail'] ?? 'Failed to remove member');
+      throw Exception(error['detail'] ?? 'Не удалось удалить участника');
     }
   }
 
@@ -1118,7 +1118,7 @@ class ChannelService {
   static Future<void> deleteChannel(int channelId) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/channels/$channelId');
@@ -1132,7 +1132,7 @@ class ChannelService {
 
     if (response.statusCode != 200 && response.statusCode != 204) {
       final error = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(error['detail'] ?? 'Failed to delete channel');
+      throw Exception(error['detail'] ?? 'Не удалось удалить канал');
     }
   }
 }

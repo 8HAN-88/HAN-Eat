@@ -68,7 +68,7 @@ class LegalService {
   static Future<void> acceptConsent() async {
     final token = await AuthService.getAccessToken();
     if (token == null || token.isEmpty) {
-      throw Exception('Требуется авторизация');
+      throw Exception('Войдите в аккаунт');
     }
     final uri = Uri.parse('$_base/accept');
     final response = await http

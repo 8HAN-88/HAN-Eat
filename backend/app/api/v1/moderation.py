@@ -195,7 +195,7 @@ def _build_webhook_alerts(
             {
                 "code": "dead_letter_backlog",
                 "severity": "critical",
-                "message": "Dead-letter backlog is high",
+                "message": "Высокая очередь недоставленных вебхуков",
                 "value": dead_depth,
                 "threshold": dead_depth_threshold,
             }
@@ -209,7 +209,7 @@ def _build_webhook_alerts(
             {
                 "code": "auto_disabled_bots",
                 "severity": "critical",
-                "message": "Bots auto-disabled due to webhook failures",
+                "message": "Боты отключены из-за ошибок вебхуков",
                 "value": auto_disabled_24h,
                 "threshold": auto_disabled_threshold,
             }
@@ -221,7 +221,7 @@ def _build_webhook_alerts(
             {
                 "code": "high_fail_volume",
                 "severity": "warning",
-                "message": "Webhook fail volume is high in last hour",
+                "message": "Много ошибок вебхуков за последний час",
                 "value": fails_1h,
                 "threshold": fails_1h_threshold,
             }
@@ -238,7 +238,7 @@ def _build_webhook_alerts(
             {
                 "code": "high_fail_rate",
                 "severity": "warning",
-                "message": "Webhook fail-rate is high in last hour",
+                "message": "Высокая доля ошибок вебхуков за последний час",
                 "value": round(fail_rate_1h, 2),
                 "threshold": fail_rate_threshold,
             }
@@ -252,7 +252,7 @@ def _build_webhook_alerts(
             {
                 "code": "dropped_deliveries",
                 "severity": "warning",
-                "message": "Dropped deliveries reached alert threshold",
+                "message": "Слишком много отброшенных доставок",
                 "value": dropped_total,
                 "threshold": dropped_total_threshold,
             }
@@ -266,7 +266,7 @@ def _build_webhook_alerts(
             {
                 "code": "throttled_deliveries",
                 "severity": "warning",
-                "message": "Per-bot webhook rate limit drops are high",
+                "message": "Слишком много отбросов из-за лимита бота",
                 "value": throttled_total,
                 "threshold": throttled_total_threshold,
             }

@@ -57,7 +57,7 @@ class MediaUploadService {
     await _waitForRateLimit();
     var token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated. Please log in first.');
+      throw Exception('Войдите в аккаунт');
     }
 
     Future<http.Response> run(String authToken) async {
@@ -87,7 +87,7 @@ class MediaUploadService {
         token = await AuthService.refreshToken();
         response = await run(token);
       } catch (e) {
-        throw Exception('Authentication failed. Please log in again.');
+        throw Exception('Войдите в аккаунт');
       }
     }
 
@@ -125,7 +125,7 @@ class MediaUploadService {
     } else {
       final error = jsonDecode(response.body) as Map<String, dynamic>?;
       throw Exception(
-          error?['detail'] ?? 'Failed to init upload: ${response.statusCode}');
+          error?['detail'] ?? 'Не удалось начать загрузку');
     }
   }
 
@@ -152,7 +152,7 @@ class MediaUploadService {
     if (viaApi) {
       final token = await AuthService.getAccessTokenForApi();
       if (token == null) {
-        throw Exception('Not authenticated');
+        throw Exception('Войдите в аккаунт');
       }
       headers['Authorization'] = 'Bearer $token';
     }
@@ -175,7 +175,7 @@ class MediaUploadService {
         );
       }
       throw Exception(
-          'Failed to upload file: ${response.statusCode} - $errorBody');
+          'Не удалось загрузить файл');
     }
   }
 
@@ -262,7 +262,7 @@ class MediaUploadService {
         await Future<void>.delayed(Duration(milliseconds: 350 * (attempt + 1)));
       }
     }
-    throw Exception(lastError ?? 'Failed to upload file');
+    throw Exception(lastError ?? 'Не удалось загрузить файл');
   }
 
   /// Завершение загрузки
@@ -287,7 +287,7 @@ class MediaUploadService {
       return UploadCompleteResponse.fromJson(data);
     } else {
       final error = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(error['detail'] ?? 'Failed to complete upload');
+      throw Exception(error['detail'] ?? 'Не удалось завершить загрузку');
     }
   }
 
@@ -300,7 +300,7 @@ class MediaUploadService {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return UploadStatusResponse.fromJson(data);
     } else {
-      throw Exception('Failed to get upload status');
+      throw Exception('Не удалось получить статус загрузки');
     }
   }
 
@@ -311,7 +311,7 @@ class MediaUploadService {
     await _waitForRateLimit();
     var token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated. Please log in first.');
+      throw Exception('Войдите в аккаунт');
     }
 
     Future<http.Response> run(String authToken) async {
@@ -338,7 +338,7 @@ class MediaUploadService {
         token = await AuthService.refreshToken();
         response = await run(token);
       } catch (_) {
-        throw Exception('Authentication failed. Please log in again.');
+        throw Exception('Войдите в аккаунт');
       }
     }
     _registerRateLimit(response);

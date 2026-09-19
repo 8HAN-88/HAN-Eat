@@ -32,15 +32,14 @@ class CommunityUploadScreen extends ConsumerStatefulWidget {
       _CommunityUploadScreenState();
 }
 
-class _CommunityUploadScreenState
-    extends ConsumerState<CommunityUploadScreen> {
+class _CommunityUploadScreenState extends ConsumerState<CommunityUploadScreen> {
   final _titleCtrl = TextEditingController();
   final _authorCtrl = TextEditingController();
   final _descriptionCtrl = TextEditingController();
-  final _tagsCtrl = TextEditingController(text: 'lifestyle,news');
+  final _tagsCtrl = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   final _picker = ImagePicker();
-  
+
   // Категории для видео Reels
   static const List<String> _videoCategories = [
     'Новости',
@@ -135,14 +134,15 @@ class _CommunityUploadScreenState
 
   Future<void> _initPreview(String filePath) async {
     if (kIsWeb) return; // На веб не поддерживается
-    
+
     try {
       _videoController?.dispose();
       _chewieController?.dispose();
       // На не-веб платформах File доступен из dart:io
       // На веб этот код не выполнится из-за проверки kIsWeb выше
       // ignore: avoid_dynamic_calls
-      _videoController = VideoPlayerController.file((io.File as dynamic)(filePath));
+      _videoController =
+          VideoPlayerController.file((io.File as dynamic)(filePath));
       await _videoController!.initialize();
       _chewieController = ChewieController(
         videoPlayerController: _videoController!,
@@ -187,13 +187,13 @@ class _CommunityUploadScreenState
     if (!_formKey.currentState!.validate() || !_canSubmit) return;
     final uploadController =
         ref.read(communityUploadControllerProvider.notifier);
-      // Добавить категорию в теги, если выбрана
-      final tags = _parseTags();
-      if (_selectedCategory != null && !tags.contains(_selectedCategory)) {
-        tags.add(_selectedCategory!);
-      }
-      
-      final success = await uploadController.submit(
+    // Добавить категорию в теги, если выбрана
+    final tags = _parseTags();
+    if (_selectedCategory != null && !tags.contains(_selectedCategory)) {
+      tags.add(_selectedCategory!);
+    }
+
+    final success = await uploadController.submit(
       title: _titleCtrl.text.trim(),
       author: _authorCtrl.text.trim(),
       description: _descriptionCtrl.text.trim(),
@@ -260,8 +260,9 @@ class _CommunityUploadScreenState
                 labelText: 'Название',
                 hintText: 'Например: Боул с киноа и нутом',
               ),
-              validator: (value) =>
-                  value == null || value.trim().isEmpty ? 'Введите название' : null,
+              validator: (value) => value == null || value.trim().isEmpty
+                  ? 'Введите название'
+                  : null,
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -361,6 +362,7 @@ class _VideoPicker extends StatefulWidget {
   });
 
   final ChewieController? chewieController;
+
   /// Когда видео выбрано, но превью нет (например на веб) — показываем "Видео выбрано"
   final int? videoBytesLength;
   final VoidCallback onPickVideo;
@@ -434,12 +436,14 @@ class _VideoPickerState extends State<_VideoPicker> {
                           ),
                       ],
                     )
-                  : (widget.videoBytesLength != null && widget.videoBytesLength! > 0)
+                  : (widget.videoBytesLength != null &&
+                          widget.videoBytesLength! > 0)
                       ? Center(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.check_circle, size: 48, color: Colors.green),
+                              const Icon(Icons.check_circle,
+                                  size: 48, color: Colors.green),
                               const SizedBox(height: 8),
                               Text(
                                 'Видео выбрано (${(widget.videoBytesLength! / (1024 * 1024)).toStringAsFixed(1)} МБ)',
@@ -560,4 +564,3 @@ class _ThumbnailPicker extends StatelessWidget {
     );
   }
 }
-

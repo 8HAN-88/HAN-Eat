@@ -284,6 +284,34 @@ void main() {
     );
   });
 
+  test('userVisibleError maps leftover upload auth and channel English', () {
+    expect(
+      parseApiErrorMessage({
+        'code': 'UPLOAD_RATE_LIMIT_EXCEEDED',
+        'message': 'Too many uploads. Please try again later.',
+      }),
+      'Слишком много загрузок. Попробуйте позже.',
+    );
+    expect(
+      userVisibleError(Exception('Google authentication failed: boom')),
+      'Не удалось войти через Google. Попробуйте снова.',
+    );
+    expect(
+      userVisibleError(Exception('Failed to create channel: boom')),
+      'Не удалось создать канал. Попробуйте позже.',
+    );
+    expect(
+      userVisibleError(Exception('Internal server error during login: boom')),
+      'Не удалось войти. Попробуйте позже.',
+    );
+    expect(
+      parseApiErrorMessage(
+        'sort_by must be one of: relevance, date, popularity',
+      ),
+      'Неверная сортировка. Допустимо: по релевантности, по дате или по популярности.',
+    );
+  });
+
   test('userVisibleAuthError prefers auth message for 401', () {
     expect(
       userVisibleAuthError(

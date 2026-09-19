@@ -511,7 +511,7 @@ class AuthService {
       } else {
         throw _authExceptionFromResponse(
           response,
-          'Ошибка входа через Google (${response.statusCode})',
+          'Не удалось войти через Google',
         );
       }
     } catch (e) {
@@ -521,7 +521,7 @@ class AuthService {
       if (_apiUnreachable(e)) {
         throw AuthException('Сервер недоступен. Проверьте подключение к интернету.');
       }
-      throw AuthException('Ошибка входа через Google: $e');
+      throw AuthException('Не удалось войти через Google');
     }
   }
   
@@ -609,7 +609,7 @@ class AuthService {
       } else {
         throw _authExceptionFromResponse(
           response,
-          'Ошибка регистрации: ${response.statusCode}',
+          'Не удалось зарегистрироваться',
         );
       }
     } catch (e) {
@@ -619,7 +619,7 @@ class AuthService {
       if (_apiUnreachable(e)) {
         throw AuthException('Сервер недоступен. Проверьте подключение к интернету.');
       }
-      throw AuthException('Ошибка регистрации: $e');
+      throw AuthException('Не удалось зарегистрироваться');
     }
   }
   
@@ -682,7 +682,7 @@ class AuthService {
         if (e is http.ClientException || _apiUnreachable(e)) {
           throw _loginConnectionException();
         }
-        throw AuthException('Ошибка входа: $e');
+        throw AuthException('Не удалось войти');
       }
     }
     if (lastError is AuthException) throw lastError;
@@ -734,7 +734,7 @@ class AuthService {
     }
     throw _authExceptionFromResponse(
       response,
-      'Ошибка входа: ${response.statusCode}',
+      'Не удалось войти',
     );
   }
 

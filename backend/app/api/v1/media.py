@@ -44,7 +44,7 @@ def _enforce_upload_rate_limit(user_id: int, action: str, limit: int) -> None:
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail={
                     "code": "UPLOAD_RATE_LIMIT_EXCEEDED",
-                    "message": "Too many uploads. Please try again later.",
+                    "message": "Слишком много загрузок. Попробуйте позже.",
                 },
                 headers={"Retry-After": "60"},
             )

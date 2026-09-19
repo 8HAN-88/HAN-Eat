@@ -86,7 +86,27 @@ const _knownEnglishDetails = <String, String>{
   'Invalid date_to format. Use YYYY-MM-DD':
       'Неверный формат даты. Используйте ГГГГ-ММ-ДД',
   'sort_by must be one of: relevance, date, popularity':
-      'Сортировка: relevance, date или popularity',
+      'Неверная сортировка. Допустимо: по релевантности, по дате или по популярности.',
+  'Сортировка: relevance, date или popularity':
+      'Неверная сортировка. Допустимо: по релевантности, по дате или по популярности.',
+  'Too many uploads. Please try again later.':
+      'Слишком много загрузок. Попробуйте позже.',
+  'User data validation failed': 'Данные профиля не прошли проверку',
+  'Internal server error during login': 'Не удалось войти. Попробуйте позже.',
+  'Google authentication failed':
+      'Не удалось войти через Google. Попробуйте снова.',
+  'Failed to create channel': 'Не удалось создать канал. Попробуйте позже.',
+  'Dead-letter backlog is high': 'Высокая очередь недоставленных вебхуков',
+  'Bots auto-disabled due to webhook failures':
+      'Боты отключены из-за ошибок вебхуков',
+  'Webhook fail volume is high in last hour':
+      'Много ошибок вебхуков за последний час',
+  'Webhook fail-rate is high in last hour':
+      'Высокая доля ошибок вебхуков за последний час',
+  'Dropped deliveries reached alert threshold':
+      'Слишком много отброшенных доставок',
+  'Per-bot webhook rate limit drops are high':
+      'Слишком много отбросов из-за лимита бота',
   'Authentication required for following_only search':
       'Войдите в аккаунт, чтобы искать только подписки',
   'Text or rating is required': 'Нужен текст или оценка',
@@ -397,6 +417,9 @@ String parseApiErrorMessage(
     if (code == 'CHAT_RATE_LIMIT_EXCEEDED') {
       return 'Слишком много действий в чате. Подождите немного.';
     }
+    if (code == 'UPLOAD_RATE_LIMIT_EXCEEDED') {
+      return 'Слишком много загрузок. Попробуйте позже.';
+    }
     if (code == 'LEGAL_CONSENT_REQUIRED') {
       return 'Примите документы перед оплатой';
     }
@@ -558,8 +581,27 @@ String userVisibleError(Object e, {String fallback = 'Произошла оши�
   if (lower.contains('level must be')) {
     return 'Выберите уровень от 1 до 79';
   }
-  if (lower.startsWith('failed to') || lower.startsWith('api error')) {
+  if (lower.startsWith('failed to')) {
+    if (lower.contains('create channel')) {
+      return 'Не удалось создать канал. Попробуйте позже.';
+    }
     return 'Не удалось выполнить действие. Попробуйте ещё раз.';
+  }
+  if (lower.startsWith('api error')) {
+    return 'Не удалось выполнить действие. Попробуйте ещё раз.';
+  }
+  if (lower.startsWith('google authentication failed')) {
+    return 'Не удалось войти через Google. Попробуйте снова.';
+  }
+  if (lower.startsWith('user data validation failed')) {
+    return 'Данные профиля не прошли проверку';
+  }
+  if (lower.startsWith('internal server error during login') ||
+      lower.contains('internal server error during login')) {
+    return 'Не удалось войти. Попробуйте позже.';
+  }
+  if (lower.startsWith('too many uploads')) {
+    return 'Слишком много загрузок. Попробуйте позже.';
   }
   if (lower.contains('video init failed') || lower.contains('no video url')) {
     return 'Не удалось запустить видео';

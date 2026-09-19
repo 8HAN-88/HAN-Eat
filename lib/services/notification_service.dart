@@ -21,7 +21,7 @@ class NotificationService {
   static Future<http.Response> _authorizedGet(Uri uri) async {
     var token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
     var response = await http.get(uri, headers: _headers(token));
     if (response.statusCode == 401) {
@@ -34,7 +34,7 @@ class NotificationService {
   static Future<http.Response> _authorizedPut(Uri uri, {String? body}) async {
     var token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
     var response = await http.put(
       uri,
@@ -118,8 +118,8 @@ class NotificationService {
           }
         },
       );
-      final androidPlugin = _localNotifications
-          .resolvePlatformSpecificImplementation<
+      final androidPlugin =
+          _localNotifications.resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>();
       await androidPlugin?.createNotificationChannel(_mealChannel);
       await androidPlugin?.createNotificationChannel(_pushChannel);
@@ -231,7 +231,7 @@ class NotificationService {
       debugPrint('NotificationService.scheduleNotification: $e\n$st');
     }
   }
-  
+
   /// Получить список уведомлений
   static Future<NotificationsResponse> getNotifications({
     int limit = 20,
@@ -259,9 +259,9 @@ class NotificationService {
       }
     }
     final detail = _tryDetail(response.body);
-    throw Exception(detail ?? 'Не удалось загрузить уведомления (${response.statusCode})');
+    throw Exception(detail ?? 'Не удалось загрузить уведомления');
   }
-  
+
   /// Пометить уведомление как прочитанное/непрочитанное
   static Future<void> markAsRead({
     required int notificationId,
@@ -277,9 +277,9 @@ class NotificationService {
       return;
     }
     final detail = _tryDetail(response.body);
-    throw Exception(detail ?? 'Не удалось обновить уведомление (${response.statusCode})');
+    throw Exception(detail ?? 'Не удалось обновить уведомление');
   }
-  
+
   /// Пометить все уведомления как прочитанные
   static Future<void> markAllAsRead() async {
     final uri = Uri.parse('$baseUrl/notifications/read-all');
@@ -289,9 +289,9 @@ class NotificationService {
       return;
     }
     final detail = _tryDetail(response.body);
-    throw Exception(detail ?? 'Не удалось пометить все как прочитанные (${response.statusCode})');
+    throw Exception(detail ?? 'Не удалось пометить все как прочитанные');
   }
-  
+
   /// Получить количество непрочитанных уведомлений
   static Future<int> getUnreadCount() async {
     final token = await AuthService.getAccessTokenForApi();
@@ -331,13 +331,13 @@ class NotificationsResponse {
   final List<NotificationItem> notifications;
   final int unreadCount;
   final bool hasMore;
-  
+
   NotificationsResponse({
     required this.notifications,
     required this.unreadCount,
     required this.hasMore,
   });
-  
+
   factory NotificationsResponse.fromJson(Map<String, dynamic> json) {
     final raw = json['notifications'];
     final list = raw is List<dynamic>
@@ -346,7 +346,8 @@ class NotificationsResponse {
             ? List<dynamic>.from(raw)
             : <dynamic>[];
     final uc = json['unread_count'];
-    final unread = uc is int ? uc : (uc is num ? uc.toInt() : int.tryParse('$uc') ?? 0);
+    final unread =
+        uc is int ? uc : (uc is num ? uc.toInt() : int.tryParse('$uc') ?? 0);
     final hm = json['has_more'];
     final hasMore = hm is bool ? hm : hm == true || hm == 'true';
     return NotificationsResponse(
@@ -375,7 +376,7 @@ class NotificationItem {
   final Map<String, dynamic>? data;
   final String? thumbnailUrl;
   final String? postType;
-  
+
   NotificationItem({
     required this.id,
     required this.type,
@@ -391,7 +392,7 @@ class NotificationItem {
     this.thumbnailUrl,
     this.postType,
   });
-  
+
   factory NotificationItem.fromJson(Map<String, dynamic> json) {
     final idRaw = json['id'];
     final id = idRaw is int
@@ -445,14 +446,14 @@ class NotificationActor {
   final String name;
   final String? username;
   final String? avatarUrl;
-  
+
   NotificationActor({
     required this.id,
     required this.name,
     this.username,
     this.avatarUrl,
   });
-  
+
   static NotificationActor? maybeFromJson(dynamic raw) {
     if (raw == null || raw is! Map) return null;
     final json = Map<String, dynamic>.from(raw);

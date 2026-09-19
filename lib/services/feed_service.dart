@@ -97,7 +97,7 @@ class FeedService {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         return FeedResponse.fromJson(data);
       } else {
-        throw Exception('Не удалось загрузить ленту (${response.statusCode})');
+        throw Exception('Не удалось загрузить ленту');
       }
     } catch (e) {
       if (kDebugMode) {
@@ -140,7 +140,7 @@ class FeedService {
     if (response.statusCode == 201) return;
     // Уже лайкнут — считаем успехом (идемпотентность UI).
     if (response.statusCode == 400) return;
-    throw Exception('Не удалось поставить лайк: ${response.statusCode}');
+    throw Exception('Не удалось поставить лайк');
   }
 
   /// Убрать лайк (`DELETE /posts/{id}/like`).
@@ -159,7 +159,7 @@ class FeedService {
     );
     if (response.statusCode == 200) return;
     if (response.statusCode == 404) return;
-    throw Exception('Не удалось убрать лайк: ${response.statusCode}');
+    throw Exception('Не удалось убрать лайк');
   }
 
   /// Скрыть пост в ленте: `POST /feed/dismiss` (аналитика + штраф в персональном скоринге).
@@ -185,7 +185,7 @@ class FeedService {
     if (response.statusCode == 404) {
       throw Exception('Пост не найден');
     }
-    throw Exception('Не удалось скрыть пост: ${response.statusCode}');
+    throw Exception('Не удалось скрыть пост');
   }
 
   /// Пожаловаться на пост (`POST /posts/{id}/report`).
@@ -211,7 +211,7 @@ class FeedService {
       final detail = _tryDetail(response.body);
       throw Exception(detail ?? 'Жалоба не принята');
     }
-    throw Exception('Не удалось отправить жалобу: ${response.statusCode}');
+    throw Exception('Не удалось отправить жалобу');
   }
 
   static String? _tryDetail(String body) {

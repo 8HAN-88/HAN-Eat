@@ -9,7 +9,8 @@ import '../../../../app/auth_route_paths.dart';
 import '../../../../features/referral/pending_referral.dart';
 import '../../../../services/auth_service.dart';
 import '../../../../services/pending_referral_store.dart';
-import '../../../../services/push_notification_service.dart' deferred as push_svc;
+import '../../../../services/push_notification_service.dart'
+    deferred as push_svc;
 import '../../../../utils/api_error_parser.dart';
 import '../../../../widgets/app_gradient_background.dart';
 import '../../../../widgets/server_connecting_hint.dart';
@@ -128,7 +129,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         final scheme = Theme.of(context).colorScheme;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.message),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось зарегистрироваться'),
+            ),
             backgroundColor: scheme.error,
             action: SnackBarAction(
               label: 'Повторить',

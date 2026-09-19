@@ -28,6 +28,21 @@ String _formatEpochToLocalShort(int? epochSeconds) {
   return '${_two(local.day)}.${_two(local.month)} ${_two(local.hour)}:${_two(local.minute)}';
 }
 
+String _dropReasonLabel(String reason) {
+  switch (reason) {
+    case 'max_attempts_exhausted':
+      return 'Исчерпаны попытки';
+    case 'rate_limited_per_bot':
+      return 'Лимит бота';
+    case 'disabled':
+      return 'Вебхук выключен';
+    case 'invalid_url':
+      return 'Неверный адрес';
+    default:
+      return reason;
+  }
+}
+
 /// Панель модератора: сводка и переход в очередь.
 class ModerationDashboardScreen extends StatefulWidget {
   const ModerationDashboardScreen({super.key});
@@ -330,7 +345,7 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen> {
         limit: selected.length,
         taskIds: selected,
       ),
-      'Выбранные dead-letter задачи отправлены в очередь',
+      'Выбранные задачи из очереди ошибок возвращены в обработку',
     );
     if (!mounted) return;
     await _loadDeadLetters(reset: true);
@@ -349,7 +364,7 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen> {
         dropReason: dropReason,
       ),
       dropReason == null
-          ? 'Отфильтрованные dead-letter задачи отправлены в очередь'
+          ? 'Отфильтрованные задачи из очереди ошибок возвращены в обработку'
           : 'Задачи с ошибкой ($dropReason) отправлены в очередь',
     );
     if (!mounted) return;
@@ -423,7 +438,7 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen> {
                         onPressed: () =>
                             context.push(MiniAppsModerationRoute.path),
                         icon: const Icon(Icons.apps_outlined),
-                        label: const Text('Модерация mini apps'),
+                        label: const Text('Модерация мини-приложений'),
                       ),
                       const SizedBox(height: 12),
                       OutlinedButton.icon(
@@ -484,12 +499,12 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen> {
                           controlsEnabled: _canManageWebhookQueue,
                           onPromoteDelayed: () => _runWebhookAction(
                             () => ModerationService.promoteWebhookDelayed(),
-                            'Delayed-задачи перенесены в очередь',
+                            'Отложенные задачи перенесены в очередь',
                           ),
                           onClearQueue: () => _runWebhookAction(
                             () async {
                               final confirm = await _confirmDangerAction(
-                                title: 'Очистить webhook-очередь?',
+                                title: 'Очистить очередь вебхуков?',
                                 message:
                                     'Будут удалены активные задачи очереди. Используйте только при инциденте.',
                                 confirmLabel: 'Очистить очередь',
@@ -501,19 +516,19 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen> {
                           ),
                           onResetMetrics: () => _runWebhookAction(
                             ModerationService.resetWebhookMetrics,
-                            'Метрики webhook-очереди сброшены',
+                            'Метрики очереди вебхуков сброшены',
                           ),
                           onRequeueDropped: () => _runWebhookAction(
                             () => ModerationService.requeueWebhookDeadLetters(),
-                            'Dropped-задачи возвращены в очередь',
+                            'Отброшенные задачи возвращены в очередь',
                           ),
                           onClearDropped: () => _runWebhookAction(
                             () async {
                               final confirm = await _confirmDangerAction(
-                                title: 'Очистить dead-letter?',
+                                title: 'Очистить очередь ошибок?',
                                 message:
-                                    'Это удалит накопленные dropped-задачи без повторной доставки.',
-                                confirmLabel: 'Очистить dead-letter',
+                                    'Это удалит накопленные отброшенные задачи без повторной доставки.',
+                                confirmLabel: 'Очистить очередь ошибок',
                               );
                               if (!confirm) return _data!.botWebhookQueue!;
                               return ModerationService
@@ -524,16 +539,16 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen> {
                           onRunRecoveryPlaybook: () => _runWebhookAction(
                             () async {
                               final confirm = await _confirmDangerAction(
-                                title: 'Запустить recovery playbook?',
+                                title: 'Запустить сценарий восстановления?',
                                 message:
-                                    'Система выполнит requeue dead-letter и promote delayed. Запускать при деградации доставки.',
-                                confirmLabel: 'Запустить recovery',
+                                    'Вернёт задачи из очереди ошибок и перенесёт отложенные в активную очередь. Используйте при сбоях доставки.',
+                                confirmLabel: 'Запустить восстановление',
                               );
                               if (!confirm) return _data!.botWebhookQueue!;
                               return ModerationService
                                   .runWebhookRecoveryPlaybook();
                             },
-                            'Recovery playbook выполнен',
+                            'Сценарий восстановления выполнен',
                           ),
                         ),
                       ],
@@ -1023,7 +1038,7 @@ class _WebhookQueueCard extends StatelessWidget {
                         .take(4)
                         .map(
                           (reason) => ActionChip(
-                            label: Text(reason),
+                            label: Text(_dropReasonLabel(reason)),
                             onPressed: () {
                               onDeadLettersQueryChanged(reason);
                               onApplyDeadLetterFilters();
@@ -1132,7 +1147,7 @@ class _WebhookQueueCard extends StatelessWidget {
                 initialValue: opsQuery,
                 decoration: const InputDecoration(
                   isDense: true,
-                  hintText: 'Фильтр: event / actor',
+                  hintText: 'Фильтр: событие или автор',
                   prefixIcon: Icon(Icons.search, size: 18),
                 ),
                 onChanged: onOpsQueryChanged,
@@ -1282,7 +1297,7 @@ class _WebhookRunbookSection extends StatelessWidget {
         onPressed: onPromoteDelayed,
       ),
       _RunbookStepData(
-        title: '5) Recovery playbook',
+        title: '5) Сценарий восстановления',
         description: 'Финальный шаг массового восстановления.',
         isActive: hasIncident,
         buttonLabel: 'Запустить восстановление',
