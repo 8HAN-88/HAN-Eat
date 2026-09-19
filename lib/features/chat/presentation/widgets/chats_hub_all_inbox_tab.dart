@@ -35,7 +35,6 @@ import '../../application/inbox_cache_keep.dart';
 import '../../application/chats_hub_refresh_provider.dart';
 import '../../application/join_requests_bulk.dart';
 import '../../widgets/inbox_slidable_tile.dart';
-import '../chat_folder_edit_screen.dart';
 import '../chat_folders_manage_sheet.dart';
 import 'chat_mute_duration_sheet.dart';
 import 'chats_hub_folder_bar.dart';
@@ -155,12 +154,10 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     List<int> conversationIds = const [],
     List<int> channelIds = const [],
   }) async {
-    final result = await Navigator.of(context).push<Object?>(
-      MaterialPageRoute(
-        builder: (_) => ChatFolderEditScreen(
-          initialConversationIds: conversationIds,
-          initialChannelIds: channelIds,
-        ),
+    final result = await context.push<Object?>(
+      ChatFolderNewRoute.pathFor(
+        conversationIds: conversationIds,
+        channelIds: channelIds,
       ),
     );
     if (!mounted) return;
@@ -171,10 +168,8 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
   }
 
   Future<void> _openEditFolder(ChatFolder folder) async {
-    final result = await Navigator.of(context).push<Object?>(
-      MaterialPageRoute(
-        builder: (_) => ChatFolderEditScreen(folder: folder),
-      ),
+    final result = await context.push<Object?>(
+      ChatFolderEditRoute.pathFor(folder.id),
     );
     if (!mounted) return;
     await _loadFolders();

@@ -88,6 +88,11 @@ import '../features/chat/presentation/chats_hub_screen.dart';
 import '../features/chat/presentation/chat_archived_screen.dart';
 import '../features/chat/presentation/chat_create_group_screen.dart';
 import '../features/chat/presentation/chat_people_search_screen.dart';
+import '../features/chat/presentation/chat_folder_edit_screen.dart';
+import '../features/chat/presentation/chat_group_info_screen.dart';
+import '../features/chat/presentation/chat_media_gallery_screen.dart';
+import '../features/chat/presentation/sticker_pack_manage_screen.dart';
+import '../features/chat/presentation/sticker_pack_preview_screen.dart';
 import '../features/stories/presentation/story_camera_screen.dart';
 import '../features/chat/presentation/chat_invite_join_screen.dart';
 import '../features/settings/presentation/paid_message_exceptions_screen.dart';
@@ -205,6 +210,53 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return '${FlexShopRoute.path}$q';
     case '/admin':
       return '${ModerationDashboardRoute.path}$q';
+    case '/help':
+    case '/faq':
+    case '/tickets':
+      return '${SupportContactRoute.path}$q';
+    case '/about':
+    case '/legal':
+    case '/terms':
+      return '${SupportSecurityRoute.path}$q';
+    case '/inbox':
+      return '${NotificationsRoute.path}$q';
+    case '/messages':
+    case '/dm':
+      return '${ChatsRoute.path}$q';
+    case '/theme':
+    case '/appearance':
+      return '${SettingsRoute.path}$q';
+    case '/compose':
+    case '/write':
+      return '${CreatePostRoute.path}$q';
+    case '/camera':
+      return '${StoryCreateRoute.path}$q';
+    case '/folders':
+    case '/new-folder':
+      return '${ChatFolderNewRoute.path}$q';
+    case '/sessions':
+    case '/devices':
+      return '${AccountSecurityRoute.path}$q';
+    case '/language':
+    case '/lang':
+    case '/data':
+    case '/storage':
+    case '/themes':
+    case '/night':
+    case '/proxy':
+      return '${SettingsRoute.path}$q';
+    case '/saved-messages':
+      return '${ProfileTabRoute.path}$q';
+    case '/calls':
+    case '/stickers':
+      return '${ChatsRoute.path}$q';
+    case '/blocklist':
+      return '${BlockedUsersRoute.path}$q';
+    case '/notification-settings':
+    case '/notif-settings':
+      return '${NotificationSettingsRoute.path}$q';
+    case '/export':
+      return '${BackupRoute.path}$q';
     default:
       return null;
   }
@@ -882,6 +934,223 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: ChatNewMessageRoute.name,
         pageBuilder: (context, state) =>
             const MaterialPage(child: ChatPeopleSearchScreen()),
+      ),
+      GoRoute(
+        path: ChatFolderNewRoute.path,
+        name: ChatFolderNewRoute.name,
+        pageBuilder: (context, state) => MaterialPage(
+          child: ChatFolderEditScreen(
+            initialConversationIds:
+                ChatFolderNewRoute.idsFrom(state.uri.queryParameters['c']),
+            initialChannelIds:
+                ChatFolderNewRoute.idsFrom(state.uri.queryParameters['ch']),
+          ),
+        ),
+      ),
+      GoRoute(
+        path: ChatFolderEditRoute.path,
+        name: ChatFolderEditRoute.name,
+        pageBuilder: (context, state) {
+          final id = parseRoutePositiveId(state.pathParameters['folderId']);
+          if (id == null) {
+            return const MaterialPage(
+              child: InvalidLinkScreen(title: 'Папка'),
+            );
+          }
+          return MaterialPage(child: ChatFolderEditScreen(folderId: id));
+        },
+      ),
+      GoRoute(
+        path: '/help',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SupportContactRoute.path,
+      ),
+      GoRoute(
+        path: '/faq',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SupportContactRoute.path,
+      ),
+      GoRoute(
+        path: '/tickets',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SupportContactRoute.path,
+      ),
+      GoRoute(
+        path: '/about',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SupportSecurityRoute.path,
+      ),
+      GoRoute(
+        path: '/legal',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SupportSecurityRoute.path,
+      ),
+      GoRoute(
+        path: '/terms',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SupportSecurityRoute.path,
+      ),
+      GoRoute(
+        path: '/inbox',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            NotificationsRoute.path,
+      ),
+      GoRoute(
+        path: '/messages',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            ChatsRoute.path,
+      ),
+      GoRoute(
+        path: '/dm',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            ChatsRoute.path,
+      ),
+      GoRoute(
+        path: '/theme',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SettingsRoute.path,
+      ),
+      GoRoute(
+        path: '/appearance',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SettingsRoute.path,
+      ),
+      GoRoute(
+        path: '/compose',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            CreatePostRoute.path,
+      ),
+      GoRoute(
+        path: '/write',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            CreatePostRoute.path,
+      ),
+      GoRoute(
+        path: '/camera',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            StoryCreateRoute.path,
+      ),
+      GoRoute(
+        path: '/folders',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            ChatFolderNewRoute.path,
+      ),
+      GoRoute(
+        path: '/new-folder',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            ChatFolderNewRoute.path,
+      ),
+      GoRoute(
+        path: '/sessions',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            AccountSecurityRoute.path,
+      ),
+      GoRoute(
+        path: '/devices',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            AccountSecurityRoute.path,
+      ),
+      GoRoute(
+        path: '/language',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SettingsRoute.path,
+      ),
+      GoRoute(
+        path: '/lang',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SettingsRoute.path,
+      ),
+      GoRoute(
+        path: '/data',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SettingsRoute.path,
+      ),
+      GoRoute(
+        path: '/storage',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SettingsRoute.path,
+      ),
+      GoRoute(
+        path: '/themes',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SettingsRoute.path,
+      ),
+      GoRoute(
+        path: '/night',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SettingsRoute.path,
+      ),
+      GoRoute(
+        path: '/proxy',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SettingsRoute.path,
+      ),
+      GoRoute(
+        path: '/saved-messages',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            ProfileTabRoute.path,
+      ),
+      GoRoute(
+        path: '/calls',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            ChatsRoute.path,
+      ),
+      GoRoute(
+        path: '/stickers',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            ChatsRoute.path,
+      ),
+      GoRoute(
+        path: '/blocklist',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            BlockedUsersRoute.path,
+      ),
+      GoRoute(
+        path: '/notification-settings',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            NotificationSettingsRoute.path,
+      ),
+      GoRoute(
+        path: '/notif-settings',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            NotificationSettingsRoute.path,
+      ),
+      GoRoute(
+        path: '/export',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            BackupRoute.path,
       ),
       GoRoute(
         path: '/new-group',
@@ -1676,6 +1945,77 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         redirect: (context, state) => SearchRoute.path,
       ),
       GoRoute(
+        path: ChatMediaGalleryRoute.path,
+        name: ChatMediaGalleryRoute.name,
+        parentNavigatorKey: hanEatRootNavigatorKey,
+        pageBuilder: (context, state) {
+          final id =
+              parseRoutePositiveId(state.pathParameters['conversationId']);
+          if (id == null) {
+            return const MaterialPage(
+              child: InvalidLinkScreen(title: 'Медиа чата'),
+            );
+          }
+          return MaterialPage(
+            child: ChatMediaGalleryScreen(conversationId: id),
+          );
+        },
+      ),
+      GoRoute(
+        path: ChatGroupInfoRoute.path,
+        name: ChatGroupInfoRoute.name,
+        parentNavigatorKey: hanEatRootNavigatorKey,
+        pageBuilder: (context, state) {
+          final id =
+              parseRoutePositiveId(state.pathParameters['conversationId']);
+          if (id == null) {
+            return const MaterialPage(
+              child: InvalidLinkScreen(title: 'О группе'),
+            );
+          }
+          final extra = state.extra;
+          return MaterialPage(
+            child: ChatGroupInfoLoaderScreen(
+              conversationId: id,
+              initialConversation:
+                  extra is ChatConversation ? extra : null,
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: StickerPackManageRoute.path,
+        name: StickerPackManageRoute.name,
+        pageBuilder: (context, state) {
+          final raw = state.pathParameters['packId'] ?? '';
+          final id = parseRoutePositiveId(raw);
+          if (id != null) {
+            return MaterialPage(child: StickerPackManageScreen(packId: id));
+          }
+          if (raw.trim().isNotEmpty) {
+            return MaterialPage(
+              child: StickerPackPreviewScreen(slug: raw.trim()),
+            );
+          }
+          return const MaterialPage(
+            child: InvalidLinkScreen(title: 'Стикеры'),
+          );
+        },
+      ),
+      GoRoute(
+        path: StickerPackPreviewRoute.path,
+        name: StickerPackPreviewRoute.name,
+        pageBuilder: (context, state) {
+          final slug = state.pathParameters['slug']?.trim() ?? '';
+          if (slug.isEmpty) {
+            return const MaterialPage(
+              child: InvalidLinkScreen(title: 'Стикеры'),
+            );
+          }
+          return MaterialPage(child: StickerPackPreviewScreen(slug: slug));
+        },
+      ),
+      GoRoute(
         path: '${ChatThreadRoute.path}/:conversationId',
         name: ChatThreadRoute.name,
         parentNavigatorKey: hanEatRootNavigatorKey,
@@ -1990,6 +2330,71 @@ class ChatCreateGroupRoute {
 class ChatNewMessageRoute {
   static const path = '/chats/new';
   static const name = 'chat_new_message';
+}
+
+class ChatFolderNewRoute {
+  static const path = '/chats/folders/new';
+  static const name = 'chat_folder_new';
+
+  static String pathFor({
+    List<int> conversationIds = const [],
+    List<int> channelIds = const [],
+  }) {
+    final params = <String, String>{
+      if (conversationIds.isNotEmpty) 'c': conversationIds.join(','),
+      if (channelIds.isNotEmpty) 'ch': channelIds.join(','),
+    };
+    if (params.isEmpty) return path;
+    return '$path?${params.entries.map((e) => '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}').join('&')}';
+  }
+
+  static List<int> idsFrom(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return const [];
+    return raw
+        .split(',')
+        .map((s) => int.tryParse(s.trim()))
+        .whereType<int>()
+        .where((id) => id > 0)
+        .toList();
+  }
+}
+
+class ChatFolderEditRoute {
+  static const path = '/chats/folders/:folderId';
+  static const name = 'chat_folder_edit';
+
+  static String pathFor(int folderId) => '/chats/folders/$folderId';
+}
+
+class ChatMediaGalleryRoute {
+  static const path = '/chats/thread/:conversationId/media';
+  static const name = 'chat_media_gallery';
+
+  static String pathFor(int conversationId) =>
+      '/chats/thread/$conversationId/media';
+}
+
+class ChatGroupInfoRoute {
+  static const path = '/chats/thread/:conversationId/info';
+  static const name = 'chat_group_info';
+
+  static String pathFor(int conversationId) =>
+      '/chats/thread/$conversationId/info';
+}
+
+class StickerPackManageRoute {
+  static const path = '/stickers/:packId';
+  static const name = 'sticker_pack_manage';
+
+  static String pathFor(int packId) => '/stickers/$packId';
+}
+
+class StickerPackPreviewRoute {
+  static const path = '/addstickers/:slug';
+  static const name = 'sticker_pack_preview';
+
+  static String pathFor(String slug) =>
+      '/addstickers/${Uri.encodeComponent(slug)}';
 }
 
 class MiniAppsRoute {

@@ -70,7 +70,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 
   Future<void> _handleRegister() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Заполните поля регистрации')),
+      );
+      return;
+    }
     if (!_legalAccepted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

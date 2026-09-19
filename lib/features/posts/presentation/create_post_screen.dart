@@ -520,7 +520,12 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   }
 
   Future<void> _handlePublish() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Заполните поля поста')),
+      );
+      return;
+    }
 
     if (!_isPollMode && !_isLinkMode) {
       final hasText = _descriptionController.text.trim().isNotEmpty ||

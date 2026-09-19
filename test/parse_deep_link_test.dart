@@ -147,6 +147,54 @@ void main() {
     expect(shortcutPathAlias('/constructor'), FlexConstructorRoute.path);
     expect(shortcutPathAlias('/shop'), FlexShopRoute.path);
     expect(shortcutPathAlias('/admin'), ModerationDashboardRoute.path);
+    expect(shortcutPathAlias('/help'), SupportContactRoute.path);
+    expect(shortcutPathAlias('/faq'), SupportContactRoute.path);
+    expect(shortcutPathAlias('/tickets'), SupportContactRoute.path);
+    expect(shortcutPathAlias('/about'), SupportSecurityRoute.path);
+    expect(shortcutPathAlias('/legal'), SupportSecurityRoute.path);
+    expect(shortcutPathAlias('/terms'), SupportSecurityRoute.path);
+    expect(shortcutPathAlias('/inbox'), NotificationsRoute.path);
+    expect(shortcutPathAlias('/messages'), ChatsRoute.path);
+    expect(shortcutPathAlias('/dm'), ChatsRoute.path);
+    expect(shortcutPathAlias('/theme'), SettingsRoute.path);
+    expect(shortcutPathAlias('/appearance'), SettingsRoute.path);
+    expect(shortcutPathAlias('/compose'), CreatePostRoute.path);
+    expect(shortcutPathAlias('/write'), CreatePostRoute.path);
+    expect(shortcutPathAlias('/camera'), StoryCreateRoute.path);
+    expect(shortcutPathAlias('/folders'), ChatFolderNewRoute.path);
+    expect(shortcutPathAlias('/new-folder'), ChatFolderNewRoute.path);
+    expect(ChatFolderNewRoute.path, '/chats/folders/new');
+    expect(ChatFolderEditRoute.pathFor(7), '/chats/folders/7');
+    expect(ChatFolderNewRoute.idsFrom('1, 2,x,3'), [1, 2, 3]);
+    expect(ChatMediaGalleryRoute.pathFor(22), '/chats/thread/22/media');
+    expect(ChatGroupInfoRoute.pathFor(22), '/chats/thread/22/info');
+    expect(StickerPackManageRoute.pathFor(4), '/stickers/4');
+    expect(StickerPackPreviewRoute.pathFor('cute'), '/addstickers/cute');
+    expect(shortcutPathAlias('/sessions'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/devices'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/language'), SettingsRoute.path);
+    expect(shortcutPathAlias('/lang'), SettingsRoute.path);
+    expect(shortcutPathAlias('/data'), SettingsRoute.path);
+    expect(shortcutPathAlias('/storage'), SettingsRoute.path);
+    expect(shortcutPathAlias('/themes'), SettingsRoute.path);
+    expect(shortcutPathAlias('/night'), SettingsRoute.path);
+    expect(shortcutPathAlias('/proxy'), SettingsRoute.path);
+    expect(shortcutPathAlias('/saved-messages'), ProfileTabRoute.path);
+    expect(shortcutPathAlias('/calls'), ChatsRoute.path);
+    expect(shortcutPathAlias('/stickers'), ChatsRoute.path);
+    expect(shortcutPathAlias('/blocklist'), BlockedUsersRoute.path);
+    expect(shortcutPathAlias('/notification-settings'),
+        NotificationSettingsRoute.path);
+    expect(shortcutPathAlias('/notif-settings'), NotificationSettingsRoute.path);
+    expect(shortcutPathAlias('/export'), BackupRoute.path);
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/addstickers/cute'),
+      '/addstickers/cute',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/stickers/4'),
+      '/stickers/4',
+    );
     expect(shortcutPathAlias('/feed'), isNull);
     expect(
       parseDeepLinkToGoPath('https://haneat.app/app/#/stars'),

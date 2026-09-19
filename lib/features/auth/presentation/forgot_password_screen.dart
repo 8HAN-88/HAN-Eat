@@ -48,7 +48,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   Future<void> _submit() async {
     final email = _emailController.text.trim();
     if (!_sent) {
-      if (!_formKey.currentState!.validate()) return;
+      if (!_formKey.currentState!.validate()) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Введите почту')),
+        );
+        return;
+      }
     } else if (email.isEmpty || !email.contains('@')) {
       return;
     }

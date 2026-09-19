@@ -184,7 +184,12 @@ class _CommunityUploadScreenState extends ConsumerState<CommunityUploadScreen> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate() || !_canSubmit) return;
+    if (!_formKey.currentState!.validate() || !_canSubmit) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Заполните поля и выберите видео')),
+      );
+      return;
+    }
     final uploadController =
         ref.read(communityUploadControllerProvider.notifier);
     // Добавить категорию в теги, если выбрана

@@ -60,7 +60,12 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Заполните код и новый пароль')),
+      );
+      return;
+    }
     final token = resolveAuthCode(
       typed: _codeController.text,
       linkToken: _linkToken,
