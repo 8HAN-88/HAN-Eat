@@ -85,7 +85,10 @@ import '../features/reels/presentation/reels_feed_screen.dart';
 import '../features/reels/presentation/reels_fullscreen_screen.dart';
 import '../features/reels/presentation/reel_by_id_screen.dart';
 import '../features/chat/presentation/chats_hub_screen.dart';
+import '../features/chat/presentation/chat_archived_screen.dart';
+import '../features/chat/presentation/chat_create_group_screen.dart';
 import '../features/chat/presentation/chat_invite_join_screen.dart';
+import '../features/settings/presentation/paid_message_exceptions_screen.dart';
 import '../features/chat/application/chat_private_reply.dart';
 import '../features/chat/presentation/chat_thread_screen.dart';
 import '../features/chat/presentation/username_deep_link_screen.dart';
@@ -156,6 +159,28 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return '${ProfileTabRoute.path}$q';
     case '/extra-ads':
       return '${ExtraAdsRoute.path}$q';
+    case '/creator':
+      return '${CreatorToolsRoute.path}$q';
+    case '/scheduled':
+      return '${ScheduledPostsRoute.path}$q';
+    case '/promoted':
+      return '${PromotedPostsRoute.path}$q';
+    case '/payouts':
+    case '/revenue':
+      return '${CreatorRevenueRoute.path}$q';
+    case '/2fa':
+      return '${TwoFactorSetupRoute.path}$q';
+    case '/edit-profile':
+    case '/profile/edit':
+    case '/me/edit':
+      return '${ProfileAuthRoute.path}$q';
+    case '/privacy':
+      return '${SettingsRoute.path}$q';
+    case '/groups':
+      return '${ChatsRoute.path}$q';
+    case '/archive':
+    case '/archived':
+      return '${ChatArchivedRoute.path}$q';
     default:
       return null;
   }
@@ -731,6 +756,102 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         redirect: (context, state) =>
             shortcutPathAlias(state.uri.path, state.uri.query) ??
             ExtraAdsRoute.path,
+      ),
+      GoRoute(
+        path: '/creator',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            CreatorToolsRoute.path,
+      ),
+      GoRoute(
+        path: '/scheduled',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            ScheduledPostsRoute.path,
+      ),
+      GoRoute(
+        path: '/promoted',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            PromotedPostsRoute.path,
+      ),
+      GoRoute(
+        path: '/payouts',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            CreatorRevenueRoute.path,
+      ),
+      GoRoute(
+        path: '/revenue',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            CreatorRevenueRoute.path,
+      ),
+      GoRoute(
+        path: '/2fa',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            TwoFactorSetupRoute.path,
+      ),
+      GoRoute(
+        path: '/edit-profile',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            ProfileAuthRoute.path,
+      ),
+      GoRoute(
+        path: '/profile/edit',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            ProfileAuthRoute.path,
+      ),
+      GoRoute(
+        path: '/me/edit',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            ProfileAuthRoute.path,
+      ),
+      GoRoute(
+        path: '/privacy',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SettingsRoute.path,
+      ),
+      GoRoute(
+        path: '/groups',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            ChatsRoute.path,
+      ),
+      GoRoute(
+        path: '/archive',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            ChatArchivedRoute.path,
+      ),
+      GoRoute(
+        path: '/archived',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            ChatArchivedRoute.path,
+      ),
+      GoRoute(
+        path: ChatArchivedRoute.path,
+        name: ChatArchivedRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: ChatArchivedScreen()),
+      ),
+      GoRoute(
+        path: ChatCreateGroupRoute.path,
+        name: ChatCreateGroupRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: ChatCreateGroupScreen()),
+      ),
+      GoRoute(
+        path: PaidMessageExceptionsRoute.path,
+        name: PaidMessageExceptionsRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: PaidMessageExceptionsScreen()),
       ),
       GoRoute(
         path: FlexSubscriptionRoute.path,
@@ -1748,6 +1869,16 @@ class ChatsRoute {
   static const name = 'chats';
 }
 
+class ChatArchivedRoute {
+  static const path = '/chats/archived';
+  static const name = 'chat_archived';
+}
+
+class ChatCreateGroupRoute {
+  static const path = '/chats/new-group';
+  static const name = 'chat_create_group';
+}
+
 class MiniAppsRoute {
   static const path = '/mini-apps';
   static const name = 'mini_apps';
@@ -1847,6 +1978,11 @@ class SettingsRoute {
 class BlockedUsersRoute {
   static const path = '/settings/blocked';
   static const name = 'blocked_users';
+}
+
+class PaidMessageExceptionsRoute {
+  static const path = '/settings/paid-exceptions';
+  static const name = 'paid_message_exceptions';
 }
 
 

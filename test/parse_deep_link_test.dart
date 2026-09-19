@@ -117,6 +117,22 @@ void main() {
     expect(shortcutPathAlias('/blocked'), BlockedUsersRoute.path);
     expect(shortcutPathAlias('/saved'), ProfileTabRoute.path);
     expect(shortcutPathAlias('/extra-ads'), ExtraAdsRoute.path);
+    expect(shortcutPathAlias('/creator'), CreatorToolsRoute.path);
+    expect(shortcutPathAlias('/scheduled'), ScheduledPostsRoute.path);
+    expect(shortcutPathAlias('/promoted'), PromotedPostsRoute.path);
+    expect(shortcutPathAlias('/payouts'), CreatorRevenueRoute.path);
+    expect(shortcutPathAlias('/revenue'), CreatorRevenueRoute.path);
+    expect(shortcutPathAlias('/2fa'), TwoFactorSetupRoute.path);
+    expect(shortcutPathAlias('/edit-profile'), ProfileAuthRoute.path);
+    expect(shortcutPathAlias('/profile/edit'), ProfileAuthRoute.path);
+    expect(shortcutPathAlias('/me/edit'), ProfileAuthRoute.path);
+    expect(shortcutPathAlias('/privacy'), SettingsRoute.path);
+    expect(shortcutPathAlias('/groups'), ChatsRoute.path);
+    expect(shortcutPathAlias('/archive'), ChatArchivedRoute.path);
+    expect(shortcutPathAlias('/archived'), ChatArchivedRoute.path);
+    expect(ChatArchivedRoute.path, '/chats/archived');
+    expect(ChatCreateGroupRoute.path, '/chats/new-group');
+    expect(PaidMessageExceptionsRoute.path, '/settings/paid-exceptions');
     expect(shortcutPathAlias('/feed'), isNull);
     expect(
       parseDeepLinkToGoPath('https://haneat.app/app/#/stars'),
