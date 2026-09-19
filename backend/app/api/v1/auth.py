@@ -336,7 +336,7 @@ async def register(
         send_verify_email(db, user)
         db.commit()
         verify_msg = (
-            "На вашу почту отправлено письмо для подтверждения email. "
+            "На вашу почту отправлено письмо с кодом. "
             "Проверьте также папку «Спам»."
         )
     except EmailDeliveryError as mail_err:

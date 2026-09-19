@@ -184,3 +184,68 @@ def test_same_otp_digits_do_not_collide_across_users(db_session):
     )
     assert err_a is None
     assert row_a is not None
+
+
+def test_verify_letter_code_confirms_mailbox(db_session, monkeypatch):
+    """Как будто открыли письмо: достаём 6 цифр из текста и подтверждаем."""
+    import re
+
+    inbox = {}
+
+    def capture(to_email, subject, text_body, html_body=None):
+        inbox.update(
+            to=to_email,
+            subject=subject,
+            text=text_body,
+            html=html_body or "",
+        )
+
+    monkeypatch.setattr(mail, "send_transactional_email_or_raise", capture)
+    user = _user(db_session, "letter@test.local")
+    mail.send_verify_email(db_session, user)
+    db_session.commit()
+    match = re.search(r"Код подтверждения: (\d{6})", inbox["text"])
+    assert match, inbox["text"]
+    code = match.group(1)
+    assert f"{code[:3]} {code[3:]}" in inbox["html"]
+    assert "Код подтверждения" in inbox["subject"]
+    row, err = mail.consume_token(
+        db_session, code, PURPOSE_VERIFY_EMAIL, email=user.email
+    )
+    assert err is None
+    assert row is not None
+    mail.mark_email_verified(user)
+    db_session.commit()
+    assert mail.is_email_verified(user)
+
+
+def test_reset_letter_code_unlocks_password(db_session, monkeypatch):
+    import re
+
+    inbox = {}
+
+    def capture(to_email, subject, text_body, html_body=None):
+        inbox.update(text=text_body, html=html_body or "")
+        return True
+
+    monkeypatch.setattr(mail, "send_transactional_email", capture)
+    user = _user(db_session, "reset@test.local")
+    assert mail.send_password_reset_email(db_session, user) is True
+    db_session.commit()
+    code = re.search(r"Код подтверждения: (\d{6})", inbox["text"]).group(1)
+    row, err = mail.consume_token(
+        db_session, code, PURPOSE_RESET_PASSWORD, email=user.email
+    )
+    assert err is None
+    assert row is not None
+
+
+def test_open_page_shows_six_digit_code():
+    from app.services.auth_link_redirect import render_open_link_page
+
+    html = render_open_link_page(
+        "verify-email", "123456", email="user@test.local"
+    )
+    assert "123 456" in html
+    assert "haneat://auth/verify-email?token=123456" in html
+    assert "user%40test.local" in html
