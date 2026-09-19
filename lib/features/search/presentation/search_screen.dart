@@ -1096,6 +1096,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             padding: const EdgeInsets.only(bottom: 16),
             child: NewPostCard(
               post: post,
+              onPostUpdated: (updated) {
+                final i = _posts.indexWhere((p) => p.id == updated.id);
+                if (i == -1) return;
+                setState(() => _posts[i] = updated);
+              },
               onPostDeleted: () {
                 setState(() {
                   _posts.removeWhere((p) => p.id == post.id);
