@@ -2,10 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/app_router.dart';
+import '../../../core/config/legal_urls.dart';
 import '../../../services/notification_service.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/user_service.dart';
@@ -18,7 +21,6 @@ import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/stars_pay_helper.dart';
 import '../../../widgets/telegram_ui.dart';
 import '../application/last_seen_privacy.dart';
-import 'blocked_users_screen.dart';
 import 'paid_message_exceptions_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -281,6 +283,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  Future<void> _openLegal(BuildContext context, String url) async {
+    final uri = Uri.parse(url);
+    if (await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Не удалось открыть: $url'),
+        action: SnackBarAction(
+          label: 'Скопировать',
+          onPressed: () {
+            Clipboard.setData(ClipboardData(text: url));
+          },
+        ),
+      ),
+    );
+  }
+
   void _showAboutDialog(BuildContext context) {
     showAboutDialog(
       context: context,
@@ -289,6 +308,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ? '1.0.0 (${WebAppUpdateService.embeddedBuild})'
           : '1.0.0',
       applicationLegalese: '© HanWe. Чаты, лента, каналы и общение.',
+      children: [
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(
+            onPressed: () =>
+                unawaited(_openLegal(context, LegalUrls.termsOfService)),
+            child: const Text('Условия использования'),
+          ),
+        ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(
+            onPressed: () =>
+                unawaited(_openLegal(context, LegalUrls.privacyPolicy)),
+            child: const Text('Конфиденциальность'),
+          ),
+        ),
+      ],
     );
   }
 
@@ -306,7 +344,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       _SettingsItem(
         title: 'Аккаунт и безопасность',
         icon: Icons.security_outlined,
-        subtitle: 'Сессия, пароль, выход со всех устройств',
+        subtitle: 'Сессии, 2FA, пароль, выход со всех устройств',
         onTap: () => context.push(AccountSecurityRoute.path),
       ),
       _SettingsItem(
@@ -378,11 +416,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         title: 'Чёрный список',
         icon: Icons.block_outlined,
         subtitle: 'Заблокированные пользователи',
-        onTap: () {
-          Navigator.of(context).push<void>(
-            MaterialPageRoute(builder: (_) => const BlockedUsersScreen()),
-          );
-        },
+        onTap: () => context.push(BlockedUsersRoute.path),
       ),
       _SettingsItem(
         title: 'Резервная копия',
