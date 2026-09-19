@@ -29,6 +29,7 @@ class ConfirmEmailChangeScreen extends StatefulWidget {
 class _ConfirmEmailChangeScreenState extends State<ConfirmEmailChangeScreen> {
   final _codeController = TextEditingController();
   final _emailController = TextEditingController();
+  String? _linkToken;
   bool _loading = false;
   bool _success = false;
   bool _codeError = false;
@@ -43,9 +44,13 @@ class _ConfirmEmailChangeScreenState extends State<ConfirmEmailChangeScreen> {
     super.initState();
     _emailController.text = (widget.email ?? '').trim();
     final token = widget.token.trim();
-    if (isAcceptableAuthCode(token)) {
-      _codeController.text =
-          isOtpCode(token) ? normalizeOtpInput(token) : token;
+    if (isOtpCode(token)) {
+      _codeController.text = normalizeOtpInput(token);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_run(token));
+      });
+    } else if (isLegacyAuthToken(token)) {
+      _linkToken = token;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         unawaited(_run(token));
       });
@@ -60,7 +65,7 @@ class _ConfirmEmailChangeScreenState extends State<ConfirmEmailChangeScreen> {
   }
 
   Future<void> _run(String raw) async {
-    final token = normalizeOtpInput(raw);
+    final token = resolveAuthCode(typed: raw, linkToken: _linkToken);
     if (!isAcceptableAuthCode(token)) {
       setState(() => _codeError = true);
       return;

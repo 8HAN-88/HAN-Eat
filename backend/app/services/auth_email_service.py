@@ -53,7 +53,13 @@ def mark_email_verified(user: User) -> None:
 
 
 def normalize_auth_code(raw: str) -> str:
-    return "".join(ch for ch in (raw or "").strip() if not ch.isspace() and ch != "-")
+    """Для 6 цифр убираем пробелы и дефисы. Длинный токен не трогаем:
+    `token_urlsafe` часто содержит `-`, его нельзя вырезать."""
+    trimmed = (raw or "").strip()
+    compact = "".join(ch for ch in trimmed if not ch.isspace() and ch != "-")
+    if _OTP_RE.fullmatch(compact):
+        return compact
+    return trimmed
 
 
 def is_otp_code(raw: str) -> bool:
@@ -318,19 +324,23 @@ def send_verify_email(db: Session, user: User) -> None:
     raw = create_auth_otp(db, user.id, PURPOSE_VERIFY_EMAIL)
     link = email_web_link("verify-email", raw, email=user.email)
     subject = "Код подтверждения — HanWe"
-    text, html = render_branded_email(
-        preheader=f"Код HanWe: {raw[:3]} {raw[3:]}",
-        title="Подтвердите почту",
-        greeting=f"Здравствуйте, {user.name}!",
-        paragraphs=[
-            "Введите этот код в приложении HanWe, чтобы подтвердить почту.",
-        ],
-        cta_label="Открыть приложение",
-        cta_url=link,
-        otp_code=raw,
-        expiry_note=_otp_expiry_note(),
-    )
-    send_transactional_email_or_raise(user.email, subject, text, html)
+    try:
+        text, html = render_branded_email(
+            preheader=f"Код HanWe: {raw[:3]} {raw[3:]}",
+            title="Подтвердите почту",
+            greeting=f"Здравствуйте, {user.name}!",
+            paragraphs=[
+                "Введите этот код в приложении HanWe, чтобы подтвердить почту.",
+            ],
+            cta_label="Открыть приложение",
+            cta_url=link,
+            otp_code=raw,
+            expiry_note=_otp_expiry_note(),
+        )
+        send_transactional_email_or_raise(user.email, subject, text, html)
+    except Exception:
+        _invalidate_active_tokens(db, user.id, PURPOSE_VERIFY_EMAIL)
+        raise
 
 
 def send_password_reset_email(db: Session, user: User) -> bool:
@@ -341,23 +351,30 @@ def send_password_reset_email(db: Session, user: User) -> bool:
     link = email_web_link("reset-password", raw, email=user.email)
     subject = "Код для нового пароля — HanWe"
     display_name = (user.name or "").strip() or "друг"
-    text, html = render_branded_email(
-        preheader=f"Код HanWe: {raw[:3]} {raw[3:]}",
-        title="Сброс пароля",
-        greeting=f"Здравствуйте, {display_name}!",
-        paragraphs=[
-            "Введите этот код в приложении HanWe, затем задайте новый пароль.",
-        ],
-        cta_label="Открыть приложение",
-        cta_url=link,
-        otp_code=raw,
-        expiry_note=_otp_expiry_note(),
-        security_note=(
-            "Если вы не запрашивали сброс пароля, проигнорируйте это письмо. "
-            "Ваш текущий пароль останется без изменений."
-        ),
-    )
-    return send_transactional_email(user.email, subject, text, html)
+    try:
+        text, html = render_branded_email(
+            preheader=f"Код HanWe: {raw[:3]} {raw[3:]}",
+            title="Сброс пароля",
+            greeting=f"Здравствуйте, {display_name}!",
+            paragraphs=[
+                "Введите этот код в приложении HanWe, затем задайте новый пароль.",
+            ],
+            cta_label="Открыть приложение",
+            cta_url=link,
+            otp_code=raw,
+            expiry_note=_otp_expiry_note(),
+            security_note=(
+                "Если вы не запрашивали сброс пароля, проигнорируйте это письмо. "
+                "Ваш текущий пароль останется без изменений."
+            ),
+        )
+        sent = send_transactional_email(user.email, subject, text, html)
+        if not sent:
+            _invalidate_active_tokens(db, user.id, PURPOSE_RESET_PASSWORD)
+        return sent
+    except Exception:
+        _invalidate_active_tokens(db, user.id, PURPOSE_RESET_PASSWORD)
+        raise
 
 
 def send_change_email_confirmation(db: Session, user: User, new_email: str) -> bool:
@@ -372,17 +389,24 @@ def send_change_email_confirmation(db: Session, user: User, new_email: str) -> b
     )
     link = email_web_link("confirm-email-change", raw, email=new_email)
     subject = "Код для новой почты — HanWe"
-    text, html = render_branded_email(
-        preheader=f"Код HanWe: {raw[:3]} {raw[3:]}",
-        title="Подтвердите новую почту",
-        greeting=None,
-        paragraphs=[
-            f"Вы запросили смену почты на {new_email}.",
-            "Введите этот код в приложении HanWe.",
-        ],
-        cta_label="Открыть приложение",
-        cta_url=link,
-        otp_code=raw,
-        expiry_note=_otp_expiry_note(),
-    )
-    return send_transactional_email(new_email, subject, text, html)
+    try:
+        text, html = render_branded_email(
+            preheader=f"Код HanWe: {raw[:3]} {raw[3:]}",
+            title="Подтвердите новую почту",
+            greeting=None,
+            paragraphs=[
+                f"Вы запросили смену почты на {new_email}.",
+                "Введите этот код в приложении HanWe.",
+            ],
+            cta_label="Открыть приложение",
+            cta_url=link,
+            otp_code=raw,
+            expiry_note=_otp_expiry_note(),
+        )
+        sent = send_transactional_email(new_email, subject, text, html)
+        if not sent:
+            _invalidate_active_tokens(db, user.id, PURPOSE_CHANGE_EMAIL)
+        return sent
+    except Exception:
+        _invalidate_active_tokens(db, user.id, PURPOSE_CHANGE_EMAIL)
+        raise

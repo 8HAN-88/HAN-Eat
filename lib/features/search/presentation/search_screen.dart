@@ -959,7 +959,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             Text(
               query.isEmpty
                   ? (_chatsHubMode && _mainTab == _MainSearchTab.people
-                      ? 'Введите имя или @username'
+                      ? 'Введите имя или @ник'
                       : 'Введите запрос для поиска')
                   : 'Ничего не найдено',
               style: Theme.of(context).textTheme.titleLarge,

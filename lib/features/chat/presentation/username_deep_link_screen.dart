@@ -28,7 +28,7 @@ class _UsernameDeepLinkScreenState extends State<UsernameDeepLinkScreen> {
   Future<void> _open() async {
     final handle = widget.username.trim().replaceFirst(RegExp(r'^@'), '');
     if (handle.length < 2) {
-      setState(() => _error = 'Некорректный username');
+      setState(() => _error = 'Некорректное имя');
       return;
     }
     try {

@@ -15,6 +15,17 @@ void main() {
       isLegacyAuthToken('abcdefghijklmnop'),
       isTrue,
     );
+    expect(
+      normalizeOtpInput('abcde-fghij-klmno-pqrstu'),
+      'abcde-fghij-klmno-pqrstu',
+    );
+    expect(
+      resolveAuthCode(
+        typed: '',
+        linkToken: 'abcde-fghij-klmno-pqrstu',
+      ),
+      'abcde-fghij-klmno-pqrstu',
+    );
   });
 
   testWidgets('digit boxes complete after six numbers', (tester) async {

@@ -383,14 +383,14 @@ async def login(
             logger.warning(f"User not found: {request.email}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Неверный email или пароль"
+                detail="Неверная почта или пароль"
             )
         
         if not verify_password(request.password, user.password_hash):
             logger.warning(f"Invalid password for user: {request.email}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Неверный email или пароль"
+                detail="Неверная почта или пароль"
             )
         
         if user.deleted_at:
@@ -574,7 +574,7 @@ async def google_auth(request: GoogleAuthRequest, http_request: Request, db: Ses
         if not google_email:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="В токене Google нет email"
+                detail="В аккаунте Google нет почты"
             )
         
         # Ищем существующего пользователя по email
@@ -858,7 +858,7 @@ async def change_email_request(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Неверный пароль")
     new_email = body.new_email.strip().lower()
     if new_email == current_user.email.lower():
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Это уже ваш текущий email")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Это уже ваша текущая почта")
     existing = db.query(User).filter(User.email == new_email).first()
     if existing and existing.id != current_user.id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Почта уже занята")

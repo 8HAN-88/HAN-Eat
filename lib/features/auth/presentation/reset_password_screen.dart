@@ -31,6 +31,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
+  String? _linkToken;
   bool _loading = false;
   bool _obscure = true;
   bool _codeError = false;
@@ -45,7 +46,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     if (isOtpCode(token)) {
       _codeController.text = normalizeOtpInput(token);
     } else if (isLegacyAuthToken(token)) {
-      _codeController.text = token;
+      _linkToken = token;
     }
   }
 
@@ -60,7 +61,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    final token = normalizeOtpInput(_codeController.text);
+    final token = resolveAuthCode(
+      typed: _codeController.text,
+      linkToken: _linkToken,
+    );
     if (!isAcceptableAuthCode(token)) {
       setState(() => _codeError = true);
       return;
@@ -145,7 +149,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Код из шести цифр. Действует 15 минут.',
+                    _linkToken != null
+                        ? 'Ссылка из письма принята. Задайте новый пароль или введите свежий код.'
+                        : 'Код из шести цифр. Действует 15 минут.',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),

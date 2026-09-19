@@ -106,6 +106,32 @@ def test_legacy_long_token_still_works(db_session):
     assert row is not None
 
 
+def test_normalize_keeps_legacy_hyphens():
+    raw = "abcde-fghij-klmno-pqrstu"
+    assert mail.normalize_auth_code(raw) == raw
+    assert mail.normalize_auth_code("123 456") == "123456"
+    assert mail.normalize_auth_code("12-34-56") == "123456"
+
+
+def test_legacy_hyphen_token_is_not_stripped(db_session):
+    from datetime import datetime, timedelta
+
+    user = _user(db_session)
+    raw = "abcde-fghij-klmno-pqrstu"
+    row = AuthToken(
+        user_id=user.id,
+        purpose=PURPOSE_VERIFY_EMAIL,
+        token_hash=mail._hash_token(raw),
+        expires_at=datetime.utcnow() + timedelta(hours=2),
+        created_at=datetime.utcnow(),
+    )
+    db_session.add(row)
+    db_session.flush()
+    got, err = mail.consume_token(db_session, raw, PURPOSE_VERIFY_EMAIL)
+    assert err is None
+    assert got is not None
+
+
 def test_change_email_otp_resolves_new_address(db_session):
     user = _user(db_session)
     code = mail.create_auth_otp(
