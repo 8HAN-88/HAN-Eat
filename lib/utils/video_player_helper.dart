@@ -67,7 +67,7 @@ class VideoPlayerHelper {
     final onWifi = await deviceOnWifiOrEthernet();
     final startUrls = expandVideoPlaybackUrls(sources.playbackUrls(qualityPref));
     if (startUrls.isEmpty) {
-      throw Exception('no video url');
+      throw Exception('Нет ссылки на видео');
     }
 
     Object? lastError;
@@ -98,7 +98,7 @@ class VideoPlayerHelper {
     }
 
     if (controller == null) {
-      throw Exception('video init failed: $lastError');
+      throw Exception('Не удалось запустить видео');
     }
 
     final upgrade = sources.upgradeUrl(qualityPref, onWifi: onWifi);
@@ -117,7 +117,7 @@ class VideoPlayerHelper {
   }) async {
     final candidates = expandVideoPlaybackUrls([url]);
     if (candidates.isEmpty) {
-      throw Exception('no video url');
+      throw Exception('Нет ссылки на видео');
     }
     Object? lastError;
     for (final candidate in candidates) {
@@ -134,7 +134,7 @@ class VideoPlayerHelper {
         debugPrint('Prepared video init failed for $candidate: $e');
       }
     }
-    throw Exception('video init failed: $lastError');
+    throw Exception('Не удалось запустить видео');
   }
 
   static Future<VideoPlayerController> _createControllerForUrl(
@@ -226,7 +226,7 @@ class VideoPlayerHelper {
     }
     if (controller.value.hasError) {
       throw Exception(
-        controller.value.errorDescription ?? 'video init failed',
+        controller.value.errorDescription ?? 'Не удалось запустить видео',
       );
     }
 

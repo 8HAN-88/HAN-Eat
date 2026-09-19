@@ -182,14 +182,14 @@ class RepostService {
   /// Создать репост (алиас с String)
   static Future<void> repost(String postId) async {
     final postIdInt = int.tryParse(postId);
-    if (postIdInt == null) throw Exception('Invalid post ID');
+    if (postIdInt == null) throw Exception('Неверный пост');
     await createRepost(postId: postIdInt);
   }
 
   /// Удалить репост (алиас с String)
   static Future<void> unrepost(String postId) async {
     final postIdInt = int.tryParse(postId);
-    if (postIdInt == null) throw Exception('Invalid post ID');
+    if (postIdInt == null) throw Exception('Неверный пост');
     await deleteRepost(postIdInt);
   }
 

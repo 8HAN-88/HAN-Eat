@@ -267,7 +267,11 @@ class ApiService {
           fallback: 'Не удалось загрузить видео',
         );
       }
-      throw Exception('API error ${resp.statusCode}: ${resp.body}');
+      throw apiExceptionFromHttpResponse(
+        resp.statusCode,
+        resp.body,
+        fallback: 'Не удалось загрузить видео',
+      );
     }
     final data = jsonDecode(resp.body) as Map<String, dynamic>;
     return CommunityVideo.fromJson(data['video'] as Map<String, dynamic>);
@@ -332,7 +336,11 @@ class ApiService {
           message: 'Недостаточно звёзд',
         );
       }
-      throw Exception('API error ${resp.statusCode}: ${resp.body}');
+      throw apiExceptionFromHttpResponse(
+        resp.statusCode,
+        resp.body,
+        fallback: 'Произошла ошибка',
+      );
     }
   }
 

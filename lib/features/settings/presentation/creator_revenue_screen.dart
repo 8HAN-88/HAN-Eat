@@ -385,8 +385,16 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
         return 'Подарок → ★';
       case 'gift_resale_received':
         return 'Продажа подарка';
+      case 'group_subscription_received':
+        return 'Подписка на группу';
+      case 'invoice_received':
+        return 'Счёт бота оплачен';
+      case 'payout_hold':
+        return 'Выплата на удержании';
+      case 'payout_refund':
+        return 'Возврат выплаты';
       default:
-        return type;
+        return 'Операция';
     }
   }
 
@@ -406,8 +414,18 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
         return 'Платное медиа';
       case 'gift':
         return 'Подарок';
+      case 'conversation':
+        return 'Группа';
+      case 'channel':
+        return 'Канал';
+      case 'post':
+        return 'Пост';
+      case 'user':
+        return 'Пользователь';
+      case 'message':
+        return 'Сообщение';
       default:
-        return type;
+        return 'Другое';
     }
   }
 
