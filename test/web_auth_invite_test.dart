@@ -21,4 +21,39 @@ void main() {
       AuthPaths.login,
     );
   });
+
+  test('web auth shell opens forgot / verify / reset from the HTML gate', () {
+    expect(
+      webAuthInitialLocation(
+        Uri.parse(
+          'http://127.0.0.1:8088/forgot-password?flutter=1&email=user@test.local',
+        ),
+      ),
+      AuthPaths.forgotPasswordWithEmail('user@test.local'),
+    );
+    expect(
+      webAuthInitialLocation(
+        Uri.parse(
+          'https://haneat.app/app/verify-email?flutter=1&email=user@test.local&token=123456',
+        ),
+      ),
+      AuthPaths.verifyEmailWith(email: 'user@test.local', token: '123456'),
+    );
+    expect(
+      webAuthInitialLocation(
+        Uri.parse(
+          'https://haneat.app/app/reset-password?email=user@test.local',
+        ),
+      ),
+      AuthPaths.resetPasswordWith(email: 'user@test.local'),
+    );
+    expect(
+      webAuthInitialLocation(
+        Uri.parse(
+          'https://haneat.app/app/#/confirm-email-change?email=new@test.local',
+        ),
+      ),
+      AuthPaths.confirmEmailChangeWith(email: 'new@test.local'),
+    );
+  });
 }

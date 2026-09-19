@@ -3,12 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/theme/app_theme.dart';
+import '../features/auth/presentation/confirm_email_change_screen.dart';
 import '../features/auth/presentation/forgot_password_screen.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/register_screen.dart';
 import '../features/auth/presentation/reset_password_screen.dart';
-import '../features/auth/presentation/verify_email_screen.dart';
 import '../features/auth/presentation/two_factor_verify_screen.dart';
+import '../features/auth/presentation/verify_email_screen.dart';
 import '../features/referral/pending_referral.dart';
 import 'auth_route_paths.dart';
 import 'theme_mode_controller.dart';
@@ -83,6 +84,14 @@ final GoRouter _authRouter = GoRouter(
         final email = state.uri.queryParameters['email'] ?? '';
         final token = state.uri.queryParameters['token'];
         return VerifyEmailScreen(email: email, initialToken: token);
+      },
+    ),
+    GoRoute(
+      path: AuthPaths.confirmEmailChange,
+      builder: (context, state) {
+        final token = state.uri.queryParameters['token'] ?? '';
+        final email = state.uri.queryParameters['email'];
+        return ConfirmEmailChangeScreen(token: token, email: email);
       },
     ),
     GoRoute(

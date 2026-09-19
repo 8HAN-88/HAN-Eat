@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/app_router.dart';
+import '../../../app/auth_route_paths.dart';
 import '../../../services/auth_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_empty_state.dart';
@@ -135,7 +135,7 @@ class _ConfirmEmailChangeScreenState extends State<ConfirmEmailChangeScreen> {
         title: 'Почта обновлена',
         subtitle: _message ?? 'Войдите с новым адресом',
         action: FilledButton(
-          onPressed: () => context.go(LoginRoute.path),
+          onPressed: () => context.go(AuthPaths.login),
           child: const Text('Войти'),
         ),
       );
@@ -203,7 +203,7 @@ class _ConfirmEmailChangeScreenState extends State<ConfirmEmailChangeScreen> {
             ),
             const SizedBox(height: 8),
             TextButton(
-              onPressed: () => context.go(LoginRoute.path),
+              onPressed: () => context.go(AuthPaths.login),
               child: const Text('На экран входа'),
             ),
           ],
