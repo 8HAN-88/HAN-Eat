@@ -5,7 +5,6 @@ import '../../../app/app_router.dart';
 import '../../../services/server_config.dart';
 import '../data/story_models.dart';
 import '../data/story_service.dart';
-import 'story_camera_screen.dart';
 import 'story_viewer_screen.dart';
 
 /// Хаб Stories / Моментов.
@@ -47,9 +46,7 @@ class _StoriesHubScreenState extends State<StoriesHubScreen> {
   }
 
   Future<void> _createStory() async {
-    final created = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => const StoryCameraScreen()),
-    );
+    final created = await context.push<bool>(StoryCreateRoute.path);
     if (created == true) {
       await _loadStories();
       if (!mounted) return;

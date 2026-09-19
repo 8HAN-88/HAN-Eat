@@ -11,7 +11,6 @@ import '../core/share/system_share.dart';
 import '../features/chat/application/chat_open_direct.dart';
 import '../features/chat/application/chat_ready_outgoing.dart';
 import '../features/chat/application/chat_thread_prefetch.dart';
-import '../features/chat/presentation/chat_people_search_screen.dart';
 import '../models/chat_models.dart';
 import '../models/post_model.dart';
 import '../services/auth_service.dart';
@@ -279,11 +278,7 @@ class _PostShareSheetState extends State<_PostShareSheet> {
   }
 
   Future<void> _openPeopleSearch() async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => const ChatPeopleSearchScreen(),
-      ),
-    );
+    await context.push(ChatNewMessageRoute.path);
     await _loadChats();
   }
 

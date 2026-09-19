@@ -213,7 +213,12 @@ class _EditProfilePostScreenState extends ConsumerState<EditProfilePostScreen> {
 
   Future<void> _save() async {
     if (_post == null) return;
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Заполните поля поста')),
+      );
+      return;
+    }
 
     setState(() => _isSaving = true);
     try {

@@ -62,7 +62,12 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
   }
 
   Future<void> _publish() async {
-    if (_selectedFile == null) return;
+    if (_selectedFile == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Выберите фото или видео')),
+      );
+      return;
+    }
     setState(() {
       _isPublishing = true;
       _publishError = null;

@@ -1165,7 +1165,12 @@ class _EditBotProfileDialogState extends State<_EditBotProfileDialog> {
         FilledButton(
           onPressed: () {
             final name = _name.text.trim();
-            if (name.isEmpty) return;
+            if (name.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Введите имя бота')),
+              );
+              return;
+            }
             Navigator.pop(
               context,
               _BotProfileEdit(
@@ -1658,7 +1663,12 @@ class _MiniAppFormDialogState extends State<_MiniAppFormDialog> {
     final name = _name.text.trim();
     final shortName = _short.text.trim().toLowerCase();
     final url = _url.text.trim();
-    if (name.isEmpty || shortName.isEmpty || url.isEmpty) return;
+    if (name.isEmpty || shortName.isEmpty || url.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Заполните название, короткое имя и ссылку')),
+      );
+      return;
+    }
     if (!_shortRe.hasMatch(shortName)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -2311,7 +2321,12 @@ class _AddCommandDialogState extends State<_AddCommandDialog> {
           onPressed: () {
             final command = _cmdController.text.trim();
             final description = _descController.text.trim();
-            if (command.isEmpty || description.isEmpty) return;
+            if (command.isEmpty || description.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Введите команду и описание')),
+              );
+              return;
+            }
             if (!_commandRegExp.hasMatch(command)) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(

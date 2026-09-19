@@ -132,7 +132,21 @@ void main() {
     expect(shortcutPathAlias('/archived'), ChatArchivedRoute.path);
     expect(ChatArchivedRoute.path, '/chats/archived');
     expect(ChatCreateGroupRoute.path, '/chats/new-group');
+    expect(ChatNewMessageRoute.path, '/chats/new');
+    expect(StoryCreateRoute.path, '/stories/create');
     expect(PaidMessageExceptionsRoute.path, '/settings/paid-exceptions');
+    expect(shortcutPathAlias('/new-group'), ChatCreateGroupRoute.path);
+    expect(shortcutPathAlias('/new-message'), ChatNewMessageRoute.path);
+    expect(shortcutPathAlias('/people'), ChatNewMessageRoute.path);
+    expect(shortcutPathAlias('/contacts'), ChatNewMessageRoute.path);
+    expect(shortcutPathAlias('/new-channel'), CreateChannelRoute.path);
+    expect(shortcutPathAlias('/new-post'), CreatePostRoute.path);
+    expect(shortcutPathAlias('/new-reel'), CreateReelRoute.path);
+    expect(shortcutPathAlias('/new-story'), StoryCreateRoute.path);
+    expect(shortcutPathAlias('/moments'), StoriesRoute.path);
+    expect(shortcutPathAlias('/constructor'), FlexConstructorRoute.path);
+    expect(shortcutPathAlias('/shop'), FlexShopRoute.path);
+    expect(shortcutPathAlias('/admin'), ModerationDashboardRoute.path);
     expect(shortcutPathAlias('/feed'), isNull);
     expect(
       parseDeepLinkToGoPath('https://haneat.app/app/#/stars'),

@@ -123,7 +123,6 @@ import '../widgets/chat_voice_mic_button.dart';
 import '../widgets/chat_voice_waveform.dart';
 import 'chat_group_info_screen.dart';
 import 'chat_media_gallery_screen.dart';
-import 'chat_people_search_screen.dart';
 import 'manual_retry_utils.dart';
 import 'chat_voice_bubble.dart';
 
@@ -7019,9 +7018,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ),
     );
     if (findPeople == true && mounted) {
-      await Navigator.of(context).push<void>(
-        MaterialPageRoute(builder: (_) => const ChatPeopleSearchScreen()),
-      );
+      await context.push(ChatNewMessageRoute.path);
     }
   }
 
