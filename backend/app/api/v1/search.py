@@ -77,7 +77,7 @@ async def search_posts(
         if sort_by not in ["relevance", "date", "popularity"]:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Сортировка: relevance, date или popularity"
+                detail="Неверная сортировка. Допустимо: по релевантности, по дате или по популярности."
             )
         
         if following_only and user_id is None:

@@ -17,7 +17,7 @@ class PaymentService {
   }) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/payments/checkout');
@@ -56,7 +56,7 @@ class PaymentService {
   }) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/payments/stars/checkout');
@@ -108,7 +108,7 @@ class PaymentService {
   static Future<List<PaymentHistoryItem>> getPaymentHistory() async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/payments/history');
@@ -133,7 +133,7 @@ class PaymentService {
   static Future<String?> refreshReceiptUrl(int subscriptionId) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/payments/$subscriptionId/receipt');
@@ -158,7 +158,7 @@ class PaymentService {
   }) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/payments/refund-request');
@@ -197,7 +197,7 @@ class PaymentService {
   static Future<List<AdminRefundQueueItem>> getAdminRefundQueue() async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/payments/admin/refund-queue');
@@ -231,7 +231,7 @@ class PaymentService {
   }) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/payments/admin/refund');
@@ -259,7 +259,7 @@ class PaymentService {
   }) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/payments/admin/refund/reject');

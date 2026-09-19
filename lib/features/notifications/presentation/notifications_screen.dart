@@ -473,7 +473,33 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                         ),
                 ],
               )
-            : ListView.builder(
+            : Column(
+                children: [
+                  if (_loadError != null)
+                    Material(
+                      color: scheme.errorContainer,
+                      child: ListTile(
+                        dense: true,
+                        leading: Icon(
+                          Icons.cloud_off_rounded,
+                          color: scheme.onErrorContainer,
+                        ),
+                        title: Text(
+                          userVisibleError(
+                            _loadError!,
+                            fallback: 'Не удалось обновить уведомления',
+                          ),
+                          style: TextStyle(color: scheme.onErrorContainer),
+                        ),
+                        trailing: TextButton(
+                          onPressed: () =>
+                              _loadNotifications(refresh: true),
+                          child: const Text('Повторить'),
+                        ),
+                      ),
+                    ),
+                  Expanded(
+                    child: ListView.builder(
                 controller: _scrollController,
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: EdgeInsets.only(bottom: floatingBottomPadding(context)),
@@ -533,6 +559,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                         actorId != null && _followLoadingIds.contains(actorId),
                   );
                 },
+                    ),
+                  ),
+                ],
               ),
       ),
     ),

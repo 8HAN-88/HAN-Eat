@@ -105,7 +105,7 @@ class CommentService {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return CommentsResponse.fromJson(data);
     } else {
-      String details = 'Failed to load comments (${response.statusCode})';
+      String details = 'Не удалось загрузить комментарии';
       try {
         final errorData = jsonDecode(response.body) as Map<String, dynamic>;
         final detail = errorData['detail'];

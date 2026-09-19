@@ -360,7 +360,7 @@ async def register(
         logger.error(f"UserResponse validation error during registration: {validation_error}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"User data validation failed: {str(validation_error)}",
+            detail="Данные профиля не прошли проверку",
         )
 
 
@@ -437,7 +437,7 @@ async def login(
             logger.error(f"UserResponse validation error: {validation_error}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"User data validation failed: {str(validation_error)}",
+                detail="Данные профиля не прошли проверку",
             )
     except HTTPException:
         raise
@@ -448,7 +448,7 @@ async def login(
         logger.error(f"Full traceback: {error_details}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Internal server error during login: {str(e)}"
+            detail="Не удалось войти. Попробуйте позже.",
         )
 
 
@@ -643,7 +643,7 @@ async def google_auth(request: GoogleAuthRequest, http_request: Request, db: Ses
         logger.exception("Google authentication failed")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Google authentication failed: {str(e)}"
+            detail="Не удалось войти через Google. Попробуйте снова.",
         )
 
 

@@ -66,11 +66,13 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       } else {
         context.go(AuthPaths.login);
       }
-    }     on AuthException catch (e) {
+    } on AuthException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.message),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось подтвердить email'),
+            ),
             action: SnackBarAction(
               label: 'Повторить',
               onPressed: () => unawaited(_verifyWithToken()),
@@ -108,11 +110,13 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
           SnackBar(content: Text(result.message)),
         );
       }
-    }     on AuthException catch (e) {
+    } on AuthException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.message),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось отправить письмо'),
+            ),
             action: SnackBarAction(
               label: 'Повторить',
               onPressed: () => unawaited(_resend()),

@@ -17,7 +17,7 @@ String _repostErrorMessage(dynamic detail, {required String fallback}) {
       return 'Пост не найден';
     case 'Channel not found':
       return 'Канал не найден';
-    case 'Not authenticated':
+    case 'Войдите в аккаунт':
       return 'Войдите, чтобы сделать репост';
     case 'Only channel owner, admins and moderators can repost to channel':
       return 'Нет прав публиковать репост в этот канал';
@@ -32,7 +32,7 @@ class RepostService {
   static Future<String> _requireToken() async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
     return token;
   }
@@ -258,7 +258,7 @@ class RepostService {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return RepostsListResponse.fromJson(data);
     } else {
-      throw Exception('Failed to load reposts');
+      throw Exception('Не удалось загрузить репосты');
     }
   }
 }

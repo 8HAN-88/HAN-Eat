@@ -15,7 +15,7 @@ class AnalyticsService {
   }) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
     
     final uri = Uri.parse('$baseUrl/analytics/posts/$postId').replace(
@@ -37,7 +37,7 @@ class AnalyticsService {
       return PostAnalyticsResponse.fromJson(data);
     } else {
       final error = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(error['detail'] ?? 'Failed to load post analytics');
+      throw Exception(error['detail'] ?? 'Не удалось загрузить статистику поста');
     }
   }
   
@@ -47,7 +47,7 @@ class AnalyticsService {
   }) async {
     var token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated. Please log in first.');
+      throw Exception('Войдите в аккаунт');
     }
     
     final uri = Uri.parse('$baseUrl/analytics/profile').replace(
@@ -76,7 +76,7 @@ class AnalyticsService {
           },
         );
       } catch (e) {
-        throw Exception('Authentication failed. Please log in again.');
+        throw Exception('Войдите в аккаунт');
       }
     }
     
@@ -85,7 +85,7 @@ class AnalyticsService {
       return ProfileAnalyticsResponse.fromJson(data);
     } else {
       final error = jsonDecode(response.body) as Map<String, dynamic>?;
-      throw Exception(error?['detail'] ?? 'Failed to load profile analytics: ${response.statusCode}');
+      throw Exception(error?['detail'] ?? 'Не удалось загрузить статистику профиля');
     }
   }
 
@@ -94,7 +94,7 @@ class AnalyticsService {
   }) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated. Please log in first.');
+      throw Exception('Войдите в аккаунт');
     }
     final uri = Uri.parse('$baseUrl/analytics/chat-channel').replace(
       queryParameters: {'days': days.toString()},
@@ -111,7 +111,7 @@ class AnalyticsService {
       return ChatChannelInsights.fromJson(data);
     }
     final error = jsonDecode(response.body) as Map<String, dynamic>?;
-    throw Exception(error?['detail'] ?? 'Failed to load chat/channel insights');
+    throw Exception(error?['detail'] ?? 'Не удалось загрузить статистику');
   }
 }
 

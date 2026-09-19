@@ -55,7 +55,7 @@ class SearchService {
       return SearchPostsResponse.fromJson(data);
     } else {
       final error = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(error['detail'] ?? 'Failed to search posts');
+      throw Exception(error['detail'] ?? 'Не удалось выполнить поиск');
     }
   }
 

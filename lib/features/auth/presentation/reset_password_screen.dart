@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/auth_route_paths.dart';
 import '../../../services/auth_service.dart';
+import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/server_connecting_hint.dart';
 
@@ -53,11 +54,13 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         );
         context.go(AuthPaths.login);
       }
-    }     on AuthException catch (e) {
+    } on AuthException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.message),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось сменить пароль'),
+            ),
             action: SnackBarAction(
               label: 'Повторить',
               onPressed: () => unawaited(_submit()),

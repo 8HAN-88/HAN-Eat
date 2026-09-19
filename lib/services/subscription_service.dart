@@ -11,7 +11,7 @@ class SubscriptionService {
   static Future<SubscriptionStatusResponse> getSubscriptionStatus() async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
     
     final uri = Uri.parse('$baseUrl/subscriptions/status');
@@ -27,7 +27,7 @@ class SubscriptionService {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return SubscriptionStatusResponse.fromJson(data);
     } else {
-      throw Exception('Failed to load subscription status');
+      throw Exception('Не удалось загрузить подписку');
     }
   }
   
@@ -41,7 +41,7 @@ class SubscriptionService {
   }) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
     
     final uri = Uri.parse('$baseUrl/subscriptions/create');
@@ -65,7 +65,7 @@ class SubscriptionService {
       return CreateSubscriptionResponse.fromJson(data);
     } else {
       final error = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(error['detail'] ?? 'Failed to create subscription');
+      throw Exception(error['detail'] ?? 'Не удалось оформить подписку');
     }
   }
   
@@ -75,7 +75,7 @@ class SubscriptionService {
   }) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/subscriptions/trial');
@@ -93,7 +93,7 @@ class SubscriptionService {
       return CreateSubscriptionResponse.fromJson(data);
     } else {
       final error = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(error['detail'] ?? 'Failed to start trial');
+      throw Exception(error['detail'] ?? 'Не удалось начать пробный период');
     }
   }
 
@@ -104,7 +104,7 @@ class SubscriptionService {
   }) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
     
     final uri = Uri.parse('$baseUrl/subscriptions/cancel');
@@ -129,7 +129,7 @@ class SubscriptionService {
       return CancelSubscriptionResponse.fromJson(data);
     } else {
       final error = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(error['detail'] ?? 'Failed to request subscription cancellation');
+      throw Exception(error['detail'] ?? 'Не удалось отправить запрос на отмену');
     }
   }
   
@@ -137,7 +137,7 @@ class SubscriptionService {
   static Future<SubscriptionHistoryResponse> getSubscriptionHistory() async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
     
     final uri = Uri.parse('$baseUrl/subscriptions/history');
@@ -153,7 +153,7 @@ class SubscriptionService {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return SubscriptionHistoryResponse.fromJson(data);
     } else {
-      throw Exception('Failed to load subscription history');
+      throw Exception('Не удалось загрузить историю подписки');
     }
   }
 }

@@ -77,7 +77,9 @@ class _TwoFactorVerifyScreenState extends State<TwoFactorVerifyScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(e.message),
+          content: Text(
+            userVisibleError(e, fallback: 'Неверный код. Попробуйте снова'),
+          ),
           action: SnackBarAction(
             label: 'Повторить',
             onPressed: () => unawaited(_submit()),

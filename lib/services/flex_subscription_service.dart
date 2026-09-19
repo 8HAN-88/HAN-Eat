@@ -12,7 +12,7 @@ class FlexSubscriptionApi {
 
   static Future<Map<String, String>> _headers() async {
     final token = await AuthService.getAccessTokenForApi();
-    if (token == null) throw Exception('Not authenticated');
+    if (token == null) throw Exception('Войдите в аккаунт');
     return {
       'Authorization': 'Bearer $token',
       'Content-Type': 'application/json',

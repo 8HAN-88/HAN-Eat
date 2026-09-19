@@ -63,7 +63,7 @@ class UserService {
   Future<void> updateAvatarFromXFile(dynamic xFile,
       {Function(double)? onProgress}) async {
     if (AuthService.instance.currentUser == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
     if (xFile is! XFile) {
       throw ArgumentError.value(xFile, 'xFile', 'Expected XFile');
@@ -148,7 +148,7 @@ class UserService {
   Future<Map<String, dynamic>> exportToJson() async {
     final currentUser = AuthService.instance.currentUser;
     if (currentUser == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
     final p = await UserService.getProfile(currentUser.id);
     return {
@@ -170,7 +170,7 @@ class UserService {
       {bool merge = true}) async {
     final currentUser = AuthService.instance.currentUser;
     if (currentUser == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
     final ver = json['export_version'];
     if (ver is! int || ver != 1) {
@@ -222,7 +222,7 @@ class UserService {
   static Future<UserProfile> getProfile(int userId) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/users/$userId');
@@ -249,7 +249,7 @@ class UserService {
         }
         return loaded;
       } else {
-        throw Exception('Failed to load profile: ${response.statusCode}');
+        throw Exception('Не удалось загрузить профиль');
       }
     } catch (e) {
       if (kDebugMode) {
@@ -269,7 +269,7 @@ class UserService {
   static Future<void> follow(int userId) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/users/$userId/follow');
@@ -288,7 +288,7 @@ class UserService {
       );
 
       if (response.statusCode != 200 && response.statusCode != 201) {
-        throw Exception('Failed to follow user');
+        throw Exception('Не удалось подписаться');
       }
     } catch (e) {
       if (kDebugMode) {
@@ -326,7 +326,7 @@ class UserService {
   static Future<void> unfollow(int userId) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw Exception('Войдите в аккаунт');
     }
 
     final uri = Uri.parse('$baseUrl/users/$userId/follow');
@@ -345,7 +345,7 @@ class UserService {
       );
 
       if (response.statusCode != 200 && response.statusCode != 204) {
-        throw Exception('Failed to unfollow user');
+        throw Exception('Не удалось отписаться');
       }
     } catch (e) {
       if (kDebugMode) {
@@ -422,7 +422,7 @@ class UserService {
         }
       }
     } catch (_) {}
-    return '$fallback (${response.statusCode})';
+    return fallback;
   }
 
   static Future<User> updateProfile({
