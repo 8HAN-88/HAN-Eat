@@ -273,6 +273,17 @@ void main() {
     );
   });
 
+  test('userVisibleError maps leftover webview network codes', () {
+    expect(
+      userVisibleError(Exception('net::ERR_NAME_NOT_RESOLVED')),
+      'Нет подключения. Проверьте интернет и попробуйте снова.',
+    );
+    expect(
+      parseApiErrorMessage('net::ERR_CONNECTION_TIMED_OUT'),
+      'Сервер не отвечает. Попробуйте ещё раз.',
+    );
+  });
+
   test('userVisibleAuthError prefers auth message for 401', () {
     expect(
       userVisibleAuthError(

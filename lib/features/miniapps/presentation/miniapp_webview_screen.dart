@@ -83,6 +83,40 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
     }
   }
 
+  String _webviewErrorMessage(String? description) {
+    final raw = (description ?? '').trim();
+    final lower = raw.toLowerCase();
+    if (lower.contains('err_name_not_resolved') ||
+        lower.contains('err_address_unreachable') ||
+        lower.contains('err_internet_disconnected') ||
+        lower.contains('err_network_changed') ||
+        lower.contains('failed host lookup') ||
+        lower.contains('host lookup')) {
+      return 'Нет подключения. Проверьте интернет и попробуйте снова.';
+    }
+    if (lower.contains('err_connection') ||
+        lower.contains('err_timed_out') ||
+        lower.contains('timed out') ||
+        lower.contains('timeout')) {
+      return 'Сервер мини-приложения не отвечает. Попробуйте ещё раз.';
+    }
+    if (lower.contains('err_ssl') ||
+        lower.contains('err_cert') ||
+        lower.contains('certificate')) {
+      return 'Небезопасное соединение. Мини-приложение недоступно.';
+    }
+    if (lower.contains('err_blocked') ||
+        lower.contains('err_access_denied') ||
+        lower.contains('access denied')) {
+      return 'Адрес мини-приложения заблокирован.';
+    }
+    if (raw.isEmpty) return 'Не удалось загрузить мини-приложение';
+    return userVisibleError(
+      Exception(raw),
+      fallback: 'Не удалось загрузить мини-приложение',
+    );
+  }
+
   Future<void> _openInBrowser() async {
     final raw = widget.url?.trim();
     if (raw == null || raw.isEmpty) return;
@@ -228,7 +262,7 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
               onReceivedError: (controller, request, error) {
                 setState(() {
                   _isLoading = false;
-                  _error = error.description;
+                  _error = _webviewErrorMessage(error.description);
                 });
               },
               shouldOverrideUrlLoading: (controller, action) async {

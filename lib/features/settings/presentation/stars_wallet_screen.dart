@@ -137,8 +137,16 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
+                        const Text(
                           'Не удалось загрузить кошелёк',
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          userVisibleError(
+                            snapshot.error!,
+                            fallback: 'Проверьте сеть и попробуйте снова',
+                          ),
                           textAlign: TextAlign.center,
                           style: TextStyle(color: scheme.onSurfaceVariant),
                         ),

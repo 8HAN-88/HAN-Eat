@@ -16,6 +16,7 @@ class StarsCheckoutSuccessScreen extends StatefulWidget {
 class _StarsCheckoutSuccessScreenState
     extends State<StarsCheckoutSuccessScreen> {
   bool _loading = true;
+  bool _failed = false;
   int? _balance;
   int _attempts = 0;
   static const _maxAttempts = 8;
@@ -27,6 +28,11 @@ class _StarsCheckoutSuccessScreenState
   }
 
   Future<void> _pollBalance() async {
+    setState(() {
+      _loading = true;
+      _failed = false;
+      _attempts = 0;
+    });
     for (var i = 0; i < _maxAttempts; i++) {
       if (i > 0) {
         await Future<void>.delayed(const Duration(seconds: 2));
@@ -39,11 +45,17 @@ class _StarsCheckoutSuccessScreenState
         setState(() {
           _balance = bal.balance;
           _loading = false;
+          _failed = false;
         });
         return;
       } catch (_) {}
     }
-    if (mounted) setState(() => _loading = false);
+    if (mounted) {
+      setState(() {
+        _loading = false;
+        _failed = _balance == null;
+      });
+    }
   }
 
   @override
@@ -63,9 +75,15 @@ class _StarsCheckoutSuccessScreenState
               Icon(
                 _loading
                     ? Icons.hourglass_top_rounded
-                    : Icons.check_circle_outline_rounded,
+                    : _balance != null
+                        ? Icons.check_circle_outline_rounded
+                        : Icons.cloud_off_rounded,
                 size: 72,
-                color: _loading ? scheme.secondary : scheme.primary,
+                color: _loading
+                    ? scheme.secondary
+                    : _balance != null
+                        ? scheme.primary
+                        : scheme.error,
               ),
               const SizedBox(height: 20),
               Text(
@@ -73,7 +91,7 @@ class _StarsCheckoutSuccessScreenState
                     ? 'Проверяем оплату…'
                     : _balance != null
                         ? 'Звёзды зачислены'
-                        : 'Проверяем зачисление звёзд',
+                        : 'Не удалось проверить оплату',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.w800,
@@ -85,15 +103,26 @@ class _StarsCheckoutSuccessScreenState
                     ? 'Попытка $_attempts из $_maxAttempts'
                     : _balance != null
                         ? 'Текущий баланс: $_balance ★'
-                        : 'Если баланс не обновился — откройте кошелёк и потяните вниз.',
+                        : 'Сеть не ответила. Откройте кошелёк или нажмите «Повторить».',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: scheme.onSurfaceVariant, height: 1.35),
               ),
               const SizedBox(height: 28),
-              FilledButton(
-                onPressed: () => context.go(StarsWalletRoute.path),
-                child: const Text('Открыть кошелёк'),
-              ),
+              if (_failed) ...[
+                FilledButton(
+                  onPressed: _pollBalance,
+                  child: const Text('Повторить'),
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton(
+                  onPressed: () => context.go(StarsWalletRoute.path),
+                  child: const Text('Открыть кошелёк'),
+                ),
+              ] else
+                FilledButton(
+                  onPressed: () => context.go(StarsWalletRoute.path),
+                  child: const Text('Открыть кошелёк'),
+                ),
               const SizedBox(height: 10),
               TextButton(
                 onPressed: () => context.go('/'),
