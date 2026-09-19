@@ -163,6 +163,19 @@
       font-weight: 600;
       cursor: pointer;
     }
+    .forgot-row {
+      display: flex;
+      justify-content: flex-end;
+      margin: -4px 0 10px;
+    }
+    .forgot-row.is-hidden { display: none; }
+    .forgot-row a {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
     .error {
       display: none;
       margin: 0 0 12px;
@@ -305,7 +318,7 @@
     </div>
     <!-- Только если не удалось открыть. -->
     <div id="continue-retry" class="auth-card" style="text-align:center;display:none">
-      <h1 class="brand">HAN <span>Eat</span></h1>
+      <h1 class="brand">Han<span>We</span></h1>
       <p class="subtitle">Не получилось открыть. Попробуйте ещё раз.</p>
       <div id="continue-error" class="error" role="alert"></div>
       <button class="primary" id="continue-btn" type="button">Попробовать снова</button>
@@ -316,15 +329,18 @@
 
   <div id="auth-gate">
     <div class="auth-card">
-      <h1 class="brand">HAN <span>Eat</span></h1>
+      <h1 class="brand">Han<span>We</span></h1>
       <p class="subtitle" id="auth-subtitle">Войдите, чтобы открыть чаты и ленту</p>
       <div id="auth-error" class="error" role="alert"></div>
 
       <form id="login-form">
-        <label for="email">Email</label>
-        <input id="email" name="email" type="email" autocomplete="username" required placeholder="example@mail.com">
+        <label for="email">Почта</label>
+        <input id="email" name="email" type="email" autocomplete="username" required placeholder="name@mail.com">
         <label for="password">Пароль</label>
         <input id="password" name="password" type="password" autocomplete="current-password" required minlength="8" placeholder="Минимум 8 символов">
+        <p class="forgot-row" id="forgot-wrap">
+          <a id="forgot-password" href="/app/forgot-password?flutter=1">Забыли пароль?</a>
+        </p>
         <div id="name-wrap" hidden>
           <label for="name">Имя</label>
           <input id="name" name="name" type="text" autocomplete="name" autocapitalize="words" placeholder="Как к вам обращаться">
@@ -471,9 +487,9 @@
             var input = typeof x.input === 'string' ? x.input : '';
             if (loc.indexOf('email') !== -1 || /email/i.test(msg)) {
               if (input && input.indexOf('@') !== -1 && input.indexOf('.') === -1) {
-                return 'Проверьте email: после @ нужна точка, например name@gmail.com';
+                return 'Проверьте почту: после @ нужна точка, например name@gmail.com';
               }
-              return 'Некорректный email. Пример: name@gmail.com';
+              return 'Некорректная почта. Пример: name@gmail.com';
             }
             if (loc.indexOf('password') !== -1) {
               return 'Проверьте пароль';
@@ -483,7 +499,7 @@
             }
             // Drop English pydantic noise; keep short Russian fallbacks.
             if (/valid email|not a valid email/i.test(msg)) {
-              return 'Некорректный email. Пример: name@gmail.com';
+              return 'Некорректная почта. Пример: name@gmail.com';
             }
             return msg || 'Ошибка ввода';
           }).filter(Boolean);
@@ -628,6 +644,8 @@
         document.getElementById('name').required = isReg;
         document.getElementById('legal-wrap').classList.toggle('is-visible', isReg);
         document.getElementById('auth-submit').textContent = isReg ? 'Создать аккаунт' : 'Войти';
+        var forgotWrap = document.getElementById('forgot-wrap');
+        if (forgotWrap) forgotWrap.classList.toggle('is-hidden', isReg);
         var pending = extractReferral(prefGet('pending_referral'));
         document.getElementById('auth-subtitle').textContent = isReg
           ? (pending
@@ -994,6 +1012,22 @@
         setMode(mode === 'login' ? 'register' : 'login');
       });
 
+      function forgotPasswordHref(email) {
+        var path = (location.pathname || '').indexOf('/app') === 0
+          ? '/app/forgot-password'
+          : '/forgot-password';
+        var u = new URL(path, location.origin);
+        u.searchParams.set('flutter', '1');
+        if (email) u.searchParams.set('email', email);
+        return u.pathname + u.search;
+      }
+
+      document.getElementById('forgot-password').addEventListener('click', function (e) {
+        e.preventDefault();
+        var email = document.getElementById('email').value.trim();
+        location.assign(forgotPasswordHref(email));
+      });
+
       document.getElementById('continue-btn').addEventListener('click', function () {
         clearError();
         var loading = document.getElementById('continue-loading');
@@ -1044,7 +1078,7 @@
           return;
         }
         if (!looksLikeEmail(email)) {
-          showError('Проверьте email: после @ нужна точка, например name@gmail.com');
+          showError('Проверьте почту: после @ нужна точка, например name@gmail.com');
           return;
         }
         btn.disabled = true;

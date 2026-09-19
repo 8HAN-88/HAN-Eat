@@ -5,6 +5,7 @@ from app.models.user import User
 from app.services.legal_consent_service import (
     consent_required,
     current_legal_version,
+    legal_status_payload,
     record_consent,
 )
 
@@ -50,3 +51,9 @@ def test_record_consent_sets_current_version():
     assert user.legal_consent_version == current_legal_version()
     assert user.legal_consent_at is not None
     assert consent_required(user) is False
+
+
+def test_legal_status_names_hanwe_not_old_brand():
+    text = legal_status_payload()["consent_text"]
+    assert "HanWe" in text
+    assert "HAN Eat" not in text
