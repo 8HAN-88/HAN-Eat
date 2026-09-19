@@ -104,13 +104,23 @@ import 'web_session_landing_screen.dart';
 import 'invalid_link_screen.dart';
 import '../widgets/app_empty_state.dart';
 
+bool _isAppHttpHost(String host) {
+  final h = host.toLowerCase();
+  return h == 'haneat.app' ||
+      h == 'www.haneat.app' ||
+      h == 'localhost' ||
+      h == '127.0.0.1' ||
+      h == '0.0.0.0' ||
+      h == '[::1]';
+}
+
 /// Преобразует `haneat://...` или `https://haneat.app/...` в путь для [GoRouter].
 String? parseDeepLinkToGoPath(String raw) {
   try {
     final uri = Uri.parse(raw);
     if (uri.scheme == 'https' || uri.scheme == 'http') {
       final host = uri.host.toLowerCase();
-      if (host == 'haneat.app' || host == 'www.haneat.app') {
+      if (_isAppHttpHost(host)) {
         // PWA живёт на /app/ — это HTML-шелл, не маршрут GoRouter.
         var path = browserPathToGoPath(uri.path) ?? '';
         var query = routerQueryFromUri(uri);

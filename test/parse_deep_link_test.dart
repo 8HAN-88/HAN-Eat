@@ -99,4 +99,25 @@ void main() {
     expect(parseDeepLinkToGoPath('https://haneat.app/app/reel/28'), '/reel/28');
     expect(parseDeepLinkToGoPath('haneat://reel/28'), '/reel/28');
   });
+
+  test('HTML forgot-password on localhost opens the Flutter screen', () {
+    expect(
+      parseDeepLinkToGoPath(
+        'http://127.0.0.1:8088/forgot-password?flutter=1&email=user@test.local',
+      ),
+      '/forgot-password?email=user%40test.local',
+    );
+    expect(
+      parseDeepLinkToGoPath(
+        'https://haneat.app/app/forgot-password?flutter=1&email=user@test.local',
+      ),
+      '/forgot-password?email=user%40test.local',
+    );
+    expect(
+      parseDeepLinkToGoPath(
+        'http://localhost:8088/verify-email?flutter=1&email=user@test.local',
+      ),
+      '/verify-email?email=user%40test.local',
+    );
+  });
 }

@@ -67,6 +67,12 @@ void main() {
         routerQueryFromUri(Uri.parse('https://haneat.app/feed?go=1&ref=alice')),
         'ref=alice',
       );
+      expect(
+        routerQueryFromUri(
+          Uri.parse('https://haneat.app/app/forgot-password?flutter=1&email=a@b.c'),
+        ),
+        'email=a%40b.c',
+      );
     });
   });
 

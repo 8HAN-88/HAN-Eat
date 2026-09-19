@@ -1,4 +1,4 @@
-const _bootQueryKeys = {'go', 'v', '_cb', 'retry', 'fresh', 'sw'};
+const _bootQueryKeys = {'go', 'v', '_cb', 'retry', 'fresh', 'sw', 'flutter'};
 
 String _normalizedPath(String path) {
   var p = path.trim();
