@@ -306,6 +306,12 @@ const _knownEnglishDetails = <String, String>{
   'video init failed': 'Не удалось запустить видео',
   'Authentication failed. Please log in again.': 'Войдите в аккаунт',
   'Not authenticated. Please log in first.': 'Войдите в аккаунт',
+  'net::ERR_NAME_NOT_RESOLVED':
+      'Нет подключения. Проверьте интернет и попробуйте снова.',
+  'net::ERR_INTERNET_DISCONNECTED':
+      'Нет подключения. Проверьте интернет и попробуйте снова.',
+  'net::ERR_CONNECTION_TIMED_OUT': 'Сервер не отвечает. Попробуйте ещё раз.',
+  'net::ERR_CONNECTION_REFUSED': 'Сервер недоступен. Попробуйте ещё раз.',
 };
 
 String? localizeKnownEnglishDetail(String detail) =>
@@ -557,6 +563,14 @@ String userVisibleError(Object e, {String fallback = 'Произошла оши�
   }
   if (lower.contains('video init failed') || lower.contains('no video url')) {
     return 'Не удалось запустить видео';
+  }
+  if (lower.contains('err_name_not_resolved') ||
+      lower.contains('err_internet_disconnected') ||
+      lower.contains('err_address_unreachable')) {
+    return 'Нет подключения. Проверьте интернет и попробуйте снова.';
+  }
+  if (lower.contains('err_connection') || lower.contains('err_timed_out')) {
+    return 'Сервер не отвечает. Попробуйте ещё раз.';
   }
   if (lower.contains('too many requests') ||
       lower.contains('rate_limit') ||
