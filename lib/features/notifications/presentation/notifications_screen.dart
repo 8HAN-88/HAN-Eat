@@ -428,11 +428,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
-          centerTitle: true,
-          title: const Text(
-            'Уведомления',
-            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
-          ),
+          title: const Text('Уведомления'),
           actions: [
             if (_unreadCount > 0)
               TextButton(
@@ -524,12 +520,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                       padding: const EdgeInsets.fromLTRB(16, 20, 16, 6),
                       child: Text(
                         entry.label,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.2,
-                          color: scheme.onSurface,
-                        ),
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: -0.2,
+                              color: scheme.onSurface,
+                            ),
                       ),
                     );
                   }

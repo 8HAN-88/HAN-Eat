@@ -247,7 +247,7 @@ class _ChatsNeoHeader extends StatelessWidget {
               controller: controller,
               padding: EdgeInsets.zero,
               tabs: const [
-                Tab(text: 'Чаты и каналы'),
+                Tab(text: 'Чаты'),
                 Tab(text: 'Контакты'),
               ],
             ),

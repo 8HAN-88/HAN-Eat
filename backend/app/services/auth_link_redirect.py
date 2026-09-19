@@ -31,7 +31,7 @@ def render_open_link_page(purpose: str, raw_token: str) -> str:
 
     titles = {
         "reset-password": "Сброс пароля",
-        "verify-email": "Подтверждение email",
+        "verify-email": "Подтверждение почты",
         "confirm-email-change": "Смена email",
     }
     cta = {

@@ -71,7 +71,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              userVisibleError(e, fallback: 'Не удалось подтвердить email'),
+              userVisibleError(e, fallback: 'Не удалось подтвердить почту'),
             ),
             action: SnackBarAction(
               label: 'Повторить',
@@ -85,7 +85,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              userVisibleError(e, fallback: 'Не удалось подтвердить email'),
+              userVisibleError(e, fallback: 'Не удалось подтвердить почту'),
             ),
             action: SnackBarAction(
               label: 'Повторить',
@@ -154,7 +154,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
   Widget build(BuildContext context) {
     final email = widget.email ?? '';
     return Scaffold(
-      appBar: AppBar(title: const Text('Подтверждение email')),
+      appBar: AppBar(title: const Text('Подтверждение почты')),
       body: AppGradientBackground(
         child: SafeArea(
           child: SingleChildScrollView(
@@ -172,7 +172,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                 const SizedBox(height: 16),
                 Text(
                   _verified
-                      ? 'Email подтверждён'
+                      ? 'Почта подтверждена'
                       : 'Мы отправили письмо${email.isNotEmpty ? ' на $email' : ''}. '
                           'Откройте ссылку в письме или вставьте код ниже.',
                   style: Theme.of(context).textTheme.bodyLarge,

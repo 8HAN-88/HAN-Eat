@@ -387,7 +387,6 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerLowest,
       appBar: AppBar(
         title: const Text(SubscriptionCopy.screenTitle),
-        centerTitle: true,
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),

@@ -861,7 +861,7 @@ class _ChannelManagementScreenState
         ),
         SwitchListTile(
           title: const Text('Автоматически публиковать рилсы'),
-          subtitle: const Text('Короткие видео сразу попадают в раздел Reels'),
+          subtitle: const Text('Короткие видео сразу попадают в раздел рилсов'),
           value: _autoPublishReels,
           onChanged: (value) => setState(() => _autoPublishReels = value),
         ),

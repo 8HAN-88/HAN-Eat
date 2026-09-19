@@ -117,7 +117,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Укажите email — отправим письмо со ссылкой для нового пароля.',
+            'Укажите почту — отправим письмо со ссылкой для нового пароля.',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -131,12 +131,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             textInputAction: TextInputAction.done,
             onFieldSubmitted: (_) => _submit(),
             decoration: const InputDecoration(
-              labelText: 'Email',
+              labelText: 'Почта',
               prefixIcon: Icon(Icons.email_outlined),
             ),
             validator: (v) {
-              if (v == null || v.trim().isEmpty) return 'Введите email';
-              if (!v.contains('@')) return 'Некорректный email';
+              if (v == null || v.trim().isEmpty) return 'Введите почту';
+              if (!v.contains('@')) return 'Некорректный адрес почты';
               return null;
             },
           ),
@@ -273,7 +273,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         const SizedBox(height: 8),
         TextButton(
           onPressed: _useAnotherEmail,
-          child: const Text('Указать другой email'),
+          child: const Text('Указать другую почту'),
         ),
         TextButton(
           onPressed: () => context.push(AuthPaths.resetPassword),

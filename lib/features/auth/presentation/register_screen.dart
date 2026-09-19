@@ -202,16 +202,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
                     decoration: const InputDecoration(
-                      labelText: 'Email',
-                      hintText: 'example@mail.com',
+                      labelText: 'Почта',
+                      hintText: 'name@mail.com',
                       prefixIcon: Icon(Icons.email_outlined),
                     ),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
-                        return 'Введите email';
+                        return 'Введите почту';
                       }
                       if (!value.contains('@')) {
-                        return 'Введите корректный email';
+                        return 'Введите корректный адрес почты';
                       }
                       return null;
                     },
@@ -220,8 +220,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   // Username (опционально)
                   TextFormField(
                     controller: _usernameController,
+                    textCapitalization: TextCapitalization.none,
                     decoration: const InputDecoration(
-                      labelText: 'Username (опционально)',
+                      labelText: 'Имя пользователя',
                       hintText: '@username',
                       prefixIcon: Icon(Icons.alternate_email),
                     ),

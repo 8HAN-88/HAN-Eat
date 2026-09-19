@@ -114,7 +114,7 @@ class StartupHomePlaceholder extends StatelessWidget {
             ),
             NavigationDestination(
               icon: Icon(Icons.apps_outlined),
-              label: 'Мини-приложения',
+              label: 'Приложения',
             ),
             NavigationDestination(
               icon: Icon(Icons.person_outline_rounded),

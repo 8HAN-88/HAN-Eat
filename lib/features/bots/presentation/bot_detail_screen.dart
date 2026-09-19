@@ -639,7 +639,7 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
               TextField(
                 controller: payloadController,
                 decoration: const InputDecoration(
-                  labelText: 'Payload (для вебхука)',
+                  labelText: 'Данные для вебхука',
                 ),
               ),
             ],
@@ -2253,7 +2253,7 @@ class _AddCommandDialogState extends State<_AddCommandDialog> {
               textCapitalization: TextCapitalization.sentences,
               controller: _buttonsController,
               decoration: const InputDecoration(
-                labelText: 'Inline-кнопки (строки через пустую строку)',
+                labelText: 'Кнопки под сообщением',
                 hintText:
                     'Текст|cb_data|Ответ\nТекст|url:https://site\nТекст|web_app:123',
               ),
@@ -2277,7 +2277,7 @@ class _AddCommandDialogState extends State<_AddCommandDialog> {
               textCapitalization: TextCapitalization.sentences,
               controller: _replyButtonsController,
               decoration: const InputDecoration(
-                labelText: 'Reply-клавиатура (над полем ввода)',
+                labelText: 'Клавиатура над полем ввода',
                 hintText: 'Да | Нет\nПозже',
                 helperText:
                     'Кнопки в ряду через «|», новый ряд — с новой строки',
@@ -2294,7 +2294,7 @@ class _AddCommandDialogState extends State<_AddCommandDialog> {
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Убрать reply-клавиатуру'),
+              title: const Text('Убрать клавиатуру над полем'),
               subtitle: const Text('Команда скроет текущую клавиатуру'),
               value: _removeReplyKeyboard,
               onChanged: (v) => setState(() => _removeReplyKeyboard = v),

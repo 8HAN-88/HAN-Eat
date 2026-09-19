@@ -17,7 +17,7 @@ Future<bool> showChangeEmailDialog(
     final saved = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Новый email'),
+        title: const Text('Новая почта'),
         content: Form(
           key: formKey,
           child: Column(
@@ -37,15 +37,15 @@ Future<bool> showChangeEmailDialog(
                 keyboardType: TextInputType.emailAddress,
                 autofocus: true,
                 decoration: const InputDecoration(
-                  labelText: 'Новый email',
+                  labelText: 'Новая почта',
                 ),
                 validator: (value) {
                   final email = value?.trim() ?? '';
                   if (!email.contains('@') || !email.contains('.')) {
-                    return 'Введите корректный email';
+                    return 'Введите корректный адрес почты';
                   }
                   if (email.toLowerCase() == currentEmail.toLowerCase()) {
-                    return 'Это уже ваш текущий email';
+                    return 'Это уже ваша текущая почта';
                   }
                   return null;
                 },

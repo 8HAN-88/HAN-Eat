@@ -104,7 +104,7 @@ class ChatPollFormPanelState extends State<ChatPollFormPanel> {
       controller: widget.scrollController,
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
-        _SectionLabel('ВОПРОС', color: labelColor),
+        _SectionLabel('Вопрос', color: labelColor),
         const SizedBox(height: 8),
         _GroupedCard(
           color: groupBg,
@@ -135,7 +135,7 @@ class ChatPollFormPanelState extends State<ChatPollFormPanel> {
           ],
         ),
         const SizedBox(height: 24),
-        _SectionLabel('ВАРИАНТЫ ОТВЕТА', color: labelColor),
+        _SectionLabel('Варианты ответа', color: labelColor),
         const SizedBox(height: 8),
         _GroupedCard(
           color: groupBg,
@@ -199,7 +199,7 @@ class ChatPollFormPanelState extends State<ChatPollFormPanel> {
             ),
           ),
         const SizedBox(height: 24),
-        _SectionLabel('НАСТРОЙКИ', color: labelColor),
+        _SectionLabel('Настройки', color: labelColor),
         const SizedBox(height: 8),
         _GroupedCard(
           color: groupBg,
