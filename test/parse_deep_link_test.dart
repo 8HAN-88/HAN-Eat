@@ -94,6 +94,22 @@ void main() {
     );
   });
 
+  test('short /flex alias stays a flex path in deep links', () {
+    expect(parseDeepLinkToGoPath('https://haneat.app/flex'), '/flex');
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/flex'),
+      '/flex',
+    );
+  });
+
+  test('blocked list has a settings path', () {
+    expect(BlockedUsersRoute.path, '/settings/blocked');
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/settings/blocked'),
+      '/settings/blocked',
+    );
+  });
+
   test('singular channel paid paths alias to /channels/:id', () {
     expect(
       channelPaidPathAlias('/channel/1/giveaways'),

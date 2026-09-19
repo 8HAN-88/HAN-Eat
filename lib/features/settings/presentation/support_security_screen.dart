@@ -8,7 +8,6 @@ import '../../../app/app_router.dart';
 import '../../../core/config/legal_urls.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../services/web_app_update_service.dart';
-import 'blocked_users_screen.dart';
 
 class SupportSecurityScreen extends StatelessWidget {
   const SupportSecurityScreen({super.key});
@@ -52,7 +51,7 @@ class SupportSecurityScreen extends StatelessWidget {
             child: ListTile(
               leading: const Icon(Icons.lock_person_outlined),
               title: const Text('Аккаунт и безопасность'),
-              subtitle: const Text('Сессия, пароль, выход со всех устройств'),
+              subtitle: const Text('Сессии, 2FA, пароль, выход со всех устройств'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => context.push(AccountSecurityRoute.path),
             ),
@@ -164,13 +163,7 @@ class SupportSecurityScreen extends StatelessWidget {
                   title: const Text('Чёрный список'),
                   subtitle: const Text('Заблокированные пользователи'),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    Navigator.of(context).push<void>(
-                      MaterialPageRoute(
-                        builder: (_) => const BlockedUsersScreen(),
-                      ),
-                    );
-                  },
+                  onTap: () => context.push(BlockedUsersRoute.path),
                 ),
               ],
             ),

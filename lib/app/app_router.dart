@@ -41,6 +41,7 @@ import '../features/auth/presentation/confirm_email_change_screen.dart';
 import '../features/settings/presentation/account_security_screen.dart';
 import '../features/settings/presentation/two_factor_setup_screen.dart';
 import '../features/settings/presentation/close_friends_screen.dart';
+import '../features/settings/presentation/blocked_users_screen.dart';
 import '../features/posts/presentation/create_post_screen.dart';
 import '../features/community/presentation/community_upload_screen.dart';
 import '../features/posts/presentation/edit_profile_post_screen.dart';
@@ -503,6 +504,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) =>
             const MaterialPage(child: SettingsScreen()),
       ),
+      GoRoute(
+        path: BlockedUsersRoute.path,
+        name: BlockedUsersRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: BlockedUsersScreen()),
+      ),
       // Маршруты настроек
       GoRoute(
         path: ProfileAuthRoute.path,
@@ -592,6 +599,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               initialLevel: FlexPurchaseLadder.levelForClassicProduct(product),
             ),
           );
+        },
+      ),
+      GoRoute(
+        path: '/flex',
+        redirect: (context, state) {
+          final q = state.uri.query;
+          return q.isEmpty
+              ? FlexSubscriptionRoute.path
+              : '${FlexSubscriptionRoute.path}?$q';
         },
       ),
       GoRoute(
@@ -1704,6 +1720,11 @@ class CreateRecipeRoute {
 class SettingsRoute {
   static const path = '/settings';
   static const name = 'settings';
+}
+
+class BlockedUsersRoute {
+  static const path = '/settings/blocked';
+  static const name = 'blocked_users';
 }
 
 
