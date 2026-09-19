@@ -146,10 +146,22 @@ def _issue_auth_tokens(
 
 
 def _session_response(row, *, current_session_id: int | None) -> AuthSessionResponse:
+    from app.services.session_device_label import (
+        display_device_name,
+        display_device_platform,
+    )
+
     return AuthSessionResponse(
         id=row.id,
-        device_name=row.device_name,
-        device_platform=row.device_platform,
+        device_name=display_device_name(
+            device_name=row.device_name,
+            device_platform=row.device_platform,
+            user_agent=row.user_agent,
+        ),
+        device_platform=display_device_platform(
+            device_platform=row.device_platform,
+            user_agent=row.user_agent,
+        ),
         ip_address=row.ip_address,
         created_at=row.created_at.isoformat() if row.created_at else "",
         last_seen_at=row.last_seen_at.isoformat() if row.last_seen_at else "",

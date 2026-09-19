@@ -81,6 +81,54 @@ def test_revoke_other_keeps_current(db_session):
     assert svc.get_active_session(db_session, session_id=b.id, jti=b.jti) is None
 
 
+def test_create_session_fills_label_from_user_agent(db_session):
+    user = _user(db_session)
+    _, _, session = svc.create_session(
+        db_session,
+        user=user,
+        user_agent=(
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+        ),
+    )
+    db_session.commit()
+    assert session.device_name == "Chrome · Linux"
+    assert session.device_platform == "web"
+
+
+def test_session_display_name_prefers_explicit_device():
+    from app.services.session_device_label import display_device_name
+
+    assert (
+        display_device_name(
+            device_name="HanWe browser",
+            device_platform="web",
+            user_agent="Mozilla/5.0 Chrome/128",
+        )
+        == "HanWe browser"
+    )
+    assert (
+        display_device_name(
+            device_name=None,
+            device_platform=None,
+            user_agent=(
+                "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
+                "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 "
+                "Mobile/15E148 Safari/604.1"
+            ),
+        )
+        == "Safari · iPhone"
+    )
+    assert (
+        display_device_name(
+            device_name=None,
+            device_platform="web",
+            user_agent=None,
+        )
+        == "Браузер"
+    )
+
+
 def test_rotate_updates_jti(db_session):
     user = _user(db_session)
     _, refresh1, session = svc.create_session(db_session, user=user)

@@ -1107,9 +1107,16 @@ class AuthService {
     } else {
       platform = 'other';
     }
+    final device = switch (platform) {
+      'web' => 'HanWe browser',
+      'ios' => 'HanWe iPhone',
+      'android' => 'HanWe Android',
+      'macos' => 'HanWe Mac',
+      _ => 'HanWe',
+    };
     return {
       'X-Client-Platform': platform,
-      'X-Client-Device': 'HanWe $platform',
+      'X-Client-Device': device,
     };
   }
 

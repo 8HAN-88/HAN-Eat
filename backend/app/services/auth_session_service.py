@@ -29,13 +29,27 @@ def create_session(
     user_agent: Optional[str] = None,
     ip_address: Optional[str] = None,
 ) -> tuple[str, str, AuthSession]:
+    from app.services.session_device_label import (
+        label_from_user_agent,
+        platform_from_user_agent,
+    )
+
+    ua = (user_agent or "").strip()[:512] or None
+    name = (device_name or "").strip()[:120] or None
+    platform = (device_platform or "").strip()[:40] or None
+    if not name:
+        derived = label_from_user_agent(ua)
+        name = derived[:120] if derived else None
+    if not platform:
+        platform = platform_from_user_agent(ua)
+
     jti = _new_jti()
     session = AuthSession(
         user_id=user.id,
         jti=jti,
-        device_name=(device_name or "").strip()[:120] or None,
-        device_platform=(device_platform or "").strip()[:40] or None,
-        user_agent=(user_agent or "").strip()[:512] or None,
+        device_name=name,
+        device_platform=platform,
+        user_agent=ua,
         ip_address=(ip_address or "").strip()[:64] or None,
         created_at=_now(),
         last_seen_at=_now(),
