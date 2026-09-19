@@ -911,7 +911,7 @@ async def block_user(
         if code == "user_not_found":
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Пользователь не найден")
         if code == "self_block":
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot block yourself")
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Нельзя заблокировать себя")
         raise
     return {"ok": True}
 
@@ -926,7 +926,7 @@ async def unblock_user(
     ok = svc.unblock_user(current_user.id, user_id)
     db.commit()
     if not ok:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Block not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Блокировка не найдена")
     return {"ok": True}
 
 

@@ -333,7 +333,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
         if (opt.isUpgrade && opt.amountDue > 0) {
           return 'Улучшить за ${opt.amountDue.toStringAsFixed(0)} ₽';
         }
-        return 'Улучшить тариф';
+        return 'Оформить уровень выше';
       }
     }
     if (_prices?.provider == 'sbp') {

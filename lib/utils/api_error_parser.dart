@@ -254,6 +254,52 @@ const _knownEnglishDetails = <String, String>{
   'Call is not active': 'Звонок не активен',
   'Yandex OAuth is not configured': 'Вход через Яндекс не настроен',
   'Yandex account has no email': 'В аккаунте Яндекса нет email',
+  'Saved chat failed': 'Не удалось открыть избранное',
+  'Folder not found': 'Папка не найдена',
+  'Cannot chat with yourself': 'Нельзя написать себе',
+  'User blocked': 'Пользователь в чёрном списке',
+  'Chat create failed': 'Не удалось создать чат',
+  'Group create failed': 'Не удалось создать группу',
+  'Invite link error': 'Не удалось создать ссылку-приглашение',
+  'Invite link not found': 'Ссылка-приглашение не найдена',
+  'Join failed': 'Не удалось вступить',
+  'Scheduled message not found': 'Отложенное сообщение не найдено',
+  'Only sender can update': 'Обновить может только отправитель',
+  'Only sender can stop': 'Остановить может только отправитель',
+  'Invalid scope': 'Неверная область удаления',
+  'Not a group chat': 'Это не группа',
+  'Topic not found': 'Тема не найдена',
+  'Ban not found': 'Блокировка не найдена',
+  'Request not found': 'Заявка не найдена',
+  'Contact not found': 'Контакт не найден',
+  'Content is protected': 'Контент защищён от пересылки',
+  'Message is too old to delete for everyone':
+      'Сообщение слишком старое, чтобы удалить у всех',
+  'Too many chat actions. Please try again later.':
+      'Слишком много действий в чате. Подождите немного.',
+  'Cannot block yourself': 'Нельзя заблокировать себя',
+  'Block not found': 'Блокировка не найдена',
+  'slug already exists': 'Такая функция уже есть',
+  'key required': 'Нужен ключ блока',
+  'cannot_ban_self': 'Нельзя заблокировать себя',
+  'cannot_ban_creator': 'Нельзя заблокировать создателя',
+  'cannot_ban_admin': 'Нельзя заблокировать администратора',
+  'cannot_restrict_self': 'Нельзя ограничить себя',
+  'cannot_restrict_creator': 'Нельзя ограничить создателя',
+  'cannot_restrict_admin': 'Нельзя ограничить администратора',
+  'cannot_change_self_role': 'Нельзя изменить свою роль',
+  'already_reviewed': 'Заявка уже рассмотрена',
+  'group_member_banned': 'Пользователь заблокирован в группе',
+  'empty_title': 'Название не может быть пустым',
+  'empty_draft': 'Черновик пустой',
+  'callback_not_found': 'Кнопка не найдена',
+  'not_live_location': 'Это не живая геопозиция',
+  'bad_bubble_accent': 'Неверный цвет пузырей',
+  'target_not_admin': 'Пользователь не модератор',
+  'invalid_restriction_until': 'Неверная дата ограничения',
+  'invalid_ban_until': 'Неверная дата блокировки',
+  'not_a_forum': 'В этой группе темы выключены',
+  'cannot_close_general': 'Общую тему закрыть нельзя',
 };
 
 String? localizeKnownEnglishDetail(String detail) =>
@@ -273,7 +319,7 @@ String parseApiErrorMessage(
       'timeout' => 'Превышено время ожидания ответа от сервера',
       'offline' => 'Войдите в аккаунт',
       'group_slow_mode' =>
-        'Слишком часто. В этом чате включен slow mode, подождите немного.',
+        'Слишком часто. В этом чате включен медленный режим, подождите немного.',
       'group_flood_limited' =>
         'Превышен лимит сообщений в минуту. Подождите и попробуйте снова.',
       'paid_media_locked' => 'Сначала откройте платное медиа, чтобы переслать',
@@ -336,6 +382,9 @@ String parseApiErrorMessage(
     if (code == 'MINIAPP_RATE_LIMIT_EXCEEDED') {
       return 'Слишком много запросов к мини-приложению. Подождите немного.';
     }
+    if (code == 'CHAT_RATE_LIMIT_EXCEEDED') {
+      return 'Слишком много действий в чате. Подождите немного.';
+    }
     if (code == 'LEGAL_CONSENT_REQUIRED') {
       return 'Примите документы перед оплатой';
     }
@@ -350,7 +399,7 @@ String parseApiErrorMessage(
       if (retry != null && retry > 0) {
         return 'Слишком часто. Подождите $retryс и попробуйте снова.';
       }
-      return 'Слишком часто. В этом чате включен slow mode, подождите немного.';
+      return 'Слишком часто. В этом чате включен медленный режим, подождите немного.';
     }
     if (code == 'group_flood_limited') {
       final retry = parseApiRetryAfterSeconds(detail);

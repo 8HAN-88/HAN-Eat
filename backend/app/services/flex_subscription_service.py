@@ -540,7 +540,7 @@ class FlexSubscriptionService:
         if not slug:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Нужен идентификатор функции")
         if self.db.query(SubscriptionFeature).filter(SubscriptionFeature.slug == slug).first():
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "slug already exists")
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Такая функция уже есть")
         feat = SubscriptionFeature(**self._feature_fields(data, slug=slug))
         self.db.add(feat)
         self.db.flush()
@@ -568,7 +568,7 @@ class FlexSubscriptionService:
         else:
             key = str(data.get("key") or "").strip()
             if not key:
-                raise HTTPException(status.HTTP_400_BAD_REQUEST, "key required")
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Нужен ключ блока")
             block = (
                 self.db.query(SubscriptionFeatureBlock)
                 .filter(SubscriptionFeatureBlock.key == key)

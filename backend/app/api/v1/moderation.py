@@ -41,6 +41,24 @@ from app.services.bot_webhook_queue_service import (
 router = APIRouter()
 
 
+def _moderation_notice_data(
+    db: Session,
+    item: ModerationQueue,
+    extra: Dict[str, Any],
+) -> Dict[str, Any]:
+    data = dict(extra)
+    if item.content_type != "comment":
+        return data
+    comment = db.query(Comment).filter(Comment.id == item.content_id).first()
+    if comment is None:
+        return data
+    data["post_id"] = comment.post_id
+    post = db.query(Post).filter(Post.id == comment.post_id).first()
+    if post is not None and post.channel_id is not None:
+        data["channel_id"] = post.channel_id
+    return data
+
+
 def _webhook_operations_page(
     db: Session,
     *,
@@ -990,7 +1008,7 @@ async def approve_content(
             entity_type=item.content_type,
             entity_id=item.content_id,
             actor_id=current_user.id,
-            data={"action": "approved"},
+            data=_moderation_notice_data(db, item, {"action": "approved"}),
         )
 
     _log_moderation_action(
@@ -1062,7 +1080,11 @@ async def reject_content(
             entity_type=item.content_type,
             entity_id=item.content_id,
             actor_id=current_user.id,
-            data={"action": "rejected", "reason": request.reason},
+            data=_moderation_notice_data(
+                db,
+                item,
+                {"action": "rejected", "reason": request.reason},
+            ),
         )
 
     _log_moderation_action(

@@ -1837,7 +1837,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             if (activeCooldownSeconds > 0) ...[
               const SizedBox(height: 12),
               Text(
-                'Сейчас активно: ${floodCooldownActive ? 'антифлуд' : 'slow mode'}. '
+                'Сейчас активно: ${floodCooldownActive ? 'антифлуд' : 'медленный режим'}. '
                 'Отправка будет доступна через ${_formatSlowModeCountdown(activeCooldownSeconds)}.',
               ),
             ],

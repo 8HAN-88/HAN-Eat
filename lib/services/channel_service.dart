@@ -1015,7 +1015,7 @@ class ChannelService {
     );
   }
 
-  /// Продвижение поста в ленте (Creator / Pro).
+  /// Продвижение поста в ленте (уровень 16).
   static Future<Map<String, dynamic>> pinPost(int postId) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) throw Exception('Not authenticated');

@@ -126,9 +126,13 @@ async def proxy_recipe_image_v2(
     except HTTPException:
         raise
     except requests.RequestException as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching image: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Не удалось загрузить изображение: {str(e)}"
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Неожиданная ошибка: {str(e)}"
+        )
 
 
 @router.get("/recipes/image-proxy")
@@ -187,6 +191,6 @@ async def kitchen_recipes_gone(request: Request, path: str | None = None):
     ):
         url = request.query_params.get("url")
         if not url:
-            raise HTTPException(status_code=422, detail="url is required")
+            raise HTTPException(status_code=422, detail="Нужна ссылка")
         return await proxy_recipe_image_v2(url)
     return _kitchen_gone()
