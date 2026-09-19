@@ -197,12 +197,22 @@ String notificationActionText(NotificationDisplayItem group) {
 String notificationLeadText(NotificationDisplayItem group) {
   final actors = group.actors;
   if (actors.isEmpty) {
-    return notificationActionText(group);
+    return _sentenceCap(notificationActionText(group));
   }
   if (group.type == 'like' || group.type == 'repost') {
     return '${groupedActorsLabel(actors)} ${notificationActionText(group)}';
   }
   return '${_actorLabel(actors.first)} ${notificationActionText(group)}';
+}
+
+/// Standalone inbox lines start with a capital (sentence case).
+String _sentenceCap(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return value;
+  final first = trimmed[0];
+  final upper = first.toUpperCase();
+  if (first == upper) return trimmed;
+  return '$upper${trimmed.substring(1)}';
 }
 
 String _likedTargetLabel(String? postType) {

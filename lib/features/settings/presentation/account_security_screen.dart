@@ -85,6 +85,41 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
             ),
           ),
           const SizedBox(height: 12),
+          Card(
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.password_outlined),
+                  title: const Text('Пароль и вход'),
+                  subtitle:
+                      const Text('Смена пароля, почты и вход через сервисы'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push(ProfileAuthRoute.path),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.shield_outlined),
+                  title: const Text('Двухфакторная защита'),
+                  subtitle: const Text(
+                    'Код из аутентификатора при входе',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push(TwoFactorSetupRoute.path),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.favorite_outline),
+                  title: const Text('Близкие друзья'),
+                  subtitle: const Text(
+                    'Кто видит сторис «Близкие друзья»',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push(CloseFriendsRoute.path),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
           Text(
             'Активные сеансы',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -147,41 +182,6 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
                 ],
               ),
             ),
-          const SizedBox(height: 12),
-          Card(
-            child: Column(
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.password_outlined),
-                  title: const Text('Пароль и вход'),
-                  subtitle:
-                      const Text('Смена пароля, почты и вход через сервисы'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => context.push(ProfileAuthRoute.path),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.shield_outlined),
-                  title: const Text('Двухфакторная защита'),
-                  subtitle: const Text(
-                    'Код из аутентификатора при входе',
-                  ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => context.push(TwoFactorSetupRoute.path),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.favorite_outline),
-                  title: const Text('Близкие друзья'),
-                  subtitle: const Text(
-                    'Кто видит сторис «Близкие друзья»',
-                  ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => context.push(CloseFriendsRoute.path),
-                ),
-              ],
-            ),
-          ),
           const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: _busy || _sessions.length <= 1 ? null : _revokeOthers,

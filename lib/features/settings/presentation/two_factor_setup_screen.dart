@@ -198,8 +198,15 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
                     if (!_enabled && _setup == null) ...[
                       FilledButton.icon(
                         onPressed: _busy ? null : _startSetup,
-                        icon: const Icon(Icons.add_moderator_outlined),
-                        label: const Text('Настроить'),
+                        icon: _busy
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.add_moderator_outlined),
+                        label: Text(_busy ? 'Настраиваем…' : 'Настроить'),
                       ),
                       if (_setupError != null) ...[
                         const SizedBox(height: 12),
@@ -211,7 +218,15 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
                         ),
                         TextButton(
                           onPressed: _busy ? null : _startSetup,
-                          child: const Text('Повторить'),
+                          child: _busy
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Text('Повторить'),
                         ),
                       ],
                     ],
@@ -259,7 +274,14 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
                       const SizedBox(height: 12),
                       FilledButton(
                         onPressed: _busy ? null : _enable,
-                        child: const Text('Включить защиту'),
+                        child: _busy
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Text('Включить защиту'),
                       ),
                     ],
                     if (_enabled) ...[
@@ -294,7 +316,14 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
                         style: FilledButton.styleFrom(
                           backgroundColor: Theme.of(context).colorScheme.error,
                         ),
-                        child: const Text('Отключить защиту'),
+                        child: _busy
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Text('Отключить защиту'),
                       ),
                     ],
                   ],

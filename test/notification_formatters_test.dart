@@ -71,6 +71,17 @@ void main() {
     expect(headers, contains('Сегодня'));
   });
 
+  test('standalone inbox lines use sentence case', () {
+    final entries = buildNotificationSections([
+      _item(id: 1, type: 'subscription_expiring', isRead: true),
+    ]);
+    final row = entries.whereType<NotificationRowItem>().single;
+    expect(
+      notificationLeadText(row.group),
+      'Подписка скоро истекает',
+    );
+  });
+
   test('hides scheduled publish notifications', () {
     final entries = buildNotificationSections([
       _item(id: 1, type: 'post_scheduled_published'),
