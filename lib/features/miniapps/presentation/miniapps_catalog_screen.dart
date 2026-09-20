@@ -16,7 +16,6 @@ import '../../bots/data/bot_models.dart';
 import '../../bots/presentation/bot_detail_screen.dart';
 import '../data/miniapp_models.dart';
 import '../data/miniapps_service.dart';
-import 'miniapp_webview_screen.dart';
 
 /// Раздел мини-приложений как в Telegram: каталог + публикация своих.
 class MiniAppsCatalogScreen extends StatefulWidget {
@@ -241,20 +240,7 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
 
   Future<void> _openMiniApp(MiniAppItem app) async {
     try {
-      final launch = await MiniAppsService.getLaunchContext(app.id);
-      if (!mounted) return;
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => MiniAppWebViewScreen(
-            title: app.name,
-            subtitle: '@${app.botUsername}',
-            url: launch.url,
-            initData: launch.initData,
-            initDataUnsafe: launch.initDataUnsafe,
-            miniAppId: app.id,
-          ),
-        ),
-      );
+      await context.push(MiniAppOpenRoute.pathFor(app.id));
       if (mounted) _reload();
     } catch (e) {
       if (!mounted) return;

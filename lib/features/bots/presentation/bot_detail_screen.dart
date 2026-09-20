@@ -15,7 +15,6 @@ import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/telegram_ui.dart';
 import '../../miniapps/data/miniapp_models.dart';
 import '../../miniapps/data/miniapps_service.dart';
-import '../../miniapps/presentation/miniapp_webview_screen.dart';
 import '../data/bot_models.dart';
 import '../data/bot_token_storage.dart';
 
@@ -1386,20 +1385,7 @@ class _BotMiniAppsScreenState extends State<BotMiniAppsScreen> {
 
   Future<void> _openApp(MiniAppItem app) async {
     try {
-      final launch = await MiniAppsService.getLaunchContext(app.id);
-      if (!mounted) return;
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => MiniAppWebViewScreen(
-            title: app.name,
-            subtitle: '@${widget.botUsername}',
-            url: launch.url,
-            initData: launch.initData,
-            initDataUnsafe: launch.initDataUnsafe,
-            miniAppId: app.id,
-          ),
-        ),
-      );
+      await context.push(MiniAppOpenRoute.pathFor(app.id));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

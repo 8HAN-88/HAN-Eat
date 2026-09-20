@@ -14,13 +14,13 @@ import 'channel_post_card.dart';
 class ChannelSearchScreen extends ConsumerStatefulWidget {
   final int channelId;
   final String initialQuery;
-  final ChannelDetail channel;
+  final ChannelDetail? channel;
 
   const ChannelSearchScreen({
     super.key,
     required this.channelId,
-    required this.initialQuery,
-    required this.channel,
+    this.initialQuery = '',
+    this.channel,
   });
 
   @override
@@ -35,10 +35,15 @@ class _ChannelSearchScreenState extends ConsumerState<ChannelSearchScreen> {
   bool _isLoading = false;
   String? _error;
   Timer? _searchDebounce;
+  ChannelDetail? _channel;
 
   @override
   void initState() {
     super.initState();
+    _channel = widget.channel;
+    if (_channel == null) {
+      unawaited(_hydrateChannel());
+    }
     _searchController.text = widget.initialQuery;
     if (widget.initialQuery.isNotEmpty) {
       _performSearch();
@@ -46,6 +51,14 @@ class _ChannelSearchScreenState extends ConsumerState<ChannelSearchScreen> {
 
     // Слушаем изменения в поле поиска для поиска в реальном времени
     _searchController.addListener(_onSearchChanged);
+  }
+
+  Future<void> _hydrateChannel() async {
+    try {
+      final channel = await ChannelService.getChannel(widget.channelId);
+      if (!mounted) return;
+      setState(() => _channel = channel);
+    } catch (_) {}
   }
 
   @override
@@ -200,6 +213,11 @@ class _ChannelSearchScreenState extends ConsumerState<ChannelSearchScreen> {
           );
         }
 
+        final channel = _channel;
+        if (channel == null) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
         if (_posts.isEmpty) {
           return AppEmptyState(
             icon: Icons.search_off_rounded,
@@ -230,7 +248,7 @@ class _ChannelSearchScreenState extends ConsumerState<ChannelSearchScreen> {
                 child: ChannelPostCard(
                   post: post,
                   channelId: widget.channelId,
-                  channel: widget.channel,
+                  channel: channel,
                   onCommentTap: () => showPostCommentsSheet(
                     context,
                     postId: post.id,

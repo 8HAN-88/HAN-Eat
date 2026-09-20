@@ -187,6 +187,35 @@ void main() {
         NotificationSettingsRoute.path);
     expect(shortcutPathAlias('/notif-settings'), NotificationSettingsRoute.path);
     expect(shortcutPathAlias('/export'), BackupRoute.path);
+    expect(StoryViewerRoute.pathFor(9), '/stories/9');
+    expect(ChannelSearchRoute.pathFor(1), '/channel/1/search');
+    expect(ChatGroupModerationLogRoute.pathFor(22), '/chats/thread/22/log');
+    expect(MiniAppOpenRoute.pathFor(3), '/webapp/3');
+    expect(
+      DonateRoute.pathFor(recipientId: 11, recipientName: 'Админ'),
+      '/donate?to=11&name=%D0%90%D0%B4%D0%BC%D0%B8%D0%BD',
+    );
+    expect(shortcutPathAlias('/marketplace'), StarGiftsMarketplaceRoute.path);
+    expect(shortcutPathAlias('/qr'), ProfileTabRoute.path);
+    expect(shortcutPathAlias('/scan'), ProfileTabRoute.path);
+    expect(shortcutPathAlias('/gif'), ChatsRoute.path);
+    expect(shortcutPathAlias('/emoji'), ChatsRoute.path);
+    expect(shortcutPathAlias('/webapp'), MiniAppsRoute.path);
+    expect(shortcutPathAlias('/miniapp'), MiniAppsRoute.path);
+    expect(shortcutPathAlias('/privacy-policy'), SupportSecurityRoute.path);
+    expect(shortcutPathAlias('/tos'), SupportSecurityRoute.path);
+    expect(shortcutPathAlias('/cookies'), SupportSecurityRoute.path);
+    expect(shortcutPathAlias('/settings/language'), SettingsRoute.path);
+    expect(shortcutPathAlias('/settings/data'), SettingsRoute.path);
+    expect(shortcutPathAlias('/settings/storage'), SettingsRoute.path);
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/stories/9'),
+      '/stories/9',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/donate?to=11'),
+      '/donate?to=11',
+    );
     expect(
       parseDeepLinkToGoPath('https://haneat.app/app/#/addstickers/cute'),
       '/addstickers/cute',

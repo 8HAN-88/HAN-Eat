@@ -17,6 +17,8 @@ import '../../../services/server_config.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../utils/session_snackbar.dart';
 import '../../../utils/video_player_helper.dart';
+import '../../../widgets/app_empty_state.dart';
+import '../../../services/story_feed_cache.dart';
 import '../../chat/application/chat_open_direct.dart';
 import '../../chat/application/chat_ready_outgoing.dart';
 import '../../chat/presentation/widgets/chat_story_reply_bubble.dart';
@@ -54,6 +56,161 @@ class StoryItem {
   bool get isOwn {
     final me = AuthService.instance.currentUser;
     return me != null && me.id == authorId;
+  }
+}
+
+StoryItem storyItemFromDto(StoryDto story) => StoryItem(
+      id: '${story.id}',
+      mediaUrl: story.mediaUrl,
+      authorId: story.author.id,
+      authorName: story.author.name,
+      authorAvatar: story.author.avatarUrl,
+      thumbnailUrl: story.thumbnailUrl,
+      isVideo: story.isVideo,
+      viewsCount: story.viewsCount,
+      myReaction: story.myReaction,
+      reactions: story.reactions,
+      duration: story.isVideo
+          ? const Duration(seconds: 30)
+          : const Duration(seconds: 5),
+    );
+
+class StoryViewerLoaderScreen extends StatefulWidget {
+  const StoryViewerLoaderScreen({
+    super.key,
+    required this.storyId,
+    this.initialStories,
+  });
+
+  final int storyId;
+  final List<StoryItem>? initialStories;
+
+  @override
+  State<StoryViewerLoaderScreen> createState() => _StoryViewerLoaderScreenState();
+}
+
+class _StoryViewerLoaderScreenState extends State<StoryViewerLoaderScreen> {
+  List<StoryItem> _stories = const [];
+  bool _loading = true;
+  Object? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final seed = widget.initialStories;
+    if (seed != null && seed.isNotEmpty) {
+      _stories = seed;
+      _loading = false;
+    }
+    unawaited(_hydrate());
+  }
+
+  int _indexOf(List<StoryItem> items) {
+    final key = '${widget.storyId}';
+    final index = items.indexWhere((item) => item.id == key);
+    return index >= 0 ? index : 0;
+  }
+
+  Future<void> _hydrate() async {
+    if (_stories.isEmpty) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
+    try {
+      List<StoryDto> live;
+      try {
+        live = await StoryService.fetchActiveStories();
+      } catch (_) {
+        live = StoryFeedCache.peek();
+      }
+      if (!mounted) return;
+      StoryDto? match;
+      for (final story in live) {
+        if (story.id == widget.storyId) {
+          match = story;
+          break;
+        }
+      }
+      if (match == null) {
+        try {
+          final mine = await StoryService.fetchMyStories();
+          for (final story in mine) {
+            if (story.id == widget.storyId) {
+              match = story;
+              break;
+            }
+          }
+        } catch (_) {}
+      }
+      if (!mounted) return;
+      if (match == null) {
+        if (_stories.isNotEmpty) {
+          setState(() => _loading = false);
+          return;
+        }
+        setState(() {
+          _loading = false;
+          _error = 'missing';
+        });
+        return;
+      }
+      final found = match;
+      final groups = StoryService.groupByAuthor(live);
+      List<StoryDto> groupStories = [found];
+      for (final group in groups) {
+        if (group.author.id == found.author.id) {
+          groupStories = group.stories;
+          break;
+        }
+      }
+      if (!groupStories.any((s) => s.id == found.id)) {
+        groupStories = [found, ...groupStories];
+      }
+      setState(() {
+        _stories = groupStories.map(storyItemFromDto).toList();
+        _loading = false;
+        _error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      if (_stories.isNotEmpty) {
+        setState(() => _loading = false);
+        return;
+      }
+      setState(() {
+        _error = e;
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_stories.isNotEmpty) {
+      return StoryViewerScreen(
+        stories: _stories,
+        initialIndex: _indexOf(_stories),
+      );
+    }
+    final err = _error;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Момент')),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : AppEmptyState(
+              icon: Icons.auto_awesome_outlined,
+              title: 'Сторис не найдена',
+              subtitle: err == null || err == 'missing'
+                  ? 'Ссылка устарела или момент уже истёк'
+                  : userVisibleError(err),
+              action: FilledButton(
+                onPressed: () => context.go(StoriesRoute.path),
+                child: const Text('К моментам'),
+              ),
+            ),
+    );
   }
 }
 

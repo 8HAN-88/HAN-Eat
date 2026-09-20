@@ -88,13 +88,11 @@ class _FeedStoriesStripState extends State<FeedStoriesStrip> {
   }
 
   Future<void> _openGroup(StoryGroup group) async {
+    if (group.stories.isEmpty) return;
     setState(() => _seenAuthorIds.add(group.author.id));
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => StoryViewerScreen(
-          stories: group.stories.map(_toViewerItem).toList(),
-        ),
-      ),
+    await context.push(
+      StoryViewerRoute.pathFor(group.stories.first.id),
+      extra: group.stories.map(storyItemFromDto).toList(),
     );
     for (final story in group.stories) {
       try {
@@ -104,22 +102,6 @@ class _FeedStoriesStripState extends State<FeedStoriesStrip> {
       }
     }
   }
-
-  StoryItem _toViewerItem(StoryDto story) => StoryItem(
-        id: '${story.id}',
-        mediaUrl: story.mediaUrl,
-        authorId: story.author.id,
-        authorName: story.author.name,
-        authorAvatar: story.author.avatarUrl,
-        thumbnailUrl: story.thumbnailUrl,
-        isVideo: story.isVideo,
-        viewsCount: story.viewsCount,
-        myReaction: story.myReaction,
-        reactions: story.reactions,
-        duration: story.isVideo
-            ? const Duration(seconds: 30)
-            : const Duration(seconds: 5),
-      );
 
   @override
   Widget build(BuildContext context) {

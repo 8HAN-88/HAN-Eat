@@ -19,7 +19,6 @@ import '../application/channels_list_refresh_provider.dart';
 import '../application/channel_posts_phase.dart';
 import 'channel_settings_bottom_sheet.dart';
 import 'channel_detail_screen_tabs.dart';
-import 'channel_search_screen.dart';
 import 'channel_create_content_sheet.dart';
 
 import 'channel_post_card.dart';
@@ -486,15 +485,9 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
 
   void _openSearchFullscreen() {
     if (_channel == null) return;
-    Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        fullscreenDialog: true,
-        builder: (context) => ChannelSearchScreen(
-          channelId: widget.channelId,
-          initialQuery: '',
-          channel: _channel!,
-        ),
-      ),
+    context.push(
+      ChannelSearchRoute.pathFor(widget.channelId),
+      extra: _channel,
     );
   }
 
