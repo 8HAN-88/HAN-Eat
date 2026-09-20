@@ -4,10 +4,120 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../app/app_router.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/app_empty_state.dart';
+import '../data/miniapp_models.dart';
 import '../data/miniapps_service.dart';
+
+class MiniAppOpenLoaderScreen extends StatefulWidget {
+  const MiniAppOpenLoaderScreen({
+    super.key,
+    required this.miniAppId,
+    this.conversationId,
+    this.startParam,
+  });
+
+  final int miniAppId;
+  final int? conversationId;
+  final String? startParam;
+
+  @override
+  State<MiniAppOpenLoaderScreen> createState() =>
+      _MiniAppOpenLoaderScreenState();
+}
+
+class _MiniAppOpenLoaderScreenState extends State<MiniAppOpenLoaderScreen> {
+  MiniAppWebViewScreen? _ready;
+  bool _loading = true;
+  Object? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_hydrate());
+  }
+
+  Future<void> _hydrate() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      MiniAppItem? item;
+      try {
+        final mine = await MiniAppsService.fetchMyMiniApps();
+        for (final app in mine) {
+          if (app.id == widget.miniAppId) {
+            item = app;
+            break;
+          }
+        }
+      } catch (_) {}
+      if (item == null) {
+        try {
+          final catalog = await MiniAppsService.fetchCatalog();
+          for (final app in catalog) {
+            if (app.id == widget.miniAppId) {
+              item = app;
+              break;
+            }
+          }
+        } catch (_) {}
+      }
+      final launch = await MiniAppsService.getLaunchContext(
+        widget.miniAppId,
+        conversationId: widget.conversationId,
+        startParam: widget.startParam,
+      );
+      if (!mounted) return;
+      setState(() {
+        _ready = MiniAppWebViewScreen(
+          title: item?.name ?? 'Mini App',
+          subtitle: item == null ? '' : '@${item.botUsername}',
+          url: launch.url,
+          initData: launch.initData,
+          initDataUnsafe: launch.initDataUnsafe,
+          miniAppId: widget.miniAppId,
+          conversationId: widget.conversationId,
+        );
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e;
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ready = _ready;
+    if (ready != null) return ready;
+    final err = _error;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Mini App')),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : AppEmptyState(
+              icon: Icons.apps_outlined,
+              title: 'Не удалось открыть',
+              subtitle: err == null
+                  ? 'Ссылка устарела или приложение недоступно'
+                  : userVisibleError(err),
+              action: FilledButton(
+                onPressed: () => context.go(MiniAppsRoute.path),
+                child: const Text('В каталог'),
+              ),
+            ),
+    );
+  }
+}
 
 /// Полноценный экран запуска мини-приложения с WebView + JS bridge (как Telegram WebApp).
 class MiniAppWebViewScreen extends StatefulWidget {

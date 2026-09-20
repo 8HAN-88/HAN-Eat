@@ -94,6 +94,12 @@ import '../features/chat/presentation/chat_media_gallery_screen.dart';
 import '../features/chat/presentation/sticker_pack_manage_screen.dart';
 import '../features/chat/presentation/sticker_pack_preview_screen.dart';
 import '../features/stories/presentation/story_camera_screen.dart';
+import '../features/stories/presentation/story_viewer_screen.dart';
+import '../features/monetization/presentation/donation_screen.dart';
+import '../features/channels/presentation/channel_search_screen.dart';
+import '../services/channel_service.dart';
+import '../features/chat/presentation/chat_group_moderation_log_screen.dart';
+import '../features/miniapps/presentation/miniapp_webview_screen.dart';
 import '../features/chat/presentation/chat_invite_join_screen.dart';
 import '../features/settings/presentation/paid_message_exceptions_screen.dart';
 import '../features/chat/application/chat_private_reply.dart';
@@ -257,6 +263,25 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return '${NotificationSettingsRoute.path}$q';
     case '/export':
       return '${BackupRoute.path}$q';
+    case '/marketplace':
+      return '${StarGiftsMarketplaceRoute.path}$q';
+    case '/qr':
+    case '/scan':
+      return '${ProfileTabRoute.path}$q';
+    case '/gif':
+    case '/emoji':
+      return '${ChatsRoute.path}$q';
+    case '/webapp':
+    case '/miniapp':
+      return '${MiniAppsRoute.path}$q';
+    case '/privacy-policy':
+    case '/tos':
+    case '/cookies':
+      return '${SupportSecurityRoute.path}$q';
+    case '/settings/language':
+    case '/settings/data':
+    case '/settings/storage':
+      return '${SettingsRoute.path}$q';
     default:
       return null;
   }
@@ -637,6 +662,82 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: StoryCreateRoute.name,
         pageBuilder: (context, state) =>
             const MaterialPage(child: StoryCameraScreen()),
+      ),
+      GoRoute(
+        path: StoryViewerRoute.path,
+        name: StoryViewerRoute.name,
+        parentNavigatorKey: hanEatRootNavigatorKey,
+        pageBuilder: (context, state) {
+          final id = parseRoutePositiveId(state.pathParameters['storyId']);
+          if (id == null) {
+            return const MaterialPage(
+              child: InvalidLinkScreen(title: 'Момент'),
+            );
+          }
+          final extra = state.extra;
+          final seeded = extra is List<StoryItem>
+              ? extra
+              : extra is List
+                  ? extra.whereType<StoryItem>().toList()
+                  : null;
+          return MaterialPage(
+            child: StoryViewerLoaderScreen(
+              storyId: id,
+              initialStories: seeded,
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: '/story/:storyId',
+        redirect: (context, state) {
+          final id = parseRoutePositiveId(state.pathParameters['storyId']);
+          if (id == null) return StoriesRoute.path;
+          return StoryViewerRoute.pathFor(id);
+        },
+      ),
+      GoRoute(
+        path: DonateRoute.path,
+        name: DonateRoute.name,
+        pageBuilder: (context, state) {
+          final to = parseRoutePositiveId(state.uri.queryParameters['to']);
+          if (to == null) {
+            return const MaterialPage(
+              child: InvalidLinkScreen(title: 'Донат'),
+            );
+          }
+          return MaterialPage(
+            child: DonationScreen(
+              recipientId: to,
+              recipientName: state.uri.queryParameters['name'] ?? 'пользователь',
+              channelId:
+                  parseRoutePositiveId(state.uri.queryParameters['channel']),
+              postId: parseRoutePositiveId(state.uri.queryParameters['post']),
+              channelName: state.uri.queryParameters['channelName'],
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: MiniAppOpenRoute.path,
+        name: MiniAppOpenRoute.name,
+        parentNavigatorKey: hanEatRootNavigatorKey,
+        pageBuilder: (context, state) {
+          final id = parseRoutePositiveId(state.pathParameters['miniAppId']);
+          if (id == null) {
+            return const MaterialPage(
+              child: InvalidLinkScreen(title: 'Mini App'),
+            );
+          }
+          return MaterialPage(
+            child: MiniAppOpenLoaderScreen(
+              miniAppId: id,
+              conversationId:
+                  parseRoutePositiveId(state.uri.queryParameters['chat']),
+              startParam: state.uri.queryParameters['start'],
+            ),
+          );
+        },
       ),
       GoRoute(
         path: ChannelsListRoute.path,
@@ -1151,6 +1252,84 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         redirect: (context, state) =>
             shortcutPathAlias(state.uri.path, state.uri.query) ??
             BackupRoute.path,
+      ),
+      GoRoute(
+        path: '/marketplace',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            StarGiftsMarketplaceRoute.path,
+      ),
+      GoRoute(
+        path: '/qr',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            ProfileTabRoute.path,
+      ),
+      GoRoute(
+        path: '/scan',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            ProfileTabRoute.path,
+      ),
+      GoRoute(
+        path: '/gif',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            ChatsRoute.path,
+      ),
+      GoRoute(
+        path: '/emoji',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            ChatsRoute.path,
+      ),
+      GoRoute(
+        path: '/webapp',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            MiniAppsRoute.path,
+      ),
+      GoRoute(
+        path: '/miniapp',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            MiniAppsRoute.path,
+      ),
+      GoRoute(
+        path: '/privacy-policy',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SupportSecurityRoute.path,
+      ),
+      GoRoute(
+        path: '/tos',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SupportSecurityRoute.path,
+      ),
+      GoRoute(
+        path: '/cookies',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SupportSecurityRoute.path,
+      ),
+      GoRoute(
+        path: '/settings/language',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SettingsRoute.path,
+      ),
+      GoRoute(
+        path: '/settings/data',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SettingsRoute.path,
+      ),
+      GoRoute(
+        path: '/settings/storage',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SettingsRoute.path,
       ),
       GoRoute(
         path: '/new-group',
@@ -1693,6 +1872,27 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
+        path: ChannelSearchRoute.path,
+        name: ChannelSearchRoute.name,
+        pageBuilder: (context, state) {
+          final channelId =
+              parseRoutePositiveId(state.pathParameters['channelId']);
+          if (channelId == null) {
+            return const MaterialPage(
+              child: InvalidLinkScreen(title: 'Поиск по каналу'),
+            );
+          }
+          final extra = state.extra;
+          return MaterialPage<void>(
+            child: ChannelSearchScreen(
+              channelId: channelId,
+              initialQuery: state.uri.queryParameters['q'] ?? '',
+              channel: extra is ChannelDetail ? extra : null,
+            ),
+          );
+        },
+      ),
+      GoRoute(
         path: '/channel/:channelId/info',
         name: 'channel_info',
         pageBuilder: (context, state) {
@@ -1958,6 +2158,27 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           }
           return MaterialPage(
             child: ChatMediaGalleryScreen(conversationId: id),
+          );
+        },
+      ),
+      GoRoute(
+        path: ChatGroupModerationLogRoute.path,
+        name: ChatGroupModerationLogRoute.name,
+        parentNavigatorKey: hanEatRootNavigatorKey,
+        pageBuilder: (context, state) {
+          final id =
+              parseRoutePositiveId(state.pathParameters['conversationId']);
+          if (id == null) {
+            return const MaterialPage(
+              child: InvalidLinkScreen(title: 'История модерации'),
+            );
+          }
+          final extra = state.extra;
+          return MaterialPage(
+            child: ChatGroupModerationLogScreen(
+              conversationId: id,
+              conversation: extra is ChatConversation ? extra : null,
+            ),
           );
         },
       ),
@@ -2382,6 +2603,14 @@ class ChatGroupInfoRoute {
       '/chats/thread/$conversationId/info';
 }
 
+class ChatGroupModerationLogRoute {
+  static const path = '/chats/thread/:conversationId/log';
+  static const name = 'chat_group_moderation_log';
+
+  static String pathFor(int conversationId) =>
+      '/chats/thread/$conversationId/log';
+}
+
 class StickerPackManageRoute {
   static const path = '/stickers/:packId';
   static const name = 'sticker_pack_manage';
@@ -2402,6 +2631,46 @@ class MiniAppsRoute {
   static const name = 'mini_apps';
 }
 
+class MiniAppOpenRoute {
+  static const path = '/webapp/:miniAppId';
+  static const name = 'mini_app_open';
+
+  static String pathFor(int miniAppId, {int? conversationId, String? start}) {
+    final params = <String, String>{
+      if (conversationId != null) 'chat': '$conversationId',
+      if (start != null && start.trim().isNotEmpty) 'start': start.trim(),
+    };
+    if (params.isEmpty) return '/webapp/$miniAppId';
+    return Uri(
+      path: '/webapp/$miniAppId',
+      queryParameters: params,
+    ).toString();
+  }
+}
+
+class DonateRoute {
+  static const path = '/donate';
+  static const name = 'donate';
+
+  static String pathFor({
+    required int recipientId,
+    required String recipientName,
+    int? channelId,
+    int? postId,
+    String? channelName,
+  }) {
+    final params = <String, String>{
+      'to': '$recipientId',
+      if (recipientName.trim().isNotEmpty) 'name': recipientName.trim(),
+      if (channelId != null) 'channel': '$channelId',
+      if (postId != null) 'post': '$postId',
+      if (channelName != null && channelName.trim().isNotEmpty)
+        'channelName': channelName.trim(),
+    };
+    return Uri(path: path, queryParameters: params).toString();
+  }
+}
+
 class StoriesRoute {
   static const path = '/stories';
   static const name = 'stories';
@@ -2410,6 +2679,24 @@ class StoriesRoute {
 class StoryCreateRoute {
   static const path = '/stories/create';
   static const name = 'story_create';
+}
+
+class StoryViewerRoute {
+  static const path = '/stories/:storyId';
+  static const name = 'story_viewer';
+
+  static String pathFor(int storyId) => '/stories/$storyId';
+}
+
+class ChannelSearchRoute {
+  static const path = '/channel/:channelId/search';
+  static const name = 'channel_search';
+
+  static String pathFor(int channelId, {String? query}) {
+    final q = query?.trim() ?? '';
+    if (q.isEmpty) return '/channel/$channelId/search';
+    return '/channel/$channelId/search?q=${Uri.encodeQueryComponent(q)}';
+  }
 }
 
 class ChatThreadRoute {
@@ -2850,6 +3137,9 @@ class EditProfilePostRoute {
 /// Карточка канала и вложенные пути (совпадают с GoRouter).
 class ChannelDetailRoute {
   static String pathFor(int channelId) => '/channel/$channelId';
+
+  static String search(int channelId, {String? query}) =>
+      ChannelSearchRoute.pathFor(channelId, query: query);
 
   static String info(int channelId, {String? channelName}) {
     final base = '${pathFor(channelId)}/info';

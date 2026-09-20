@@ -11,8 +11,6 @@ import 'package:intl/intl.dart';
 
 import 'package:go_router/go_router.dart';
 
-import '../../../miniapps/presentation/miniapps_catalog_screen.dart';
-
 import '../../../../app/app_router.dart';
 import '../../../../core/haptics/app_haptics.dart';
 import '../../../../core/platform/device_location.dart';
@@ -520,11 +518,7 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
 
   Future<void> _openMiniAppsCatalog() async {
     Navigator.of(context).pop();
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const MiniAppsCatalogScreen(),
-      ),
-    );
+    await context.push(MiniAppsRoute.path);
   }
 
   void _toggleSearch() {

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'donation_screen.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../app/app_router.dart';
 
 /// Кнопка "Поддержать" для профиля канала / поста
 class SupportButton extends StatelessWidget {
@@ -21,21 +23,15 @@ class SupportButton extends StatelessWidget {
   final bool compact;
 
   Future<void> _openDonationScreen(BuildContext context) async {
-    final result = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => DonationScreen(
-          recipientId: recipientId,
-          recipientName: recipientName,
-          channelId: channelId,
-          postId: postId,
-          channelName: channelName,
-        ),
+    await context.push(
+      DonateRoute.pathFor(
+        recipientId: recipientId,
+        recipientName: recipientName,
+        channelId: channelId,
+        postId: postId,
+        channelName: channelName,
       ),
     );
-
-    if (result == true && context.mounted) {
-      // Можно показать благодарность или обновить UI
-    }
   }
 
   @override

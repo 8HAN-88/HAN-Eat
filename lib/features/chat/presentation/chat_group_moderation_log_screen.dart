@@ -1,17 +1,24 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../app/app_router.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/chat_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/app_empty_state.dart';
 
 class ChatGroupModerationLogScreen extends StatefulWidget {
   const ChatGroupModerationLogScreen({
     super.key,
-    required this.conversation,
+    this.conversation,
+    this.conversationId,
   });
 
-  final ChatConversation conversation;
+  final ChatConversation? conversation;
+  final int? conversationId;
 
   @override
   State<ChatGroupModerationLogScreen> createState() =>
@@ -31,23 +38,58 @@ class _ChatGroupModerationLogScreenState
 
   String _selectedFilter = 'all';
   bool _loading = true;
+  bool _missing = false;
   Object? _error;
   List<ChatGroupModerationLogItem> _items = [];
+  ChatConversation? _conversation;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _conversation = widget.conversation;
+    if (_conversation == null && widget.conversationId != null) {
+      unawaited(_hydrate());
+    } else if (_conversation != null) {
+      unawaited(_load());
+    } else {
+      _loading = false;
+      _missing = true;
+    }
+  }
+
+  Future<void> _hydrate() async {
+    final id = widget.conversationId;
+    if (id == null) {
+      setState(() {
+        _missing = true;
+        _loading = false;
+      });
+      return;
+    }
+    try {
+      final conv = await ChatService.getConversation(id);
+      if (!mounted) return;
+      setState(() => _conversation = conv);
+      await _load();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _missing = true;
+        _loading = false;
+      });
+    }
   }
 
   Future<void> _load() async {
+    final conversation = _conversation;
+    if (conversation == null) return;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
       final items = await ChatService.listGroupModerationLog(
-        widget.conversation.id,
+        conversation.id,
         action: _selectedFilter,
       );
       if (!mounted) return;
@@ -66,7 +108,21 @@ class _ChatGroupModerationLogScreenState
 
   @override
   Widget build(BuildContext context) {
-    final title = widget.conversation.displayTitle;
+    if (_missing && _conversation == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('История модерации')),
+        body: AppEmptyState(
+          icon: Icons.shield_outlined,
+          title: 'Чат не найден',
+          subtitle: 'Ссылка устарела или диалог недоступен',
+          action: FilledButton(
+            onPressed: () => context.go(ChatsRoute.path),
+            child: const Text('К чатам'),
+          ),
+        ),
+      );
+    }
+    final title = _conversation?.displayTitle ?? 'группа';
     return Scaffold(
       appBar: AppBar(
         title: const Text('История модерации'),

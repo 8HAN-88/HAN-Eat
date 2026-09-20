@@ -22,7 +22,6 @@ import '../../../widgets/app_empty_state.dart';
 import '../application/chat_inbox_optimistic.dart';
 import '../application/chats_hub_refresh_provider.dart';
 import '../application/join_requests_bulk.dart';
-import 'chat_group_moderation_log_screen.dart';
 import 'widgets/chat_mute_duration_sheet.dart';
 import 'widgets/chats_hub_contacts_tab.dart';
 
@@ -1821,12 +1820,9 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
   }
 
   Future<void> _openModerationLog() async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => ChatGroupModerationLogScreen(
-          conversation: _conversation,
-        ),
-      ),
+    await context.push<void>(
+      ChatGroupModerationLogRoute.pathFor(_conversation.id),
+      extra: _conversation,
     );
     if (mounted) _load();
   }

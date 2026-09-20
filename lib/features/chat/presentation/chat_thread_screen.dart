@@ -25,8 +25,6 @@ import '../../../core/share/system_share.dart';
 
 import '../../bots/data/bot_inline_service.dart';
 import '../../bots/presentation/inline_suggestions.dart';
-import '../../miniapps/data/miniapps_service.dart';
-import '../../miniapps/presentation/miniapp_webview_screen.dart';
 import '../../bots/data/bot_models.dart';
 import '../../../services/api_service.dart';
 import '../../calls/call_message_labels.dart';
@@ -3056,22 +3054,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return;
     }
     try {
-      final launch = await MiniAppsService.getLaunchContext(
-        miniAppId,
-        conversationId: widget.conversationId,
-      );
-      if (!mounted) return;
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => MiniAppWebViewScreen(
-            title: result.title,
-            subtitle: result.description,
-            url: launch.url,
-            initData: launch.initData,
-            initDataUnsafe: launch.initDataUnsafe,
-            miniAppId: miniAppId,
-            conversationId: widget.conversationId,
-          ),
+      await context.push(
+        MiniAppOpenRoute.pathFor(
+          miniAppId,
+          conversationId: widget.conversationId,
         ),
       );
     } catch (e) {
@@ -14541,22 +14527,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   ) async {
     if (button.isWebApp) {
       try {
-        final launch = await MiniAppsService.getLaunchContext(
-          button.miniAppId!,
-          conversationId: widget.conversationId,
-        );
-        if (!mounted) return;
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => MiniAppWebViewScreen(
-              title: button.text.trim().isNotEmpty ? button.text.trim() : 'Mini App',
-              subtitle: '',
-              url: launch.url,
-              initData: launch.initData,
-              initDataUnsafe: launch.initDataUnsafe,
-              miniAppId: button.miniAppId,
-              conversationId: widget.conversationId,
-            ),
+        await context.push(
+          MiniAppOpenRoute.pathFor(
+            button.miniAppId!,
+            conversationId: widget.conversationId,
           ),
         );
       } catch (e) {

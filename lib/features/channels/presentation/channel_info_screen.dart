@@ -16,7 +16,6 @@ import '../../../services/server_config.dart';
 import 'channel_detail_screen.dart';
 import 'channel_detail_screen_tabs.dart';
 import 'channel_settings_bottom_sheet.dart';
-import 'channel_search_screen.dart';
 import '../../../app/app_router.dart';
 import '../../../widgets/app_empty_state.dart';
 
@@ -229,15 +228,9 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
 
   void _openSearch() {
     if (_channel == null) return;
-    Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        fullscreenDialog: true,
-        builder: (context) => ChannelSearchScreen(
-          channelId: widget.channelId,
-          initialQuery: '',
-          channel: _channel!,
-        ),
-      ),
+    context.push(
+      ChannelSearchRoute.pathFor(widget.channelId),
+      extra: _channel,
     );
   }
 
