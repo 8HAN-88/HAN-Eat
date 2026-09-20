@@ -144,6 +144,26 @@ String? channelPaidPathAlias(String path, [String query = '']) {
   return '/channels/${segs[1]}/${segs[2]}$q';
 }
 
+/// `/bots/:id/commands` and sibling BotFather paths.
+String? botSectionPathAlias(String path, [String query = '']) {
+  final clean = path.split('?').first;
+  final segs = clean.split('/').where((s) => s.isNotEmpty).toList();
+  if (segs.length != 3 || segs[0] != 'bots') return null;
+  final id = int.tryParse(segs[1]);
+  if (id == null || id <= 0) return null;
+  final section = switch (segs[2]) {
+    'commands' || 'command' => 'commands',
+    'apps' || 'miniapps' || 'mini-apps' => 'miniapps',
+    'newapp' || 'new-app' => 'newapp',
+    'token' => 'token',
+    _ => null,
+  };
+  if (section == null) return null;
+  final extra = query.trim();
+  final q = extra.isEmpty ? 'section=$section' : '$extra&section=$section';
+  return '/bots/$id?$q';
+}
+
 /// Short leftover paths people type from Telegram muscle memory.
 String? shortcutPathAlias(String path, [String query = '']) {
   final clean = path.split('?').first;
@@ -327,6 +347,135 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return '${CreatePostRoute.path}$q';
     case '/nearby':
       return '${ChatsRoute.path}$q';
+    case '/home':
+    case '/explore':
+    case '/discover':
+    case '/start':
+    case '/welcome':
+    case '/for-you':
+    case '/foryou':
+    case '/following':
+    case '/subs':
+    case '/subscriptions':
+      return '${FeedRoute.path}$q';
+    case '/signin':
+    case '/sign-in':
+      return '${LoginRoute.path}$q';
+    case '/signup':
+    case '/sign-up':
+      return '${RegisterRoute.path}$q';
+    case '/contact':
+    case '/feedback':
+    case '/report':
+    case '/whats-new':
+    case '/tips':
+    case '/guide':
+    case '/howto':
+      return '${SupportContactRoute.path}$q';
+    case '/monetization':
+    case '/earn':
+    case '/studio':
+    case '/tools':
+    case '/dashboard':
+    case '/suggested':
+    case '/suggest':
+      return '${CreatorToolsRoute.path}$q';
+    case '/billing':
+    case '/pay':
+    case '/pricing':
+    case '/plans':
+    case '/business':
+      return '${FlexSubscriptionRoute.path}$q';
+    case '/ai':
+      return FlexSubscriptionRoute.pathWithLevel(9);
+    case '/pro':
+      return FlexSubscriptionRoute.pathWithLevel(18);
+    case '/max':
+      return FlexSubscriptionRoute.pathWithLevel(79);
+    case '/advertiser':
+    case '/advertising':
+    case '/campaigns':
+    case '/ads-hub':
+      return '${AdsHubRoute.path}$q';
+    case '/queue':
+    case '/review':
+      return '${ModerationQueueRoute.path}$q';
+    case '/refunds':
+      return '${AdminRefundQueueRoute.path}$q';
+    case '/affiliate':
+      return '${PartnerProgramRoute.path}$q';
+    case '/collectibles':
+    case '/nft':
+      return '${StarGiftsMarketplaceRoute.path}$q';
+    case '/tip':
+      return '${StarsWalletRoute.path}$q';
+    case '/features':
+    case '/compare':
+      return '${FlexConstructorRoute.path}$q';
+    case '/publish':
+    case '/upload':
+      return '${CreatePostRoute.path}$q';
+    case '/import':
+    case '/restore':
+      return '${BackupRoute.path}$q';
+    case '/gdpr':
+    case '/settings/about':
+      return '${SupportSecurityRoute.path}$q';
+    case '/last-seen':
+    case '/install':
+    case '/pwa':
+      return '${SettingsRoute.path}$q';
+    case '/exceptions':
+      return '${PaidMessageExceptionsRoute.path}$q';
+    case '/add-contact':
+    case '/new-contact':
+      return '${ChatNewMessageRoute.path}$q';
+    case '/invite-friends':
+    case '/share-app':
+      return '${PartnerProgramRoute.path}$q';
+    case '/qr-login':
+    case '/link-device':
+    case '/active-sessions':
+    case '/connected':
+      return '${AccountSecurityRoute.path}$q';
+    case '/two-step':
+    case '/cloud-password':
+    case '/recovery':
+      return '${TwoFactorSetupRoute.path}$q';
+    case '/email':
+    case '/phone':
+    case '/change-email':
+      return '${ProfileAuthRoute.path}$q';
+    case '/highlights':
+    case '/stories/archive':
+      return '${StoriesRoute.path}$q';
+    case '/catalog':
+    case '/directory':
+    case '/muted':
+    case '/topics':
+    case '/forum':
+      return '${ChatsRoute.path}$q';
+    case '/find':
+    case '/global':
+    case '/hashtag':
+      return '${SearchRoute.path}$q';
+    case '/drafts':
+      return '${ScheduledPostsRoute.path}$q';
+    case '/comments':
+      return '${NotificationsRoute.path}$q';
+    case '/bot':
+    case '/newapp':
+      return '${MyBotsRoute.path}$q';
+    case '/settings/flex':
+      return '${FlexSubscriptionRoute.path}$q';
+    case '/settings/wallet':
+      return '${StarsWalletRoute.path}$q';
+    case '/settings/bots':
+      return '${MyBotsRoute.path}$q';
+    case '/settings/ads':
+      return '${AdsHubRoute.path}$q';
+    case '/settings/creator':
+      return '${CreatorToolsRoute.path}$q';
     default:
       return null;
   }
@@ -380,6 +529,10 @@ String? parseDeepLinkToGoPath(String raw) {
           final paidAlias = channelPaidPathAlias(path, query ?? '');
           if (paidAlias != null) {
             return paidAlias;
+          }
+          final botAlias = botSectionPathAlias(path, query ?? '');
+          if (botAlias != null) {
+            return botAlias;
           }
           final shortAlias = shortcutPathAlias(path, query ?? '');
           if (shortAlias != null) {
@@ -580,6 +733,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             return PartnerProgramRoute.path;
           }
           return stableHomePath;
+        }
+        final aliasQuery = state.uri.query;
+        final aliased = shortcutPathAlias(state.uri.path, aliasQuery) ??
+            botSectionPathAlias(state.uri.path, aliasQuery);
+        if (aliased != null) {
+          final aliasPath = aliased.split('?').first;
+          final here = loc.split('?').first;
+          if (aliasPath != here) return aliased;
         }
         if (isAuth) return null;
         final locBase = loc.split('?').first;

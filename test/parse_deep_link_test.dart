@@ -239,6 +239,53 @@ void main() {
     expect(shortcutPathAlias('/passport'), AccountSecurityRoute.path);
     expect(shortcutPathAlias('/poll'), CreatePostRoute.path);
     expect(shortcutPathAlias('/nearby'), ChatsRoute.path);
+    expect(shortcutPathAlias('/home'), FeedRoute.path);
+    expect(shortcutPathAlias('/explore'), FeedRoute.path);
+    expect(shortcutPathAlias('/signin'), LoginRoute.path);
+    expect(shortcutPathAlias('/signup'), RegisterRoute.path);
+    expect(shortcutPathAlias('/contact'), SupportContactRoute.path);
+    expect(shortcutPathAlias('/studio'), CreatorToolsRoute.path);
+    expect(shortcutPathAlias('/billing'), FlexSubscriptionRoute.path);
+    expect(shortcutPathAlias('/ai'), FlexSubscriptionRoute.pathWithLevel(9));
+    expect(shortcutPathAlias('/pro'), FlexSubscriptionRoute.pathWithLevel(18));
+    expect(shortcutPathAlias('/max'), FlexSubscriptionRoute.pathWithLevel(79));
+    expect(shortcutPathAlias('/advertiser'), AdsHubRoute.path);
+    expect(shortcutPathAlias('/queue'), ModerationQueueRoute.path);
+    expect(shortcutPathAlias('/refunds'), AdminRefundQueueRoute.path);
+    expect(shortcutPathAlias('/affiliate'), PartnerProgramRoute.path);
+    expect(shortcutPathAlias('/collectibles'), StarGiftsMarketplaceRoute.path);
+    expect(shortcutPathAlias('/tip'), StarsWalletRoute.path);
+    expect(shortcutPathAlias('/features'), FlexConstructorRoute.path);
+    expect(shortcutPathAlias('/publish'), CreatePostRoute.path);
+    expect(shortcutPathAlias('/import'), BackupRoute.path);
+    expect(shortcutPathAlias('/gdpr'), SupportSecurityRoute.path);
+    expect(shortcutPathAlias('/exceptions'), PaidMessageExceptionsRoute.path);
+    expect(shortcutPathAlias('/add-contact'), ChatNewMessageRoute.path);
+    expect(shortcutPathAlias('/invite-friends'), PartnerProgramRoute.path);
+    expect(shortcutPathAlias('/active-sessions'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/two-step'), TwoFactorSetupRoute.path);
+    expect(shortcutPathAlias('/email'), ProfileAuthRoute.path);
+    expect(shortcutPathAlias('/highlights'), StoriesRoute.path);
+    expect(shortcutPathAlias('/catalog'), ChatsRoute.path);
+    expect(shortcutPathAlias('/find'), SearchRoute.path);
+    expect(shortcutPathAlias('/drafts'), ScheduledPostsRoute.path);
+    expect(shortcutPathAlias('/comments'), NotificationsRoute.path);
+    expect(shortcutPathAlias('/bot'), MyBotsRoute.path);
+    expect(shortcutPathAlias('/settings/flex'), FlexSubscriptionRoute.path);
+    expect(shortcutPathAlias('/settings/about'), SupportSecurityRoute.path);
+    expect(botSectionPathAlias('/bots/5/commands'), '/bots/5?section=commands');
+    expect(botSectionPathAlias('/bots/5/apps'), '/bots/5?section=miniapps');
+    expect(botSectionPathAlias('/bots/5/token'), '/bots/5?section=token');
+    expect(botSectionPathAlias('/bots/5/newapp'), '/bots/5?section=newapp');
+    expect(botSectionPathAlias('/bots/my/commands'), isNull);
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/bots/5/commands'),
+      '/bots/5?section=commands',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/studio'),
+      CreatorToolsRoute.path,
+    );
     expect(
       parseDeepLinkToGoPath('https://haneat.app/app/#/saved-posts'),
       SavedPostsRoute.path,
