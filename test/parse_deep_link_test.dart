@@ -208,6 +208,45 @@ void main() {
     expect(shortcutPathAlias('/settings/language'), SettingsRoute.path);
     expect(shortcutPathAlias('/settings/data'), SettingsRoute.path);
     expect(shortcutPathAlias('/settings/storage'), SettingsRoute.path);
+    expect(SavedPostsRoute.path, '/saved-posts');
+    expect(shortcutPathAlias('/stats'), AppAnalyticsRoute.path);
+    expect(shortcutPathAlias('/insights'), AppAnalyticsRoute.path);
+    expect(shortcutPathAlias('/bookmarks'), SavedPostsRoute.path);
+    expect(shortcutPathAlias('/likes'), SavedPostsRoute.path);
+    expect(shortcutPathAlias('/saved-posts'), SavedPostsRoute.path);
+    expect(shortcutPathAlias('/mentions'), NotificationsRoute.path);
+    expect(shortcutPathAlias('/activity'), NotificationsRoute.path);
+    expect(shortcutPathAlias('/settings/backup'), BackupRoute.path);
+    expect(shortcutPathAlias('/settings/2fa'), TwoFactorSetupRoute.path);
+    expect(shortcutPathAlias('/settings/devices'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/download'), SupportSecurityRoute.path);
+    expect(shortcutPathAlias('/licenses'), SupportSecurityRoute.path);
+    expect(shortcutPathAlias('/changelog'), SupportSecurityRoute.path);
+    expect(shortcutPathAlias('/version'), SupportSecurityRoute.path);
+    expect(shortcutPathAlias('/wallpaper'), SettingsRoute.path);
+    expect(shortcutPathAlias('/autodelete'), SettingsRoute.path);
+    expect(shortcutPathAlias('/chat-settings'), SettingsRoute.path);
+    expect(shortcutPathAlias('/data-and-storage'), SettingsRoute.path);
+    expect(shortcutPathAlias('/giveaway'), AdsHubRoute.path);
+    expect(shortcutPathAlias('/giveaways'), AdsHubRoute.path);
+    expect(shortcutPathAlias('/boost'), AdsHubRoute.path);
+    expect(shortcutPathAlias('/botfather'), MyBotsRoute.path);
+    expect(shortcutPathAlias('/newbot'), MyBotsRoute.path);
+    expect(shortcutPathAlias('/gifts/market'), StarGiftsMarketplaceRoute.path);
+    expect(shortcutPathAlias('/gifts/shop'), StarGiftsMarketplaceRoute.path);
+    expect(shortcutPathAlias('/secret'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/passcode'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/passport'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/poll'), CreatePostRoute.path);
+    expect(shortcutPathAlias('/nearby'), ChatsRoute.path);
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/saved-posts'),
+      SavedPostsRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/bookmarks'),
+      SavedPostsRoute.path,
+    );
     expect(
       parseDeepLinkToGoPath('https://haneat.app/app/#/stories/9'),
       '/stories/9',

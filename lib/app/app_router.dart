@@ -47,6 +47,7 @@ import '../features/community/presentation/community_upload_screen.dart';
 import '../features/posts/presentation/edit_profile_post_screen.dart';
 import '../models/post_model.dart';
 import '../features/profile/presentation/profile_screen.dart';
+import '../features/saved/presentation/saved_posts_screen.dart';
 import '../features/miniapps/presentation/miniapps_catalog_screen.dart';
 import '../features/stories/presentation/stories_hub_screen.dart';
 import '../features/profile/presentation/follow_list_screen.dart';
@@ -282,6 +283,50 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/settings/data':
     case '/settings/storage':
       return '${SettingsRoute.path}$q';
+    case '/stats':
+    case '/insights':
+      return '${AppAnalyticsRoute.path}$q';
+    case '/bookmarks':
+    case '/likes':
+    case '/saved-posts':
+      return '${SavedPostsRoute.path}$q';
+    case '/mentions':
+    case '/activity':
+      return '${NotificationsRoute.path}$q';
+    case '/settings/backup':
+      return '${BackupRoute.path}$q';
+    case '/settings/2fa':
+      return '${TwoFactorSetupRoute.path}$q';
+    case '/settings/devices':
+      return '${AccountSecurityRoute.path}$q';
+    case '/download':
+    case '/licenses':
+    case '/changelog':
+    case '/version':
+      return '${SupportSecurityRoute.path}$q';
+    case '/wallpaper':
+    case '/autodelete':
+    case '/chat-settings':
+    case '/data-and-storage':
+      return '${SettingsRoute.path}$q';
+    case '/giveaway':
+    case '/giveaways':
+    case '/boost':
+      return '${AdsHubRoute.path}$q';
+    case '/botfather':
+    case '/newbot':
+      return '${MyBotsRoute.path}$q';
+    case '/gifts/market':
+    case '/gifts/shop':
+      return '${StarGiftsMarketplaceRoute.path}$q';
+    case '/secret':
+    case '/passcode':
+    case '/passport':
+      return '${AccountSecurityRoute.path}$q';
+    case '/poll':
+      return '${CreatePostRoute.path}$q';
+    case '/nearby':
+      return '${ChatsRoute.path}$q';
     default:
       return null;
   }
@@ -1332,6 +1377,180 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             SettingsRoute.path,
       ),
       GoRoute(
+        path: '/stats',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            AppAnalyticsRoute.path,
+      ),
+      GoRoute(
+        path: '/insights',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            AppAnalyticsRoute.path,
+      ),
+      GoRoute(
+        path: '/bookmarks',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SavedPostsRoute.path,
+      ),
+      GoRoute(
+        path: '/likes',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SavedPostsRoute.path,
+      ),
+      GoRoute(
+        path: '/mentions',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            NotificationsRoute.path,
+      ),
+      GoRoute(
+        path: '/activity',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            NotificationsRoute.path,
+      ),
+      GoRoute(
+        path: '/settings/backup',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            BackupRoute.path,
+      ),
+      GoRoute(
+        path: '/settings/2fa',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            TwoFactorSetupRoute.path,
+      ),
+      GoRoute(
+        path: '/settings/devices',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            AccountSecurityRoute.path,
+      ),
+      GoRoute(
+        path: '/download',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SupportSecurityRoute.path,
+      ),
+      GoRoute(
+        path: '/licenses',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SupportSecurityRoute.path,
+      ),
+      GoRoute(
+        path: '/changelog',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SupportSecurityRoute.path,
+      ),
+      GoRoute(
+        path: '/version',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SupportSecurityRoute.path,
+      ),
+      GoRoute(
+        path: '/wallpaper',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SettingsRoute.path,
+      ),
+      GoRoute(
+        path: '/autodelete',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SettingsRoute.path,
+      ),
+      GoRoute(
+        path: '/chat-settings',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SettingsRoute.path,
+      ),
+      GoRoute(
+        path: '/data-and-storage',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            SettingsRoute.path,
+      ),
+      GoRoute(
+        path: '/giveaway',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            AdsHubRoute.path,
+      ),
+      GoRoute(
+        path: '/giveaways',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            AdsHubRoute.path,
+      ),
+      GoRoute(
+        path: '/boost',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            AdsHubRoute.path,
+      ),
+      GoRoute(
+        path: '/botfather',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            MyBotsRoute.path,
+      ),
+      GoRoute(
+        path: '/newbot',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            MyBotsRoute.path,
+      ),
+      GoRoute(
+        path: '/gifts/market',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            StarGiftsMarketplaceRoute.path,
+      ),
+      GoRoute(
+        path: '/gifts/shop',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            StarGiftsMarketplaceRoute.path,
+      ),
+      GoRoute(
+        path: '/secret',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            AccountSecurityRoute.path,
+      ),
+      GoRoute(
+        path: '/passcode',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            AccountSecurityRoute.path,
+      ),
+      GoRoute(
+        path: '/passport',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            AccountSecurityRoute.path,
+      ),
+      GoRoute(
+        path: '/poll',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            CreatePostRoute.path,
+      ),
+      GoRoute(
+        path: '/nearby',
+        redirect: (context, state) =>
+            shortcutPathAlias(state.uri.path, state.uri.query) ??
+            ChatsRoute.path,
+      ),
+      GoRoute(
         path: '/new-group',
         redirect: (context, state) =>
             shortcutPathAlias(state.uri.path, state.uri.query) ??
@@ -1540,11 +1759,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             'token' => BotDetailOpenSection.token,
             _ => BotDetailOpenSection.none,
           };
+          final extra = state.extra;
+          final token = extra is String && extra.trim().isNotEmpty
+              ? extra.trim()
+              : null;
           return NoTransitionPage(
             child: BotDetailScreen(
               botId: id,
               botUsername: username,
               openSection: section,
+              initialToken: token,
+              showTokenOnOpen:
+                  token != null || section == BotDetailOpenSection.token,
             ),
           );
         },
@@ -1725,6 +1951,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             const MaterialPage(child: CloseFriendsScreen()),
       ),
       // Profile
+      GoRoute(
+        path: SavedPostsRoute.path,
+        name: SavedPostsRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: SavedPostsScreen()),
+      ),
       GoRoute(
         path: ProfileRoute.path,
         name: ProfileRoute.name,
@@ -2746,6 +2978,11 @@ class ChatThreadOpenArgs {
 class ProfileTabRoute {
   static const path = '/me';
   static const name = 'profile_tab';
+}
+
+class SavedPostsRoute {
+  static const path = '/saved-posts';
+  static const name = 'saved_posts';
 }
 
 

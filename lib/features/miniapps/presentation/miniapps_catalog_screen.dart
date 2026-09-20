@@ -221,15 +221,11 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
     final bot = selected;
     if (bot == null || !mounted) return;
 
-    await Navigator.of(context).push<void>(
-      PageRouteBuilder<void>(
-        pageBuilder: (_, __, ___) => BotMiniAppsScreen(
-          botId: bot.id,
-          botUsername: bot.username,
-          autoNewApp: true,
-        ),
-        transitionDuration: Duration.zero,
-        reverseTransitionDuration: Duration.zero,
+    await context.push(
+      BotDetailRoute.pathFor(
+        bot.id,
+        username: bot.username,
+        section: BotDetailOpenSection.newApp,
       ),
     );
     if (mounted) {
