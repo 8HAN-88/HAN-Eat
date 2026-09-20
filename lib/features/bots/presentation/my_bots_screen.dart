@@ -56,24 +56,16 @@ class _MyBotsScreenState extends State<MyBotsScreen> {
     String? initialToken,
     bool showTokenSheet = false,
   }) async {
-    if (initialToken != null || showTokenSheet) {
-      await Navigator.of(context).push<void>(
-        PageRouteBuilder<void>(
-          pageBuilder: (_, __, ___) => BotDetailScreen(
-            botId: bot.id,
-            botUsername: bot.username,
-            initialToken: initialToken,
-            showTokenOnOpen: showTokenSheet,
-          ),
-          transitionDuration: Duration.zero,
-          reverseTransitionDuration: Duration.zero,
-        ),
-      );
-    } else {
-      await context.push(
-        BotDetailRoute.pathFor(bot.id, username: bot.username),
-      );
-    }
+    await context.push(
+      BotDetailRoute.pathFor(
+        bot.id,
+        username: bot.username,
+        section: (initialToken != null || showTokenSheet)
+            ? BotDetailOpenSection.token
+            : BotDetailOpenSection.none,
+      ),
+      extra: initialToken,
+    );
     if (mounted) _loadBots();
   }
 
