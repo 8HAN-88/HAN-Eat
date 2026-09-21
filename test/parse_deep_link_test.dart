@@ -313,6 +313,39 @@ void main() {
     expect(shortcutPathAlias('/paid-messages'), PaidMessageExceptionsRoute.path);
     expect(shortcutPathAlias('/collections'), SavedPostsRoute.path);
     expect(shortcutPathAlias('/settings/close-friends'), CloseFriendsRoute.path);
+    expect(shortcutPathAlias('/my-stars'), StarsWalletRoute.path);
+    expect(shortcutPathAlias('/flex-shop'), FlexShopRoute.path);
+    expect(shortcutPathAlias('/join-group'), ChatCreateGroupRoute.path);
+    expect(resourcePathAlias('/channels/1'), '/channel/1');
+    expect(resourcePathAlias('/channels/1/info'), '/channel/1/info');
+    expect(resourcePathAlias('/channels/1/giveaways'), isNull);
+    expect(resourcePathAlias('/channels/management'), isNull);
+    expect(resourcePathAlias('/chats/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/chat/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/chats/archived'), isNull);
+    expect(resourcePathAlias('/chats/21/info'), '/chats/thread/21/info');
+    expect(resourcePathAlias('/chats/thread/21/members'), '/chats/thread/21/info');
+    expect(resourcePathAlias('/chats/thread/21/search'), '/chats/thread/21');
+    expect(resourcePathAlias('/invoice/9'), '/paid/invoices/9');
+    expect(resourcePathAlias('/paid/invoice/9'), '/paid/invoices/9');
+    expect(resourcePathAlias('/join/AbC12'), '/chat-invite/AbC12');
+    expect(resourcePathAlias('/user/11'), '${ProfileRoute.path}?userId=11');
+    expect(resourcePathAlias('/profile/11'), '${ProfileRoute.path}?userId=11');
+    expect(resourcePathAlias('/profile/followers'), isNull);
+    expect(resourcePathAlias('/c/1'), '/channel/1');
+    expect(resourcePathAlias('/posts/28/comments'), '/post/28/comments');
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/chats/21'),
+      '/chats/thread/21',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/channels/1/settings'),
+      '/channel/1/settings',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/invoice/9'),
+      '/paid/invoices/9',
+    );
     expect(
       parseDeepLinkToGoPath('https://haneat.app/studio'),
       CreatorToolsRoute.path,

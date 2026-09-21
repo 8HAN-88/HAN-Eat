@@ -145,6 +145,126 @@ String? channelPaidPathAlias(String path, [String query = '']) {
   return '/channels/${segs[1]}/${segs[2]}$q';
 }
 
+/// ID-bearing leftovers: plural channels, short chats, invoices, join links.
+String? resourcePathAlias(String path, [String query = '']) {
+  final clean = path.split('?').first;
+  final segs = clean.split('/').where((s) => s.isNotEmpty).toList();
+  if (segs.isEmpty) return null;
+  final q = query.isEmpty ? '' : '?$query';
+
+  if (segs[0] == 'channels' && segs.length >= 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) {
+      if (segs.length == 2) return '/channel/$id$q';
+      final rest = segs[2];
+      if (rest == 'giveaways' || rest == 'suggested-posts') return null;
+      const channelPages = {
+        'info',
+        'settings',
+        'subscribers',
+        'search',
+        'management',
+        'create-post',
+      };
+      if (channelPages.contains(rest) && segs.length == 3) {
+        return '/channel/$id/$rest$q';
+      }
+      if (rest == 'post' && segs.length >= 4) {
+        final postId = int.tryParse(segs[3]);
+        if (postId != null && postId > 0) {
+          if (segs.length == 4) return '/channel/$id/post/$postId$q';
+          if (segs.length == 5 && segs[4] == 'edit') {
+            return '/channel/$id/post/$postId/edit$q';
+          }
+        }
+      }
+    }
+  }
+
+  const chatRoots = {'chats', 'chat', 'dialog', 'conversation', 'dm', 'messages'};
+  const chatReserved = {'archived', 'new', 'new-group', 'folders', 'thread'};
+  if (chatRoots.contains(segs[0]) && segs.length == 2) {
+    if (chatReserved.contains(segs[1])) return null;
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/chats/thread/$id$q';
+  }
+  if (segs[0] == 'chats' && segs.length == 3) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0 &&
+        (segs[2] == 'info' || segs[2] == 'media' || segs[2] == 'log')) {
+      return '/chats/thread/$id/${segs[2]}$q';
+    }
+  }
+  if (segs.length == 4 && segs[0] == 'chats' && segs[1] == 'thread') {
+    final id = int.tryParse(segs[2]);
+    if (id != null && id > 0) {
+      if (segs[3] == 'members' || segs[3] == 'admins') {
+        return '/chats/thread/$id/info$q';
+      }
+      if (segs[3] == 'search' || segs[3] == 'pinned') {
+        return '/chats/thread/$id$q';
+      }
+    }
+  }
+
+  if ((segs[0] == 'invoice' || segs[0] == 'invoices') && segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/paid/invoices/$id$q';
+  }
+  if (segs.length == 3 &&
+      ((segs[0] == 'paid' &&
+              (segs[1] == 'invoice' || segs[1] == 'invoice-pay')) ||
+          (segs[0] == 'stars' &&
+              (segs[1] == 'invoice' || segs[1] == 'invoices'))) &&
+      int.tryParse(segs[2]) != null) {
+    final id = int.parse(segs[2]);
+    if (id > 0) return '/paid/invoices/$id$q';
+  }
+
+  if ((segs[0] == 'join' ||
+          segs[0] == 'joinchat' ||
+          segs[0] == 'join-chat' ||
+          segs[0] == 'addlist') &&
+      segs.length == 2 &&
+      segs[1].isNotEmpty) {
+    return '/chat-invite/${Uri.encodeComponent(segs[1])}$q';
+  }
+
+  if ((segs[0] == 'user' || segs[0] == 'users') && segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '${ProfileRoute.path}?userId=$id';
+  }
+  if (segs[0] == 'profile' && segs.length == 2) {
+    if (segs[1] == 'followers' ||
+        segs[1] == 'following' ||
+        segs[1] == 'edit') {
+      return null;
+    }
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '${ProfileRoute.path}?userId=$id';
+  }
+
+  if (segs[0] == 'c' && segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/channel/$id$q';
+  }
+
+  if (segs[0] == 'posts' && segs.length >= 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) {
+      if (segs.length == 2) return '/post/$id$q';
+      if (segs.length == 3 && segs[2] == 'comments') {
+        return '/post/$id/comments$q';
+      }
+      if (segs.length == 3 && segs[2] == 'edit') {
+        return '/post/$id/edit$q';
+      }
+    }
+  }
+
+  return null;
+}
+
 /// `/bots/:id/commands` and sibling BotFather paths.
 String? botSectionPathAlias(String path, [String query = '']) {
   final clean = path.split('?').first;
@@ -652,6 +772,25 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/settings/stickers':
     case '/settings/calls':
       return '${ChatsRoute.path}$q';
+    case '/my-stars':
+    case '/stars-wallet':
+    case '/wallet-stars':
+      return '${StarsWalletRoute.path}$q';
+    case '/flex-shop':
+      return '${FlexShopRoute.path}$q';
+    case '/flex-constructor':
+      return '${FlexConstructorRoute.path}$q';
+    case '/join-group':
+      return '${ChatCreateGroupRoute.path}$q';
+    case '/star-gifts':
+      return '${StarGiftsInventoryRoute.path}$q';
+    case '/invoice':
+    case '/invoices':
+      return '${StarsWalletRoute.path}$q';
+    case '/join':
+    case '/join-chat':
+    case '/joinchat':
+      return '${ChatsRoute.path}$q';
     default:
       return null;
   }
@@ -709,6 +848,10 @@ String? parseDeepLinkToGoPath(String raw) {
           final botAlias = botSectionPathAlias(path, query ?? '');
           if (botAlias != null) {
             return botAlias;
+          }
+          final resourceAlias = resourcePathAlias(path, query ?? '');
+          if (resourceAlias != null) {
+            return resourceAlias;
           }
           final shortAlias = shortcutPathAlias(path, query ?? '');
           if (shortAlias != null) {
@@ -912,7 +1055,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         }
         final aliasQuery = state.uri.query;
         final aliased = shortcutPathAlias(state.uri.path, aliasQuery) ??
-            botSectionPathAlias(state.uri.path, aliasQuery);
+            botSectionPathAlias(state.uri.path, aliasQuery) ??
+            resourcePathAlias(state.uri.path, aliasQuery);
         if (aliased != null) {
           final aliasPath = aliased.split('?').first;
           final here = loc.split('?').first;
@@ -2015,8 +2159,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: StarInvoicePayRoute.path,
         name: StarInvoicePayRoute.name,
         pageBuilder: (context, state) {
-          final id =
-              int.tryParse(state.pathParameters['invoiceId'] ?? '') ?? 0;
+          final id = parseRoutePositiveId(state.pathParameters['invoiceId']);
+          if (id == null) {
+            return const MaterialPage(
+              child: InvalidLinkScreen(title: 'Счёт в звёздах'),
+            );
+          }
           return MaterialPage(child: StarInvoicePayScreen(invoiceId: id));
         },
       ),

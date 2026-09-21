@@ -218,6 +218,11 @@ class _StarInvoicePayScreenState extends State<StarInvoicePayScreen> {
                             onPressed: _load,
                             child: const Text('Повторить'),
                           ),
+                          const SizedBox(height: 8),
+                          OutlinedButton(
+                            onPressed: () => context.go('/paid/wallet'),
+                            child: const Text('К кошельку звёзд'),
+                          ),
                         ],
                       ),
                     ),
