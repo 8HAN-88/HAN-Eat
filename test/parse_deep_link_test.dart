@@ -346,6 +346,35 @@ void main() {
       parseDeepLinkToGoPath('https://haneat.app/app/#/invoice/9'),
       '/paid/invoices/9',
     );
+    expect(resourcePathAlias('/miniapp/5'), '/webapp/5');
+    expect(resourcePathAlias('/mini-apps/5'), '/webapp/5');
+    expect(resourcePathAlias('/bot/5'), '/bots/5');
+    expect(botSectionPathAlias('/bot/5/commands'), '/bots/5/commands');
+    expect(resourcePathAlias('/folder/3'), '/chats/folders/3');
+    expect(resourcePathAlias('/sticker/4'), '/stickers/4');
+    expect(resourcePathAlias('/pack/cute'), '/addstickers/cute');
+    expect(resourcePathAlias('/moment/9'), '/stories/9');
+    expect(resourcePathAlias('/moments/create'), StoryCreateRoute.path);
+    expect(resourcePathAlias('/donate/11'), '/donate?to=11');
+    expect(resourcePathAlias('/tip/11'), '/donate?to=11');
+    expect(resourcePathAlias('/campaign/8'), '/ads/8');
+    expect(resourcePathAlias('/group/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/hashtag/han'), '${SearchRoute.path}?q=%23han');
+    expect(resourcePathAlias('/p/28'), '/post/28');
+    expect(resourcePathAlias('/ch/1'), '/channel/1');
+    expect(shortcutPathAlias('/new-ad'), AdsCampaignEditorRoute.path);
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/miniapp/5'),
+      '/webapp/5',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/donate/11'),
+      '/donate?to=11',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/bot/5/apps'),
+      '/bots/5/apps',
+    );
     expect(
       parseDeepLinkToGoPath('https://haneat.app/studio'),
       CreatorToolsRoute.path,

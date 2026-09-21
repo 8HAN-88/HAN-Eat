@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../app/app_router.dart';
 import '../../../models/sticker_models.dart';
 import '../../../services/media_upload_service.dart';
 import '../../../services/server_config.dart';
@@ -398,7 +400,13 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
                         child: const Text('Повторить'),
                       ),
                       TextButton(
-                        onPressed: () => Navigator.of(context).maybePop(),
+                        onPressed: () {
+                          if (context.canPop()) {
+                            context.pop();
+                          } else {
+                            context.go(ChatsRoute.path);
+                          }
+                        },
                         child: const Text('Назад'),
                       ),
                     ],
