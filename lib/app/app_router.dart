@@ -138,7 +138,8 @@ bool _isAppHttpHost(String host) {
 String? channelPaidPathAlias(String path, [String query = '']) {
   final clean = path.split('?').first;
   final segs = clean.split('/').where((s) => s.isNotEmpty).toList();
-  if (segs.length != 3 || segs[0] != 'channel') return null;
+  if (segs.length != 3) return null;
+  if (segs[0] != 'channel' && segs[0] != 'c' && segs[0] != 'ch') return null;
   if (int.tryParse(segs[1]) == null) return null;
   if (segs[2] != 'giveaways' && segs[2] != 'suggested-posts') return null;
   final q = query.isEmpty ? '' : '?$query';
@@ -300,16 +301,32 @@ String? resourcePathAlias(String path, [String query = '']) {
     }
   }
 
-  if (segs[0] == 'c' && segs.length == 2) {
+  if ((segs[0] == 'c' || segs[0] == 'ch') && segs.length == 2) {
     final id = int.tryParse(segs[1]);
     if (id != null && id > 0) return '/channel/$id$q';
   }
-  if (segs[0] == 'channel' && segs.length == 3) {
+  if ((segs[0] == 'c' || segs[0] == 'ch' || segs[0] == 'channel') &&
+      segs.length == 3) {
     final id = int.tryParse(segs[1]);
-    if (id != null &&
-        id > 0 &&
-        (segs[2] == 'posts' || segs[2] == 'feed' || segs[2] == 'wall')) {
-      return '/channel/$id$q';
+    if (id != null && id > 0) {
+      final rest = segs[2];
+      if (rest == 'posts' || rest == 'feed' || rest == 'wall') {
+        return '/channel/$id$q';
+      }
+      if (rest == 'members' || rest == 'admins') {
+        return '/channel/$id/subscribers$q';
+      }
+      const channelPages = {
+        'info',
+        'settings',
+        'subscribers',
+        'search',
+        'management',
+        'create-post',
+      };
+      if (channelPages.contains(rest)) {
+        return '/channel/$id/$rest$q';
+      }
     }
   }
 
@@ -323,11 +340,36 @@ String? resourcePathAlias(String path, [String query = '']) {
       if (segs.length == 3 && segs[2] == 'edit') {
         return '/post/$id/edit$q';
       }
+      if (segs.length == 3 &&
+          (segs[2] == 'likes' || segs[2] == 'likers' || segs[2] == 'like')) {
+        return '/post/$id$q';
+      }
+      if (segs.length == 3 &&
+          (segs[2] == 'analytics' ||
+              segs[2] == 'stats' ||
+              segs[2] == 'insights')) {
+        return AppAnalyticsRoute.pathWithPostId(id);
+      }
     }
   }
   if (segs[0] == 'p' && segs.length == 2) {
     final id = int.tryParse(segs[1]);
     if (id != null && id > 0) return '/post/$id$q';
+  }
+  if (segs[0] == 'p' && segs.length == 3) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) {
+      if (segs[2] == 'comments') return '/post/$id/comments$q';
+      if (segs[2] == 'edit') return '/post/$id/edit$q';
+      if (segs[2] == 'likes' || segs[2] == 'likers' || segs[2] == 'like') {
+        return '/post/$id$q';
+      }
+      if (segs[2] == 'analytics' ||
+          segs[2] == 'stats' ||
+          segs[2] == 'insights') {
+        return AppAnalyticsRoute.pathWithPostId(id);
+      }
+    }
   }
 
   if ((segs[0] == 'bot' || segs[0] == 'bots') && segs.length == 2) {
@@ -359,6 +401,14 @@ String? resourcePathAlias(String path, [String query = '']) {
     if (segs[1] == 'new') return '${ChatFolderNewRoute.path}$q';
     final id = int.tryParse(segs[1]);
     if (id != null && id > 0) return '/chats/folders/$id$q';
+  }
+  if ((segs[0] == 'folder' || segs[0] == 'folders') && segs.length == 3) {
+    final id = int.tryParse(segs[1]);
+    if (id != null &&
+        id > 0 &&
+        (segs[2] == 'edit' || segs[2] == 'settings')) {
+      return '/chats/folders/$id$q';
+    }
   }
 
   if ((segs[0] == 'sticker' ||
@@ -411,11 +461,6 @@ String? resourcePathAlias(String path, [String query = '']) {
     return '${SearchRoute.path}?q=${Uri.encodeQueryComponent(raw)}';
   }
 
-  if (segs[0] == 'ch' && segs.length == 2) {
-    final id = int.tryParse(segs[1]);
-    if (id != null && id > 0) return '/channel/$id$q';
-  }
-
   if ((segs[0] == 'notif' || segs[0] == 'notification') && segs.length == 2) {
     return '${NotificationsRoute.path}$q';
   }
@@ -461,6 +506,71 @@ String? resourcePathAlias(String path, [String query = '']) {
     if (id != null && id > 0) return '${StarGiftsInventoryRoute.path}$q';
   }
 
+  const extraChatRoots = {
+    'direct',
+    'im',
+    'msg',
+    'message',
+    'thread',
+    'convo',
+    'private',
+  };
+  if (extraChatRoots.contains(segs[0]) && segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/chats/thread/$id$q';
+  }
+  if (extraChatRoots.contains(segs[0]) && segs.length == 3) {
+    if (segs[1] == 't' || segs[1] == 'c') {
+      final id = int.tryParse(segs[2]);
+      if (id != null && id > 0) return '/chats/thread/$id$q';
+    }
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) {
+      if (segs[2] == 'info' || segs[2] == 'media' || segs[2] == 'log') {
+        return '/chats/thread/$id/${segs[2]}$q';
+      }
+      if (segs[2] == 'gallery' ||
+          segs[2] == 'photos' ||
+          segs[2] == 'files' ||
+          segs[2] == 'links') {
+        return '/chats/thread/$id/media$q';
+      }
+      if (segs[2] == 'members' || segs[2] == 'admins') {
+        return '/chats/thread/$id/info$q';
+      }
+    }
+  }
+
+  if ((segs[0] == 't' || segs[0] == 'g') && segs.length == 3) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) {
+      if (segs[2] == 'info' || segs[2] == 'media' || segs[2] == 'log') {
+        return '/chats/thread/$id/${segs[2]}$q';
+      }
+      if (segs[2] == 'gallery' ||
+          segs[2] == 'photos' ||
+          segs[2] == 'files' ||
+          segs[2] == 'links') {
+        return '/chats/thread/$id/media$q';
+      }
+      if (segs[2] == 'members' || segs[2] == 'admins') {
+        return '/chats/thread/$id/info$q';
+      }
+    }
+  }
+  if (segs[0] == 'f' && segs.length == 3) {
+    final id = int.tryParse(segs[1]);
+    if (id != null &&
+        id > 0 &&
+        (segs[2] == 'edit' || segs[2] == 'settings')) {
+      return '/chats/folders/$id$q';
+    }
+  }
+  if (segs[0] == 'peer' && segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '${ProfileRoute.path}?userId=$id';
+  }
+
   if (segs.length == 2) {
     final id = int.tryParse(segs[1]);
     if (id != null && id > 0) {
@@ -484,7 +594,10 @@ String? resourcePathAlias(String path, [String query = '']) {
 String? botSectionPathAlias(String path, [String query = '']) {
   final clean = path.split('?').first;
   final segs = clean.split('/').where((s) => s.isNotEmpty).toList();
-  if (segs.length != 3 || (segs[0] != 'bots' && segs[0] != 'bot')) return null;
+  if (segs.length != 3 ||
+      (segs[0] != 'bots' && segs[0] != 'bot' && segs[0] != 'b')) {
+    return null;
+  }
   final id = int.tryParse(segs[1]);
   if (id == null || id <= 0) return null;
   final extra = query.trim();
@@ -1016,6 +1129,18 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/add-sticker':
     case '/new-sticker':
       return '${ChatsRoute.path}$q';
+    case '/direct':
+    case '/direct/inbox':
+    case '/im':
+    case '/msg':
+    case '/message':
+    case '/thread':
+    case '/convo':
+    case '/private':
+    case '/messenger':
+      return '${ChatsRoute.path}$q';
+    case '/me':
+      return '${ProfileTabRoute.path}$q';
     default:
       return null;
   }

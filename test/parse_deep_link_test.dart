@@ -424,6 +424,37 @@ void main() {
       AppAnalyticsRoute.pathWithPostId(28),
     );
     expect(resourcePathAlias('/bot/5/edit'), '/bots/5');
+    expect(resourcePathAlias('/c/1/info'), '/channel/1/info');
+    expect(resourcePathAlias('/c/1/settings'), '/channel/1/settings');
+    expect(resourcePathAlias('/ch/1/subscribers'), '/channel/1/subscribers');
+    expect(resourcePathAlias('/channel/1/members'), '/channel/1/subscribers');
+    expect(resourcePathAlias('/p/28/comments'), '/post/28/comments');
+    expect(resourcePathAlias('/p/28/edit'), '/post/28/edit');
+    expect(resourcePathAlias('/p/28/likes'), '/post/28');
+    expect(
+      resourcePathAlias('/posts/28/likes'),
+      '/post/28',
+    );
+    expect(resourcePathAlias('/t/21/info'), '/chats/thread/21/info');
+    expect(resourcePathAlias('/g/21/media'), '/chats/thread/21/media');
+    expect(resourcePathAlias('/f/3/edit'), '/chats/folders/3');
+    expect(resourcePathAlias('/folder/3/edit'), '/chats/folders/3');
+    expect(resourcePathAlias('/direct/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/direct/t/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/im/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/im/21/info'), '/chats/thread/21/info');
+    expect(resourcePathAlias('/msg/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/thread/21/media'), '/chats/thread/21/media');
+    expect(resourcePathAlias('/peer/11'), '${ProfileRoute.path}?userId=11');
+    expect(botSectionPathAlias('/b/5/commands'), '/bots/5/commands');
+    expect(botSectionPathAlias('/b/5/apps'), '/bots/5/apps');
+    expect(channelPaidPathAlias('/c/1/giveaways'), '/channels/1/giveaways');
+    expect(channelPaidPathAlias('/ch/1/suggested-posts'),
+        '/channels/1/suggested-posts');
+    expect(shortcutPathAlias('/direct'), ChatsRoute.path);
+    expect(shortcutPathAlias('/direct/inbox'), ChatsRoute.path);
+    expect(shortcutPathAlias('/im'), ChatsRoute.path);
+    expect(shortcutPathAlias('/me'), ProfileTabRoute.path);
     expect(shortcutPathAlias('/black-list'), BlockedUsersRoute.path);
     expect(shortcutPathAlias('/close-friend'), CloseFriendsRoute.path);
     expect(
@@ -433,6 +464,26 @@ void main() {
     expect(
       parseDeepLinkToGoPath('https://haneat.app/video/28'),
       '/post/28',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/c/1/info'),
+      '/channel/1/info',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/p/28/comments'),
+      '/post/28/comments',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/b/5/commands'),
+      '/bots/5/commands',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/direct/21'),
+      '/chats/thread/21',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/c/1/giveaways'),
+      '/channels/1/giveaways',
     );
     expect(
       parseDeepLinkToGoPath('https://haneat.app/studio'),
