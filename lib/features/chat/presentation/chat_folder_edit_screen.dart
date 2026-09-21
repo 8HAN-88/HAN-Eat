@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/app_router.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/channel_service.dart';
 import '../../../services/chat_folder_store.dart';
@@ -375,8 +377,14 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
               const Text('Папка не найдена'),
               const SizedBox(height: 12),
               FilledButton(
-                onPressed: () => Navigator.of(context).maybePop(),
-                child: const Text('Назад'),
+                onPressed: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go(ChatsRoute.path);
+                  }
+                },
+                child: const Text('К чатам'),
               ),
             ],
           ),

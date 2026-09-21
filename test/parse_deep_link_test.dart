@@ -376,6 +376,36 @@ void main() {
       '/bots/5/apps',
     );
     expect(
+      resourcePathAlias('/profile/11/followers'),
+      ProfileFollowersRoute.withUserId(11),
+    );
+    expect(
+      resourcePathAlias('/user/11/following'),
+      ProfileFollowingRoute.withUserId(11),
+    );
+    expect(resourcePathAlias('/followers/11'),
+        ProfileFollowersRoute.withUserId(11));
+    expect(resourcePathAlias('/u/alice/followers'),
+        UsernameDeepLinkRoute.pathFor('alice'));
+    expect(resourcePathAlias('/channel/1/posts'), '/channel/1');
+    expect(resourcePathAlias('/channels/1/feed'), '/channel/1');
+    expect(resourcePathAlias('/post/28/likes'), '/post/28');
+    expect(resourcePathAlias('/b/5'), '/bots/5');
+    expect(resourcePathAlias('/w/5'), '/webapp/5');
+    expect(resourcePathAlias('/d/11'), '/donate?to=11');
+    expect(resourcePathAlias('/f/3'), '/chats/folders/3');
+    expect(resourcePathAlias('/t/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/gifts/9'), StarGiftsInventoryRoute.path);
+    expect(resourcePathAlias('/gifts/market'), isNull);
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/profile/11/followers'),
+      ProfileFollowersRoute.withUserId(11),
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/channel/1/posts'),
+      '/channel/1',
+    );
+    expect(
       parseDeepLinkToGoPath('https://haneat.app/studio'),
       CreatorToolsRoute.path,
     );

@@ -166,6 +166,9 @@ String? resourcePathAlias(String path, [String query = '']) {
         'management',
         'create-post',
       };
+      if (rest == 'posts' || rest == 'feed' || rest == 'wall') {
+        return '/channel/$id$q';
+      }
       if (channelPages.contains(rest) && segs.length == 3) {
         return '/channel/$id/$rest$q';
       }
@@ -243,10 +246,50 @@ String? resourcePathAlias(String path, [String query = '']) {
     final id = int.tryParse(segs[1]);
     if (id != null && id > 0) return '${ProfileRoute.path}?userId=$id';
   }
+  if (segs[0] == 'profile' && segs.length == 3) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) {
+      if (segs[2] == 'followers') return ProfileFollowersRoute.withUserId(id);
+      if (segs[2] == 'following') return ProfileFollowingRoute.withUserId(id);
+      if (segs[2] == 'posts' || segs[2] == 'feed') {
+        return ProfileRoute.withUserId(id);
+      }
+    }
+  }
+  if ((segs[0] == 'user' || segs[0] == 'users') && segs.length == 3) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) {
+      if (segs[2] == 'followers') return ProfileFollowersRoute.withUserId(id);
+      if (segs[2] == 'following') return ProfileFollowingRoute.withUserId(id);
+    }
+  }
+  if ((segs[0] == 'followers' || segs[0] == 'following') && segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) {
+      return segs[0] == 'followers'
+          ? ProfileFollowersRoute.withUserId(id)
+          : ProfileFollowingRoute.withUserId(id);
+    }
+  }
+  if (segs[0] == 'u' && segs.length == 3 && segs[1].isNotEmpty) {
+    if (segs[2] == 'followers' ||
+        segs[2] == 'following' ||
+        segs[2] == 'posts') {
+      return UsernameDeepLinkRoute.pathFor(segs[1]);
+    }
+  }
 
   if (segs[0] == 'c' && segs.length == 2) {
     final id = int.tryParse(segs[1]);
     if (id != null && id > 0) return '/channel/$id$q';
+  }
+  if (segs[0] == 'channel' && segs.length == 3) {
+    final id = int.tryParse(segs[1]);
+    if (id != null &&
+        id > 0 &&
+        (segs[2] == 'posts' || segs[2] == 'feed' || segs[2] == 'wall')) {
+      return '/channel/$id$q';
+    }
   }
 
   if (segs[0] == 'posts' && segs.length >= 2) {
@@ -348,6 +391,39 @@ String? resourcePathAlias(String path, [String query = '']) {
 
   if ((segs[0] == 'notif' || segs[0] == 'notification') && segs.length == 2) {
     return '${NotificationsRoute.path}$q';
+  }
+
+  if (segs[0] == 'post' && segs.length == 3) {
+    final id = int.tryParse(segs[1]);
+    if (id != null &&
+        id > 0 &&
+        (segs[2] == 'likes' || segs[2] == 'likers' || segs[2] == 'like')) {
+      return '/post/$id$q';
+    }
+  }
+
+  if ((segs[0] == 'gift' || segs[0] == 'gifts') && segs.length == 2) {
+    if (segs[1] == 'market' || segs[1] == 'shop' || segs[1] == 'marketplace') {
+      return null;
+    }
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '${StarGiftsInventoryRoute.path}$q';
+  }
+
+  if (segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) {
+      final short = switch (segs[0]) {
+        'b' => '/bots/$id$q',
+        'w' => '/webapp/$id$q',
+        'd' => query.isEmpty ? '/donate?to=$id' : '/donate?to=$id&$query',
+        'i' => '/paid/invoices/$id$q',
+        'f' => '/chats/folders/$id$q',
+        'g' || 't' => '/chats/thread/$id$q',
+        _ => null,
+      };
+      if (short != null) return short;
+    }
   }
 
   return null;

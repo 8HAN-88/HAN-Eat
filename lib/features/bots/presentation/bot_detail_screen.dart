@@ -809,7 +809,13 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
                 child: Row(
                   children: [
                     IconButton(
-                      onPressed: () => Navigator.of(context).maybePop(),
+                      onPressed: () {
+                        if (context.canPop()) {
+                          context.pop();
+                        } else {
+                          context.go(MyBotsRoute.path);
+                        }
+                      },
                       icon: const Icon(Icons.arrow_back_rounded),
                     ),
                     Expanded(
@@ -847,9 +853,14 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
                                 child: const Text('Повторить'),
                               ),
                               TextButton(
-                                onPressed: () =>
-                                    Navigator.of(context).maybePop(),
-                                child: const Text('Назад'),
+                                onPressed: () {
+                                  if (context.canPop()) {
+                                    context.pop();
+                                  } else {
+                                    context.go(MyBotsRoute.path);
+                                  }
+                                },
+                                child: const Text('Мои боты'),
                               ),
                             ],
                           ),

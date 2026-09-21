@@ -582,8 +582,14 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                 ),
                 const SizedBox(height: 16),
                 FilledButton(
-                  onPressed: () => Navigator.of(context).maybePop(),
-                  child: const Text('Закрыть'),
+                  onPressed: () {
+                    if (context.canPop()) {
+                      context.pop();
+                    } else {
+                      context.go(StoriesRoute.path);
+                    }
+                  },
+                  child: const Text('К моментам'),
                 ),
               ],
             ),

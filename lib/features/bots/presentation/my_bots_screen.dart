@@ -133,7 +133,13 @@ class _MyBotsScreenState extends State<MyBotsScreen> {
                   children: [
                     IconButton(
                       tooltip: 'Назад',
-                      onPressed: () => Navigator.of(context).maybePop(),
+                      onPressed: () {
+                        if (context.canPop()) {
+                          context.pop();
+                        } else {
+                          context.go(SettingsRoute.path);
+                        }
+                      },
                       icon: const Icon(Icons.arrow_back_rounded),
                     ),
                     Expanded(

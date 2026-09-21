@@ -187,7 +187,14 @@ class _FollowListScreenState extends State<FollowListScreen> {
                                         ),
                                         label: const Text('Поделиться'),
                                       )
-                                    : null),
+                                    : FilledButton(
+                                        onPressed: () => context.push(
+                                          ProfileRoute.withUserId(
+                                            widget.userId,
+                                          ),
+                                        ),
+                                        child: const Text('К профилю'),
+                                      )),
                           ),
                         ],
                       )
