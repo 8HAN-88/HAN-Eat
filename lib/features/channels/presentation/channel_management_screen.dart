@@ -590,9 +590,25 @@ class _ChannelManagementScreenState
               _channelLoadError!,
               fallback: 'Проверьте сеть',
             ),
-            action: FilledButton(
-              onPressed: _loadChannel,
-              child: const Text('Повторить'),
+            action: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FilledButton(
+                  onPressed: _loadChannel,
+                  child: const Text('Повторить'),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () {
+                    if (context.canPop()) {
+                      context.pop();
+                    } else {
+                      context.go(ChannelDetailRoute.pathFor(widget.channelId));
+                    }
+                  },
+                  child: const Text('К каналу'),
+                ),
+              ],
             ),
           ),
         );

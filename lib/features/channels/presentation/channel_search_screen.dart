@@ -145,7 +145,13 @@ class _ChannelSearchScreenState extends ConsumerState<ChannelSearchScreen> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(ChannelDetailRoute.pathFor(widget.channelId));
+            }
+          },
         ),
         title: TextField(
           textCapitalization: TextCapitalization.sentences,

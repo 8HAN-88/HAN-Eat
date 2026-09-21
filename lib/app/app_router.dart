@@ -170,6 +170,9 @@ String? resourcePathAlias(String path, [String query = '']) {
       if (rest == 'posts' || rest == 'feed' || rest == 'wall') {
         return '/channel/$id$q';
       }
+      if (rest == 'members' || rest == 'admins') {
+        return '/channel/$id/subscribers$q';
+      }
       if (channelPages.contains(rest) && segs.length == 3) {
         return '/channel/$id/$rest$q';
       }
@@ -179,6 +182,13 @@ String? resourcePathAlias(String path, [String query = '']) {
           if (segs.length == 4) return '/channel/$id/post/$postId$q';
           if (segs.length == 5 && segs[4] == 'edit') {
             return '/channel/$id/post/$postId/edit$q';
+          }
+          if (segs.length == 5 && segs[4] == 'comments') {
+            return '/post/$postId/comments$q';
+          }
+          if (segs.length == 5 &&
+              (segs[4] == 'likes' || segs[4] == 'likers')) {
+            return '/channel/$id/post/$postId$q';
           }
         }
       }
@@ -327,6 +337,29 @@ String? resourcePathAlias(String path, [String query = '']) {
       if (channelPages.contains(rest)) {
         return '/channel/$id/$rest$q';
       }
+      final postId = int.tryParse(rest);
+      if (postId != null && postId > 0) {
+        return '/channel/$id/post/$postId$q';
+      }
+    }
+  }
+  if ((segs[0] == 'c' || segs[0] == 'ch' || segs[0] == 'channel') &&
+      segs.length >= 4 &&
+      segs[2] == 'post') {
+    final id = int.tryParse(segs[1]);
+    final postId = int.tryParse(segs[3]);
+    if (id != null && id > 0 && postId != null && postId > 0) {
+      if (segs.length == 4) return '/channel/$id/post/$postId$q';
+      if (segs.length == 5 && segs[4] == 'edit') {
+        return '/channel/$id/post/$postId/edit$q';
+      }
+      if (segs.length == 5 && segs[4] == 'comments') {
+        return '/post/$postId/comments$q';
+      }
+      if (segs.length == 5 &&
+          (segs[4] == 'likes' || segs[4] == 'likers')) {
+        return '/channel/$id/post/$postId$q';
+      }
     }
   }
 
@@ -342,6 +375,13 @@ String? resourcePathAlias(String path, [String query = '']) {
       }
       if (segs.length == 3 &&
           (segs[2] == 'likes' || segs[2] == 'likers' || segs[2] == 'like')) {
+        return '/post/$id$q';
+      }
+      if (segs.length == 3 &&
+          (segs[2] == 'share' ||
+              segs[2] == 'repost' ||
+              segs[2] == 'forward' ||
+              segs[2] == 'send')) {
         return '/post/$id$q';
       }
       if (segs.length == 3 &&
@@ -362,6 +402,12 @@ String? resourcePathAlias(String path, [String query = '']) {
       if (segs[2] == 'comments') return '/post/$id/comments$q';
       if (segs[2] == 'edit') return '/post/$id/edit$q';
       if (segs[2] == 'likes' || segs[2] == 'likers' || segs[2] == 'like') {
+        return '/post/$id$q';
+      }
+      if (segs[2] == 'share' ||
+          segs[2] == 'repost' ||
+          segs[2] == 'forward' ||
+          segs[2] == 'send') {
         return '/post/$id$q';
       }
       if (segs[2] == 'analytics' ||
@@ -413,6 +459,8 @@ String? resourcePathAlias(String path, [String query = '']) {
 
   if ((segs[0] == 'sticker' ||
           segs[0] == 'stickerset' ||
+          segs[0] == 'stickerpack' ||
+          segs[0] == 'sticker-pack' ||
           segs[0] == 'pack' ||
           segs[0] == 'addsticker' ||
           segs[0] == 'add-stickers') &&
@@ -471,6 +519,15 @@ String? resourcePathAlias(String path, [String query = '']) {
       if (segs[2] == 'likes' || segs[2] == 'likers' || segs[2] == 'like') {
         return '/post/$id$q';
       }
+      if (segs[2] == 'share' ||
+          segs[2] == 'repost' ||
+          segs[2] == 'forward' ||
+          segs[2] == 'send') {
+        return '/post/$id$q';
+      }
+      if (segs[2] == 'comments') {
+        return '/post/$id/comments$q';
+      }
       if (segs[2] == 'analytics' ||
           segs[2] == 'stats' ||
           segs[2] == 'insights') {
@@ -491,6 +548,23 @@ String? resourcePathAlias(String path, [String query = '']) {
       segs.length == 2) {
     final id = int.tryParse(segs[1]);
     if (id != null && id > 0) return '/post/$id$q';
+  }
+  if ((segs[0] == 'video' ||
+          segs[0] == 'photo' ||
+          segs[0] == 'image' ||
+          segs[0] == 'img' ||
+          segs[0] == 'pic' ||
+          segs[0] == 'media') &&
+      segs.length == 3) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) {
+      if (segs[2] == 'comments') return '/post/$id/comments$q';
+      if (segs[2] == 'likes' ||
+          segs[2] == 'share' ||
+          segs[2] == 'repost') {
+        return '/post/$id$q';
+      }
+    }
   }
   if ((segs[0] == 'analytics' || segs[0] == 'stats' || segs[0] == 'insights') &&
       segs.length == 2) {
@@ -1141,6 +1215,34 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return '${ChatsRoute.path}$q';
     case '/me':
       return '${ProfileTabRoute.path}$q';
+    case '/dialog':
+    case '/dialogs':
+    case '/dialogues':
+    case '/all-chats':
+    case '/my-groups':
+    case '/supergroups':
+    case '/saved-chats':
+    case '/recent-chats':
+      return '${ChatsRoute.path}$q';
+    case '/channel':
+    case '/broadcast':
+      return '${ChannelsManagementRoute.path}$q';
+    case '/new-dm':
+    case '/new-dialog':
+      return '${ChatNewMessageRoute.path}$q';
+    case '/privacy/last-seen':
+    case '/privacy/calls':
+    case '/privacy/groups':
+    case '/privacy/forwards':
+    case '/privacy/photo':
+    case '/privacy/phone':
+    case '/privacy/bio':
+    case '/privacy/messages':
+      return '${SettingsRoute.path}$q';
+    case '/settings/notif':
+    case '/notif':
+    case '/notification':
+      return '${NotificationSettingsRoute.path}$q';
     default:
       return null;
   }
