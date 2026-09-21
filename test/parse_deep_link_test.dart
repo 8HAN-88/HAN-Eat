@@ -405,6 +405,35 @@ void main() {
       parseDeepLinkToGoPath('https://haneat.app/channel/1/posts'),
       '/channel/1',
     );
+    expect(resourcePathAlias('/chat/21/media'), '/chats/thread/21/media');
+    expect(resourcePathAlias('/dm/21/info'), '/chats/thread/21/info');
+    expect(resourcePathAlias('/group/21/info'), '/chats/thread/21/info');
+    expect(
+      resourcePathAlias('/chats/thread/21/gallery'),
+      '/chats/thread/21/media',
+    );
+    expect(resourcePathAlias('/video/28'), '/post/28');
+    expect(resourcePathAlias('/photo/28'), '/post/28');
+    expect(resourcePathAlias('/comments/28'), '/post/28/comments');
+    expect(
+      resourcePathAlias('/post/28/analytics'),
+      AppAnalyticsRoute.pathWithPostId(28),
+    );
+    expect(
+      resourcePathAlias('/stats/28'),
+      AppAnalyticsRoute.pathWithPostId(28),
+    );
+    expect(resourcePathAlias('/bot/5/edit'), '/bots/5');
+    expect(shortcutPathAlias('/black-list'), BlockedUsersRoute.path);
+    expect(shortcutPathAlias('/close-friend'), CloseFriendsRoute.path);
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/chat/21/media'),
+      '/chats/thread/21/media',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/video/28'),
+      '/post/28',
+    );
     expect(
       parseDeepLinkToGoPath('https://haneat.app/studio'),
       CreatorToolsRoute.path,

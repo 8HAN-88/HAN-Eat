@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../app/app_router.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/chat_service.dart';
 import '../../../services/server_config.dart';
@@ -451,8 +453,17 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
                                       )
                                     else
                                       TextButton(
-                                        onPressed: () =>
-                                            Navigator.of(context).maybePop(),
+                                        onPressed: () {
+                                          if (context.canPop()) {
+                                            context.pop();
+                                          } else {
+                                            context.go(
+                                              ChatThreadRoute.pathForId(
+                                                widget.conversationId,
+                                              ),
+                                            );
+                                          }
+                                        },
                                         child: const Text('Назад в чат'),
                                       ),
                                   ],
