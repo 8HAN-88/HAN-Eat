@@ -404,8 +404,14 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
                     ),
                     const SizedBox(height: 12),
                     FilledButton(
-                      onPressed: () => Navigator.of(context).maybePop(),
-                      child: const Text('Закрыть'),
+                      onPressed: () {
+                        if (context.canPop()) {
+                          context.pop();
+                        } else {
+                          context.go(MiniAppsRoute.path);
+                        }
+                      },
+                      child: const Text('В каталог'),
                     ),
                   ],
                 ),
