@@ -191,11 +191,26 @@ String? resourcePathAlias(String path, [String query = '']) {
     final id = int.tryParse(segs[1]);
     if (id != null && id > 0) return '/chats/thread/$id$q';
   }
-  if (segs[0] == 'chats' && segs.length == 3) {
+  if ((chatRoots.contains(segs[0]) ||
+          segs[0] == 'group' ||
+          segs[0] == 'groups' ||
+          segs[0] == 'supergroup') &&
+      segs.length == 3) {
+    if (chatReserved.contains(segs[1])) return null;
     final id = int.tryParse(segs[1]);
-    if (id != null && id > 0 &&
-        (segs[2] == 'info' || segs[2] == 'media' || segs[2] == 'log')) {
-      return '/chats/thread/$id/${segs[2]}$q';
+    if (id != null && id > 0) {
+      if (segs[2] == 'info' || segs[2] == 'media' || segs[2] == 'log') {
+        return '/chats/thread/$id/${segs[2]}$q';
+      }
+      if (segs[2] == 'gallery' ||
+          segs[2] == 'photos' ||
+          segs[2] == 'files' ||
+          segs[2] == 'links') {
+        return '/chats/thread/$id/media$q';
+      }
+      if (segs[2] == 'members' || segs[2] == 'admins') {
+        return '/chats/thread/$id/info$q';
+      }
     }
   }
   if (segs.length == 4 && segs[0] == 'chats' && segs[1] == 'thread') {
@@ -203,6 +218,12 @@ String? resourcePathAlias(String path, [String query = '']) {
     if (id != null && id > 0) {
       if (segs[3] == 'members' || segs[3] == 'admins') {
         return '/chats/thread/$id/info$q';
+      }
+      if (segs[3] == 'gallery' ||
+          segs[3] == 'photos' ||
+          segs[3] == 'files' ||
+          segs[3] == 'links') {
+        return '/chats/thread/$id/media$q';
       }
       if (segs[3] == 'search' || segs[3] == 'pinned') {
         return '/chats/thread/$id$q';
@@ -314,6 +335,12 @@ String? resourcePathAlias(String path, [String query = '']) {
     final id = int.tryParse(segs[1]);
     if (id != null && id > 0) return '/bots/$id$q';
   }
+  if ((segs[0] == 'bot' || segs[0] == 'bots') && segs.length == 3) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0 && (segs[2] == 'edit' || segs[2] == 'profile')) {
+      return '/bots/$id$q';
+    }
+  }
 
   const miniRoots = {
     'miniapp',
@@ -395,11 +422,35 @@ String? resourcePathAlias(String path, [String query = '']) {
 
   if (segs[0] == 'post' && segs.length == 3) {
     final id = int.tryParse(segs[1]);
-    if (id != null &&
-        id > 0 &&
-        (segs[2] == 'likes' || segs[2] == 'likers' || segs[2] == 'like')) {
-      return '/post/$id$q';
+    if (id != null && id > 0) {
+      if (segs[2] == 'likes' || segs[2] == 'likers' || segs[2] == 'like') {
+        return '/post/$id$q';
+      }
+      if (segs[2] == 'analytics' ||
+          segs[2] == 'stats' ||
+          segs[2] == 'insights') {
+        return AppAnalyticsRoute.pathWithPostId(id);
+      }
     }
+  }
+  if ((segs[0] == 'comment' || segs[0] == 'comments') && segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/post/$id/comments$q';
+  }
+  if ((segs[0] == 'video' ||
+          segs[0] == 'photo' ||
+          segs[0] == 'image' ||
+          segs[0] == 'img' ||
+          segs[0] == 'pic' ||
+          segs[0] == 'media') &&
+      segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/post/$id$q';
+  }
+  if ((segs[0] == 'analytics' || segs[0] == 'stats' || segs[0] == 'insights') &&
+      segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return AppAnalyticsRoute.pathWithPostId(id);
   }
 
   if ((segs[0] == 'gift' || segs[0] == 'gifts') && segs.length == 2) {
@@ -803,6 +854,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/best-friends':
     case '/besties':
     case '/story-privacy':
+    case '/close-friend':
       return '${CloseFriendsRoute.path}$q';
     case '/change-password':
     case '/password':
@@ -877,6 +929,8 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return '${SupportContactRoute.path}$q';
     case '/blacklist':
     case '/blocked-users':
+    case '/black-list':
+    case '/block-list':
       return '${BlockedUsersRoute.path}$q';
     case '/night-mode':
     case '/dark':

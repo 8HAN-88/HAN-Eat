@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/app_router.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/chat_service.dart';
@@ -128,8 +130,14 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
           const SizedBox(height: 16),
           Center(
             child: FilledButton(
-              onPressed: () => Navigator.of(context).maybePop(),
-              child: const Text('Назад'),
+              onPressed: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go(SettingsRoute.path);
+                }
+              },
+              child: const Text('К настройкам'),
             ),
           ),
         ],
