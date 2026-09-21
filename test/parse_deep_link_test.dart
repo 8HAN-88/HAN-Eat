@@ -455,6 +455,33 @@ void main() {
     expect(shortcutPathAlias('/direct/inbox'), ChatsRoute.path);
     expect(shortcutPathAlias('/im'), ChatsRoute.path);
     expect(shortcutPathAlias('/me'), ProfileTabRoute.path);
+    expect(resourcePathAlias('/c/1/post/28'), '/channel/1/post/28');
+    expect(resourcePathAlias('/c/1/28'), '/channel/1/post/28');
+    expect(resourcePathAlias('/ch/1/post/28/edit'), '/channel/1/post/28/edit');
+    expect(
+      resourcePathAlias('/channel/1/post/28/comments'),
+      '/post/28/comments',
+    );
+    expect(
+      resourcePathAlias('/channels/1/members'),
+      '/channel/1/subscribers',
+    );
+    expect(
+      resourcePathAlias('/channels/1/post/28/comments'),
+      '/post/28/comments',
+    );
+    expect(resourcePathAlias('/post/28/share'), '/post/28');
+    expect(resourcePathAlias('/p/28/repost'), '/post/28');
+    expect(resourcePathAlias('/video/28/comments'), '/post/28/comments');
+    expect(resourcePathAlias('/stickerpack/cute'), '/addstickers/cute');
+    expect(shortcutPathAlias('/dialogs'), ChatsRoute.path);
+    expect(shortcutPathAlias('/channel'), ChannelsManagementRoute.path);
+    expect(shortcutPathAlias('/new-dm'), ChatNewMessageRoute.path);
+    expect(shortcutPathAlias('/privacy/last-seen'), SettingsRoute.path);
+    expect(
+      shortcutPathAlias('/settings/notif'),
+      NotificationSettingsRoute.path,
+    );
     expect(shortcutPathAlias('/black-list'), BlockedUsersRoute.path);
     expect(shortcutPathAlias('/close-friend'), CloseFriendsRoute.path);
     expect(
@@ -484,6 +511,22 @@ void main() {
     expect(
       parseDeepLinkToGoPath('https://haneat.app/c/1/giveaways'),
       '/channels/1/giveaways',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/c/1/post/28'),
+      '/channel/1/post/28',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/c/1/28'),
+      '/channel/1/post/28',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/channel/1/post/28/comments'),
+      '/post/28/comments',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/dialogs'),
+      ChatsRoute.path,
     );
     expect(
       parseDeepLinkToGoPath('https://haneat.app/studio'),

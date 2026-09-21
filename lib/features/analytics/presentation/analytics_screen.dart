@@ -109,6 +109,27 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
     );
   }
 
+  void _leaveAnalytics() {
+    if (!mounted) return;
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
+    final postId = widget.postId;
+    if (postId != null) {
+      context.go(PostFeedRoute.pathFor(postId));
+      return;
+    }
+    context.go(CreatorToolsRoute.path);
+  }
+
+  Widget _leaveAnalyticsButton() {
+    return TextButton(
+      onPressed: _leaveAnalytics,
+      child: Text(widget.postId != null ? 'К посту' : 'К инструментам'),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final statusAsync = ref.watch(subscriptionStatusProvider);
@@ -118,6 +139,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
       return Scaffold(
         appBar: AppBar(
           title: Text(widget.postId != null ? 'Аналитика поста' : 'Аналитика'),
+          leading: BackButton(onPressed: _leaveAnalytics),
         ),
         body: const Center(child: CircularProgressIndicator()),
       );
@@ -125,17 +147,27 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
 
     if (status == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Аналитика')),
+        appBar: AppBar(
+          title: const Text('Аналитика'),
+          leading: BackButton(onPressed: _leaveAnalytics),
+        ),
         body: AppEmptyState(
           icon: Icons.cloud_off_rounded,
           title: 'Не удалось загрузить статус',
           subtitle: 'Проверьте сеть и обновите подписку',
-          action: FilledButton(
-            onPressed: () {
-              refreshSubscriptionStatus(ref);
-              _loadAnalytics();
-            },
-            child: const Text('Повторить'),
+          action: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FilledButton(
+                onPressed: () {
+                  refreshSubscriptionStatus(ref);
+                  _loadAnalytics();
+                },
+                child: const Text('Повторить'),
+              ),
+              const SizedBox(height: 8),
+              _leaveAnalyticsButton(),
+            ],
           ),
         ),
       );
@@ -143,7 +175,10 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
 
     if (!status.canCreatorAnalytics) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Аналитика')),
+        appBar: AppBar(
+          title: const Text('Аналитика'),
+          leading: BackButton(onPressed: _leaveAnalytics),
+        ),
         body: _creatorUpsell(),
       );
     }
@@ -151,6 +186,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.postId != null ? 'Аналитика поста' : 'Аналитика профиля'),
+        leading: BackButton(onPressed: _leaveAnalytics),
         actions: [
           // Селектор периода
           PopupMenuButton<int>(
@@ -193,9 +229,16 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
         icon: Icons.cloud_off_rounded,
         title: 'Не удалось загрузить',
         subtitle: userVisibleError(_loadError!, fallback: 'Проверьте сеть'),
-        action: FilledButton(
-          onPressed: _loadAnalytics,
-          child: const Text('Повторить'),
+        action: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FilledButton(
+              onPressed: _loadAnalytics,
+              child: const Text('Повторить'),
+            ),
+            const SizedBox(height: 8),
+            _leaveAnalyticsButton(),
+          ],
         ),
       );
     }
@@ -204,9 +247,16 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
         icon: Icons.analytics_outlined,
         title: 'Нет данных',
         subtitle: 'За выбранный период статистика пока пуста',
-        action: FilledButton(
-          onPressed: _loadAnalytics,
-          child: const Text('Обновить'),
+        action: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FilledButton(
+              onPressed: _loadAnalytics,
+              child: const Text('Обновить'),
+            ),
+            const SizedBox(height: 8),
+            _leaveAnalyticsButton(),
+          ],
         ),
       );
     }
