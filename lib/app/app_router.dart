@@ -261,6 +261,94 @@ String? resourcePathAlias(String path, [String query = '']) {
       }
     }
   }
+  if (segs[0] == 'p' && segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/post/$id$q';
+  }
+
+  if ((segs[0] == 'bot' || segs[0] == 'bots') && segs.length == 2) {
+    if (segs[1] == 'my') return null;
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/bots/$id$q';
+  }
+
+  const miniRoots = {
+    'miniapp',
+    'miniapps',
+    'mini-apps',
+    'webapps',
+    'web-app',
+    'twa',
+  };
+  if (miniRoots.contains(segs[0]) && segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/webapp/$id$q';
+  }
+
+  if ((segs[0] == 'folder' || segs[0] == 'folders') && segs.length == 2) {
+    if (segs[1] == 'new') return '${ChatFolderNewRoute.path}$q';
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/chats/folders/$id$q';
+  }
+
+  if ((segs[0] == 'sticker' ||
+          segs[0] == 'stickerset' ||
+          segs[0] == 'pack' ||
+          segs[0] == 'addsticker' ||
+          segs[0] == 'add-stickers') &&
+      segs.length == 2 &&
+      segs[1].isNotEmpty) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/stickers/$id$q';
+    return '/addstickers/${Uri.encodeComponent(segs[1])}$q';
+  }
+
+  if ((segs[0] == 'moment' ||
+          segs[0] == 'moments' ||
+          segs[0] == 'highlight' ||
+          segs[0] == 's') &&
+      segs.length == 2) {
+    if (segs[1] == 'create') return '${StoryCreateRoute.path}$q';
+    if (segs[1] == 'archive') return '${StoriesRoute.path}$q';
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/stories/$id$q';
+  }
+
+  if ((segs[0] == 'donate' || segs[0] == 'tip') && segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) {
+      return query.isEmpty ? '/donate?to=$id' : '/donate?to=$id&$query';
+    }
+  }
+
+  if ((segs[0] == 'ad' || segs[0] == 'campaign' || segs[0] == 'campaigns') &&
+      segs.length == 2) {
+    if (segs[1] == 'new') return '${AdsCampaignEditorRoute.path}$q';
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/ads/$id$q';
+  }
+
+  if ((segs[0] == 'group' || segs[0] == 'groups' || segs[0] == 'supergroup') &&
+      segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/chats/thread/$id$q';
+  }
+
+  if ((segs[0] == 'hashtag' || segs[0] == 'tag' || segs[0] == 'h') &&
+      segs.length == 2 &&
+      segs[1].isNotEmpty) {
+    final raw = segs[1].startsWith('#') ? segs[1] : '#${segs[1]}';
+    return '${SearchRoute.path}?q=${Uri.encodeQueryComponent(raw)}';
+  }
+
+  if (segs[0] == 'ch' && segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/channel/$id$q';
+  }
+
+  if ((segs[0] == 'notif' || segs[0] == 'notification') && segs.length == 2) {
+    return '${NotificationsRoute.path}$q';
+  }
 
   return null;
 }
@@ -269,7 +357,7 @@ String? resourcePathAlias(String path, [String query = '']) {
 String? botSectionPathAlias(String path, [String query = '']) {
   final clean = path.split('?').first;
   final segs = clean.split('/').where((s) => s.isNotEmpty).toList();
-  if (segs.length != 3 || segs[0] != 'bots') return null;
+  if (segs.length != 3 || (segs[0] != 'bots' && segs[0] != 'bot')) return null;
   final id = int.tryParse(segs[1]);
   if (id == null || id <= 0) return null;
   final extra = query.trim();
@@ -790,6 +878,13 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/join':
     case '/join-chat':
     case '/joinchat':
+      return '${ChatsRoute.path}$q';
+    case '/new-ad':
+    case '/create-ad':
+    case '/order-ad':
+      return '${AdsCampaignEditorRoute.path}$q';
+    case '/add-sticker':
+    case '/new-sticker':
       return '${ChatsRoute.path}$q';
     default:
       return null;
@@ -1349,7 +1444,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AdsCampaignEditorRoute.editPath,
         name: AdsCampaignEditorRoute.editName,
         pageBuilder: (context, state) {
-          final id = int.tryParse(state.pathParameters['campaignId'] ?? '');
+          final id = parseRoutePositiveId(state.pathParameters['campaignId']);
+          if (id == null) {
+            return const MaterialPage(
+              child: InvalidLinkScreen(title: 'Реклама'),
+            );
+          }
           return MaterialPage(
             child: AdCampaignEditorScreen(campaignId: id),
           );

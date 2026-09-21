@@ -410,9 +410,19 @@ class _AdCampaignEditorScreenState extends State<AdCampaignEditorScreen> {
         icon: Icons.cloud_off_rounded,
         title: 'Не удалось открыть',
         subtitle: _error,
-        action: FilledButton(
-          onPressed: _bootstrap,
-          child: const Text('Повторить'),
+        action: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FilledButton(
+              onPressed: _bootstrap,
+              child: const Text('Повторить'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton(
+              onPressed: () => context.go(AdsHubRoute.path),
+              child: const Text('К рекламе'),
+            ),
+          ],
         ),
       );
     }

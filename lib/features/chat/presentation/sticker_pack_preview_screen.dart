@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/app_router.dart';
 import '../../../models/sticker_models.dart';
 import '../../../services/server_config.dart';
 import '../../../services/sticker_service.dart';
@@ -101,7 +103,13 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
                         child: const Text('Повторить'),
                       ),
                       TextButton(
-                        onPressed: () => Navigator.of(context).maybePop(),
+                        onPressed: () {
+                          if (context.canPop()) {
+                            context.pop();
+                          } else {
+                            context.go(ChatsRoute.path);
+                          }
+                        },
                         child: const Text('Назад'),
                       ),
                     ],
