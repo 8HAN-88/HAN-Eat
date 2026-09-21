@@ -381,29 +381,22 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
   }
 
   Future<void> _manageCommands() async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => _BotCommandsScreen(
-          botId: widget.botId,
-          botUsername: widget.botUsername,
-          initialCommands: _commands,
-          onChanged: _loadCommands,
-        ),
+    await context.push(
+      BotCommandsRoute.pathFor(
+        widget.botId,
+        username: widget.botUsername,
       ),
+      extra: _commands,
     );
-    await _loadCommands();
+    if (mounted) await _loadCommands();
   }
 
   Future<void> _manageMiniApps({bool autoNewApp = false}) async {
-    await Navigator.of(context).push<void>(
-      PageRouteBuilder<void>(
-        pageBuilder: (_, __, ___) => BotMiniAppsScreen(
-          botId: widget.botId,
-          botUsername: widget.botUsername,
-          autoNewApp: autoNewApp,
-        ),
-        transitionDuration: Duration.zero,
-        reverseTransitionDuration: Duration.zero,
+    await context.push(
+      BotMiniAppsRoute.pathFor(
+        widget.botId,
+        username: widget.botUsername,
+        newApp: autoNewApp,
       ),
     );
     if (mounted) await _loadMiniApps();
@@ -1435,6 +1428,7 @@ class _BotMiniAppsScreenState extends State<BotMiniAppsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.botId <= 0) return _botSectionMissing(context);
     return AppGradientBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
@@ -1447,12 +1441,19 @@ class _BotMiniAppsScreenState extends State<BotMiniAppsScreen> {
                 child: Row(
                   children: [
                     IconButton(
-                      onPressed: () => Navigator.of(context).maybePop(),
+                      onPressed: () => _leaveBotSection(
+                        context,
+                        botId: widget.botId,
+                        botUsername: widget.botUsername,
+                      ),
                       icon: const Icon(Icons.arrow_back_rounded),
                     ),
                     Expanded(
                       child: Text(
-                        'Мини-приложения',
+                        widget.botUsername.trim().isEmpty ||
+                                widget.botUsername == 'bot'
+                            ? 'Мини-приложения'
+                            : 'Мини-приложения · @${widget.botUsername}',
                         style: Theme.of(context)
                             .textTheme
                             .titleLarge
@@ -1806,24 +1807,58 @@ class _MiniAppFormDialogState extends State<_MiniAppFormDialog> {
 // Commands
 // ---------------------------------------------------------------------------
 
-class _BotCommandsScreen extends StatefulWidget {
-  const _BotCommandsScreen({
+void _leaveBotSection(
+  BuildContext context, {
+  required int botId,
+  required String botUsername,
+}) {
+  if (context.canPop()) {
+    context.pop();
+    return;
+  }
+  context.go(BotDetailRoute.pathFor(botId, username: botUsername));
+}
+
+Widget _botSectionMissing(BuildContext context) {
+  return AppGradientBackground(
+    child: Scaffold(
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        title: const Text('Бот'),
+      ),
+      body: AppEmptyState(
+        icon: Icons.smart_toy_outlined,
+        title: 'Бот не найден',
+        subtitle: 'Ссылка устарела или бот недоступен',
+        action: FilledButton(
+          onPressed: () => context.go(MyBotsRoute.path),
+          child: const Text('Мои боты'),
+        ),
+      ),
+    ),
+  );
+}
+
+class BotCommandsScreen extends StatefulWidget {
+  const BotCommandsScreen({
+    super.key,
     required this.botId,
     required this.botUsername,
-    required this.initialCommands,
-    required this.onChanged,
+    this.initialCommands = const [],
+    this.onChanged,
   });
 
   final int botId;
   final String botUsername;
   final List<BotCommandCreate> initialCommands;
-  final Future<void> Function() onChanged;
+  final Future<void> Function()? onChanged;
 
   @override
-  State<_BotCommandsScreen> createState() => _BotCommandsScreenState();
+  State<BotCommandsScreen> createState() => _BotCommandsScreenState();
 }
 
-class _BotCommandsScreenState extends State<_BotCommandsScreen> {
+class _BotCommandsScreenState extends State<BotCommandsScreen> {
   late List<BotCommandCreate> _commands;
   String? _error;
 
@@ -1831,9 +1866,7 @@ class _BotCommandsScreenState extends State<_BotCommandsScreen> {
   void initState() {
     super.initState();
     _commands = List.of(widget.initialCommands);
-    if (_commands.isEmpty) {
-      unawaited(_reload());
-    }
+    unawaited(_reload());
   }
 
   Future<void> _reload() async {
@@ -1844,10 +1877,12 @@ class _BotCommandsScreenState extends State<_BotCommandsScreen> {
         _commands = cmds;
         _error = null;
       });
-      await widget.onChanged();
+      await widget.onChanged?.call();
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = userVisibleError(e));
+      if (_commands.isEmpty) {
+        setState(() => _error = userVisibleError(e));
+      }
     }
   }
 
@@ -1931,6 +1966,7 @@ class _BotCommandsScreenState extends State<_BotCommandsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.botId <= 0) return _botSectionMissing(context);
     return AppGradientBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
@@ -1943,12 +1979,19 @@ class _BotCommandsScreenState extends State<_BotCommandsScreen> {
                 child: Row(
                   children: [
                     IconButton(
-                      onPressed: () => Navigator.of(context).maybePop(),
+                      onPressed: () => _leaveBotSection(
+                        context,
+                        botId: widget.botId,
+                        botUsername: widget.botUsername,
+                      ),
                       icon: const Icon(Icons.arrow_back_rounded),
                     ),
                     Expanded(
                       child: Text(
-                        'Commands',
+                        widget.botUsername.trim().isEmpty ||
+                                widget.botUsername == 'bot'
+                            ? 'Команды'
+                            : 'Команды · @${widget.botUsername}',
                         style: Theme.of(context)
                             .textTheme
                             .titleLarge

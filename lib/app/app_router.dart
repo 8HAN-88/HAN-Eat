@@ -106,6 +106,7 @@ import '../features/settings/presentation/paid_message_exceptions_screen.dart';
 import '../features/chat/application/chat_private_reply.dart';
 import '../features/chat/presentation/chat_thread_screen.dart';
 import '../features/chat/presentation/username_deep_link_screen.dart';
+import '../features/bots/data/bot_models.dart';
 import '../features/bots/presentation/bot_detail_screen.dart';
 import '../features/bots/presentation/my_bots_screen.dart';
 import '../models/chat_models.dart';
@@ -151,17 +152,30 @@ String? botSectionPathAlias(String path, [String query = '']) {
   if (segs.length != 3 || segs[0] != 'bots') return null;
   final id = int.tryParse(segs[1]);
   if (id == null || id <= 0) return null;
-  final section = switch (segs[2]) {
-    'commands' || 'command' => 'commands',
-    'apps' || 'miniapps' || 'mini-apps' => 'miniapps',
-    'newapp' || 'new-app' => 'newapp',
-    'token' => 'token',
+  final extra = query.trim();
+  String withExtra(String dest) {
+    if (extra.isEmpty) return dest;
+    return dest.contains('?') ? '$dest&$extra' : '$dest?$extra';
+  }
+
+  return switch (segs[2]) {
+    'commands' || 'command' => withExtra('/bots/$id/commands'),
+    'apps' || 'miniapps' || 'mini-apps' => withExtra('/bots/$id/apps'),
+    'newapp' || 'new-app' => extra.isEmpty
+        ? '/bots/$id/apps?new=1'
+        : '/bots/$id/apps?new=1&$extra',
+    'token' => extra.isEmpty
+        ? '/bots/$id?section=token'
+        : '/bots/$id?$extra&section=token',
+    'webhook' ||
+    'webhooks' ||
+    'invoices' ||
+    'invoice' ||
+    'stats' ||
+    'analytics' =>
+      withExtra('/bots/$id'),
     _ => null,
   };
-  if (section == null) return null;
-  final extra = query.trim();
-  final q = extra.isEmpty ? 'section=$section' : '$extra&section=$section';
-  return '/bots/$id?$q';
 }
 
 /// Short leftover paths people type from Telegram muscle memory.
@@ -476,6 +490,168 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return '${AdsHubRoute.path}$q';
     case '/settings/creator':
       return '${CreatorToolsRoute.path}$q';
+    case '/miniapps':
+    case '/webapps':
+    case '/apps':
+    case '/games':
+    case '/twa':
+      return '${MiniAppsRoute.path}$q';
+    case '/my-bots':
+    case '/create-bot':
+    case '/new-bot':
+    case '/developers':
+    case '/botapi':
+      return '${MyBotsRoute.path}$q';
+    case '/my-channels':
+    case '/manage-channels':
+      return '${ChannelsManagementRoute.path}$q';
+    case '/my-profile':
+      return '${ProfileTabRoute.path}$q';
+    case '/account':
+    case '/settings/account':
+    case '/settings/profile':
+    case '/settings/username':
+    case '/username':
+    case '/bio':
+    case '/avatar':
+      return '${ProfileAuthRoute.path}$q';
+    case '/settings/close-friends':
+    case '/best-friends':
+    case '/besties':
+    case '/story-privacy':
+      return '${CloseFriendsRoute.path}$q';
+    case '/change-password':
+    case '/password':
+    case '/settings/password':
+    case '/privacy-and-security':
+    case '/secret-chat':
+      return '${AccountSecurityRoute.path}$q';
+    case '/forgot':
+      return '${ForgotPasswordRoute.path}$q';
+    case '/subscribe':
+    case '/upgrade':
+    case '/plus':
+    case '/vip':
+    case '/manage-subscription':
+    case '/my-subscription':
+    case '/flex-plus':
+      return '${FlexSubscriptionRoute.path}$q';
+    case '/flex-ai':
+      return FlexSubscriptionRoute.pathWithLevel(9);
+    case '/flex-pro':
+      return FlexSubscriptionRoute.pathWithLevel(18);
+    case '/flex-max':
+      return FlexSubscriptionRoute.pathWithLevel(79);
+    case '/balance':
+    case '/buy-stars':
+    case '/get-stars':
+    case '/star-balance':
+      return '${StarsWalletRoute.path}$q';
+    case '/my-gifts':
+    case '/saved-gifts':
+      return '${StarGiftsInventoryRoute.path}$q';
+    case '/gift-shop':
+      return '${StarGiftsMarketplaceRoute.path}$q';
+    case '/earnings':
+    case '/withdraw':
+    case '/payout':
+    case '/sbp':
+      return '${CreatorRevenueRoute.path}$q';
+    case '/referrals':
+    case '/share':
+    case '/refer':
+    case '/partners':
+    case '/invite-link':
+      return '${PartnerProgramRoute.path}$q';
+    case '/alerts':
+    case '/updates':
+      return '${NotificationsRoute.path}$q';
+    case '/create':
+    case '/add-post':
+      return '${CreatePostRoute.path}$q';
+    case '/add-story':
+    case '/create-story':
+      return '${StoryCreateRoute.path}$q';
+    case '/create-group':
+      return '${ChatCreateGroupRoute.path}$q';
+    case '/create-channel':
+      return '${CreateChannelRoute.path}$q';
+    case '/new-chat':
+    case '/start-chat':
+    case '/write-message':
+      return '${ChatNewMessageRoute.path}$q';
+    case '/policy':
+    case '/eula':
+    case '/safety':
+    case '/legal-info':
+    case '/imprint':
+      return '${SupportSecurityRoute.path}$q';
+    case '/bug':
+    case '/ticket':
+    case '/bug-report':
+    case '/customer-service':
+      return '${SupportContactRoute.path}$q';
+    case '/blacklist':
+    case '/blocked-users':
+      return '${BlockedUsersRoute.path}$q';
+    case '/night-mode':
+    case '/dark':
+    case '/auto-download':
+    case '/data-saver':
+    case '/settings/chats':
+      return '${SettingsRoute.path}$q';
+    case '/two-factor':
+    case '/authenticator':
+      return '${TwoFactorSetupRoute.path}$q';
+    case '/admin-panel':
+    case '/staff':
+      return '${ModerationDashboardRoute.path}$q';
+    case '/collections':
+    case '/liked':
+    case '/later':
+    case '/watch-later':
+      return '${SavedPostsRoute.path}$q';
+    case '/schedule':
+    case '/scheduled-posts':
+      return '${ScheduledPostsRoute.path}$q';
+    case '/promote':
+      return '${PromotedPostsRoute.path}$q';
+    case '/ads-manager':
+      return '${AdsHubRoute.path}$q';
+    case '/monetize':
+      return '${CreatorToolsRoute.path}$q';
+    case '/more-ads':
+      return '${ExtraAdsRoute.path}$q';
+    case '/store':
+    case '/packs':
+      return '${FlexShopRoute.path}$q';
+    case '/levels':
+      return '${FlexConstructorRoute.path}$q';
+    case '/chat-folders':
+    case '/settings/folders':
+      return '${ChatFolderNewRoute.path}$q';
+    case '/archived-chats':
+      return '${ChatArchivedRoute.path}$q';
+    case '/paid-messages':
+      return '${PaidMessageExceptionsRoute.path}$q';
+    case '/do-not-disturb':
+    case '/dnd':
+      return '${NotificationSettingsRoute.path}$q';
+    case '/trending':
+    case '/popular':
+      return '${FeedRoute.path}$q';
+    case '/export-data':
+    case '/takeout':
+      return '${BackupRoute.path}$q';
+    case '/metrics':
+    case '/statistics':
+      return '${AppAnalyticsRoute.path}$q';
+    case '/search-people':
+    case '/hashtags':
+      return '${SearchRoute.path}$q';
+    case '/settings/stickers':
+    case '/settings/calls':
+      return '${ChatsRoute.path}$q';
     default:
       return null;
   }
@@ -1907,16 +2083,31 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: BotDetailRoute.path,
         name: BotDetailRoute.name,
+        redirect: (context, state) {
+          final id = int.tryParse(state.pathParameters['botId'] ?? '') ?? 0;
+          if (id <= 0) return null;
+          final section =
+              (state.uri.queryParameters['section'] ?? '').toLowerCase();
+          final username = state.uri.queryParameters['u'];
+          return switch (section) {
+            'commands' || 'command' =>
+              BotCommandsRoute.pathFor(id, username: username),
+            'miniapps' || 'mini_apps' || 'apps' =>
+              BotMiniAppsRoute.pathFor(id, username: username),
+            'newapp' || 'new_app' => BotMiniAppsRoute.pathFor(
+                id,
+                username: username,
+                newApp: true,
+              ),
+            _ => null,
+          };
+        },
         pageBuilder: (context, state) {
           final id = int.tryParse(state.pathParameters['botId'] ?? '') ?? 0;
           final username = state.uri.queryParameters['u'] ?? 'bot';
           final sectionRaw =
               (state.uri.queryParameters['section'] ?? '').toLowerCase();
           final section = switch (sectionRaw) {
-            'miniapps' || 'mini_apps' || 'apps' =>
-              BotDetailOpenSection.miniApps,
-            'newapp' || 'new_app' => BotDetailOpenSection.newApp,
-            'commands' => BotDetailOpenSection.commands,
             'token' => BotDetailOpenSection.token,
             _ => BotDetailOpenSection.none,
           };
@@ -1932,6 +2123,42 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               initialToken: token,
               showTokenOnOpen:
                   token != null || section == BotDetailOpenSection.token,
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: BotCommandsRoute.path,
+        name: BotCommandsRoute.name,
+        pageBuilder: (context, state) {
+          final id = int.tryParse(state.pathParameters['botId'] ?? '') ?? 0;
+          final username = state.uri.queryParameters['u'] ?? 'bot';
+          final extra = state.extra;
+          final initial = extra is List<BotCommandCreate>
+              ? extra
+              : const <BotCommandCreate>[];
+          return NoTransitionPage(
+            child: BotCommandsScreen(
+              botId: id,
+              botUsername: username,
+              initialCommands: initial,
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: BotMiniAppsRoute.path,
+        name: BotMiniAppsRoute.name,
+        pageBuilder: (context, state) {
+          final id = int.tryParse(state.pathParameters['botId'] ?? '') ?? 0;
+          final username = state.uri.queryParameters['u'] ?? 'bot';
+          final newRaw =
+              (state.uri.queryParameters['new'] ?? '').toLowerCase();
+          return NoTransitionPage(
+            child: BotMiniAppsScreen(
+              botId: id,
+              botUsername: username,
+              autoNewApp: newRaw == '1' || newRaw == 'true',
             ),
           );
         },
@@ -3388,24 +3615,61 @@ class BotDetailRoute {
     String? username,
     BotDetailOpenSection section = BotDetailOpenSection.none,
   }) {
+    switch (section) {
+      case BotDetailOpenSection.miniApps:
+        return BotMiniAppsRoute.pathFor(botId, username: username);
+      case BotDetailOpenSection.newApp:
+        return BotMiniAppsRoute.pathFor(
+          botId,
+          username: username,
+          newApp: true,
+        );
+      case BotDetailOpenSection.commands:
+        return BotCommandsRoute.pathFor(botId, username: username);
+      case BotDetailOpenSection.token:
+      case BotDetailOpenSection.none:
+        break;
+    }
     final params = <String, String>{};
     if (username != null && username.trim().isNotEmpty) {
       params['u'] = username.trim();
     }
-    switch (section) {
-      case BotDetailOpenSection.miniApps:
-        params['section'] = 'miniapps';
-      case BotDetailOpenSection.newApp:
-        params['section'] = 'newapp';
-      case BotDetailOpenSection.commands:
-        params['section'] = 'commands';
-      case BotDetailOpenSection.token:
-        params['section'] = 'token';
-      case BotDetailOpenSection.none:
-        break;
+    if (section == BotDetailOpenSection.token) {
+      params['section'] = 'token';
     }
     final uri = Uri(
       path: '/bots/$botId',
+      queryParameters: params.isEmpty ? null : params,
+    );
+    return uri.toString();
+  }
+}
+
+class BotCommandsRoute {
+  static const path = '/bots/:botId/commands';
+  static const name = 'bot_commands';
+
+  static String pathFor(int botId, {String? username}) {
+    final handle = username?.trim() ?? '';
+    final uri = Uri(
+      path: '/bots/$botId/commands',
+      queryParameters: handle.isEmpty ? null : {'u': handle},
+    );
+    return uri.toString();
+  }
+}
+
+class BotMiniAppsRoute {
+  static const path = '/bots/:botId/apps';
+  static const name = 'bot_miniapps';
+
+  static String pathFor(int botId, {String? username, bool newApp = false}) {
+    final params = <String, String>{};
+    final handle = username?.trim() ?? '';
+    if (handle.isNotEmpty) params['u'] = handle;
+    if (newApp) params['new'] = '1';
+    final uri = Uri(
+      path: '/bots/$botId/apps',
       queryParameters: params.isEmpty ? null : params,
     );
     return uri.toString();
