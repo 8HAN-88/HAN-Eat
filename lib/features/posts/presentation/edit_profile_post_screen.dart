@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../app/app_router.dart';
 import '../../../models/post_model.dart';
 import '../../../services/api_service.dart';
 import '../../../services/feed_cache_service.dart';
@@ -356,8 +357,14 @@ class _EditProfilePostScreenState extends ConsumerState<EditProfilePostScreen> {
               ),
             const SizedBox(height: 8),
             TextButton(
-              onPressed: () => context.pop(),
-              child: const Text('Назад'),
+              onPressed: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go(PostFeedRoute.pathFor(widget.postId));
+                }
+              },
+              child: const Text('К посту'),
             ),
           ],
         ),

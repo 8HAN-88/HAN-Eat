@@ -97,6 +97,15 @@ class _ChannelSubscribersScreenState extends State<ChannelSubscribersScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Подписчики'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(ChannelDetailRoute.pathFor(widget.channelId));
+            }
+          },
+        ),
         bottom: subtitle != null && subtitle.isNotEmpty
             ? PreferredSize(
                 preferredSize: const Size.fromHeight(24),
@@ -129,9 +138,29 @@ class _ChannelSubscribersScreenState extends State<ChannelSubscribersScreen> {
                           error,
                           fallback: 'Проверьте подключение',
                         ),
-                        action: FilledButton(
-                          onPressed: () => _load(refresh: true),
-                          child: const Text('Повторить'),
+                        action: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            FilledButton(
+                              onPressed: () => _load(refresh: true),
+                              child: const Text('Повторить'),
+                            ),
+                            const SizedBox(height: 8),
+                            TextButton(
+                              onPressed: () {
+                                if (context.canPop()) {
+                                  context.pop();
+                                } else {
+                                  context.go(
+                                    ChannelDetailRoute.pathFor(
+                                      widget.channelId,
+                                    ),
+                                  );
+                                }
+                              },
+                              child: const Text('К каналу'),
+                            ),
+                          ],
                         ),
                       ),
                     ],

@@ -1,7 +1,9 @@
 // Экран комментариев к посту
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import '../../../app/app_router.dart';
 import '../../../core/theme/color_schemes.dart';
 import '../../../services/comment_service.dart';
 import '../../../services/auth_service.dart';
@@ -250,6 +252,15 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
     }
   }
 
+  void _leaveComments() {
+    if (!mounted) return;
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
+    context.go(PostFeedRoute.pathFor(widget.postId));
+  }
+
   @override
   Widget build(BuildContext context) {
     final byId = <int, Comment>{for (final c in _comments) c.id: c};
@@ -371,6 +382,12 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
                               onPressed: () =>
                                   Navigator.of(context).maybePop(),
                               child: const Text('Закрыть'),
+                            ),
+                          ] else ...[
+                            const SizedBox(height: 8),
+                            TextButton(
+                              onPressed: _leaveComments,
+                              child: const Text('К посту'),
                             ),
                           ],
                         ],
@@ -516,6 +533,7 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
       appBar: AppBar(
         backgroundColor: scheme.surface,
         title: const Text('Комментарии'),
+        leading: BackButton(onPressed: _leaveComments),
       ),
       resizeToAvoidBottomInset: true,
       bottomNavigationBar: _buildComposerBar(context),

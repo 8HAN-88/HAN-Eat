@@ -251,7 +251,13 @@ class _ChannelSettingsScreenState extends ConsumerState<ChannelSettingsScreen> {
                       ),
                       const SizedBox(height: 8),
                       TextButton(
-                        onPressed: () => context.pop(),
+                        onPressed: () {
+                          if (context.canPop()) {
+                            context.pop();
+                          } else {
+                            context.go(ChatsRoute.path);
+                          }
+                        },
                         child: const Text('Назад'),
                       ),
                     ],

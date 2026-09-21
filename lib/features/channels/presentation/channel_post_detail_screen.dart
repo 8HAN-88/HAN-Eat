@@ -156,9 +156,25 @@ class _ChannelPostDetailScreenState
               _loadError!,
               fallback: 'Проверьте сеть',
             ),
-            action: FilledButton(
-              onPressed: _loadPost,
-              child: const Text('Повторить'),
+            action: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FilledButton(
+                  onPressed: _loadPost,
+                  child: const Text('Повторить'),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () {
+                    if (context.canPop()) {
+                      context.pop();
+                    } else {
+                      context.go(ChannelDetailRoute.pathFor(widget.channelId));
+                    }
+                  },
+                  child: const Text('К каналу'),
+                ),
+              ],
             ),
           ),
         );
@@ -174,10 +190,10 @@ class _ChannelPostDetailScreenState
               if (context.canPop()) {
                 context.pop();
               } else {
-                context.go(FeedRoute.path);
+                context.go(ChannelDetailRoute.pathFor(widget.channelId));
               }
             },
-            child: const Text('Назад'),
+            child: const Text('К каналу'),
           ),
         ),
       );
