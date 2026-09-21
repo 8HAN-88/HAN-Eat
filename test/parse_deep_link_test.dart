@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:han_eat/app/app_router.dart';
+import 'package:han_eat/features/bots/presentation/bot_detail_screen.dart';
 
 void main() {
   test('PWA /app/ is not a GoRouter location', () {
@@ -273,15 +274,45 @@ void main() {
     expect(shortcutPathAlias('/bot'), MyBotsRoute.path);
     expect(shortcutPathAlias('/settings/flex'), FlexSubscriptionRoute.path);
     expect(shortcutPathAlias('/settings/about'), SupportSecurityRoute.path);
-    expect(botSectionPathAlias('/bots/5/commands'), '/bots/5?section=commands');
-    expect(botSectionPathAlias('/bots/5/apps'), '/bots/5?section=miniapps');
+    expect(botSectionPathAlias('/bots/5/commands'), '/bots/5/commands');
+    expect(botSectionPathAlias('/bots/5/command'), '/bots/5/commands');
+    expect(botSectionPathAlias('/bots/5/apps'), '/bots/5/apps');
+    expect(botSectionPathAlias('/bots/5/miniapps'), '/bots/5/apps');
     expect(botSectionPathAlias('/bots/5/token'), '/bots/5?section=token');
-    expect(botSectionPathAlias('/bots/5/newapp'), '/bots/5?section=newapp');
+    expect(botSectionPathAlias('/bots/5/newapp'), '/bots/5/apps?new=1');
+    expect(botSectionPathAlias('/bots/5/webhook'), '/bots/5');
     expect(botSectionPathAlias('/bots/my/commands'), isNull);
     expect(
       parseDeepLinkToGoPath('https://haneat.app/app/#/bots/5/commands'),
-      '/bots/5?section=commands',
+      '/bots/5/commands',
     );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/bots/5/miniapps'),
+      '/bots/5/apps',
+    );
+    expect(BotCommandsRoute.pathFor(5, username: 'demo_bot'),
+        '/bots/5/commands?u=demo_bot');
+    expect(BotMiniAppsRoute.pathFor(5, newApp: true), '/bots/5/apps?new=1');
+    expect(
+      BotDetailRoute.pathFor(5, section: BotDetailOpenSection.commands),
+      '/bots/5/commands',
+    );
+    expect(
+      BotDetailRoute.pathFor(5, section: BotDetailOpenSection.newApp),
+      '/bots/5/apps?new=1',
+    );
+    expect(shortcutPathAlias('/miniapps'), MiniAppsRoute.path);
+    expect(shortcutPathAlias('/my-bots'), MyBotsRoute.path);
+    expect(shortcutPathAlias('/balance'), StarsWalletRoute.path);
+    expect(shortcutPathAlias('/subscribe'), FlexSubscriptionRoute.path);
+    expect(shortcutPathAlias('/flex-pro'), FlexSubscriptionRoute.pathWithLevel(18));
+    expect(shortcutPathAlias('/create-group'), ChatCreateGroupRoute.path);
+    expect(shortcutPathAlias('/blacklist'), BlockedUsersRoute.path);
+    expect(shortcutPathAlias('/two-factor'), TwoFactorSetupRoute.path);
+    expect(shortcutPathAlias('/my-channels'), ChannelsManagementRoute.path);
+    expect(shortcutPathAlias('/paid-messages'), PaidMessageExceptionsRoute.path);
+    expect(shortcutPathAlias('/collections'), SavedPostsRoute.path);
+    expect(shortcutPathAlias('/settings/close-friends'), CloseFriendsRoute.path);
     expect(
       parseDeepLinkToGoPath('https://haneat.app/studio'),
       CreatorToolsRoute.path,
