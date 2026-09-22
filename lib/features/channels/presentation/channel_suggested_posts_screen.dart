@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/app_router.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../core/share/system_share.dart';
 import '../../../services/paid_features_service.dart';
@@ -254,6 +256,15 @@ class _ChannelSuggestedPostsScreenState
     return Scaffold(
       appBar: AppBar(
         title: Text('Предложения · ${widget.channelName}'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(ChannelDetailRoute.pathFor(widget.channelId));
+            }
+          },
+        ),
         actions: [
           if (_canSuggest)
             IconButton(

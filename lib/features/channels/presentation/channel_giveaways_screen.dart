@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../app/app_router.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../services/paid_features_service.dart';
 import '../../../utils/api_error_parser.dart';
@@ -457,6 +459,15 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Розыгрыши · ${widget.channelName}'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(ChannelDetailRoute.pathFor(widget.channelId));
+            }
+          },
+        ),
         actions: [
           if (widget.canManage)
             IconButton(

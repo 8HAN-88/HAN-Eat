@@ -288,7 +288,7 @@ String? resourcePathAlias(String path, [String query = '']) {
     }
   }
 
-  if ((segs[0] == 'invoice' || segs[0] == 'invoices') && segs.length == 2) {
+  if ((segs[0] == 'invoice' || segs[0] == 'invoices' || segs[0] == 'receipt' || segs[0] == 'bill') && segs.length == 2) {
     final id = int.tryParse(segs[1]);
     if (id != null && id > 0) return '/paid/invoices/$id$q';
   }
@@ -1372,6 +1372,10 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/live':
     case '/stream':
       return '${ChannelsManagementRoute.path}$q';
+    case '/privacy/blocked':
+    case '/settings/block':
+    case '/settings/blocklist':
+      return '${BlockedUsersRoute.path}$q';
     default:
       return null;
   }

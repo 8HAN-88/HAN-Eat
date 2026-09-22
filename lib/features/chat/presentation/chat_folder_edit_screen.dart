@@ -369,7 +369,18 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
   Widget build(BuildContext context) {
     if (_folderMissing) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Папка')),
+        appBar: AppBar(
+          title: const Text('Папка'),
+          leading: BackButton(
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(ChatsRoute.path);
+              }
+            },
+          ),
+        ),
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -393,7 +404,18 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
     }
     if (widget.folderId != null && !_isEdit) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Папка')),
+        appBar: AppBar(
+          title: const Text('Папка'),
+          leading: BackButton(
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(ChatsRoute.path);
+              }
+            },
+          ),
+        ),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -404,6 +426,15 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_isEdit ? 'Папка' : 'Новая папка'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(ChatsRoute.path);
+            }
+          },
+        ),
         actions: [
           if (_isEdit)
             IconButton(

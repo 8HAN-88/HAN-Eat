@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../app/app_router.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/paid_features_service.dart';
 import '../../../utils/api_error_parser.dart';
@@ -201,7 +202,18 @@ class _StarInvoicePayScreenState extends State<StarInvoicePayScreen> {
     final scheme = Theme.of(context).colorScheme;
     final invoice = _invoice;
     return Scaffold(
-      appBar: AppBar(title: const Text('Счёт в звёздах')),
+      appBar: AppBar(
+        title: const Text('Счёт в звёздах'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(StarsWalletRoute.path);
+            }
+          },
+        ),
+      ),
       body: AppGradientBackground(
         child: _loading
             ? const Center(child: CircularProgressIndicator())

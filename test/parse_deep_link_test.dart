@@ -516,6 +516,10 @@ void main() {
     expect(shortcutPathAlias('/location'), ChatsRoute.path);
     expect(shortcutPathAlias('/live'), ChannelsManagementRoute.path);
     expect(shortcutPathAlias('/stream'), ChannelsManagementRoute.path);
+    expect(resourcePathAlias('/receipt/9'), '/paid/invoices/9');
+    expect(resourcePathAlias('/bill/9'), '/paid/invoices/9');
+    expect(shortcutPathAlias('/privacy/blocked'), BlockedUsersRoute.path);
+    expect(shortcutPathAlias('/settings/blocklist'), BlockedUsersRoute.path);
     expect(shortcutPathAlias('/topic'), ChatsRoute.path);
     expect(shortcutPathAlias('/forum'), ChatsRoute.path);
     expect(shortcutPathAlias('/boost'), AdsHubRoute.path);

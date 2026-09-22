@@ -59,6 +59,15 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Аккаунт и безопасность'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(SettingsRoute.path);
+            }
+          },
+        ),
         actions: [
           IconButton(
             tooltip: 'Обновить',

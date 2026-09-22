@@ -173,6 +173,15 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Поддержка'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(SettingsRoute.path);
+            }
+          },
+        ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),

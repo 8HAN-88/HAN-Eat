@@ -88,7 +88,18 @@ class _ChatGroupInfoLoaderScreenState extends State<ChatGroupInfoLoaderScreen> {
     }
     final err = _error;
     return Scaffold(
-      appBar: AppBar(title: const Text('О группе')),
+      appBar: AppBar(
+        title: const Text('О группе'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(ChatThreadRoute.pathForId(widget.conversationId));
+            }
+          },
+        ),
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : AppEmptyState(
@@ -1872,6 +1883,15 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('О группе'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(ChatThreadRoute.pathForId(widget.conversation.id));
+            }
+          },
+        ),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())

@@ -38,7 +38,18 @@ class SupportSecurityScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Поддержка и безопасность')),
+      appBar: AppBar(
+        title: const Text('Поддержка и безопасность'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(SettingsRoute.path);
+            }
+          },
+        ),
+      ),
       body: ListView(
         padding: EdgeInsets.fromLTRB(
           16,

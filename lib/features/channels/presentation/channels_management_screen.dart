@@ -159,6 +159,15 @@ class _ChannelsManagementScreenState
     return Scaffold(
       appBar: AppBar(
         title: const Text('Управление каналами'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(ChatsRoute.path);
+            }
+          },
+        ),
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

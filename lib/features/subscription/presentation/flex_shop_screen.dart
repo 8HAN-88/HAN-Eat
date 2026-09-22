@@ -126,6 +126,15 @@ class _FlexShopScreenState extends State<FlexShopScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('Все возможности'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(FlexSubscriptionRoute.path);
+            }
+          },
+        ),
         actions: [
           IconButton(
             onPressed: () => context.push(FlexSubscriptionRoute.path),

@@ -174,7 +174,18 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
   Widget build(BuildContext context) {
     if (!AuthService.isInitialized || !UserService.isInitialized) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Профиль')),
+        appBar: AppBar(
+          title: const Text('Профиль'),
+          leading: BackButton(
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(SettingsRoute.path);
+              }
+            },
+          ),
+        ),
         body: const Center(
           child: CircularProgressIndicator(),
         ),
@@ -191,7 +202,18 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
     final currentProfile = profile ?? UserProfile(uid: user.uid);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Профиль')),
+      appBar: AppBar(
+        title: const Text('Профиль'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(SettingsRoute.path);
+            }
+          },
+        ),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

@@ -87,6 +87,15 @@ class _AdvertiserHubScreenState extends State<AdvertiserHubScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Заказать рекламу'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(AdsHubRoute.path);
+            }
+          },
+        ),
         actions: [
           IconButton(
             tooltip: 'Написать в поддержку',

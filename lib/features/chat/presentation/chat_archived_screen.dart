@@ -553,6 +553,15 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
               )
             : AppBar(
                 title: const Text('Архив'),
+                leading: BackButton(
+                  onPressed: () {
+                    if (context.canPop()) {
+                      context.pop();
+                    } else {
+                      context.go(ChatsRoute.path);
+                    }
+                  },
+                ),
                 actions: [
                   if (!isEmpty && !_loading)
                     IconButton(
