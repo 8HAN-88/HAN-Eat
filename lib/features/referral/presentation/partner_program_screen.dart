@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/app_router.dart';
 import '../../../services/app_invite_service.dart';
 import '../../../services/pending_referral_store.dart';
 import '../../../services/revenue_share_service.dart';
@@ -362,6 +364,15 @@ class _PartnerProgramScreenState extends State<PartnerProgramScreen> {
           widget.focusExtraAds
               ? 'Доп. реклама за долю'
               : 'Партнёрская программа',
+        ),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(SettingsRoute.path);
+            }
+          },
         ),
       ),
       body: RefreshIndicator(

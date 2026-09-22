@@ -507,6 +507,15 @@ void main() {
     expect(resourcePathAlias('/forum/21'), '/chats/thread/21');
     expect(resourcePathAlias('/n/9'), NotificationsRoute.path);
     expect(resourcePathAlias('/highlights/9'), '/stories/9');
+    expect(resourcePathAlias('/poll/28'), '/post/28');
+    expect(resourcePathAlias('/voice/28'), '/post/28');
+    expect(resourcePathAlias('/file/28'), '/post/28');
+    expect(resourcePathAlias('/doc/28'), '/post/28');
+    expect(resourcePathAlias('/live/1'), '/channel/1');
+    expect(resourcePathAlias('/stream/1'), '/channel/1');
+    expect(shortcutPathAlias('/location'), ChatsRoute.path);
+    expect(shortcutPathAlias('/live'), ChannelsManagementRoute.path);
+    expect(shortcutPathAlias('/stream'), ChannelsManagementRoute.path);
     expect(shortcutPathAlias('/topic'), ChatsRoute.path);
     expect(shortcutPathAlias('/forum'), ChatsRoute.path);
     expect(shortcutPathAlias('/boost'), AdsHubRoute.path);

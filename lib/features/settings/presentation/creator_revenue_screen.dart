@@ -3,7 +3,10 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
+
+import '../../../app/app_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../services/paid_features_service.dart';
@@ -440,6 +443,15 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Доходы автора'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(CreatorToolsRoute.path);
+            }
+          },
+        ),
         actions: [
           IconButton(
             tooltip: 'Запросить выплату',

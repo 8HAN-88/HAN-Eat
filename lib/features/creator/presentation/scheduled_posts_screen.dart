@@ -173,6 +173,15 @@ class _ScheduledPostsScreenState extends ConsumerState<ScheduledPostsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Запланированные посты'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(CreatorToolsRoute.path);
+            }
+          },
+        ),
         actions: [
           IconButton(
             onPressed: _loading ? null : _load,
@@ -226,9 +235,19 @@ class _ScheduledPostsScreenState extends ConsumerState<ScheduledPostsScreen> {
         icon: Icons.cloud_off_rounded,
         title: 'Не удалось загрузить',
         subtitle: _error,
-        action: FilledButton(
-          onPressed: _load,
-          child: const Text('Повторить'),
+        action: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FilledButton(
+              onPressed: _load,
+              child: const Text('Повторить'),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => context.go(CreatorToolsRoute.path),
+              child: const Text('К инструментам'),
+            ),
+          ],
         ),
       );
     }

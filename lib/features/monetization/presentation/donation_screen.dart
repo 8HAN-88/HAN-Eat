@@ -1,6 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../app/app_router.dart';
 import '../../../services/api_service.dart';
 import '../../../widgets/stars_pay_helper.dart';
 import '../data/donation_models.dart';
@@ -85,6 +88,15 @@ class _DonationScreenState extends State<DonationScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Поддержать автора'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(ProfileRoute.withUserId(widget.recipientId));
+            }
+          },
+        ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),

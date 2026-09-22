@@ -76,7 +76,18 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Чёрный список')),
+      appBar: AppBar(
+        title: const Text('Чёрный список'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(SettingsRoute.path);
+            }
+          },
+        ),
+      ),
       body: RefreshIndicator(
         onRefresh: _load,
         child: _buildBody(),
@@ -103,9 +114,19 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
           Text(_error!, textAlign: TextAlign.center),
           const SizedBox(height: 16),
           Center(
-            child: FilledButton(
-              onPressed: _load,
-              child: const Text('Повторить'),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FilledButton(
+                  onPressed: _load,
+                  child: const Text('Повторить'),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () => context.go(SettingsRoute.path),
+                  child: const Text('К настройкам'),
+                ),
+              ],
             ),
           ),
         ],

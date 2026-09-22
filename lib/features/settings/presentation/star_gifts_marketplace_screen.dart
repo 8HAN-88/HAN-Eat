@@ -98,7 +98,18 @@ class _StarGiftsMarketplaceScreenState extends State<StarGiftsMarketplaceScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Витрина подарков')),
+      appBar: AppBar(
+        title: const Text('Витрина подарков'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(StarGiftsInventoryRoute.path);
+            }
+          },
+        ),
+      ),
       body: AppGradientBackground(
         child: RefreshIndicator(
           onRefresh: _load,
@@ -127,9 +138,19 @@ class _StarGiftsMarketplaceScreenState extends State<StarGiftsMarketplaceScreen>
           Text(_error!, textAlign: TextAlign.center),
           const SizedBox(height: 12),
           Center(
-            child: FilledButton(
-              onPressed: _load,
-              child: const Text('Повторить'),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FilledButton(
+                  onPressed: _load,
+                  child: const Text('Повторить'),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () => context.go(StarGiftsInventoryRoute.path),
+                  child: const Text('К подаркам'),
+                ),
+              ],
             ),
           ),
         ],

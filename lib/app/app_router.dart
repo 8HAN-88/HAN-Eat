@@ -591,7 +591,13 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[0] == 'image' ||
           segs[0] == 'img' ||
           segs[0] == 'pic' ||
-          segs[0] == 'media') &&
+          segs[0] == 'media' ||
+          segs[0] == 'voice' ||
+          segs[0] == 'audio' ||
+          segs[0] == 'file' ||
+          segs[0] == 'doc' ||
+          segs[0] == 'document' ||
+          segs[0] == 'poll') &&
       segs.length == 2) {
     final id = int.tryParse(segs[1]);
     if (id != null && id > 0) return '/post/$id$q';
@@ -745,6 +751,10 @@ String? resourcePathAlias(String path, [String query = '']) {
   if ((segs[0] == 'topic' || segs[0] == 'forum') && segs.length == 2) {
     final id = int.tryParse(segs[1]);
     if (id != null && id > 0) return '/chats/thread/$id$q';
+  }
+  if ((segs[0] == 'live' || segs[0] == 'stream') && segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/channel/$id$q';
   }
   if (segs[0] == 'saved' && segs.length == 2) {
     final id = int.tryParse(segs[1]);
@@ -1356,6 +1366,12 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/open':
     case '/call':
       return '${ChatsRoute.path}$q';
+    case '/location':
+    case '/live-location':
+      return '${ChatsRoute.path}$q';
+    case '/live':
+    case '/stream':
+      return '${ChannelsManagementRoute.path}$q';
     default:
       return null;
   }
