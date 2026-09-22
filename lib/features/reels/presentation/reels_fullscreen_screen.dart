@@ -772,7 +772,13 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
               child: IconButton(
                 icon:
                     const Icon(Icons.arrow_back, color: Colors.white, size: 28),
-                onPressed: () => context.pop(),
+                onPressed: () {
+                  if (context.canPop()) {
+                    context.pop();
+                    return;
+                  }
+                  context.go(FeedRoute.path);
+                },
               ),
             ),
           ),

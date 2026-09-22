@@ -119,6 +119,15 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
         appBar: AppBar(
           title: const Text('Звёзды и кошелёк'),
           backgroundColor: Colors.transparent,
+          leading: BackButton(
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(SettingsRoute.path);
+              }
+            },
+          ),
           actions: [
             IconButton(
               onPressed: _refresh,
@@ -154,6 +163,17 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
                         FilledButton(
                           onPressed: _refresh,
                           child: const Text('Повторить'),
+                        ),
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: () {
+                            if (context.canPop()) {
+                              context.pop();
+                            } else {
+                              context.go(SettingsRoute.path);
+                            }
+                          },
+                          child: const Text('К настройкам'),
                         ),
                       ],
                     ),
