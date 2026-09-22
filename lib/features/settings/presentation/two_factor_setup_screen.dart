@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/app_router.dart';
 import '../../../services/totp_auth_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/otp_code_input.dart';
@@ -154,7 +156,18 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Двухфакторная защита')),
+      appBar: AppBar(
+        title: const Text('Двухфакторная защита'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(AccountSecurityRoute.path);
+            }
+          },
+        ),
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -169,6 +182,11 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
                         FilledButton(
                           onPressed: _load,
                           child: const Text('Повторить'),
+                        ),
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: () => context.go(AccountSecurityRoute.path),
+                          child: const Text('К безопасности'),
                         ),
                       ],
                     ),

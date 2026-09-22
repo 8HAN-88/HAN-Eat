@@ -69,6 +69,15 @@ class _StoriesHubScreenState extends State<StoriesHubScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Моменты'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(FeedRoute.path);
+            }
+          },
+        ),
         actions: [
           IconButton(
             tooltip: 'Близкие друзья',
