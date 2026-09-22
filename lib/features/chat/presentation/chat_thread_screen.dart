@@ -794,6 +794,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         } catch (_) {}
         if (Navigator.of(context).canPop()) {
           Navigator.of(context).pop();
+        } else {
+          context.go(ChatsRoute.path);
         }
         return;
       }
@@ -7281,8 +7283,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
     }
     _bumpChatsHub();
-    if (mounted && Navigator.of(context).canPop()) {
+    if (!mounted) return;
+    if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
+    } else {
+      context.go(ChatsRoute.path);
     }
   }
 
@@ -8901,7 +8906,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
     if (!mounted) return;
     if (result == 'left') {
-      if (context.canPop()) context.pop();
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go(ChatsRoute.path);
+      }
       return;
     }
     try {

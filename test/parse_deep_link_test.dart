@@ -838,6 +838,46 @@ void main() {
     );
     expect(shortcutPathAlias('/logout'), isNull);
     expect(shortcutPathAlias('/delete-account'), isNull);
+    expect(resourcePathAlias('/show-media/28'), '/post/28');
+    expect(resourcePathAlias('/chat-id/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/channel-id/1'), '/channel/1');
+    expect(resourcePathAlias('/user-id/11'), '${ProfileRoute.path}?userId=11');
+    expect(resourcePathAlias('/bot-id/5'), '/bots/5');
+    expect(resourcePathAlias('/reelid/28'), '/reel/28');
+    expect(resourcePathAlias('/goto-msg/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/jump-msg/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/chat/21/archive'), '/chats/thread/21');
+    expect(resourcePathAlias('/dm/21/ttl'), '/chats/thread/21');
+    expect(resourcePathAlias('/c/1/unmute'), '/channel/1');
+    expect(shortcutPathAlias('/phone-calls'), ChatsRoute.path);
+    expect(shortcutPathAlias('/starred-messages'), ProfileTabRoute.path);
+    expect(shortcutPathAlias('/create-poll'), CreatePostRoute.path);
+    expect(shortcutPathAlias('/help-center'), SupportContactRoute.path);
+    expect(shortcutPathAlias('/block-user'), BlockedUsersRoute.path);
+    expect(shortcutPathAlias('/create-folder'), ChatFolderNewRoute.path);
+    expect(shortcutPathAlias('/mute-all'), NotificationSettingsRoute.path);
+    expect(shortcutPathAlias('/about-us'), SupportSecurityRoute.path);
+    expect(shortcutPathAlias('/callhistory'), ChatsRoute.path);
+    expect(shortcutPathAlias('/addbot'), MyBotsRoute.path);
+    expect(shortcutPathAlias('/joinchannel'), ChannelsManagementRoute.path);
+    expect(shortcutPathAlias('/sendgift'), StarGiftsInventoryRoute.path);
+    expect(shortcutPathAlias('/delete-chat'), ChatsRoute.path);
+    expect(
+      leftoverPathAlias('/go/goto-msg/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      leftoverPathAlias('/go/phone-calls'),
+      ChatsRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/show-media/28'),
+      '/post/28',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/help-center'),
+      SupportContactRoute.path,
+    );
     expect(
       leftoverPathAlias('/go/openpost/28'),
       '/post/28',
