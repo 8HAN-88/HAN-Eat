@@ -3008,7 +3008,6 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/bannedusers':
     case '/markallread':
       return '${ChatsRoute.path}$q';
-    case '/autotranslate':
     case '/showseconds':
     case '/readtime':
     case '/playtime':
