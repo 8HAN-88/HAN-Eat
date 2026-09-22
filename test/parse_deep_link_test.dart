@@ -1055,6 +1055,69 @@ void main() {
       parseDeepLinkToGoPath('https://haneat.app/cid/21'),
       '/chats/thread/21',
     );
+    expect(resourcePathAlias('/msgid/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/msglink/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/goto-message/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/gid/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/tid/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/fid/3'), '/chats/folders/3');
+    expect(resourcePathAlias('/eid/4'), '/stickers/4');
+    expect(resourcePathAlias('/rid/28'), '/reel/28');
+    expect(resourcePathAlias('/hid/9'), '/stories/9');
+    expect(resourcePathAlias('/qid/28'), '/post/28');
+    expect(resourcePathAlias('/share/animation/28'), '/post/28');
+    expect(resourcePathAlias('/share/round/28'), '/post/28');
+    expect(resourcePathAlias('/reposts/28'), '/post/28');
+    expect(resourcePathAlias('/shares/28'), '/post/28');
+    expect(resourcePathAlias('/chat/21/topics'), '/chats/thread/21');
+    expect(resourcePathAlias('/dm/21/join-to-send'), '/chats/thread/21');
+    expect(resourcePathAlias('/c/1/approve'), '/channel/1');
+    expect(resourcePathAlias('/p/28/via'), '/post/28');
+    expect(resourcePathAlias('/post/28/forwarded'), '/post/28');
+    expect(shortcutPathAlias('/default-permissions'), ChatsRoute.path);
+    expect(shortcutPathAlias('/approve-new-members'), ChatsRoute.path);
+    expect(shortcutPathAlias('/slow-mode-timer'), ChatsRoute.path);
+    expect(shortcutPathAlias('/auto-translate'), SettingsRoute.path);
+    expect(shortcutPathAlias('/show-seconds'), SettingsRoute.path);
+    expect(shortcutPathAlias('/read-time'), SettingsRoute.path);
+    expect(shortcutPathAlias('/via-bot'), MyBotsRoute.path);
+    expect(shortcutPathAlias('/iv-page'), ChatsRoute.path);
+    expect(shortcutPathAlias('/post-stats'), AppAnalyticsRoute.path);
+    expect(shortcutPathAlias('/repost-story'), StoriesRoute.path);
+    expect(shortcutPathAlias('/close-friends-story'), CloseFriendsRoute.path);
+    expect(shortcutPathAlias('/channel-admins'), ChannelsManagementRoute.path);
+    expect(shortcutPathAlias('/invite-links'), ChatsRoute.path);
+    expect(shortcutPathAlias('/stealth-mode'), StoriesRoute.path);
+    expect(shortcutPathAlias('/defaultpermissions'), ChatsRoute.path);
+    expect(shortcutPathAlias('/autotranslate'), SettingsRoute.path);
+    expect(shortcutPathAlias('/viabot'), MyBotsRoute.path);
+    expect(shortcutPathAlias('/poststats'), AppAnalyticsRoute.path);
+    expect(shortcutPathAlias('/repoststory'), StoriesRoute.path);
+    expect(shortcutPathAlias('/closefriendsstory'), CloseFriendsRoute.path);
+    expect(
+      leftoverPathAlias('/go/default-permissions'),
+      ChatsRoute.path,
+    );
+    expect(
+      leftoverPathAlias('/go/msgid/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      leftoverPathAlias('/go/gid/21'),
+      '/chats/thread/21',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/auto-translate'),
+      SettingsRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/msgid/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/repost-story'),
+      StoriesRoute.path,
+    );
     expect(shortcutPathAlias('/reels'), isNull);
     expect(shortcutPathAlias('/logout'), isNull);
     expect(shortcutPathAlias('/reels'), isNull);

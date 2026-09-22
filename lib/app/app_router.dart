@@ -218,7 +218,14 @@ String? resourcePathAlias(String path, [String query = '']) {
           rest == 'permissions' ||
           rest == 'antispam' ||
           rest == 'sign' ||
-          rest == 'join-to-send') {
+          rest == 'join-to-send' ||
+          rest == 'join-to-comment' ||
+          rest == 'default-permissions' ||
+          rest == 'approve' ||
+          rest == 'hide-members' ||
+          rest == 'restrict' ||
+          rest == 'topics' ||
+          rest == 'forum') {
         return '/channel/$id$q';
       }
       if (rest == 'invite' || rest == 'invite-link') {
@@ -318,7 +325,17 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'antispam' ||
           segs[2] == 'reactions' ||
           segs[2] == 'translate' ||
-          segs[2] == 'seen') {
+          segs[2] == 'seen' ||
+          segs[2] == 'default-permissions' ||
+          segs[2] == 'approve' ||
+          segs[2] == 'join-to-send' ||
+          segs[2] == 'join-to-comment' ||
+          segs[2] == 'hide-members' ||
+          segs[2] == 'restrict' ||
+          segs[2] == 'topics' ||
+          segs[2] == 'forum' ||
+          segs[2] == 'discussion' ||
+          segs[2] == 'linked') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -369,7 +386,17 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[3] == 'antispam' ||
           segs[3] == 'reactions' ||
           segs[3] == 'translate' ||
-          segs[3] == 'seen') {
+          segs[3] == 'seen' ||
+          segs[3] == 'default-permissions' ||
+          segs[3] == 'approve' ||
+          segs[3] == 'join-to-send' ||
+          segs[3] == 'join-to-comment' ||
+          segs[3] == 'hide-members' ||
+          segs[3] == 'restrict' ||
+          segs[3] == 'topics' ||
+          segs[3] == 'forum' ||
+          segs[3] == 'discussion' ||
+          segs[3] == 'linked') {
         return '/chats/thread/$id$q';
       }
       if (segs[3] == 'invite' || segs[3] == 'invite-link') {
@@ -501,7 +528,14 @@ String? resourcePathAlias(String path, [String query = '']) {
           rest == 'permissions' ||
           rest == 'antispam' ||
           rest == 'sign' ||
-          rest == 'join-to-send') {
+          rest == 'join-to-send' ||
+          rest == 'join-to-comment' ||
+          rest == 'default-permissions' ||
+          rest == 'approve' ||
+          rest == 'hide-members' ||
+          rest == 'restrict' ||
+          rest == 'topics' ||
+          rest == 'forum') {
         return '/channel/$id$q';
       }
       if (rest == 'invite' || rest == 'invite-link') {
@@ -564,7 +598,9 @@ String? resourcePathAlias(String path, [String query = '']) {
               segs[2] == 'react' ||
               segs[2] == 'reactors' ||
               segs[2] == 'tips' ||
-              segs[2] == 'tip')) {
+              segs[2] == 'tip' ||
+              segs[2] == 'via' ||
+              segs[2] == 'forwarded')) {
         return '/post/$id$q';
       }
       if (segs.length == 3 &&
@@ -603,7 +639,9 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'react' ||
           segs[2] == 'reactors' ||
           segs[2] == 'tips' ||
-          segs[2] == 'tip') {
+          segs[2] == 'tip' ||
+          segs[2] == 'via' ||
+          segs[2] == 'forwarded') {
         return '/post/$id$q';
       }
       if (segs[2] == 'share' ||
@@ -741,7 +779,9 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'react' ||
           segs[2] == 'reactors' ||
           segs[2] == 'tips' ||
-          segs[2] == 'tip') {
+          segs[2] == 'tip' ||
+          segs[2] == 'via' ||
+          segs[2] == 'forwarded') {
         return '/post/$id$q';
       }
       if (segs[2] == 'share' ||
@@ -886,7 +926,17 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'antispam' ||
           segs[2] == 'reactions' ||
           segs[2] == 'translate' ||
-          segs[2] == 'seen') {
+          segs[2] == 'seen' ||
+          segs[2] == 'default-permissions' ||
+          segs[2] == 'approve' ||
+          segs[2] == 'join-to-send' ||
+          segs[2] == 'join-to-comment' ||
+          segs[2] == 'hide-members' ||
+          segs[2] == 'restrict' ||
+          segs[2] == 'topics' ||
+          segs[2] == 'forum' ||
+          segs[2] == 'discussion' ||
+          segs[2] == 'linked') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -944,7 +994,17 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'antispam' ||
           segs[2] == 'reactions' ||
           segs[2] == 'translate' ||
-          segs[2] == 'seen') {
+          segs[2] == 'seen' ||
+          segs[2] == 'default-permissions' ||
+          segs[2] == 'approve' ||
+          segs[2] == 'join-to-send' ||
+          segs[2] == 'join-to-comment' ||
+          segs[2] == 'hide-members' ||
+          segs[2] == 'restrict' ||
+          segs[2] == 'topics' ||
+          segs[2] == 'forum' ||
+          segs[2] == 'discussion' ||
+          segs[2] == 'linked') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -1013,7 +1073,9 @@ String? resourcePathAlias(String path, [String query = '']) {
         'voice' ||
         'file' ||
         'doc' ||
-        'gif' =>
+        'gif' ||
+        'animation' ||
+        'round' =>
           '/post/$id$q',
         _ => null,
       };
@@ -1160,7 +1222,9 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[0] == 'reactors' ||
           segs[0] == 'tips' ||
           segs[0] == 'likers' ||
-          segs[0] == 'viewers') &&
+          segs[0] == 'viewers' ||
+          segs[0] == 'reposts' ||
+          segs[0] == 'shares') &&
       segs.length == 2) {
     final id = int.tryParse(segs[1]);
     if (id != null && id > 0) return '/post/$id$q';
@@ -1210,7 +1274,15 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[0] == 'mid' ||
           segs[0] == 'smsg' ||
           segs[0] == 'imsg' ||
-          segs[0] == 'dmsg') &&
+          segs[0] == 'dmsg' ||
+          segs[0] == 'msgid' ||
+          segs[0] == 'msglink' ||
+          segs[0] == 'goto-message' ||
+          segs[0] == 'open-mid' ||
+          segs[0] == 'jump-mid' ||
+          segs[0] == 'msg-id' ||
+          segs[0] == 'message-id' ||
+          segs[0] == 'show-message') &&
       segs.length == 3) {
     final cid = int.tryParse(segs[1]);
     final mid = int.tryParse(segs[2]);
@@ -1316,6 +1388,13 @@ String? resourcePathAlias(String path, [String query = '']) {
         'wid' => '/webapp/$id$q',
         'sid' => '/stories/$id$q',
         'aid' => '/ads/$id$q',
+        'gid' => '/chats/thread/$id$q',
+        'tid' => '/chats/thread/$id$q',
+        'fid' => '/chats/folders/$id$q',
+        'eid' => '/stickers/$id$q',
+        'rid' => '/reel/$id$q',
+        'hid' => '/stories/$id$q',
+        'qid' => '/post/$id$q',
         _ => null,
       };
       if (opened != null) return opened;
@@ -2859,6 +2938,96 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/legalterms':
     case '/abouthanwe':
       return '${SupportSecurityRoute.path}$q';
+    case '/default-permissions':
+    case '/approve-new-members':
+    case '/slow-mode-timer':
+    case '/forwarded-from':
+    case '/inline-result':
+    case '/iv-page':
+    case '/cached-page':
+    case '/invite-links':
+    case '/pending-requests':
+    case '/member-list':
+    case '/banned-users':
+    case '/history-for-new':
+    case '/chat-admins':
+    case '/protected-content':
+    case '/no-forwards':
+    case '/send-as-channel':
+    case '/anonymous-posting':
+    case '/mark-all-read':
+    case '/read-all':
+    case '/all-chats-folder':
+    case '/non-contacts':
+    case '/keep-archived':
+    case '/unarchive-on-new':
+      return '${ChatsRoute.path}$q';
+    case '/auto-translate':
+    case '/show-seconds':
+    case '/read-time':
+    case '/play-time':
+    case '/message-timestamps':
+    case '/exact-time':
+    case '/date-format':
+    case '/12-hour':
+    case '/24-hour':
+    case '/disable-animations':
+    case '/in-app-browser':
+    case '/open-links-in-app':
+    case '/secret-chat-settings':
+    case '/self-destruct-timer':
+    case '/screenshot-notify':
+    case '/secret-ttl':
+      return '${SettingsRoute.path}$q';
+    case '/via-bot':
+      return '${MyBotsRoute.path}$q';
+    case '/post-stats':
+      return '${AppAnalyticsRoute.path}$q';
+    case '/repost-story':
+    case '/stories-stealth':
+    case '/stealth-mode':
+      return '${StoriesRoute.path}$q';
+    case '/close-friends-story':
+      return '${CloseFriendsRoute.path}$q';
+    case '/channel-admins':
+    case '/subscriber-list':
+    case '/recent-subscribers':
+    case '/boost-level':
+    case '/channel-boost':
+      return '${ChannelsManagementRoute.path}$q';
+    case '/defaultpermissions':
+    case '/approvenewmembers':
+    case '/slowmodetimer':
+    case '/forwardedfrom':
+    case '/inlineresult':
+    case '/ivpage':
+    case '/cachedpage':
+    case '/invitelinks':
+    case '/pendingrequests':
+    case '/memberlist':
+    case '/bannedusers':
+    case '/markallread':
+      return '${ChatsRoute.path}$q';
+    case '/autotranslate':
+    case '/showseconds':
+    case '/readtime':
+    case '/playtime':
+    case '/inappbrowser':
+    case '/secretttl':
+      return '${SettingsRoute.path}$q';
+    case '/viabot':
+      return '${MyBotsRoute.path}$q';
+    case '/poststats':
+      return '${AppAnalyticsRoute.path}$q';
+    case '/repoststory':
+    case '/stealthmode':
+      return '${StoriesRoute.path}$q';
+    case '/closefriendsstory':
+      return '${CloseFriendsRoute.path}$q';
+    case '/channeladmins':
+    case '/subscriberlist':
+    case '/boostlevel':
+      return '${ChannelsManagementRoute.path}$q';
     default:
       return null;
   }
