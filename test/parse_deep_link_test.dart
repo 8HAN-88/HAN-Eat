@@ -743,6 +743,56 @@ void main() {
     expect(shortcutPathAlias('/calllog'), ChatsRoute.path);
     expect(shortcutPathAlias('/secretchats'), ChatsRoute.path);
     expect(shortcutPathAlias('/verify-account'), ProfileAuthRoute.path);
+    expect(resourcePathAlias('/open-post/28'), '/post/28');
+    expect(resourcePathAlias('/open-chat/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/open-channel/1'), '/channel/1');
+    expect(resourcePathAlias('/open-bot/5'), '/bots/5');
+    expect(resourcePathAlias('/open-user/11'), '${ProfileRoute.path}?userId=11');
+    expect(resourcePathAlias('/open-story/9'), '/stories/9');
+    expect(resourcePathAlias('/open-reel/28'), '/reel/28');
+    expect(resourcePathAlias('/linkedchat/1'), '/channel/1');
+    expect(resourcePathAlias('/linked-chat/1'), '/channel/1');
+    expect(resourcePathAlias('/gigagroup/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/megagroup/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/start-bot/5'), '/bots/5');
+    expect(resourcePathAlias('/start-app/5'), '/webapp/5');
+    expect(resourcePathAlias('/share/start-bot/5'), '/bots/5');
+    expect(resourcePathAlias('/share/contact/11'), '${ProfileRoute.path}?userId=11');
+    expect(resourcePathAlias('/chat/21/mute'), '/chats/thread/21');
+    expect(resourcePathAlias('/dm/21/pin'), '/chats/thread/21');
+    expect(resourcePathAlias('/chats/thread/21/secret'), '/chats/thread/21');
+    expect(resourcePathAlias('/gigagroup/21/info'), '/chats/thread/21/info');
+    expect(shortcutPathAlias('/call-log'), ChatsRoute.path);
+    expect(shortcutPathAlias('/recent-calls'), ChatsRoute.path);
+    expect(shortcutPathAlias('/secret-chats'), ChatsRoute.path);
+    expect(shortcutPathAlias('/saved-msg'), ChatsRoute.path);
+    expect(shortcutPathAlias('/im-box'), ChatsRoute.path);
+    expect(shortcutPathAlias('/terms-of-use'), SupportSecurityRoute.path);
+    expect(shortcutPathAlias('/refunds-policy'), SupportSecurityRoute.path);
+    expect(shortcutPathAlias('/dmca'), SupportSecurityRoute.path);
+    expect(shortcutPathAlias('/ban-appeal'), SupportContactRoute.path);
+    expect(shortcutPathAlias('/kyc'), ProfileAuthRoute.path);
+    expect(shortcutPathAlias('/invoice-history'), StarsWalletRoute.path);
+    expect(shortcutPathAlias('/gift-stars'), StarsWalletRoute.path);
+    expect(shortcutPathAlias('/start-bot'), MyBotsRoute.path);
+    expect(shortcutPathAlias('/write-post'), CreatePostRoute.path);
+    expect(shortcutPathAlias('/promo-code'), PartnerProgramRoute.path);
+    expect(shortcutPathAlias('/mtproto-proxy'), SettingsRoute.path);
+    expect(shortcutPathAlias('/socks5'), SettingsRoute.path);
+    expect(shortcutPathAlias('/authorizations'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/email-verify'), VerifyEmailRoute.path);
+    expect(shortcutPathAlias('/restore-account'), ForgotPasswordRoute.path);
+    expect(
+      leftoverPathAlias('/go/open-post/28'),
+      '/post/28',
+    );
+    expect(
+      leftoverPathAlias('/go/call-log'),
+      ChatsRoute.path,
+    );
+    expect(shortcutPathAlias('/reels'), isNull);
+    expect(shortcutPathAlias('/watch'), isNull);
+    expect(resourcePathAlias('/app/5'), isNull);
     expect(
       leftoverPathAlias('/go/openpost/28'),
       '/post/28',

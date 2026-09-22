@@ -1862,7 +1862,11 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       await ChatService.leaveGroup(conversationId: _conversation.id);
       if (!mounted) return;
       widget.onLeftGroup?.call();
-      Navigator.of(context).pop('left');
+      if (context.canPop()) {
+        context.pop('left');
+      } else {
+        context.go(ChatsRoute.path);
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
