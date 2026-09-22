@@ -287,7 +287,11 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
         );
       }
       if (!mounted) return;
-      Navigator.pop(context, result);
+      if (context.canPop()) {
+        context.pop(result);
+      } else {
+        context.go(ChatsRoute.path);
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -330,7 +334,11 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
     try {
       await ChatFolderStore.deleteFolder(folder.id);
       if (!mounted) return;
-      Navigator.pop(context, 'deleted');
+      if (context.canPop()) {
+        context.pop('deleted');
+      } else {
+        context.go(ChatsRoute.path);
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

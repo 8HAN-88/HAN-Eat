@@ -65,7 +65,11 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
     try {
       await StickerService.installPack(pack.id);
       if (!mounted) return;
-      Navigator.pop(context, true);
+      if (context.canPop()) {
+        context.pop(true);
+      } else {
+        context.go(ChatsRoute.path);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);

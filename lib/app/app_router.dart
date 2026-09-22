@@ -256,7 +256,9 @@ String? resourcePathAlias(String path, [String query = '']) {
   if ((chatRoots.contains(segs[0]) ||
           segs[0] == 'group' ||
           segs[0] == 'groups' ||
-          segs[0] == 'supergroup') &&
+          segs[0] == 'supergroup' ||
+          segs[0] == 'gigagroup' ||
+          segs[0] == 'megagroup') &&
       segs.length == 3) {
     if (chatReserved.contains(segs[1])) return null;
     final id = int.tryParse(segs[1]);
@@ -277,6 +279,13 @@ String? resourcePathAlias(String path, [String query = '']) {
         return '/chats/thread/$id/info$q';
       }
       if (segs[2] == 'call' || segs[2] == 'voice' || segs[2] == 'video') {
+        return '/chats/thread/$id$q';
+      }
+      if (segs[2] == 'mute' ||
+          segs[2] == 'pin' ||
+          segs[2] == 'secret' ||
+          segs[2] == 'search' ||
+          segs[2] == 'pinned') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -303,7 +312,10 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[3] == 'pinned' ||
           segs[3] == 'call' ||
           segs[3] == 'voice' ||
-          segs[3] == 'video') {
+          segs[3] == 'video' ||
+          segs[3] == 'mute' ||
+          segs[3] == 'pin' ||
+          segs[3] == 'secret') {
         return '/chats/thread/$id$q';
       }
       if (segs[3] == 'invite' || segs[3] == 'invite-link') {
@@ -620,7 +632,11 @@ String? resourcePathAlias(String path, [String query = '']) {
     if (id != null && id > 0) return '/ads/$id$q';
   }
 
-  if ((segs[0] == 'group' || segs[0] == 'groups' || segs[0] == 'supergroup') &&
+  if ((segs[0] == 'group' ||
+          segs[0] == 'groups' ||
+          segs[0] == 'supergroup' ||
+          segs[0] == 'gigagroup' ||
+          segs[0] == 'megagroup') &&
       segs.length == 2) {
     final id = int.tryParse(segs[1]);
     if (id != null && id > 0) return '/chats/thread/$id$q';
@@ -759,6 +775,13 @@ String? resourcePathAlias(String path, [String query = '']) {
       if (segs[2] == 'call' || segs[2] == 'voice' || segs[2] == 'video') {
         return '/chats/thread/$id$q';
       }
+      if (segs[2] == 'mute' ||
+          segs[2] == 'pin' ||
+          segs[2] == 'secret' ||
+          segs[2] == 'search' ||
+          segs[2] == 'pinned') {
+        return '/chats/thread/$id$q';
+      }
       final mid = int.tryParse(segs[2]);
       if (mid != null && mid > 0) {
         return query.isEmpty
@@ -787,6 +810,13 @@ String? resourcePathAlias(String path, [String query = '']) {
         return '/chats/thread/$id/info$q';
       }
       if (segs[2] == 'call' || segs[2] == 'voice' || segs[2] == 'video') {
+        return '/chats/thread/$id$q';
+      }
+      if (segs[2] == 'mute' ||
+          segs[2] == 'pin' ||
+          segs[2] == 'secret' ||
+          segs[2] == 'search' ||
+          segs[2] == 'pinned') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -846,7 +876,9 @@ String? resourcePathAlias(String path, [String query = '']) {
         'folder' => '/chats/folders/$id$q',
         'ad' || 'campaign' => '/ads/$id$q',
         'giveaway' => '/channel/$id$q',
-        'startapp' => '/webapp/$id$q',
+        'startapp' || 'start-app' => '/webapp/$id$q',
+        'start-bot' || 'startbot' => '/bots/$id$q',
+        'contact' || 'profile' => '${ProfileRoute.path}?userId=$id',
         _ => null,
       };
     }
@@ -1008,13 +1040,18 @@ String? resourcePathAlias(String path, [String query = '']) {
     final id = int.tryParse(segs[1]);
     if (id != null && id > 0) return '/stories/$id$q';
   }
-  if (segs[0] == 'startapp' && segs.length == 2) {
+  if ((segs[0] == 'startapp' || segs[0] == 'start-app') && segs.length == 2) {
     final id = int.tryParse(segs[1]);
     if (id != null && id > 0) return '/webapp/$id$q';
   }
-  if (segs[0] == 'startbot' && segs.length == 2) {
+  if ((segs[0] == 'startbot' || segs[0] == 'start-bot') && segs.length == 2) {
     final id = int.tryParse(segs[1]);
     if (id != null && id > 0) return '/bots/$id$q';
+  }
+  if ((segs[0] == 'linkedchat' || segs[0] == 'linked-chat') &&
+      segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/channel/$id$q';
   }
   if (segs.length == 3 &&
       segs[0] == 'stars' &&
@@ -1027,12 +1064,13 @@ String? resourcePathAlias(String path, [String query = '']) {
     final id = int.tryParse(segs[1]);
     if (id != null && id > 0) {
       final opened = switch (segs[0]) {
-        'openpost' => '/post/$id$q',
-        'openchat' => '/chats/thread/$id$q',
-        'openchannel' => '/channel/$id$q',
-        'openbot' => '/bots/$id$q',
-        'openuser' => '${ProfileRoute.path}?userId=$id',
-        'openstory' => '/stories/$id$q',
+        'openpost' || 'open-post' => '/post/$id$q',
+        'openchat' || 'open-chat' => '/chats/thread/$id$q',
+        'openchannel' || 'open-channel' => '/channel/$id$q',
+        'openbot' || 'open-bot' => '/bots/$id$q',
+        'openuser' || 'open-user' => '${ProfileRoute.path}?userId=$id',
+        'openstory' || 'open-story' => '/stories/$id$q',
+        'openreel' || 'open-reel' => '/reel/$id$q',
         'react' || 'view' => '/post/$id$q',
         'unique' || 'nft' => '${StarGiftsInventoryRoute.path}$q',
         _ => null,
@@ -1879,6 +1917,65 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/verify-account':
     case '/business-verify':
       return '${ProfileAuthRoute.path}$q';
+    case '/call-log':
+    case '/recent-calls':
+    case '/secret-chats':
+    case '/saved-msg':
+    case '/im-box':
+    case '/msgbox':
+    case '/voice-messages':
+      return '${ChatsRoute.path}$q';
+    case '/terms-of-use':
+    case '/tos-page':
+    case '/refunds-policy':
+    case '/child-safety':
+    case '/copyright-policy':
+    case '/copyright':
+    case '/dmca':
+      return '${SupportSecurityRoute.path}$q';
+    case '/ban-appeal':
+    case '/unban':
+    case '/appeal-ban':
+    case '/abuse':
+    case '/spam':
+      return '${SupportContactRoute.path}$q';
+    case '/kyc':
+    case '/verify-kyc':
+    case '/change-phone':
+    case '/change-username':
+    case '/set-name':
+    case '/my-username':
+      return '${ProfileAuthRoute.path}$q';
+    case '/invoice-history':
+    case '/receipts':
+    case '/gift-stars':
+      return '${StarsWalletRoute.path}$q';
+    case '/start-bot':
+      return '${MyBotsRoute.path}$q';
+    case '/write-post':
+      return '${CreatePostRoute.path}$q';
+    case '/promo-code':
+      return '${PartnerProgramRoute.path}$q';
+    case '/mtproto-proxy':
+    case '/socks5':
+    case '/settings/advanced':
+    case '/advanced':
+    case '/settings/chat':
+    case '/battery-saver':
+    case '/low-data':
+    case '/offline-mode':
+      return '${SettingsRoute.path}$q';
+    case '/authorizations':
+    case '/logged-in':
+    case '/devices-other':
+    case '/passcode-lock':
+    case '/login-qr':
+      return '${AccountSecurityRoute.path}$q';
+    case '/email-verify':
+      return '${VerifyEmailRoute.path}$q';
+    case '/restore-account':
+    case '/recover-account':
+      return '${ForgotPasswordRoute.path}$q';
     default:
       return null;
   }
