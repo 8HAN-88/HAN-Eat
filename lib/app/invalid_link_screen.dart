@@ -17,7 +17,18 @@ class InvalidLinkScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
+      appBar: AppBar(
+        title: Text(title),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/feed');
+            }
+          },
+        ),
+      ),
       body: AppEmptyState(
         icon: Icons.link_off_rounded,
         title: message,

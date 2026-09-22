@@ -496,6 +496,13 @@ void main() {
     expect(leftoverPathAlias('/open/share/post/28'), '/post/28');
     expect(leftoverPathAlias('/c/1/giveaways'), '/channels/1/giveaways');
     expect(shortcutPathAlias('/go'), ChatsRoute.path);
+    expect(resourcePathAlias('/r/28'), '/reel/28');
+    expect(resourcePathAlias('/contact/11'), '${ProfileRoute.path}?userId=11');
+    expect(resourcePathAlias('/people/11'), '${ProfileRoute.path}?userId=11');
+    expect(resourcePathAlias('/boost/1'), '/channel/1');
+    expect(resourcePathAlias('/forward/21/456'), '/chats/thread/21?msg=456');
+    expect(shortcutPathAlias('/boost'), AdsHubRoute.path);
+    expect(shortcutPathAlias('/people'), ChatNewMessageRoute.path);
     expect(shortcutPathAlias('/black-list'), BlockedUsersRoute.path);
     expect(shortcutPathAlias('/close-friend'), CloseFriendsRoute.path);
     expect(

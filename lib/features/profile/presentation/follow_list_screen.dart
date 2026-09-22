@@ -40,6 +40,15 @@ class _FollowListScreenState extends State<FollowListScreen> {
   String get _title =>
       widget.type == FollowListType.followers ? 'Подписчики' : 'Подписки';
 
+  void _leaveList() {
+    if (!mounted) return;
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
+    context.go(ProfileRoute.withUserId(widget.userId));
+  }
+
   @override
   void initState() {
     super.initState();
@@ -127,7 +136,10 @@ class _FollowListScreenState extends State<FollowListScreen> {
   Widget build(BuildContext context) {
     final error = _error;
     return Scaffold(
-      appBar: AppBar(title: Text(_title)),
+      appBar: AppBar(
+        title: Text(_title),
+        leading: BackButton(onPressed: _leaveList),
+      ),
       body: RefreshIndicator(
         onRefresh: () => _load(refresh: true),
         child: _loading
@@ -141,9 +153,19 @@ class _FollowListScreenState extends State<FollowListScreen> {
                         title: 'Не удалось загрузить',
                         subtitle:
                             userVisibleError(error, fallback: 'Проверьте сеть'),
-                        action: FilledButton(
-                          onPressed: () => _load(refresh: true),
-                          child: const Text('Повторить'),
+                        action: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            FilledButton(
+                              onPressed: () => _load(refresh: true),
+                              child: const Text('Повторить'),
+                            ),
+                            const SizedBox(height: 8),
+                            TextButton(
+                              onPressed: _leaveList,
+                              child: const Text('К профилю'),
+                            ),
+                          ],
                         ),
                       ),
                     ],
