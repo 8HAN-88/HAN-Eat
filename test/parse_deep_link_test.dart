@@ -919,6 +919,49 @@ void main() {
       parseDeepLinkToGoPath('https://haneat.app/ton-wallet'),
       StarsWalletRoute.path,
     );
+    expect(resourcePathAlias('/jump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/goto/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/msg-link/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/mediaid/28'), '/post/28');
+    expect(resourcePathAlias('/photoid/28'), '/post/28');
+    expect(resourcePathAlias('/share/media/28'), '/post/28');
+    expect(resourcePathAlias('/chat/21/autodelete'), '/chats/thread/21');
+    expect(resourcePathAlias('/dm/21/color'), '/chats/thread/21');
+    expect(resourcePathAlias('/c/1/color'), '/channel/1');
+    expect(resourcePathAlias('/p/28/reactors'), '/post/28');
+    expect(resourcePathAlias('/post/28/tips'), '/post/28');
+    expect(shortcutPathAlias('/auto-delete'), SettingsRoute.path);
+    expect(shortcutPathAlias('/night-theme'), SettingsRoute.path);
+    expect(shortcutPathAlias('/storage-usage'), SettingsRoute.path);
+    expect(shortcutPathAlias('/set-bio'), ProfileAuthRoute.path);
+    expect(shortcutPathAlias('/set-username'), ProfileAuthRoute.path);
+    expect(shortcutPathAlias('/two-step-password'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/link-desktop'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/blocked-users-list'), BlockedUsersRoute.path);
+    expect(shortcutPathAlias('/close-friends-list'), CloseFriendsRoute.path);
+    expect(shortcutPathAlias('/exceptions-list'), PaidMessageExceptionsRoute.path);
+    expect(shortcutPathAlias('/mute-settings'), NotificationSettingsRoute.path);
+    expect(shortcutPathAlias('/archive-folder'), ChatArchivedRoute.path);
+    expect(shortcutPathAlias('/secret-chats-list'), ChatsRoute.path);
+    expect(shortcutPathAlias('/sensitive-content'), SettingsRoute.path);
+    expect(
+      leftoverPathAlias('/go/auto-delete'),
+      SettingsRoute.path,
+    );
+    expect(
+      leftoverPathAlias('/go/jump/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/set-bio'),
+      ProfileAuthRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/msg-link/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(shortcutPathAlias('/reels'), isNull);
+    expect(shortcutPathAlias('/logout'), isNull);
     expect(shortcutPathAlias('/reels'), isNull);
     expect(shortcutPathAlias('/users'), isNull);
     expect(
