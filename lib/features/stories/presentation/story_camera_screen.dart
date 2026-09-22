@@ -130,6 +130,17 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
           iconTheme: const IconThemeData(color: Colors.white),
           title:
               const Text('Предпросмотр', style: TextStyle(color: Colors.white)),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            tooltip: 'Назад',
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(StoriesRoute.path);
+              }
+            },
+          ),
         ),
         body: Center(
           child: _isVideo
@@ -291,6 +302,17 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
         iconTheme: const IconThemeData(color: Colors.white),
         title:
             const Text('Создать сторис', style: TextStyle(color: Colors.white)),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Назад',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(StoriesRoute.path);
+            }
+          },
+        ),
       ),
       body: Center(
         child: Column(

@@ -93,7 +93,20 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Забыли пароль?')),
+      appBar: AppBar(
+        title: const Text('Забыли пароль?'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Назад',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(AuthPaths.login);
+            }
+          },
+        ),
+      ),
       body: AppGradientBackground(
         child: SafeArea(
           child: SingleChildScrollView(

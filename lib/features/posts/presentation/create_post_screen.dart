@@ -658,7 +658,11 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       }
 
       if (mounted) {
-        Navigator.of(context).pop(true); // Возвращаемся с успехом
+        if (context.canPop()) {
+          context.pop(true);
+        } else {
+          context.go(FeedRoute.path);
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(wasVideoSelected

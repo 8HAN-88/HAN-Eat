@@ -583,6 +583,63 @@ void main() {
       parseDeepLinkToGoPath('https://haneat.app/share/miniapp/5'),
       '/webapp/5',
     );
+    expect(resourcePathAlias('/c/1/boost'), '/channel/1');
+    expect(resourcePathAlias('/channel/1/live'), '/channel/1');
+    expect(resourcePathAlias('/channels/1/voicechat'), '/channel/1');
+    expect(resourcePathAlias('/chat/21/call'), '/chats/thread/21');
+    expect(resourcePathAlias('/dm/21/voice'), '/chats/thread/21');
+    expect(resourcePathAlias('/chats/thread/21/video'), '/chats/thread/21');
+    expect(
+      resourcePathAlias('/profile/11/stories'),
+      ProfileRoute.withUserId(11),
+    );
+    expect(
+      resourcePathAlias('/user/11/moments'),
+      ProfileRoute.withUserId(11),
+    );
+    expect(
+      resourcePathAlias('/u/alice/highlights'),
+      UsernameDeepLinkRoute.pathFor('alice'),
+    );
+    expect(resourcePathAlias('/gift/9/send'), StarGiftsInventoryRoute.path);
+    expect(resourcePathAlias('/share/ad/8'), '/ads/8');
+    expect(resourcePathAlias('/share/giveaway/1'), '/channel/1');
+    expect(resourcePathAlias('/q/28'), '/post/28');
+    expect(resourcePathAlias('/quiz/28'), '/post/28');
+    expect(resourcePathAlias('/iv/28'), '/post/28');
+    expect(resourcePathAlias('/j/AbC12'), '/chat-invite/AbC12');
+    expect(resourcePathAlias('/emoji/cute'), '/addstickers/cute');
+    expect(resourcePathAlias('/addemoji/cute'), '/addstickers/cute');
+    expect(
+      resourcePathAlias('/collectible/9'),
+      StarGiftsInventoryRoute.path,
+    );
+    expect(resourcePathAlias('/theme/1'), SettingsRoute.path);
+    expect(shortcutPathAlias('/quiz'), CreatePostRoute.path);
+    expect(shortcutPathAlias('/settings/privacy/calls'), SettingsRoute.path);
+    expect(shortcutPathAlias('/privacy/invites'), SettingsRoute.path);
+    expect(shortcutPathAlias('/passkeys'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/ton'), StarsWalletRoute.path);
+    expect(shortcutPathAlias('/fragment'), StarGiftsMarketplaceRoute.path);
+    expect(shortcutPathAlias('/newmessage'), ChatNewMessageRoute.path);
+    expect(shortcutPathAlias('/savedmessages'), ProfileTabRoute.path);
+    expect(shortcutPathAlias('/addstickers'), ChatsRoute.path);
+    expect(
+      leftoverPathAlias('/go/c/1/boost'),
+      '/channel/1',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/chat/21/call'),
+      '/chats/thread/21',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/quiz/28'),
+      '/post/28',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/ton'),
+      StarsWalletRoute.path,
+    );
     expect(
       parseDeepLinkToGoPath('https://haneat.app/app/#/chat/21/media'),
       '/chats/thread/21/media',

@@ -181,7 +181,20 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     final email = _email;
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Подтверждение почты')),
+      appBar: AppBar(
+        title: const Text('Подтверждение почты'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Назад',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(AuthPaths.login);
+            }
+          },
+        ),
+      ),
       body: AppGradientBackground(
         child: SafeArea(
           child: SingleChildScrollView(

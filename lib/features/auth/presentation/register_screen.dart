@@ -174,6 +174,17 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Регистрация'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Назад',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(AuthPaths.login);
+            }
+          },
+        ),
       ),
       body: AppGradientBackground(
         child: SafeArea(

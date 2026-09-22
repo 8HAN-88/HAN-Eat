@@ -388,7 +388,14 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
         );
       }
       return Scaffold(
-        appBar: AppBar(title: const Text('Канал')),
+        appBar: AppBar(
+          title: const Text('Канал'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            tooltip: 'Назад',
+            onPressed: _leaveChannelInfo,
+          ),
+        ),
         body: AppEmptyState(
           icon: Icons.group_off_outlined,
           title: 'Канал не найден',
