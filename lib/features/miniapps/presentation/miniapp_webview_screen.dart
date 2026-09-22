@@ -546,7 +546,11 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
         buttonText: widget.title,
       );
       if (!mounted) return;
-      Navigator.of(context).pop(true);
+      if (context.canPop()) {
+        context.pop(true);
+      } else {
+        context.go(MiniAppsRoute.path);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _sendingData = false);
@@ -569,7 +573,7 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
     controller.addJavaScriptHandler(
       handlerName: 'close',
       callback: (args) {
-        Navigator.of(context).pop();
+        _leaveMiniapp();
       },
     );
     controller.addJavaScriptHandler(

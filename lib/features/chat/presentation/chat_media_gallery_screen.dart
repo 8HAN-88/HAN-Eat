@@ -275,7 +275,13 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
     );
     if (!mounted || action == null) return;
     if (action == 'show') {
-      Navigator.pop(context, msg.id);
+      if (context.canPop()) {
+        context.pop(msg.id);
+      } else {
+        context.go(
+          '${ChatThreadRoute.pathForId(widget.conversationId)}?msg=${msg.id}',
+        );
+      }
       return;
     }
     if (url == null || url.isEmpty) return;
