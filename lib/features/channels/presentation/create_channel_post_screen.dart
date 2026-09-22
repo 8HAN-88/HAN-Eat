@@ -1082,7 +1082,11 @@ class _CreateChannelPostScreenState
           notifyReelsFeedRefresh(ref);
         }
         if (!context.mounted) return;
-        context.pop(createdPost ?? true);
+        if (context.canPop()) {
+          context.pop(createdPost ?? true);
+        } else {
+          context.go(ChannelDetailRoute.pathFor(widget.channelId));
+        }
         messenger?.showSnackBar(
           SnackBar(
             content: Text(

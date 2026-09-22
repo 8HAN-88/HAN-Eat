@@ -720,6 +720,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
+        leading: isOwnProfile
+            ? null
+            : IconButton(
+                icon: const Icon(Icons.arrow_back),
+                tooltip: 'Назад',
+                onPressed: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go(FeedRoute.path);
+                  }
+                },
+              ),
         title: isOwnProfile
             ? TelegramConnectionAwareTitle(fallback: user.name)
             : Text(user.name),
