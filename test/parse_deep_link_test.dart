@@ -878,6 +878,49 @@ void main() {
       parseDeepLinkToGoPath('https://haneat.app/help-center'),
       SupportContactRoute.path,
     );
+    expect(resourcePathAlias('/show-msg/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/jump-to/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/open-message/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/media-id/28'), '/post/28');
+    expect(resourcePathAlias('/sticker-id/4'), '/post/4');
+    expect(resourcePathAlias('/edit-bot/5'), '/bots/5');
+    expect(resourcePathAlias('/launch-app/5'), '/webapp/5');
+    expect(resourcePathAlias('/mini-app/5'), '/webapp/5');
+    expect(resourcePathAlias('/chat/21/slowmode'), '/chats/thread/21');
+    expect(resourcePathAlias('/c/1/protect'), '/channel/1');
+    expect(shortcutPathAlias('/slow-mode'), ChatsRoute.path);
+    expect(shortcutPathAlias('/unread-chats'), ChatsRoute.path);
+    expect(shortcutPathAlias('/privacy-settings'), SettingsRoute.path);
+    expect(shortcutPathAlias('/edit-bot'), MyBotsRoute.path);
+    expect(shortcutPathAlias('/web-app'), MiniAppsRoute.path);
+    expect(shortcutPathAlias('/ton-wallet'), StarsWalletRoute.path);
+    expect(shortcutPathAlias('/stars-history'), StarsWalletRoute.path);
+    expect(shortcutPathAlias('/ads-cabinet'), AdsHubRoute.path);
+    expect(shortcutPathAlias('/paid-exceptions'), PaidMessageExceptionsRoute.path);
+    expect(shortcutPathAlias('/channel-list'), ChannelsManagementRoute.path);
+    expect(shortcutPathAlias('/session-list'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/revenue-share'), ExtraAdsRoute.path);
+    expect(shortcutPathAlias('/archived-stories'), StoriesRoute.path);
+    expect(shortcutPathAlias('/flex-levels'), FlexConstructorRoute.path);
+    expect(shortcutPathAlias('/gift-send'), StarGiftsInventoryRoute.path);
+    expect(
+      leftoverPathAlias('/go/slow-mode'),
+      ChatsRoute.path,
+    );
+    expect(
+      leftoverPathAlias('/go/show-msg/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/mini-app/5'),
+      '/webapp/5',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/ton-wallet'),
+      StarsWalletRoute.path,
+    );
+    expect(shortcutPathAlias('/reels'), isNull);
+    expect(shortcutPathAlias('/users'), isNull);
     expect(
       leftoverPathAlias('/go/openpost/28'),
       '/post/28',

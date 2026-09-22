@@ -365,7 +365,11 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
       await ApiService.deleteBot(widget.botId);
       await BotTokenStorage.removeToken(widget.botId);
       if (!mounted) return;
-      Navigator.of(context).pop();
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go(MyBotsRoute.path);
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
