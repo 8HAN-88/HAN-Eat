@@ -148,6 +148,15 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('Подписка'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(SettingsRoute.path);
+            }
+          },
+        ),
         actions: [
           IconButton(
             tooltip: 'Все возможности',
@@ -171,6 +180,17 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen>
                           FilledButton(
                             onPressed: _load,
                             child: const Text('Повторить'),
+                          ),
+                          const SizedBox(height: 8),
+                          TextButton(
+                            onPressed: () {
+                              if (context.canPop()) {
+                                context.pop();
+                              } else {
+                                context.go(SettingsRoute.path);
+                              }
+                            },
+                            child: const Text('К настройкам'),
                           ),
                         ],
                       ),

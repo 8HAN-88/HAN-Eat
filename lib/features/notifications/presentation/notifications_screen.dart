@@ -429,6 +429,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         backgroundColor: Colors.transparent,
         appBar: AppBar(
           title: const Text('Уведомления'),
+          leading: BackButton(
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(FeedRoute.path);
+              }
+            },
+          ),
           actions: [
             if (_unreadCount > 0)
               TextButton(
@@ -452,9 +461,20 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                             _loadError!,
                             fallback: 'Проверьте сеть и попробуйте снова',
                           ),
-                          action: FilledButton(
-                            onPressed: () => _loadNotifications(refresh: true),
-                            child: const Text('Повторить'),
+                          action: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              FilledButton(
+                                onPressed: () =>
+                                    _loadNotifications(refresh: true),
+                                child: const Text('Повторить'),
+                              ),
+                              const SizedBox(height: 8),
+                              TextButton(
+                                onPressed: () => context.go(FeedRoute.path),
+                                child: const Text('К ленте'),
+                              ),
+                            ],
                           ),
                         )
                       : AppEmptyState(

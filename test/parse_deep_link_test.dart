@@ -501,6 +501,14 @@ void main() {
     expect(resourcePathAlias('/people/11'), '${ProfileRoute.path}?userId=11');
     expect(resourcePathAlias('/boost/1'), '/channel/1');
     expect(resourcePathAlias('/forward/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/reply/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/quote/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/topic/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/forum/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/n/9'), NotificationsRoute.path);
+    expect(resourcePathAlias('/highlights/9'), '/stories/9');
+    expect(shortcutPathAlias('/topic'), ChatsRoute.path);
+    expect(shortcutPathAlias('/forum'), ChatsRoute.path);
     expect(shortcutPathAlias('/boost'), AdsHubRoute.path);
     expect(shortcutPathAlias('/people'), ChatNewMessageRoute.path);
     expect(shortcutPathAlias('/black-list'), BlockedUsersRoute.path);

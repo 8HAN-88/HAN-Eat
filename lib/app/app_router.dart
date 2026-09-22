@@ -520,6 +520,7 @@ String? resourcePathAlias(String path, [String query = '']) {
   if ((segs[0] == 'moment' ||
           segs[0] == 'moments' ||
           segs[0] == 'highlight' ||
+          segs[0] == 'highlights' ||
           segs[0] == 's') &&
       segs.length == 2) {
     if (segs[1] == 'create') return '${StoryCreateRoute.path}$q';
@@ -711,7 +712,8 @@ String? resourcePathAlias(String path, [String query = '']) {
     final id = int.tryParse(segs[1]);
     if (id != null && id > 0) return '/channel/$id$q';
   }
-  if (segs[0] == 'forward' && segs.length == 3) {
+  if ((segs[0] == 'forward' || segs[0] == 'reply' || segs[0] == 'quote') &&
+      segs.length == 3) {
     final cid = int.tryParse(segs[1]);
     final mid = int.tryParse(segs[2]);
     if (cid != null && cid > 0 && mid != null && mid > 0) {
@@ -740,6 +742,10 @@ String? resourcePathAlias(String path, [String query = '']) {
     final id = int.tryParse(segs[1]);
     if (id != null && id > 0) return '/chats/thread/$id$q';
   }
+  if ((segs[0] == 'topic' || segs[0] == 'forum') && segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/chats/thread/$id$q';
+  }
   if (segs[0] == 'saved' && segs.length == 2) {
     final id = int.tryParse(segs[1]);
     if (id != null && id > 0) return '/chats/thread/$id$q';
@@ -756,6 +762,7 @@ String? resourcePathAlias(String path, [String query = '']) {
         'f' => '/chats/folders/$id$q',
         'g' || 't' || 'm' => '/chats/thread/$id$q',
         'r' => '/reel/$id$q',
+        'n' => '${NotificationsRoute.path}$q',
         _ => null,
       };
       if (short != null) return short;
@@ -1090,6 +1097,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/directory':
     case '/muted':
     case '/topics':
+    case '/topic':
     case '/forum':
       return '${ChatsRoute.path}$q';
     case '/find':

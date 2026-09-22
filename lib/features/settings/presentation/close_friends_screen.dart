@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/app_router.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/chat_service.dart';
 import '../../../services/close_friends_service.dart';
@@ -151,7 +153,18 @@ class _CloseFriendsScreenState extends State<CloseFriendsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Близкие друзья')),
+      appBar: AppBar(
+        title: const Text('Близкие друзья'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(SettingsRoute.path);
+            }
+          },
+        ),
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -166,6 +179,17 @@ class _CloseFriendsScreenState extends State<CloseFriendsScreen> {
                         FilledButton(
                           onPressed: _load,
                           child: const Text('Повторить'),
+                        ),
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: () {
+                            if (context.canPop()) {
+                              context.pop();
+                            } else {
+                              context.go(SettingsRoute.path);
+                            }
+                          },
+                          child: const Text('К настройкам'),
                         ),
                       ],
                     ),

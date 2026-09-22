@@ -63,6 +63,15 @@ class _CreatorToolsScreenState extends State<CreatorToolsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Инструменты автора'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(SettingsRoute.path);
+            }
+          },
+        ),
         actions: [
           IconButton(
             onPressed: _loading ? null : _load,
@@ -88,9 +97,25 @@ class _CreatorToolsScreenState extends State<CreatorToolsScreen> {
         icon: Icons.cloud_off_rounded,
         title: 'Не удалось загрузить',
         subtitle: _error,
-        action: FilledButton(
-          onPressed: _load,
-          child: const Text('Повторить'),
+        action: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FilledButton(
+              onPressed: _load,
+              child: const Text('Повторить'),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go(SettingsRoute.path);
+                }
+              },
+              child: const Text('К настройкам'),
+            ),
+          ],
         ),
       );
     }
