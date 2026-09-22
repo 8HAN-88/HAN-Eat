@@ -245,6 +245,17 @@ class _CommunityUploadScreenState extends ConsumerState<CommunityUploadScreen> {
               ? 'Рилс в «${widget.channelName!.trim()}»'
               : 'Новый рилс',
         ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Назад',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(FeedRoute.path);
+            }
+          },
+        ),
       ),
       body: Form(
         key: _formKey,

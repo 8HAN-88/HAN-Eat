@@ -101,7 +101,20 @@ class _MiniAppOpenLoaderScreenState extends State<MiniAppOpenLoaderScreen> {
     if (ready != null) return ready;
     final err = _error;
     return Scaffold(
-      appBar: AppBar(title: const Text('Mini App')),
+      appBar: AppBar(
+        title: const Text('Mini App'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Назад',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(MiniAppsRoute.path);
+            }
+          },
+        ),
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : AppEmptyState(

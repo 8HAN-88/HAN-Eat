@@ -140,7 +140,20 @@ class _ChannelPostDetailScreenState
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Пост')),
+        appBar: AppBar(
+          title: const Text('Пост'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            tooltip: 'Назад',
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(ChannelDetailRoute.pathFor(widget.channelId));
+              }
+            },
+          ),
+        ),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -148,7 +161,20 @@ class _ChannelPostDetailScreenState
     if (_post == null) {
       if (_loadError != null) {
         return Scaffold(
-          appBar: AppBar(title: const Text('Пост')),
+          appBar: AppBar(
+            title: const Text('Пост'),
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back),
+              tooltip: 'Назад',
+              onPressed: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go(ChannelDetailRoute.pathFor(widget.channelId));
+                }
+              },
+            ),
+          ),
           body: AppEmptyState(
             icon: Icons.cloud_off_rounded,
             title: 'Не удалось загрузить',
@@ -180,7 +206,20 @@ class _ChannelPostDetailScreenState
         );
       }
       return Scaffold(
-        appBar: AppBar(title: const Text('Пост')),
+        appBar: AppBar(
+          title: const Text('Пост'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            tooltip: 'Назад',
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(ChannelDetailRoute.pathFor(widget.channelId));
+              }
+            },
+          ),
+        ),
         body: AppEmptyState(
           icon: Icons.article_outlined,
           title: 'Пост не найден',

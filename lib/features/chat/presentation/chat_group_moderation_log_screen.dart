@@ -110,7 +110,20 @@ class _ChatGroupModerationLogScreenState
   Widget build(BuildContext context) {
     if (_missing && _conversation == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('История модерации')),
+        appBar: AppBar(
+          title: const Text('История модерации'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            tooltip: 'Назад',
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(ChatsRoute.path);
+              }
+            },
+          ),
+        ),
         body: AppEmptyState(
           icon: Icons.shield_outlined,
           title: 'Чат не найден',
@@ -126,6 +139,22 @@ class _ChatGroupModerationLogScreenState
     return Scaffold(
       appBar: AppBar(
         title: const Text('История модерации'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Назад',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              final cid = widget.conversationId ?? widget.conversation?.id;
+              context.go(
+                cid != null
+                    ? ChatThreadRoute.pathForId(cid)
+                    : ChatsRoute.path,
+              );
+            }
+          },
+        ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(56),
           child: SizedBox(

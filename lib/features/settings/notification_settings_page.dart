@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import '../../app/app_router.dart';
 import '../../utils/api_error_parser.dart';
 import '../../services/notification_preferences_service.dart';
 import '../../services/push_notification_service.dart';
@@ -150,7 +152,20 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Настройки уведомлений')),
+        appBar: AppBar(
+          title: const Text('Настройки уведомлений'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            tooltip: 'Назад',
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(SettingsRoute.path);
+              }
+            },
+          ),
+        ),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -159,6 +174,17 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
       return Scaffold(
         appBar: AppBar(
           title: const Text('Настройки уведомлений'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            tooltip: 'Назад',
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(SettingsRoute.path);
+              }
+            },
+          ),
           actions: [
             IconButton(
               icon: const Icon(Icons.refresh),
@@ -188,7 +214,20 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Настройки уведомлений')),
+      appBar: AppBar(
+        title: const Text('Настройки уведомлений'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Назад',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(SettingsRoute.path);
+            }
+          },
+        ),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

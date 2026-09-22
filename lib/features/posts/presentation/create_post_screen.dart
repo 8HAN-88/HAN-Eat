@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:han_eat/app/app_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:han_eat/widgets/app_gradient_background.dart';
 import 'package:han_eat/services/post_service.dart';
@@ -718,7 +720,15 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           automaticallyImplyLeading: false,
           titleSpacing: 8,
           title: TextButton(
-            onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
+            onPressed: _isLoading
+                ? null
+                : () {
+                    if (context.canPop()) {
+                      context.pop();
+                    } else {
+                      context.go(FeedRoute.path);
+                    }
+                  },
             child: const Text('Отмена'),
           ),
           actions: [

@@ -740,6 +740,11 @@ String? resourcePathAlias(String path, [String query = '']) {
         'user' => '${ProfileRoute.path}?userId=$id',
         'story' => '/stories/$id$q',
         'reel' => '/reel/$id$q',
+        'sticker' || 'pack' => '/stickers/$id$q',
+        'gift' => '${StarGiftsInventoryRoute.path}$q',
+        'invoice' || 'receipt' || 'bill' => '/paid/invoices/$id$q',
+        'miniapp' || 'webapp' => '/webapp/$id$q',
+        'folder' => '/chats/folders/$id$q',
         _ => null,
       };
     }
@@ -773,10 +778,83 @@ String? resourcePathAlias(String path, [String query = '']) {
         'g' || 't' || 'm' => '/chats/thread/$id$q',
         'r' => '/reel/$id$q',
         'n' => '${NotificationsRoute.path}$q',
+        'l' => '/channel/$id$q',
+        'a' => '/ads/$id$q',
+        'v' => '/post/$id$q',
         _ => null,
       };
       if (short != null) return short;
     }
+  }
+
+  if ((segs[0] == 'voicechat' ||
+          segs[0] == 'voice-chat' ||
+          segs[0] == 'vc' ||
+          segs[0] == 'discussion' ||
+          segs[0] == 'linked') &&
+      segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/channel/$id$q';
+  }
+  if (segs[0] == 'saved-messages' && segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/chats/thread/$id$q';
+  }
+  if ((segs[0] == 'modlog' ||
+          segs[0] == 'adminlog' ||
+          segs[0] == 'moderation-log') &&
+      segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/chats/thread/$id/log$q';
+  }
+  if (segs[0] == 'subscribers' && segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/channel/$id/subscribers$q';
+  }
+  if (segs[0] == 'boosts' && segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/channel/$id$q';
+  }
+  if ((segs[0] == 'reactions' ||
+          segs[0] == 'likes' ||
+          segs[0] == 'like' ||
+          segs[0] == 'repost' ||
+          segs[0] == 'send') &&
+      segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/post/$id$q';
+  }
+  if (segs[0] == 'forward' && segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/post/$id$q';
+  }
+  if (segs[0] == 'edit' && segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/post/$id/edit$q';
+  }
+  if ((segs[0] == 'block' || segs[0] == 'unblock' || segs[0] == 'report') &&
+      segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '${ProfileRoute.path}?userId=$id';
+  }
+  if ((segs[0] == 'mute' || segs[0] == 'pin' || segs[0] == 'secret') &&
+      segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/chats/thread/$id$q';
+  }
+  if ((segs[0] == 'round' ||
+          segs[0] == 'voicenote' ||
+          segs[0] == 'voice-note' ||
+          segs[0] == 'gif' ||
+          segs[0] == 'animation') &&
+      segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/post/$id$q';
+  }
+  if ((segs[0] == 'link' || segs[0] == 'invite-link') &&
+      segs.length == 2 &&
+      segs[1].isNotEmpty) {
+    return '/chat-invite/${Uri.encodeComponent(segs[1])}$q';
   }
 
   return null;
@@ -1375,7 +1453,53 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/privacy/blocked':
     case '/settings/block':
     case '/settings/blocklist':
+    case '/settings/privacy/blocked':
       return '${BlockedUsersRoute.path}$q';
+    case '/privacy/profile':
+    case '/privacy/birthday':
+    case '/privacy/voice':
+    case '/privacy/status':
+    case '/privacy/online':
+    case '/privacy/gifts':
+    case '/privacy/lastseen':
+    case '/settings/privacy/last-seen':
+    case '/settings/appearance':
+    case '/settings/theme':
+    case '/settings/night':
+    case '/settings/wallpaper':
+    case '/settings/autodelete':
+      return '${SettingsRoute.path}$q';
+    case '/extraads':
+    case '/extra_ads':
+      return '${ExtraAdsRoute.path}$q';
+    case '/voice-chats':
+    case '/voicechats':
+    case '/discussion':
+    case '/linked-chat':
+      return '${ChatsRoute.path}$q';
+    case '/ads-review':
+    case '/mod-ads':
+      return '${AdsReviewRoute.path}$q';
+    case '/admin-tickets':
+    case '/support-admin':
+      return '${AdminSupportTicketsRoute.path}$q';
+    case '/partner-payouts':
+      return '${AdminPartnerPayoutsRoute.path}$q';
+    case '/creator-payouts':
+      return '${AdminCreatorPayoutsRoute.path}$q';
+    case '/flex-features':
+    case '/flex-admin':
+      return '${AdminFlexFeaturesRoute.path}$q';
+    case '/saved-stories':
+    case '/story-archive':
+    case '/my-moments':
+      return '${StoriesRoute.path}$q';
+    case '/log-in':
+      return '${LoginRoute.path}$q';
+    case '/setlanguage':
+    case '/setemoji':
+    case '/bg':
+      return '${SettingsRoute.path}$q';
     default:
       return null;
   }

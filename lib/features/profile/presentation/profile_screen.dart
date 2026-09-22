@@ -597,6 +597,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           title: widget.userId == null
               ? const TelegramConnectionAwareTitle(fallback: 'Профиль')
               : const Text('Профиль'),
+          leading: widget.userId == null
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: 'Назад',
+                  onPressed: () {
+                    if (context.canPop()) {
+                      context.pop();
+                    } else {
+                      context.go(FeedRoute.path);
+                    }
+                  },
+                ),
         ),
         body: const Center(child: CircularProgressIndicator()),
       );
@@ -611,7 +624,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       if (widget.userId != null) {
         if (_profileLoadError != null) {
           return Scaffold(
-            appBar: AppBar(title: const Text('Профиль')),
+            appBar: AppBar(
+              title: const Text('Профиль'),
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                tooltip: 'Назад',
+                onPressed: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go(FeedRoute.path);
+                  }
+                },
+              ),
+            ),
             body: AppEmptyState(
               icon: Icons.cloud_off_rounded,
               title: 'Не удалось загрузить профиль',
@@ -627,7 +653,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           );
         }
         return Scaffold(
-          appBar: AppBar(title: const Text('Профиль')),
+          appBar: AppBar(
+            title: const Text('Профиль'),
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back),
+              tooltip: 'Назад',
+              onPressed: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go(FeedRoute.path);
+                }
+              },
+            ),
+          ),
           body: AppEmptyState(
             icon: Icons.person_off_outlined,
             title: 'Пользователь не найден',

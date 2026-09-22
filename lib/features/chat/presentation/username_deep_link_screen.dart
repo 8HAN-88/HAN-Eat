@@ -73,7 +73,20 @@ class _UsernameDeepLinkScreenState extends State<UsernameDeepLinkScreen> {
   Widget build(BuildContext context) {
     final err = _error;
     return Scaffold(
-      appBar: AppBar(title: Text('@${widget.username.replaceFirst('@', '')}')),
+      appBar: AppBar(
+        title: Text('@${widget.username.replaceFirst('@', '')}'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Назад',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(ChatsRoute.path);
+            }
+          },
+        ),
+      ),
       body: Center(
         child: err == null
             ? const CircularProgressIndicator()

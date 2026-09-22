@@ -401,6 +401,17 @@ class _ModerationDashboardScreenState extends State<ModerationDashboardScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Модерация'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Назад',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(SettingsRoute.path);
+            }
+          },
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),

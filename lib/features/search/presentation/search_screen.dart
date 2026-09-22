@@ -483,6 +483,17 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           title: Text(_screenTitle),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            tooltip: 'Назад',
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(FeedRoute.path);
+              }
+            },
+          ),
           actions: [
             if (!_unifiedPeopleSearch || _mainTab != _MainSearchTab.people)
               IconButton(

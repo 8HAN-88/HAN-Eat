@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/app_router.dart';
 import '../../../features/miniapps/data/miniapp_models.dart';
 import '../../../features/miniapps/data/miniapps_service.dart';
 import '../../../utils/api_error_parser.dart';
@@ -98,6 +100,17 @@ class _MiniAppsModerationScreenState extends State<MiniAppsModerationScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Модерация мини-приложений'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Назад',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(ModerationDashboardRoute.path);
+            }
+          },
+        ),
         actions: [
           PopupMenuButton<String?>(
             initialValue: _statusFilter,

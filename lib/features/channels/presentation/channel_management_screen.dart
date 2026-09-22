@@ -574,7 +574,20 @@ class _ChannelManagementScreenState
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Управление каналом')),
+        appBar: AppBar(
+          title: const Text('Управление каналом'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            tooltip: 'Назад',
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(ChannelDetailRoute.pathFor(widget.channelId));
+              }
+            },
+          ),
+        ),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -582,7 +595,20 @@ class _ChannelManagementScreenState
     if (_channel == null) {
       if (_channelLoadError != null) {
         return Scaffold(
-          appBar: AppBar(title: const Text('Управление каналом')),
+          appBar: AppBar(
+            title: const Text('Управление каналом'),
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back),
+              tooltip: 'Назад',
+              onPressed: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go(ChannelDetailRoute.pathFor(widget.channelId));
+                }
+              },
+            ),
+          ),
           body: AppEmptyState(
             icon: Icons.cloud_off_rounded,
             title: 'Не удалось загрузить',
@@ -614,7 +640,20 @@ class _ChannelManagementScreenState
         );
       }
       return Scaffold(
-        appBar: AppBar(title: const Text('Управление каналом')),
+        appBar: AppBar(
+          title: const Text('Управление каналом'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            tooltip: 'Назад',
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(ChatsRoute.path);
+              }
+            },
+          ),
+        ),
         body: AppEmptyState(
           icon: Icons.group_off_outlined,
           title: 'Канал не найден',
@@ -638,7 +677,20 @@ class _ChannelManagementScreenState
         _channel!.canManageJoinRequests;
     if (!canOpenManagement) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Управление каналом')),
+        appBar: AppBar(
+          title: const Text('Управление каналом'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            tooltip: 'Назад',
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(ChatsRoute.path);
+              }
+            },
+          ),
+        ),
         body: AppEmptyState(
           icon: Icons.lock_outline,
           title: 'Нет доступа',
@@ -661,6 +713,17 @@ class _ChannelManagementScreenState
       length: 3,
       child: Scaffold(
         appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            tooltip: 'Назад',
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(ChannelDetailRoute.pathFor(widget.channelId));
+              }
+            },
+          ),
           title: Row(
             children: [
               const Expanded(child: Text('Управление каналом')),

@@ -277,7 +277,20 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Канал')),
+        appBar: AppBar(
+          title: const Text('Канал'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            tooltip: 'Назад',
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(ChatsRoute.path);
+              }
+            },
+          ),
+        ),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -285,7 +298,20 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
     if (_channel == null) {
       if (_channelLoadError != null) {
         return Scaffold(
-          appBar: AppBar(title: const Text('Канал')),
+          appBar: AppBar(
+            title: const Text('Канал'),
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back),
+              tooltip: 'Назад',
+              onPressed: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go(ChatsRoute.path);
+                }
+              },
+            ),
+          ),
           body: AppEmptyState(
             icon: Icons.cloud_off_rounded,
             title: 'Не удалось загрузить канал',
@@ -317,7 +343,20 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
         );
       }
       return Scaffold(
-        appBar: AppBar(title: const Text('Канал')),
+        appBar: AppBar(
+          title: const Text('Канал'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            tooltip: 'Назад',
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(ChatsRoute.path);
+              }
+            },
+          ),
+        ),
         body: AppEmptyState(
           icon: Icons.group_off_outlined,
           title: 'Канал не найден',

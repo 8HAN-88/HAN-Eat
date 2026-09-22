@@ -363,6 +363,17 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Управление стикерпаком'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Назад',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(ChatsRoute.path);
+            }
+          },
+        ),
         actions: [
           IconButton(
             onPressed: (_saving || pack?.shareLink == null)

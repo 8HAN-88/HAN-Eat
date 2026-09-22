@@ -227,6 +227,17 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           title: const Text('Создать канал'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            tooltip: 'Назад',
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(ChatsRoute.path);
+              }
+            },
+          ),
         ),
         body: SafeArea(
           child: SingleChildScrollView(
