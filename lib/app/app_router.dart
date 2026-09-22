@@ -216,7 +216,9 @@ String? resourcePathAlias(String path, [String query = '']) {
           rest == 'color' ||
           rest == 'autodelete' ||
           rest == 'permissions' ||
-          rest == 'antispam') {
+          rest == 'antispam' ||
+          rest == 'sign' ||
+          rest == 'join-to-send') {
         return '/channel/$id$q';
       }
       if (rest == 'invite' || rest == 'invite-link') {
@@ -313,7 +315,10 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'permissions' ||
           segs[2] == 'effects' ||
           segs[2] == 'reminders' ||
-          segs[2] == 'antispam') {
+          segs[2] == 'antispam' ||
+          segs[2] == 'reactions' ||
+          segs[2] == 'translate' ||
+          segs[2] == 'seen') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -361,7 +366,10 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[3] == 'permissions' ||
           segs[3] == 'effects' ||
           segs[3] == 'reminders' ||
-          segs[3] == 'antispam') {
+          segs[3] == 'antispam' ||
+          segs[3] == 'reactions' ||
+          segs[3] == 'translate' ||
+          segs[3] == 'seen') {
         return '/chats/thread/$id$q';
       }
       if (segs[3] == 'invite' || segs[3] == 'invite-link') {
@@ -491,7 +499,9 @@ String? resourcePathAlias(String path, [String query = '']) {
           rest == 'color' ||
           rest == 'autodelete' ||
           rest == 'permissions' ||
-          rest == 'antispam') {
+          rest == 'antispam' ||
+          rest == 'sign' ||
+          rest == 'join-to-send') {
         return '/channel/$id$q';
       }
       if (rest == 'invite' || rest == 'invite-link') {
@@ -553,7 +563,8 @@ String? resourcePathAlias(String path, [String query = '']) {
               segs[2] == 'like' ||
               segs[2] == 'react' ||
               segs[2] == 'reactors' ||
-              segs[2] == 'tips')) {
+              segs[2] == 'tips' ||
+              segs[2] == 'tip')) {
         return '/post/$id$q';
       }
       if (segs.length == 3 &&
@@ -591,7 +602,8 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'like' ||
           segs[2] == 'react' ||
           segs[2] == 'reactors' ||
-          segs[2] == 'tips') {
+          segs[2] == 'tips' ||
+          segs[2] == 'tip') {
         return '/post/$id$q';
       }
       if (segs[2] == 'share' ||
@@ -728,7 +740,8 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'like' ||
           segs[2] == 'react' ||
           segs[2] == 'reactors' ||
-          segs[2] == 'tips') {
+          segs[2] == 'tips' ||
+          segs[2] == 'tip') {
         return '/post/$id$q';
       }
       if (segs[2] == 'share' ||
@@ -870,7 +883,10 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'permissions' ||
           segs[2] == 'effects' ||
           segs[2] == 'reminders' ||
-          segs[2] == 'antispam') {
+          segs[2] == 'antispam' ||
+          segs[2] == 'reactions' ||
+          segs[2] == 'translate' ||
+          segs[2] == 'seen') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -925,7 +941,10 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'permissions' ||
           segs[2] == 'effects' ||
           segs[2] == 'reminders' ||
-          segs[2] == 'antispam') {
+          segs[2] == 'antispam' ||
+          segs[2] == 'reactions' ||
+          segs[2] == 'translate' ||
+          segs[2] == 'seen') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -988,7 +1007,13 @@ String? resourcePathAlias(String path, [String query = '']) {
         'startapp' || 'start-app' => '/webapp/$id$q',
         'start-bot' || 'startbot' => '/bots/$id$q',
         'contact' || 'profile' => '${ProfileRoute.path}?userId=$id',
-        'media' || 'photo' || 'video' || 'voice' || 'file' || 'doc' =>
+        'media' ||
+        'photo' ||
+        'video' ||
+        'voice' ||
+        'file' ||
+        'doc' ||
+        'gif' =>
           '/post/$id$q',
         _ => null,
       };
@@ -1182,7 +1207,10 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[0] == 'tme' ||
           segs[0] == 'permalink' ||
           segs[0] == 'cmsg' ||
-          segs[0] == 'mid') &&
+          segs[0] == 'mid' ||
+          segs[0] == 'smsg' ||
+          segs[0] == 'imsg' ||
+          segs[0] == 'dmsg') &&
       segs.length == 3) {
     final cid = int.tryParse(segs[1]);
     final mid = int.tryParse(segs[2]);
@@ -1282,6 +1310,12 @@ String? resourcePathAlias(String path, [String query = '']) {
         'docid' ||
         'stickerid' =>
           '/post/$id$q',
+        'cid' => '/chats/thread/$id$q',
+        'pid' => '/post/$id$q',
+        'bid' => '/bots/$id$q',
+        'wid' => '/webapp/$id$q',
+        'sid' => '/stories/$id$q',
+        'aid' => '/ads/$id$q',
         _ => null,
       };
       if (opened != null) return opened;
@@ -2734,6 +2768,97 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return '${BlockedUsersRoute.path}$q';
     case '/channel-color':
       return '${ChannelsManagementRoute.path}$q';
+    case '/saved-messages-settings':
+    case '/default-send-as':
+    case '/linked-chat-settings':
+    case '/discussion-link':
+    case '/sticker-pack-list':
+    case '/emoji-pack-list':
+    case '/unread-folder':
+    case '/personal-chats':
+    case '/groups-folder':
+    case '/send-as-file':
+    case '/sticker-suggestions':
+    case '/hold-to-record':
+    case '/voice-waveform':
+    case '/round-video-notes':
+    case '/video-messages':
+    case '/photo-editor':
+    case '/video-trimmer':
+    case '/seen-by':
+    case '/message-info':
+    case '/silentsend':
+    case '/exportchat':
+    case '/messageeffects':
+      return '${ChatsRoute.path}$q';
+    case '/chat-wallpaper-url':
+    case '/swipe-to-archive':
+    case '/chat-preview':
+    case '/link-preview-settings':
+    case '/autoplay-gifs':
+    case '/in-app-player':
+    case '/save-edited-photos':
+    case '/reply-with-enter':
+    case '/send-with-enter':
+    case '/replace-emoji':
+    case '/big-emoji':
+    case '/quick-reaction':
+    case '/double-tap-react':
+    case '/swipe-to-reply':
+      return '${SettingsRoute.path}$q';
+    case '/folder-invite-link':
+    case '/chat-folders-list':
+    case '/folder-share':
+      return '${ChatFolderNewRoute.path}$q';
+    case '/bots-folder':
+      return '${MyBotsRoute.path}$q';
+    case '/channels-folder':
+      return '${ChannelsManagementRoute.path}$q';
+    case '/push-settings':
+    case '/web-push':
+    case '/show-preview':
+    case '/hide-preview':
+      return '${NotificationSettingsRoute.path}$q';
+    case '/story-views':
+    case '/story-viewers':
+    case '/moments-archive':
+    case '/hide-story':
+    case '/archive-story':
+    case '/save-story':
+    case '/share-story':
+    case '/highlight-story':
+      return '${StoriesRoute.path}$q';
+    case '/upload-reel':
+    case '/community-upload':
+      return '${CreateReelRoute.path}$q';
+    case '/addpeople':
+      return '${ChatNewMessageRoute.path}$q';
+    case '/reportproblem':
+      return '${SupportContactRoute.path}$q';
+    case '/blockanddelete':
+      return '${BlockedUsersRoute.path}$q';
+    case '/giftupgrade':
+    case '/gifttransfer':
+      return '${StarGiftsInventoryRoute.path}$q';
+    case '/starstopup':
+      return '${StarsWalletRoute.path}$q';
+    case '/starswithdraw':
+      return '${CreatorRevenueRoute.path}$q';
+    case '/flexmanage':
+      return '${FlexSubscriptionRoute.path}$q';
+    case '/adscreate':
+      return '${AdsCampaignEditorRoute.path}$q';
+    case '/boostnow':
+      return '${AdsHubRoute.path}$q';
+    case '/partnerinvite':
+      return '${PartnerProgramRoute.path}$q';
+    case '/extraadstoggle':
+      return '${ExtraAdsRoute.path}$q';
+    case '/backupexport':
+      return '${BackupRoute.path}$q';
+    case '/legalterms':
+    case '/abouthanwe':
+      return '${SupportSecurityRoute.path}$q';
     default:
       return null;
   }
