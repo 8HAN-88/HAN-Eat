@@ -93,7 +93,11 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
         visibility: _visibility,
       );
       if (!mounted) return;
-      Navigator.of(context).pop(true);
+      if (context.canPop()) {
+        context.pop(true);
+      } else {
+        context.go(StoriesRoute.path);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {

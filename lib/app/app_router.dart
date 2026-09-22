@@ -203,7 +203,10 @@ String? resourcePathAlias(String path, [String query = '']) {
           rest == 'voicechat' ||
           rest == 'stats' ||
           rest == 'insights' ||
-          rest == 'analytics') {
+          rest == 'analytics' ||
+          rest == 'boosts' ||
+          rest == 'statistics' ||
+          rest == 'reactions') {
         return '/channel/$id$q';
       }
       if (rest == 'invite' || rest == 'invite-link') {
@@ -417,7 +420,10 @@ String? resourcePathAlias(String path, [String query = '']) {
           rest == 'voicechat' ||
           rest == 'stats' ||
           rest == 'insights' ||
-          rest == 'analytics') {
+          rest == 'analytics' ||
+          rest == 'boosts' ||
+          rest == 'statistics' ||
+          rest == 'reactions') {
         return '/channel/$id$q';
       }
       if (rest == 'invite' || rest == 'invite-link') {
@@ -536,7 +542,13 @@ String? resourcePathAlias(String path, [String query = '']) {
   }
   if ((segs[0] == 'bot' || segs[0] == 'bots') && segs.length == 3) {
     final id = int.tryParse(segs[1]);
-    if (id != null && id > 0 && (segs[2] == 'edit' || segs[2] == 'profile')) {
+    if (id != null &&
+        id > 0 &&
+        (segs[2] == 'edit' ||
+            segs[2] == 'profile' ||
+            segs[2] == 'start' ||
+            segs[2] == 'open' ||
+            segs[2] == 'launch')) {
       return '/bots/$id$q';
     }
   }
@@ -987,6 +999,28 @@ String? resourcePathAlias(String path, [String query = '']) {
   }
   if (segs[0] == 'folderinvite' && segs.length == 2 && segs[1].isNotEmpty) {
     return '/chat-invite/${Uri.encodeComponent(segs[1])}$q';
+  }
+  if ((segs[0] == 'story' || segs[0] == 'status') && segs.length == 2) {
+    if (segs[1] == 'create' || segs[1] == 'new') {
+      return '${StoryCreateRoute.path}$q';
+    }
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/stories/$id$q';
+  }
+  if (segs[0] == 'startapp' && segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/webapp/$id$q';
+  }
+  if (segs[0] == 'startbot' && segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/bots/$id$q';
+  }
+  if (segs.length == 3 &&
+      segs[0] == 'stars' &&
+      (segs[1] == 'pay' || segs[1] == 'invoice') &&
+      int.tryParse(segs[2]) != null) {
+    final id = int.parse(segs[2]);
+    if (id > 0) return '/paid/invoices/$id$q';
   }
 
   return null;
@@ -1732,6 +1766,60 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return '${StarsCheckoutSuccessRoute.path}$q';
     case '/paid-cancel':
       return '${StarsCheckoutCancelRoute.path}$q';
+    case '/buy':
+    case '/topup':
+    case '/deposit':
+      return '${StarsWalletRoute.path}$q';
+    case '/ref':
+    case '/refs':
+    case '/promo':
+    case '/shareurl':
+      return '${PartnerProgramRoute.path}$q';
+    case '/helpdesk':
+      return '${SupportContactRoute.path}$q';
+    case '/nightmode':
+    case '/darkmode':
+    case '/lightmode':
+      return '${SettingsRoute.path}$q';
+    case '/chatlist':
+    case '/chat-list':
+      return '${ChatsRoute.path}$q';
+    case '/newfolder':
+    case '/addfolder':
+      return '${ChatFolderNewRoute.path}$q';
+    case '/consent':
+    case '/gdpr-consent':
+      return '${LegalConsentRoute.path}$q';
+    case '/otp':
+      return '${LoginRoute.path}$q';
+    case '/changeemail':
+    case '/email-change':
+      return '${ProfileAuthRoute.path}$q';
+    case '/mygifts':
+      return '${StarGiftsInventoryRoute.path}$q';
+    case '/mybots':
+      return '${MyBotsRoute.path}$q';
+    case '/mychannels':
+      return '${ChannelsManagementRoute.path}$q';
+    case '/mystars':
+      return '${StarsWalletRoute.path}$q';
+    case '/closefriends':
+      return '${CloseFriendsRoute.path}$q';
+    case '/editprofile':
+      return '${ProfileAuthRoute.path}$q';
+    case '/notifsettings':
+      return '${NotificationSettingsRoute.path}$q';
+    case '/flexplus':
+      return '${FlexSubscriptionRoute.path}$q';
+    case '/tg':
+    case '/telegram':
+      return '${ChatsRoute.path}$q';
+    case '/startapp':
+    case '/attachmenu':
+      return '${MiniAppsRoute.path}$q';
+    case '/status':
+    case '/story':
+      return '${StoriesRoute.path}$q';
     default:
       return null;
   }

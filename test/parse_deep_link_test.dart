@@ -681,6 +681,47 @@ void main() {
       parseDeepLinkToGoPath('https://haneat.app/app/#/confirm-email'),
       VerifyEmailRoute.path,
     );
+    expect(resourcePathAlias('/c/1/boosts'), '/channel/1');
+    expect(resourcePathAlias('/channel/1/statistics'), '/channel/1');
+    expect(resourcePathAlias('/story/9'), '/stories/9');
+    expect(resourcePathAlias('/status/9'), '/stories/9');
+    expect(resourcePathAlias('/startapp/5'), '/webapp/5');
+    expect(resourcePathAlias('/startbot/5'), '/bots/5');
+    expect(resourcePathAlias('/bot/5/start'), '/bots/5');
+    expect(resourcePathAlias('/stars/pay/9'), '/paid/invoices/9');
+    expect(shortcutPathAlias('/buy'), StarsWalletRoute.path);
+    expect(shortcutPathAlias('/topup'), StarsWalletRoute.path);
+    expect(shortcutPathAlias('/ref'), PartnerProgramRoute.path);
+    expect(shortcutPathAlias('/helpdesk'), SupportContactRoute.path);
+    expect(shortcutPathAlias('/nightmode'), SettingsRoute.path);
+    expect(shortcutPathAlias('/chatlist'), ChatsRoute.path);
+    expect(shortcutPathAlias('/newfolder'), ChatFolderNewRoute.path);
+    expect(shortcutPathAlias('/consent'), LegalConsentRoute.path);
+    expect(shortcutPathAlias('/otp'), LoginRoute.path);
+    expect(shortcutPathAlias('/mygifts'), StarGiftsInventoryRoute.path);
+    expect(shortcutPathAlias('/mybots'), MyBotsRoute.path);
+    expect(shortcutPathAlias('/mychannels'), ChannelsManagementRoute.path);
+    expect(shortcutPathAlias('/closefriends'), CloseFriendsRoute.path);
+    expect(shortcutPathAlias('/flexplus'), FlexSubscriptionRoute.path);
+    expect(shortcutPathAlias('/tg'), ChatsRoute.path);
+    expect(shortcutPathAlias('/startapp'), MiniAppsRoute.path);
+    expect(shortcutPathAlias('/status'), StoriesRoute.path);
+    expect(
+      leftoverPathAlias('/go/story/9'),
+      '/stories/9',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/startapp/5'),
+      '/webapp/5',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/story/9'),
+      '/stories/9',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/buy'),
+      StarsWalletRoute.path,
+    );
     expect(
       parseDeepLinkToGoPath('https://haneat.app/app/#/chat/21/media'),
       '/chats/thread/21/media',

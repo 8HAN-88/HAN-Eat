@@ -289,7 +289,11 @@ class _EditProfilePostScreenState extends ConsumerState<EditProfilePostScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Пост обновлён')),
       );
-      context.pop(true);
+      if (context.canPop()) {
+        context.pop(true);
+      } else {
+        context.go(PostFeedRoute.pathFor(widget.postId));
+      }
     } catch (e) {
       if (!mounted) return;
       showErrorSnackBar(
@@ -308,6 +312,17 @@ class _EditProfilePostScreenState extends ConsumerState<EditProfilePostScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Редактировать пост'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Назад',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(PostFeedRoute.pathFor(widget.postId));
+            }
+          },
+        ),
         actions: [
           if (!_isLoading && _loadError == null)
             TextButton(
