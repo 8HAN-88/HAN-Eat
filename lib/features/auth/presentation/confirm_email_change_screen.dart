@@ -123,7 +123,20 @@ class _ConfirmEmailChangeScreenState extends State<ConfirmEmailChangeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Смена почты')),
+      appBar: AppBar(
+        title: const Text('Смена почты'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Назад',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(AuthPaths.login);
+            }
+          },
+        ),
+      ),
       body: AppGradientBackground(child: _buildBody()),
     );
   }

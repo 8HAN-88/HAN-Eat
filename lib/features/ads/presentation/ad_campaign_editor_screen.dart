@@ -326,6 +326,17 @@ class _AdCampaignEditorScreenState extends State<AdCampaignEditorScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_isNew ? 'Новая заявка' : 'Заявка'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Назад',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(AdsHubRoute.path);
+            }
+          },
+        ),
       ),
       body: _buildBody(),
       bottomNavigationBar: _loading || _error != null ? null : _bottomBar(),
@@ -372,7 +383,11 @@ class _AdCampaignEditorScreenState extends State<AdCampaignEditorScreen> {
                               return;
                             }
                             if (!_editable) {
-                              Navigator.of(context).pop();
+                              if (context.canPop()) {
+                                context.pop();
+                              } else {
+                                context.go(AdsHubRoute.path);
+                              }
                               return;
                             }
                             unawaited(_save(submit: true));

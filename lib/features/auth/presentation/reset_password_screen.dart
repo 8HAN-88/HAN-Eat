@@ -136,7 +136,20 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Новый пароль')),
+      appBar: AppBar(
+        title: const Text('Новый пароль'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Назад',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(AuthPaths.login);
+            }
+          },
+        ),
+      ),
       body: AppGradientBackground(
         child: SafeArea(
           child: SingleChildScrollView(

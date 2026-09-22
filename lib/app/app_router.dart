@@ -192,7 +192,15 @@ String? resourcePathAlias(String path, [String query = '']) {
         'management',
         'create-post',
       };
-      if (rest == 'posts' || rest == 'feed' || rest == 'wall') {
+      if (rest == 'posts' ||
+          rest == 'feed' ||
+          rest == 'wall' ||
+          rest == 'boost' ||
+          rest == 'live' ||
+          rest == 'stream' ||
+          rest == 'discussion' ||
+          rest == 'linked' ||
+          rest == 'voicechat') {
         return '/channel/$id$q';
       }
       if (rest == 'members' || rest == 'admins') {
@@ -256,6 +264,9 @@ String? resourcePathAlias(String path, [String query = '']) {
       if (segs[2] == 'members' || segs[2] == 'admins') {
         return '/chats/thread/$id/info$q';
       }
+      if (segs[2] == 'call' || segs[2] == 'voice' || segs[2] == 'video') {
+        return '/chats/thread/$id$q';
+      }
       final mid = int.tryParse(segs[2]);
       if (mid != null && mid > 0) {
         return query.isEmpty
@@ -276,7 +287,11 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[3] == 'links') {
         return '/chats/thread/$id/media$q';
       }
-      if (segs[3] == 'search' || segs[3] == 'pinned') {
+      if (segs[3] == 'search' ||
+          segs[3] == 'pinned' ||
+          segs[3] == 'call' ||
+          segs[3] == 'voice' ||
+          segs[3] == 'video') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[3]);
@@ -329,7 +344,11 @@ String? resourcePathAlias(String path, [String query = '']) {
     if (id != null && id > 0) {
       if (segs[2] == 'followers') return ProfileFollowersRoute.withUserId(id);
       if (segs[2] == 'following') return ProfileFollowingRoute.withUserId(id);
-      if (segs[2] == 'posts' || segs[2] == 'feed') {
+      if (segs[2] == 'posts' ||
+          segs[2] == 'feed' ||
+          segs[2] == 'stories' ||
+          segs[2] == 'moments' ||
+          segs[2] == 'highlights') {
         return ProfileRoute.withUserId(id);
       }
     }
@@ -339,6 +358,12 @@ String? resourcePathAlias(String path, [String query = '']) {
     if (id != null && id > 0) {
       if (segs[2] == 'followers') return ProfileFollowersRoute.withUserId(id);
       if (segs[2] == 'following') return ProfileFollowingRoute.withUserId(id);
+      if (segs[2] == 'stories' ||
+          segs[2] == 'moments' ||
+          segs[2] == 'highlights' ||
+          segs[2] == 'posts') {
+        return ProfileRoute.withUserId(id);
+      }
     }
   }
   if ((segs[0] == 'followers' || segs[0] == 'following') && segs.length == 2) {
@@ -352,7 +377,10 @@ String? resourcePathAlias(String path, [String query = '']) {
   if (segs[0] == 'u' && segs.length == 3 && segs[1].isNotEmpty) {
     if (segs[2] == 'followers' ||
         segs[2] == 'following' ||
-        segs[2] == 'posts') {
+        segs[2] == 'posts' ||
+        segs[2] == 'stories' ||
+        segs[2] == 'moments' ||
+        segs[2] == 'highlights') {
       return UsernameDeepLinkRoute.pathFor(segs[1]);
     }
   }
@@ -366,7 +394,15 @@ String? resourcePathAlias(String path, [String query = '']) {
     final id = int.tryParse(segs[1]);
     if (id != null && id > 0) {
       final rest = segs[2];
-      if (rest == 'posts' || rest == 'feed' || rest == 'wall') {
+      if (rest == 'posts' ||
+          rest == 'feed' ||
+          rest == 'wall' ||
+          rest == 'boost' ||
+          rest == 'live' ||
+          rest == 'stream' ||
+          rest == 'discussion' ||
+          rest == 'linked' ||
+          rest == 'voicechat') {
         return '/channel/$id$q';
       }
       if (rest == 'members' || rest == 'admins') {
@@ -632,6 +668,11 @@ String? resourcePathAlias(String path, [String query = '']) {
     final id = int.tryParse(segs[1]);
     if (id != null && id > 0) return '${StarGiftsInventoryRoute.path}$q';
   }
+  if ((segs[0] == 'gift' || segs[0] == 'gifts') && segs.length == 3) {
+    if (segs[2] == 'send' || segs[2] == 'view') {
+      return '${StarGiftsInventoryRoute.path}$q';
+    }
+  }
 
   const extraChatRoots = {
     'direct',
@@ -666,6 +707,9 @@ String? resourcePathAlias(String path, [String query = '']) {
       if (segs[2] == 'members' || segs[2] == 'admins') {
         return '/chats/thread/$id/info$q';
       }
+      if (segs[2] == 'call' || segs[2] == 'voice' || segs[2] == 'video') {
+        return '/chats/thread/$id$q';
+      }
       final mid = int.tryParse(segs[2]);
       if (mid != null && mid > 0) {
         return query.isEmpty
@@ -689,6 +733,9 @@ String? resourcePathAlias(String path, [String query = '']) {
       }
       if (segs[2] == 'members' || segs[2] == 'admins') {
         return '/chats/thread/$id/info$q';
+      }
+      if (segs[2] == 'call' || segs[2] == 'voice' || segs[2] == 'video') {
+        return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
       if (mid != null && mid > 0) {
@@ -745,6 +792,8 @@ String? resourcePathAlias(String path, [String query = '']) {
         'invoice' || 'receipt' || 'bill' => '/paid/invoices/$id$q',
         'miniapp' || 'webapp' => '/webapp/$id$q',
         'folder' => '/chats/folders/$id$q',
+        'ad' || 'campaign' => '/ads/$id$q',
+        'giveaway' => '/channel/$id$q',
         _ => null,
       };
     }
@@ -781,6 +830,7 @@ String? resourcePathAlias(String path, [String query = '']) {
         'l' => '/channel/$id$q',
         'a' => '/ads/$id$q',
         'v' => '/post/$id$q',
+        'q' => '/post/$id$q',
         _ => null,
       };
       if (short != null) return short;
@@ -855,6 +905,34 @@ String? resourcePathAlias(String path, [String query = '']) {
       segs.length == 2 &&
       segs[1].isNotEmpty) {
     return '/chat-invite/${Uri.encodeComponent(segs[1])}$q';
+  }
+  if ((segs[0] == 'q' || segs[0] == 'quiz' || segs[0] == 'iv') &&
+      segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/post/$id$q';
+  }
+  if ((segs[0] == 'j' || segs[0] == 'plus') &&
+      segs.length == 2 &&
+      segs[1].isNotEmpty) {
+    return '/chat-invite/${Uri.encodeComponent(segs[1])}$q';
+  }
+  if ((segs[0] == 'emoji' ||
+          segs[0] == 'addemoji' ||
+          segs[0] == 'customemoji') &&
+      segs.length == 2 &&
+      segs[1].isNotEmpty) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/stickers/$id$q';
+    return '/addstickers/${Uri.encodeComponent(segs[1])}$q';
+  }
+  if ((segs[0] == 'collectible' || segs[0] == 'unique-gift') &&
+      segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '${StarGiftsInventoryRoute.path}$q';
+  }
+  if ((segs[0] == 'theme' || segs[0] == 'bg' || segs[0] == 'wallpaper') &&
+      segs.length == 2) {
+    return '${SettingsRoute.path}$q';
   }
 
   return null;
@@ -1076,6 +1154,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/passport':
       return '${AccountSecurityRoute.path}$q';
     case '/poll':
+    case '/quiz':
       return '${CreatePostRoute.path}$q';
     case '/nearby':
       return '${ChatsRoute.path}$q';
@@ -1500,6 +1579,43 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/setemoji':
     case '/bg':
       return '${SettingsRoute.path}$q';
+    case '/settings/privacy/calls':
+    case '/settings/privacy/groups':
+    case '/settings/privacy/forwards':
+    case '/settings/privacy/phone':
+    case '/settings/privacy/photo':
+    case '/settings/privacy/bio':
+    case '/settings/privacy/messages':
+    case '/privacy/invites':
+    case '/privacy/p2p':
+    case '/privacy/voice-calls':
+    case '/privacy/channels':
+    case '/read-receipts':
+    case '/typing':
+    case '/typing-status':
+    case '/hide-read':
+      return '${SettingsRoute.path}$q';
+    case '/autolock':
+    case '/passkey':
+    case '/passkeys':
+    case '/biometric':
+    case '/screen-lock':
+      return '${AccountSecurityRoute.path}$q';
+    case '/ton':
+      return '${StarsWalletRoute.path}$q';
+    case '/crypto':
+    case '/fragment':
+    case '/nft-usernames':
+      return '${StarGiftsMarketplaceRoute.path}$q';
+    case '/newmessage':
+    case '/addcontact':
+      return '${ChatNewMessageRoute.path}$q';
+    case '/savedmessages':
+      return '${ProfileTabRoute.path}$q';
+    case '/addstickers':
+      return '${ChatsRoute.path}$q';
+    case '/username-auction':
+      return '${ProfileAuthRoute.path}$q';
     default:
       return null;
   }
@@ -3724,7 +3840,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           if (id == null) {
             return MaterialPage(
               child: Scaffold(
-                appBar: AppBar(title: const Text('Чат')),
+                appBar: AppBar(
+                  title: const Text('Чат'),
+                  leading: IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    tooltip: 'Назад',
+                    onPressed: () {
+                      if (context.canPop()) {
+                        context.pop();
+                      } else {
+                        context.go(ChatsRoute.path);
+                      }
+                    },
+                  ),
+                ),
                 body: AppEmptyState(
                   icon: Icons.chat_bubble_outline,
                   title: 'Чат не найден',
@@ -3920,6 +4049,18 @@ class _RouterRecoveryScreenState extends State<_RouterRecoveryScreen> {
       appBar: AppBar(
         title: const Text('Восстановление'),
         backgroundColor: Colors.transparent,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Назад',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              final user = AuthService.instance.currentUser;
+              context.go(user == null ? LoginRoute.path : _stableHomePath);
+            }
+          },
+        ),
       ),
       body: AppEmptyState(
         icon: Icons.sync_problem_rounded,
