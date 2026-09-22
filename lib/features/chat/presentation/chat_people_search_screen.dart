@@ -141,7 +141,18 @@ class _ChatPeopleSearchScreenState extends State<ChatPeopleSearchScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Найти людей')),
+      appBar: AppBar(
+        title: const Text('Найти людей'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(ChatsRoute.path);
+            }
+          },
+        ),
+      ),
       body: Column(
         children: [
           Padding(

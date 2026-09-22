@@ -308,7 +308,18 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
     final count = _filter == _MediaFilter.links ? links.length : items.length;
 
     return Scaffold(
-      appBar: AppBar(title: Text('Медиа ($count)')),
+      appBar: AppBar(
+        title: Text('Медиа ($count)'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(ChatThreadRoute.pathForId(widget.conversationId));
+            }
+          },
+        ),
+      ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

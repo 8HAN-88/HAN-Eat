@@ -392,6 +392,15 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
         appBar: AppBar(
           title: const Text('Сохранённые'),
           backgroundColor: Colors.transparent,
+          leading: BackButton(
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(FeedRoute.path);
+              }
+            },
+          ),
           actions: [
             if (_isOffline)
               const Padding(

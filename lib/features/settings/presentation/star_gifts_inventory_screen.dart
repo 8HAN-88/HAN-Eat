@@ -456,6 +456,15 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Мои подарки'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(SettingsRoute.path);
+            }
+          },
+        ),
         actions: [
           if (_gifts.length > 1)
             IconButton(

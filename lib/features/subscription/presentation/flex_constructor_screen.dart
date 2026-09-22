@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/app_router.dart';
 import '../../../services/flex_subscription_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
@@ -133,6 +135,15 @@ class _FlexConstructorScreenState extends State<FlexConstructorScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Настроить подписку'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(FlexSubscriptionRoute.path);
+            }
+          },
+        ),
         actions: [
           TextButton(
             onPressed: _saving || me == null || !me.active ? null : _save,

@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/app_router.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/chat_service.dart';
@@ -113,6 +115,15 @@ class _PaidMessageExceptionsScreenState
     return Scaffold(
       appBar: AppBar(
         title: const Text('Кто пишет бесплатно'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(SettingsRoute.path);
+            }
+          },
+        ),
         actions: [
           IconButton(
             tooltip: 'Добавить',

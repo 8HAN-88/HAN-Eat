@@ -475,7 +475,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Настройки')),
+      appBar: AppBar(
+        title: const Text('Настройки'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(FeedRoute.path);
+            }
+          },
+        ),
+      ),
       body: AppGradientBackground(
         child: ListView(
           padding: EdgeInsets.fromLTRB(
