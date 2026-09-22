@@ -482,6 +482,20 @@ void main() {
       shortcutPathAlias('/settings/notif'),
       NotificationSettingsRoute.path,
     );
+    expect(resourcePathAlias('/dialogs/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/m/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/chats/thread/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/chats/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/share/post/28'), '/post/28');
+    expect(resourcePathAlias('/share/reel/28'), '/reel/28');
+    expect(resourcePathAlias('/call/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/saved/21'), '/chats/thread/21');
+    expect(unwrapGoOpenPath('/go/c/1/info'), '/c/1/info');
+    expect(unwrapGoOpenPath('/open/chats/21'), '/chats/21');
+    expect(leftoverPathAlias('/go/c/1/info'), '/channel/1/info');
+    expect(leftoverPathAlias('/open/share/post/28'), '/post/28');
+    expect(leftoverPathAlias('/c/1/giveaways'), '/channels/1/giveaways');
+    expect(shortcutPathAlias('/go'), ChatsRoute.path);
     expect(shortcutPathAlias('/black-list'), BlockedUsersRoute.path);
     expect(shortcutPathAlias('/close-friend'), CloseFriendsRoute.path);
     expect(
@@ -527,6 +541,18 @@ void main() {
     expect(
       parseDeepLinkToGoPath('https://haneat.app/app/#/dialogs'),
       ChatsRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/go/c/1/info'),
+      '/channel/1/info',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/open/chats/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/share/post/28'),
+      '/post/28',
     );
     expect(
       parseDeepLinkToGoPath('https://haneat.app/studio'),

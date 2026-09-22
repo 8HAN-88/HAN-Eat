@@ -692,7 +692,13 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
               right: 12,
               child: IconButton(
                 icon: const Icon(Icons.close, color: Colors.white),
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: () {
+                  if (Navigator.of(context).canPop()) {
+                    Navigator.of(context).pop();
+                    return;
+                  }
+                  context.go(StoriesRoute.path);
+                },
               ),
             ),
             Positioned.fill(

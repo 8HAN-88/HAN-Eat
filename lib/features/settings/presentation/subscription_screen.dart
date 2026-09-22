@@ -389,6 +389,15 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
         title: const Text(SubscriptionCopy.screenTitle),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(SettingsRoute.path);
+            }
+          },
+        ),
       ),
       body: AppGradientBackground(
         child: ListView(
@@ -670,7 +679,13 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
             ],
             const SizedBox(height: 8),
             TextButton(
-              onPressed: () => context.pop(),
+              onPressed: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go(SettingsRoute.path);
+                }
+              },
               child: const Text('Позже'),
             ),
             const SizedBox(height: 24),

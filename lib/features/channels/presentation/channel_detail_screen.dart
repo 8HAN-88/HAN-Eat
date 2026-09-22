@@ -293,9 +293,25 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
               _channelLoadError!,
               fallback: 'Проверьте сеть',
             ),
-            action: FilledButton(
-              onPressed: () => _loadChannel(forceRefresh: true),
-              child: const Text('Повторить'),
+            action: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FilledButton(
+                  onPressed: () => _loadChannel(forceRefresh: true),
+                  child: const Text('Повторить'),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () {
+                    if (context.canPop()) {
+                      context.pop();
+                    } else {
+                      context.go(ChatsRoute.path);
+                    }
+                  },
+                  child: const Text('К чатам'),
+                ),
+              ],
             ),
           ),
         );

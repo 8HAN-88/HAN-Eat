@@ -242,6 +242,15 @@ class _ChatThreadLoaderScreenState
     ref.read(chatsHubRefreshProvider.notifier).state++;
   }
 
+  void _leaveThread() {
+    if (!mounted) return;
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
+    context.go(ChatsRoute.path);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_conversation != null) {
@@ -259,21 +268,35 @@ class _ChatThreadLoaderScreenState
     }
     if (_loading) {
       return Scaffold(
-        appBar: AppBar(),
+        appBar: AppBar(
+          leading: BackButton(onPressed: _leaveThread),
+        ),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
     return Scaffold(
-      appBar: AppBar(),
+      appBar: AppBar(
+        leading: BackButton(onPressed: _leaveThread),
+      ),
       body: AppEmptyState(
         icon: Icons.chat_bubble_outline,
         title: 'Чат не найден',
         subtitle: _error != null
             ? userVisibleError(_error!)
             : 'Нет доступа к диалогу',
-        action: FilledButton(
-          onPressed: _resolveConversation,
-          child: const Text('Повторить'),
+        action: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FilledButton(
+              onPressed: _resolveConversation,
+              child: const Text('Повторить'),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: _leaveThread,
+              child: const Text('К чатам'),
+            ),
+          ],
         ),
       ),
     );
