@@ -133,7 +133,18 @@ class _ChatInviteJoinScreenState extends State<ChatInviteJoinScreen> {
   Widget build(BuildContext context) {
     final paidId = _paidConversationId;
     return Scaffold(
-      appBar: AppBar(title: const Text('Приглашение в группу')),
+      appBar: AppBar(
+        title: const Text('Приглашение в группу'),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/chats');
+            }
+          },
+        ),
+      ),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),

@@ -335,11 +335,23 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
     );
   }
 
+  void _leaveChannelInfo() {
+    if (!mounted) return;
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
+    context.go(ChatsRoute.path);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading || _tabController == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Канал')),
+        appBar: AppBar(
+          title: const Text('Канал'),
+          leading: BackButton(onPressed: _leaveChannelInfo),
+        ),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -347,7 +359,10 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
     if (_channel == null) {
       if (_channelLoadError != null) {
         return Scaffold(
-          appBar: AppBar(title: const Text('Канал')),
+          appBar: AppBar(
+            title: const Text('Канал'),
+            leading: BackButton(onPressed: _leaveChannelInfo),
+          ),
           body: AppEmptyState(
             icon: Icons.cloud_off_rounded,
             title: 'Не удалось загрузить',
@@ -355,9 +370,19 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
               _channelLoadError!,
               fallback: 'Проверьте сеть',
             ),
-            action: FilledButton(
-              onPressed: _bootstrap,
-              child: const Text('Повторить'),
+            action: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FilledButton(
+                  onPressed: _bootstrap,
+                  child: const Text('Повторить'),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: _leaveChannelInfo,
+                  child: const Text('К чатам'),
+                ),
+              ],
             ),
           ),
         );

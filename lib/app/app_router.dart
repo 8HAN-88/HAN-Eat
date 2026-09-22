@@ -703,6 +703,23 @@ String? resourcePathAlias(String path, [String query = '']) {
     final id = int.tryParse(segs[1]);
     if (id != null && id > 0) return '${ProfileRoute.path}?userId=$id';
   }
+  if ((segs[0] == 'contact' || segs[0] == 'people') && segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '${ProfileRoute.path}?userId=$id';
+  }
+  if (segs[0] == 'boost' && segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/channel/$id$q';
+  }
+  if (segs[0] == 'forward' && segs.length == 3) {
+    final cid = int.tryParse(segs[1]);
+    final mid = int.tryParse(segs[2]);
+    if (cid != null && cid > 0 && mid != null && mid > 0) {
+      return query.isEmpty
+          ? '/chats/thread/$cid?msg=$mid'
+          : '/chats/thread/$cid?$query&msg=$mid';
+    }
+  }
 
   if (segs[0] == 'share' && segs.length == 3) {
     final id = int.tryParse(segs[2]);
@@ -738,6 +755,7 @@ String? resourcePathAlias(String path, [String query = '']) {
         'i' => '/paid/invoices/$id$q',
         'f' => '/chats/folders/$id$q',
         'g' || 't' || 'm' => '/chats/thread/$id$q',
+        'r' => '/reel/$id$q',
         _ => null,
       };
       if (short != null) return short;

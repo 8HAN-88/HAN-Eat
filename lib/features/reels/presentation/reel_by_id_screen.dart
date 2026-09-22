@@ -92,9 +92,19 @@ class _ReelByIdScreenState extends State<ReelByIdScreen> {
               icon: Icons.cloud_off_rounded,
               title: 'Не удалось открыть',
               subtitle: msg,
-              action: FilledButton(
-                onPressed: _reload,
-                child: const Text('Повторить'),
+              action: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FilledButton(
+                    onPressed: _reload,
+                    child: const Text('Повторить'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: _leave,
+                    child: const Text('К ленте'),
+                  ),
+                ],
               ),
             ),
           );
