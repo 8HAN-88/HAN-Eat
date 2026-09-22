@@ -214,7 +214,9 @@ String? resourcePathAlias(String path, [String query = '']) {
           rest == 'protect' ||
           rest == 'signatures' ||
           rest == 'color' ||
-          rest == 'autodelete') {
+          rest == 'autodelete' ||
+          rest == 'permissions' ||
+          rest == 'antispam') {
         return '/channel/$id$q';
       }
       if (rest == 'invite' || rest == 'invite-link') {
@@ -307,7 +309,11 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'wallpaper' ||
           segs[2] == 'autodelete' ||
           segs[2] == 'color' ||
-          segs[2] == 'send-as') {
+          segs[2] == 'send-as' ||
+          segs[2] == 'permissions' ||
+          segs[2] == 'effects' ||
+          segs[2] == 'reminders' ||
+          segs[2] == 'antispam') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -351,7 +357,11 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[3] == 'wallpaper' ||
           segs[3] == 'autodelete' ||
           segs[3] == 'color' ||
-          segs[3] == 'send-as') {
+          segs[3] == 'send-as' ||
+          segs[3] == 'permissions' ||
+          segs[3] == 'effects' ||
+          segs[3] == 'reminders' ||
+          segs[3] == 'antispam') {
         return '/chats/thread/$id$q';
       }
       if (segs[3] == 'invite' || segs[3] == 'invite-link') {
@@ -479,7 +489,9 @@ String? resourcePathAlias(String path, [String query = '']) {
           rest == 'protect' ||
           rest == 'signatures' ||
           rest == 'color' ||
-          rest == 'autodelete') {
+          rest == 'autodelete' ||
+          rest == 'permissions' ||
+          rest == 'antispam') {
         return '/channel/$id$q';
       }
       if (rest == 'invite' || rest == 'invite-link') {
@@ -805,6 +817,7 @@ String? resourcePathAlias(String path, [String query = '']) {
     'convo',
     'private',
     'm',
+    'tg',
   };
   if (extraChatRoots.contains(segs[0]) && segs.length == 2) {
     final id = int.tryParse(segs[1]);
@@ -853,7 +866,11 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'wallpaper' ||
           segs[2] == 'autodelete' ||
           segs[2] == 'color' ||
-          segs[2] == 'send-as') {
+          segs[2] == 'send-as' ||
+          segs[2] == 'permissions' ||
+          segs[2] == 'effects' ||
+          segs[2] == 'reminders' ||
+          segs[2] == 'antispam') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -904,7 +921,11 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'wallpaper' ||
           segs[2] == 'autodelete' ||
           segs[2] == 'color' ||
-          segs[2] == 'send-as') {
+          segs[2] == 'send-as' ||
+          segs[2] == 'permissions' ||
+          segs[2] == 'effects' ||
+          segs[2] == 'reminders' ||
+          segs[2] == 'antispam') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -967,7 +988,8 @@ String? resourcePathAlias(String path, [String query = '']) {
         'startapp' || 'start-app' => '/webapp/$id$q',
         'start-bot' || 'startbot' => '/bots/$id$q',
         'contact' || 'profile' => '${ProfileRoute.path}?userId=$id',
-        'media' || 'photo' || 'video' => '/post/$id$q',
+        'media' || 'photo' || 'video' || 'voice' || 'file' || 'doc' =>
+          '/post/$id$q',
         _ => null,
       };
     }
@@ -1108,7 +1130,13 @@ String? resourcePathAlias(String path, [String query = '']) {
       segs.length == 2) {
     return '${SettingsRoute.path}$q';
   }
-  if ((segs[0] == 'views' || segs[0] == 'forwards') && segs.length == 2) {
+  if ((segs[0] == 'views' ||
+          segs[0] == 'forwards' ||
+          segs[0] == 'reactors' ||
+          segs[0] == 'tips' ||
+          segs[0] == 'likers' ||
+          segs[0] == 'viewers') &&
+      segs.length == 2) {
     final id = int.tryParse(segs[1]);
     if (id != null && id > 0) return '/post/$id$q';
   }
@@ -1150,7 +1178,11 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[0] == 'open-message' ||
           segs[0] == 'jump' ||
           segs[0] == 'goto' ||
-          segs[0] == 'msg-link') &&
+          segs[0] == 'msg-link' ||
+          segs[0] == 'tme' ||
+          segs[0] == 'permalink' ||
+          segs[0] == 'cmsg' ||
+          segs[0] == 'mid') &&
       segs.length == 3) {
     final cid = int.tryParse(segs[1]);
     final mid = int.tryParse(segs[2]);
@@ -2603,6 +2635,105 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/saved-media-list':
     case '/shared-media-list':
       return '${ChatsRoute.path}$q';
+    case '/export-chat':
+    case '/import-chat':
+    case '/chat-history':
+    case '/message-search':
+    case '/attach-file':
+    case '/record-video-note':
+    case '/forward-here':
+    case '/pin-message':
+    case '/schedule-message':
+    case '/silent-send':
+    case '/view-once':
+    case '/spoiler-media':
+    case '/transcribe':
+    case '/voice-to-text':
+    case '/send-when-online':
+    case '/set-reminder':
+    case '/caption-above':
+    case '/message-effects':
+    case '/chat-permissions':
+    case '/sticker-settings':
+    case '/emoji-settings':
+    case '/saved-gifs-list':
+    case '/enable-topics':
+    case '/new-forum-topic':
+    case '/close-topic':
+    case '/general-topic':
+    case '/make-admin':
+    case '/ban-user':
+    case '/approve-join':
+    case '/invite-via-link':
+    case '/leave-and-delete':
+    case '/delete-message':
+    case '/anti-spam':
+    case '/join-to-send':
+    case '/join-to-comment':
+    case '/sign-posts':
+    case '/hidden-members':
+    case '/live-location-list':
+      return '${ChatsRoute.path}$q';
+    case '/people-nearby-list':
+    case '/add-people':
+      return '${ChatNewMessageRoute.path}$q';
+    case '/report-message':
+    case '/report-problem':
+    case '/support-ticket':
+      return '${SupportContactRoute.path}$q';
+    case '/block-and-delete':
+      return '${BlockedUsersRoute.path}$q';
+    case '/gift-upgrade':
+    case '/gift-transfer':
+      return '${StarGiftsInventoryRoute.path}$q';
+    case '/stars-topup':
+      return '${StarsWalletRoute.path}$q';
+    case '/stars-withdraw':
+      return '${CreatorRevenueRoute.path}$q';
+    case '/flex-manage':
+    case '/flex-cancel':
+      return '${FlexSubscriptionRoute.path}$q';
+    case '/ads-create':
+    case '/campaign-new':
+      return '${AdsCampaignEditorRoute.path}$q';
+    case '/ads-stats':
+    case '/boost-now':
+    case '/giveaway-new':
+      return '${AdsHubRoute.path}$q';
+    case '/suggested-new':
+      return '${CreatorToolsRoute.path}$q';
+    case '/partner-invite':
+    case '/referral-code':
+      return '${PartnerProgramRoute.path}$q';
+    case '/extra-ads-toggle':
+      return '${ExtraAdsRoute.path}$q';
+    case '/2fa-setup':
+      return '${TwoFactorSetupRoute.path}$q';
+    case '/backup-export':
+    case '/backup-restore':
+      return '${BackupRoute.path}$q';
+    case '/legal-terms':
+    case '/legal-privacy':
+    case '/legal-cookies':
+    case '/about-hanwe':
+      return '${SupportSecurityRoute.path}$q';
+    case '/nighttheme':
+    case '/daytheme':
+    case '/systemtheme':
+    case '/storageusage':
+    case '/cachesize':
+    case '/languageapp':
+    case '/whocanfind':
+    case '/sensitivecontent':
+      return '${SettingsRoute.path}$q';
+    case '/twosteppassword':
+    case '/activesessionslist':
+    case '/linkdesktop':
+      return '${AccountSecurityRoute.path}$q';
+    case '/blockeduserslist':
+      return '${BlockedUsersRoute.path}$q';
+    case '/channel-color':
+      return '${ChannelsManagementRoute.path}$q';
     default:
       return null;
   }

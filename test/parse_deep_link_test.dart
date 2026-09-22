@@ -960,6 +960,54 @@ void main() {
       parseDeepLinkToGoPath('https://haneat.app/msg-link/21/456'),
       '/chats/thread/21?msg=456',
     );
+    expect(resourcePathAlias('/tme/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/permalink/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/tg/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/reactors/28'), '/post/28');
+    expect(resourcePathAlias('/tips/28'), '/post/28');
+    expect(resourcePathAlias('/share/voice/28'), '/post/28');
+    expect(resourcePathAlias('/chat/21/permissions'), '/chats/thread/21');
+    expect(resourcePathAlias('/c/1/antispam'), '/channel/1');
+    expect(shortcutPathAlias('/export-chat'), ChatsRoute.path);
+    expect(shortcutPathAlias('/silent-send'), ChatsRoute.path);
+    expect(shortcutPathAlias('/message-effects'), ChatsRoute.path);
+    expect(shortcutPathAlias('/add-people'), ChatNewMessageRoute.path);
+    expect(shortcutPathAlias('/report-problem'), SupportContactRoute.path);
+    expect(shortcutPathAlias('/block-and-delete'), BlockedUsersRoute.path);
+    expect(shortcutPathAlias('/gift-upgrade'), StarGiftsInventoryRoute.path);
+    expect(shortcutPathAlias('/stars-topup'), StarsWalletRoute.path);
+    expect(shortcutPathAlias('/stars-withdraw'), CreatorRevenueRoute.path);
+    expect(shortcutPathAlias('/flex-manage'), FlexSubscriptionRoute.path);
+    expect(shortcutPathAlias('/ads-create'), AdsCampaignEditorRoute.path);
+    expect(shortcutPathAlias('/boost-now'), AdsHubRoute.path);
+    expect(shortcutPathAlias('/partner-invite'), PartnerProgramRoute.path);
+    expect(shortcutPathAlias('/extra-ads-toggle'), ExtraAdsRoute.path);
+    expect(shortcutPathAlias('/2fa-setup'), TwoFactorSetupRoute.path);
+    expect(shortcutPathAlias('/backup-export'), BackupRoute.path);
+    expect(shortcutPathAlias('/legal-terms'), SupportSecurityRoute.path);
+    expect(shortcutPathAlias('/nighttheme'), SettingsRoute.path);
+    expect(shortcutPathAlias('/delete-message'), ChatsRoute.path);
+    expect(shortcutPathAlias('/tg'), ChatsRoute.path);
+    expect(
+      leftoverPathAlias('/go/export-chat'),
+      ChatsRoute.path,
+    );
+    expect(
+      leftoverPathAlias('/go/tme/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      leftoverPathAlias('/go/tg/21'),
+      '/chats/thread/21',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/silent-send'),
+      ChatsRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/permalink/21/456'),
+      '/chats/thread/21?msg=456',
+    );
     expect(shortcutPathAlias('/reels'), isNull);
     expect(shortcutPathAlias('/logout'), isNull);
     expect(shortcutPathAlias('/reels'), isNull);
