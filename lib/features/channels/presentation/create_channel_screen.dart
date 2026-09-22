@@ -192,7 +192,11 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
       );
 
       if (mounted) {
-        context.pop(channel.id); // Возвращаемся с ID созданного канала
+        if (context.canPop()) {
+          context.pop(channel.id);
+        } else {
+          context.go(ChannelDetailRoute.pathFor(channel.id));
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Канал создан')),
         );
