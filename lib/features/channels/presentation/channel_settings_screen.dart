@@ -136,7 +136,11 @@ class _ChannelSettingsScreenState extends ConsumerState<ChannelSettingsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Настройки сохранены')),
         );
-        context.pop(true); // Возвращаемся с успехом
+        if (context.canPop()) {
+          context.pop(true);
+        } else {
+          context.go(ChannelDetailRoute.pathFor(widget.channelId));
+        }
       }
     } catch (e) {
       if (mounted) {

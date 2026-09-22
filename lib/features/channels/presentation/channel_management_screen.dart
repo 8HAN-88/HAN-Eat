@@ -474,7 +474,11 @@ class _ChannelManagementScreenState
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Настройки сохранены')),
         );
-        context.pop(true);
+        if (context.canPop()) {
+          context.pop(true);
+        } else {
+          context.go(ChannelDetailRoute.pathFor(widget.channelId));
+        }
       }
     } catch (e) {
       if (mounted) {

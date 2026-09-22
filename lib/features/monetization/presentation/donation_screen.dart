@@ -60,7 +60,11 @@ class _DonationScreenState extends State<DonationScreen> {
 
       if (!mounted) return;
       final messenger = ScaffoldMessenger.of(context);
-      Navigator.of(context).pop(true);
+      if (context.canPop()) {
+        context.pop(true);
+      } else {
+        context.go(ProfileRoute.withUserId(widget.recipientId));
+      }
       messenger.showSnackBar(
         SnackBar(
           content: Text('Спасибо! Донат $_selectedAmount ★ отправлен'),

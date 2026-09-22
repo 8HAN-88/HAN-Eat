@@ -722,6 +722,43 @@ void main() {
       parseDeepLinkToGoPath('https://haneat.app/app/#/buy'),
       StarsWalletRoute.path,
     );
+    expect(resourcePathAlias('/openpost/28'), '/post/28');
+    expect(resourcePathAlias('/openchat/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/openchannel/1'), '/channel/1');
+    expect(resourcePathAlias('/openbot/5'), '/bots/5');
+    expect(resourcePathAlias('/openuser/11'), '${ProfileRoute.path}?userId=11');
+    expect(resourcePathAlias('/openstory/9'), '/stories/9');
+    expect(resourcePathAlias('/react/28'), '/post/28');
+    expect(resourcePathAlias('/view/28'), '/post/28');
+    expect(resourcePathAlias('/unique/9'), StarGiftsInventoryRoute.path);
+    expect(resourcePathAlias('/nft/9'), StarGiftsInventoryRoute.path);
+    expect(resourcePathAlias('/share/startapp/5'), '/webapp/5');
+    expect(shortcutPathAlias('/mtproto'), SupportSecurityRoute.path);
+    expect(shortcutPathAlias('/terms-of-service'), SupportSecurityRoute.path);
+    expect(shortcutPathAlias('/report-abuse'), SupportContactRoute.path);
+    expect(shortcutPathAlias('/payout-settings'), CreatorRevenueRoute.path);
+    expect(shortcutPathAlias('/billing-history'), FlexSubscriptionRoute.path);
+    expect(shortcutPathAlias('/gift-premium'), FlexSubscriptionRoute.path);
+    expect(shortcutPathAlias('/send-stars'), StarsWalletRoute.path);
+    expect(shortcutPathAlias('/calllog'), ChatsRoute.path);
+    expect(shortcutPathAlias('/secretchats'), ChatsRoute.path);
+    expect(shortcutPathAlias('/verify-account'), ProfileAuthRoute.path);
+    expect(
+      leftoverPathAlias('/go/openpost/28'),
+      '/post/28',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/openchat/21'),
+      '/chats/thread/21',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/react/28'),
+      '/post/28',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/gift-premium'),
+      FlexSubscriptionRoute.path,
+    );
     expect(
       parseDeepLinkToGoPath('https://haneat.app/app/#/chat/21/media'),
       '/chats/thread/21/media',

@@ -846,6 +846,7 @@ String? resourcePathAlias(String path, [String query = '']) {
         'folder' => '/chats/folders/$id$q',
         'ad' || 'campaign' => '/ads/$id$q',
         'giveaway' => '/channel/$id$q',
+        'startapp' => '/webapp/$id$q',
         _ => null,
       };
     }
@@ -1021,6 +1022,23 @@ String? resourcePathAlias(String path, [String query = '']) {
       int.tryParse(segs[2]) != null) {
     final id = int.parse(segs[2]);
     if (id > 0) return '/paid/invoices/$id$q';
+  }
+  if (segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) {
+      final opened = switch (segs[0]) {
+        'openpost' => '/post/$id$q',
+        'openchat' => '/chats/thread/$id$q',
+        'openchannel' => '/channel/$id$q',
+        'openbot' => '/bots/$id$q',
+        'openuser' => '${ProfileRoute.path}?userId=$id',
+        'openstory' => '/stories/$id$q',
+        'react' || 'view' => '/post/$id$q',
+        'unique' || 'nft' => '${StarGiftsInventoryRoute.path}$q',
+        _ => null,
+      };
+      if (opened != null) return opened;
+    }
   }
 
   return null;
@@ -1820,6 +1838,47 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/status':
     case '/story':
       return '${StoriesRoute.path}$q';
+    case '/mtproto':
+    case '/terms-of-service':
+    case '/user-agreement':
+    case '/refund-policy':
+    case '/cookie-policy':
+    case '/community-guidelines':
+    case '/safety-center':
+    case '/about-app':
+    case '/build':
+    case '/ads-policy':
+      return '${SupportSecurityRoute.path}$q';
+    case '/report-abuse':
+    case '/report-spam':
+    case '/appeal':
+    case '/helpdesk-chat':
+      return '${SupportContactRoute.path}$q';
+    case '/payout-settings':
+    case '/creator-fund':
+      return '${CreatorRevenueRoute.path}$q';
+    case '/billing-history':
+    case '/cancel-sub':
+    case '/restore-purchase':
+    case '/subscription-manage':
+    case '/gift-premium':
+    case '/gift-flex':
+      return '${FlexSubscriptionRoute.path}$q';
+    case '/send-stars':
+    case '/give-stars':
+    case '/tip-jar':
+      return '${StarsWalletRoute.path}$q';
+    case '/calllog':
+    case '/recentcalls':
+    case '/voicemessages':
+    case '/secretchats':
+    case '/broadcasts':
+    case '/imbox':
+    case '/savedmsg':
+      return '${ChatsRoute.path}$q';
+    case '/verify-account':
+    case '/business-verify':
+      return '${ProfileAuthRoute.path}$q';
     default:
       return null;
   }
