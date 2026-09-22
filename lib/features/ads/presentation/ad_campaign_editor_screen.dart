@@ -254,7 +254,11 @@ class _AdCampaignEditorScreenState extends State<AdCampaignEditorScreen> {
       setState(() => _saving = false);
       await _showResult(saved, submitted: submit);
       if (!mounted) return;
-      Navigator.of(context).pop(true);
+      if (context.canPop()) {
+        context.pop(true);
+      } else {
+        context.go(AdsHubRoute.path);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
