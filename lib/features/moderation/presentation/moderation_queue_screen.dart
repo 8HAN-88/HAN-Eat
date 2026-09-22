@@ -653,6 +653,17 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Очередь модерации'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Назад',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(ModerationDashboardRoute.path);
+            }
+          },
+        ),
         actions: [
           // Фильтр по типу контента
           PopupMenuButton<String?>(

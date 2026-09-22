@@ -218,6 +218,17 @@ class _ChannelSettingsScreenState extends ConsumerState<ChannelSettingsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Настройки: ${widget.channelName}'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Назад',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(ChannelDetailRoute.pathFor(widget.channelId));
+            }
+          },
+        ),
         actions: [
           if (_isLoading)
             const Padding(

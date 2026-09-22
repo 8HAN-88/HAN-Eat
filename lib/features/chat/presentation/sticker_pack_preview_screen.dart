@@ -87,6 +87,17 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Предпросмотр пака'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Назад',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(ChatsRoute.path);
+            }
+          },
+        ),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())

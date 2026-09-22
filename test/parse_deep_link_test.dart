@@ -526,6 +526,63 @@ void main() {
     expect(shortcutPathAlias('/people'), ChatNewMessageRoute.path);
     expect(shortcutPathAlias('/black-list'), BlockedUsersRoute.path);
     expect(shortcutPathAlias('/close-friend'), CloseFriendsRoute.path);
+    expect(resourcePathAlias('/l/1'), '/channel/1');
+    expect(resourcePathAlias('/a/8'), '/ads/8');
+    expect(resourcePathAlias('/v/28'), '/post/28');
+    expect(resourcePathAlias('/voicechat/1'), '/channel/1');
+    expect(resourcePathAlias('/voice-chat/1'), '/channel/1');
+    expect(resourcePathAlias('/vc/1'), '/channel/1');
+    expect(resourcePathAlias('/saved-messages/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/modlog/21'), '/chats/thread/21/log');
+    expect(resourcePathAlias('/adminlog/21'), '/chats/thread/21/log');
+    expect(resourcePathAlias('/subscribers/1'), '/channel/1/subscribers');
+    expect(resourcePathAlias('/boosts/1'), '/channel/1');
+    expect(resourcePathAlias('/reactions/28'), '/post/28');
+    expect(resourcePathAlias('/likes/28'), '/post/28');
+    expect(resourcePathAlias('/forward/28'), '/post/28');
+    expect(resourcePathAlias('/edit/28'), '/post/28/edit');
+    expect(resourcePathAlias('/block/11'), '${ProfileRoute.path}?userId=11');
+    expect(resourcePathAlias('/secret/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/mute/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/gif/28'), '/post/28');
+    expect(resourcePathAlias('/round/28'), '/post/28');
+    expect(resourcePathAlias('/link/AbC12'), '/chat-invite/AbC12');
+    expect(resourcePathAlias('/share/sticker/4'), '/stickers/4');
+    expect(resourcePathAlias('/share/gift/9'), StarGiftsInventoryRoute.path);
+    expect(resourcePathAlias('/share/invoice/9'), '/paid/invoices/9');
+    expect(resourcePathAlias('/share/miniapp/5'), '/webapp/5');
+    expect(resourcePathAlias('/share/folder/3'), '/chats/folders/3');
+    expect(shortcutPathAlias('/privacy/profile'), SettingsRoute.path);
+    expect(shortcutPathAlias('/privacy/birthday'), SettingsRoute.path);
+    expect(shortcutPathAlias('/settings/appearance'), SettingsRoute.path);
+    expect(shortcutPathAlias('/settings/privacy/blocked'), BlockedUsersRoute.path);
+    expect(shortcutPathAlias('/extraads'), ExtraAdsRoute.path);
+    expect(shortcutPathAlias('/voice-chats'), ChatsRoute.path);
+    expect(shortcutPathAlias('/ads-review'), AdsReviewRoute.path);
+    expect(shortcutPathAlias('/admin-tickets'), AdminSupportTicketsRoute.path);
+    expect(shortcutPathAlias('/partner-payouts'), AdminPartnerPayoutsRoute.path);
+    expect(shortcutPathAlias('/creator-payouts'), AdminCreatorPayoutsRoute.path);
+    expect(shortcutPathAlias('/flex-features'), AdminFlexFeaturesRoute.path);
+    expect(shortcutPathAlias('/my-moments'), StoriesRoute.path);
+    expect(shortcutPathAlias('/log-in'), LoginRoute.path);
+    expect(leftoverPathAlias('/go/l/1'), '/channel/1');
+    expect(leftoverPathAlias('/open/modlog/21'), '/chats/thread/21/log');
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/voicechat/1'),
+      '/channel/1',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/edit/28'),
+      '/post/28/edit',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/settings/appearance'),
+      SettingsRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/share/miniapp/5'),
+      '/webapp/5',
+    );
     expect(
       parseDeepLinkToGoPath('https://haneat.app/app/#/chat/21/media'),
       '/chats/thread/21/media',

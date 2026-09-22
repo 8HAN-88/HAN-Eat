@@ -18,6 +18,7 @@ import '../../../utils/file_helper.dart';
 import '../../../widgets/telegram_photo_grid.dart';
 import '../../../utils/url_validator.dart';
 import '../../../services/feed_api_cache.dart';
+import '../../../app/app_router.dart';
 import '../../reels/application/reels_feed_refresh_provider.dart';
 
 class CreateChannelPostScreen extends ConsumerStatefulWidget {
@@ -1154,7 +1155,15 @@ class _CreateChannelPostScreenState
         elevation: 0,
         titleSpacing: 8,
         title: TextButton(
-          onPressed: _isSubmitting ? null : () => context.pop(false),
+          onPressed: _isSubmitting
+              ? null
+              : () {
+                  if (context.canPop()) {
+                    context.pop(false);
+                  } else {
+                    context.go(ChannelDetailRoute.pathFor(widget.channelId));
+                  }
+                },
           child: const Text('Отмена'),
         ),
         actions: [

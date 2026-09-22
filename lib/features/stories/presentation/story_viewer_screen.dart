@@ -196,7 +196,20 @@ class _StoryViewerLoaderScreenState extends State<StoryViewerLoaderScreen> {
     }
     final err = _error;
     return Scaffold(
-      appBar: AppBar(title: const Text('Момент')),
+      appBar: AppBar(
+        title: const Text('Момент'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Назад',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(StoriesRoute.path);
+            }
+          },
+        ),
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : AppEmptyState(
@@ -568,6 +581,17 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
         appBar: AppBar(
           backgroundColor: Colors.black,
           iconTheme: const IconThemeData(color: Colors.white),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            tooltip: 'Назад',
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(StoriesRoute.path);
+              }
+            },
+          ),
         ),
         body: Center(
           child: Padding(

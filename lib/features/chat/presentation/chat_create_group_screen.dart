@@ -121,6 +121,17 @@ class _ChatCreateGroupScreenState extends State<ChatCreateGroupScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Новая группа'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Назад',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(ChatsRoute.path);
+            }
+          },
+        ),
         actions: [
           TextButton(
             onPressed: _creating || _selected.isEmpty ? null : _create,
