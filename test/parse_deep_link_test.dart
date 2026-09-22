@@ -640,6 +640,47 @@ void main() {
       parseDeepLinkToGoPath('https://haneat.app/app/#/ton'),
       StarsWalletRoute.path,
     );
+    expect(resourcePathAlias('/c/1/stats'), '/channel/1');
+    expect(resourcePathAlias('/channel/1/invite'), '/channel/1/info');
+    expect(resourcePathAlias('/chat/21/invite'), '/chats/thread/21/info');
+    expect(resourcePathAlias('/post/28/views'), '/post/28');
+    expect(resourcePathAlias('/p/28/forwards'), '/post/28');
+    expect(resourcePathAlias('/views/28'), '/post/28');
+    expect(resourcePathAlias('/filter/3'), '/chats/folders/3');
+    expect(resourcePathAlias('/chatfolder/3'), '/chats/folders/3');
+    expect(resourcePathAlias('/folderinvite/AbC12'), '/chat-invite/AbC12');
+    expect(shortcutPathAlias('/newgroup'), ChatCreateGroupRoute.path);
+    expect(shortcutPathAlias('/newchannel'), CreateChannelRoute.path);
+    expect(shortcutPathAlias('/newchat'), ChatNewMessageRoute.path);
+    expect(shortcutPathAlias('/newpost'), CreatePostRoute.path);
+    expect(shortcutPathAlias('/create-recipe'), CreatePostRoute.path);
+    expect(shortcutPathAlias('/newstory'), StoryCreateRoute.path);
+    expect(shortcutPathAlias('/newreel'), CreateReelRoute.path);
+    expect(shortcutPathAlias('/confirm-email'), VerifyEmailRoute.path);
+    expect(shortcutPathAlias('/forgot-pass'), ForgotPasswordRoute.path);
+    expect(shortcutPathAlias('/twofa'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/setusername'), ProfileAuthRoute.path);
+    expect(shortcutPathAlias('/lite-mode'), SettingsRoute.path);
+    expect(shortcutPathAlias('/success'), SubscriptionSuccessRoute.path);
+    expect(shortcutPathAlias('/cancel'), SubscriptionCancelRoute.path);
+    expect(shortcutPathAlias('/checkout'), FlexSubscriptionRoute.path);
+    expect(shortcutPathAlias('/paid-success'), StarsCheckoutSuccessRoute.path);
+    expect(
+      leftoverPathAlias('/go/c/1/stats'),
+      '/channel/1',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/newgroup'),
+      ChatCreateGroupRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/post/28/views'),
+      '/post/28',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/confirm-email'),
+      VerifyEmailRoute.path,
+    );
     expect(
       parseDeepLinkToGoPath('https://haneat.app/app/#/chat/21/media'),
       '/chats/thread/21/media',

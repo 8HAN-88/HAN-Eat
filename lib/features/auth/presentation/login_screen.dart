@@ -204,6 +204,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           scrolledUnderElevation: 0,
           surfaceTintColor: Colors.transparent,
           title: const Text('Вход'),
+          leading: (context.canPop() ||
+                  AuthService.instance.currentUser != null)
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: 'Назад',
+                  onPressed: () {
+                    if (context.canPop()) {
+                      context.pop();
+                    } else {
+                      context.go(AuthPaths.feed);
+                    }
+                  },
+                )
+              : null,
         ),
         body: Stack(
           fit: StackFit.expand,

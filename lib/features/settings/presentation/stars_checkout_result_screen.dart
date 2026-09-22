@@ -65,6 +65,17 @@ class _StarsCheckoutSuccessScreenState
       appBar: AppBar(
         title: const Text('Покупка звёзд'),
         automaticallyImplyLeading: false,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Назад',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(StarsWalletRoute.path);
+            }
+          },
+        ),
       ),
       body: Center(
         child: Padding(
@@ -145,6 +156,17 @@ class StarsCheckoutCancelScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Оплата отменена'),
         automaticallyImplyLeading: false,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Назад',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(StarsWalletRoute.path);
+            }
+          },
+        ),
       ),
       body: Center(
         child: Padding(

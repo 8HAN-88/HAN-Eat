@@ -89,6 +89,17 @@ class _SubscriptionSuccessScreenState
       appBar: AppBar(
         title: const Text('Оплата подписки'),
         automaticallyImplyLeading: false,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Назад',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(FlexSubscriptionRoute.path);
+            }
+          },
+        ),
       ),
       body: Center(
         child: Padding(

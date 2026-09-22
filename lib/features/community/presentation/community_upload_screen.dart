@@ -220,7 +220,11 @@ class _CommunityUploadScreenState extends ConsumerState<CommunityUploadScreen> {
           ),
         ),
       );
-      context.pop(true);
+      if (context.canPop()) {
+        context.pop(true);
+      } else {
+        context.go(FeedRoute.path);
+      }
     } else if (state.error != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
