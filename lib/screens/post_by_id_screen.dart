@@ -6,6 +6,7 @@ import '../features/feed/presentation/new_post_card.dart';
 import '../models/post_model.dart';
 import '../services/api_service.dart';
 import '../utils/api_error_parser.dart';
+import '../app/app_router.dart';
 import '../widgets/app_empty_state.dart';
 
 class PostByIdScreen extends StatefulWidget {
@@ -32,11 +33,20 @@ class _PostByIdScreenState extends State<PostByIdScreen> {
     });
   }
 
+  void _leavePost() {
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
+    context.go(FeedRoute.path);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Пост'),
+        leading: BackButton(onPressed: _leavePost),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -77,9 +87,19 @@ class _PostByIdScreenState extends State<PostByIdScreen> {
                       icon: Icons.cloud_off_rounded,
                       title: 'Не удалось загрузить',
                       subtitle: msg,
-                      action: FilledButton(
-                        onPressed: _reload,
-                        child: const Text('Повторить'),
+                      action: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          FilledButton(
+                            onPressed: _reload,
+                            child: const Text('Повторить'),
+                          ),
+                          const SizedBox(height: 8),
+                          TextButton(
+                            onPressed: _leavePost,
+                            child: const Text('К ленте'),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -98,14 +118,8 @@ class _PostByIdScreenState extends State<PostByIdScreen> {
                       title: 'Пост не найден',
                       subtitle: 'Возможно, он удалён или недоступен',
                       action: FilledButton(
-                        onPressed: () {
-                          if (context.canPop()) {
-                            context.pop();
-                          } else {
-                            context.go('/feed');
-                          }
-                        },
-                        child: const Text('Назад'),
+                        onPressed: _leavePost,
+                        child: const Text('К ленте'),
                       ),
                     ),
                   ),

@@ -233,6 +233,15 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
     await _openExternal(raw);
   }
 
+  void _leaveMiniapp() {
+    if (!mounted) return;
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
+    context.go(MiniAppsRoute.path);
+  }
+
   void _showMoreMenu() {
     showModalBottomSheet<void>(
       context: context,
@@ -264,7 +273,7 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
                 title: const Text('Закрыть'),
                 onTap: () {
                   Navigator.pop(ctx);
-                  Navigator.of(context).pop();
+                  _leaveMiniapp();
                 },
               ),
             ],
@@ -295,7 +304,7 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
               unawaited(_emitBackButton());
               return;
             }
-            Navigator.of(context).pop();
+            _leaveMiniapp();
           },
         ),
         title: Column(
@@ -326,7 +335,7 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
           IconButton(
             tooltip: 'Закрыть',
             icon: const Icon(Icons.close_rounded),
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: _leaveMiniapp,
           ),
         ],
       ),
@@ -448,7 +457,7 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           OutlinedButton(
-                            onPressed: () => Navigator.of(context).pop(),
+                            onPressed: _leaveMiniapp,
                             child: const Text('Закрыть'),
                           ),
                           const SizedBox(width: 12),

@@ -135,6 +135,31 @@ bool _isAppHttpHost(String host) {
 
 /// Paid channel screens live under `/channels/:id/...`.
 /// Keep `/channel/:id/giveaways` in the same family as info/settings.
+/// Telegram-style wrappers: `/go/c/1/info`, `/open/chats/21`.
+String unwrapGoOpenPath(String path) {
+  var clean = path.split('?').first;
+  while (true) {
+    if (clean.startsWith('/go/')) {
+      clean = clean.substring(3);
+    } else if (clean.startsWith('/open/')) {
+      clean = clean.substring(5);
+    } else {
+      break;
+    }
+    if (clean.isEmpty) return '/';
+    if (!clean.startsWith('/')) clean = '/$clean';
+  }
+  return clean;
+}
+
+String? leftoverPathAlias(String path, [String query = '']) {
+  final unwrapped = unwrapGoOpenPath(path);
+  return channelPaidPathAlias(unwrapped, query) ??
+      shortcutPathAlias(unwrapped, query) ??
+      botSectionPathAlias(unwrapped, query) ??
+      resourcePathAlias(unwrapped, query);
+}
+
 String? channelPaidPathAlias(String path, [String query = '']) {
   final clean = path.split('?').first;
   final segs = clean.split('/').where((s) => s.isNotEmpty).toList();
@@ -195,7 +220,16 @@ String? resourcePathAlias(String path, [String query = '']) {
     }
   }
 
-  const chatRoots = {'chats', 'chat', 'dialog', 'conversation', 'dm', 'messages'};
+  const chatRoots = {
+    'chats',
+    'chat',
+    'dialog',
+    'dialogs',
+    'dialogues',
+    'conversation',
+    'dm',
+    'messages',
+  };
   const chatReserved = {'archived', 'new', 'new-group', 'folders', 'thread'};
   if (chatRoots.contains(segs[0]) && segs.length == 2) {
     if (chatReserved.contains(segs[1])) return null;
@@ -222,6 +256,12 @@ String? resourcePathAlias(String path, [String query = '']) {
       if (segs[2] == 'members' || segs[2] == 'admins') {
         return '/chats/thread/$id/info$q';
       }
+      final mid = int.tryParse(segs[2]);
+      if (mid != null && mid > 0) {
+        return query.isEmpty
+            ? '/chats/thread/$id?msg=$mid'
+            : '/chats/thread/$id?$query&msg=$mid';
+      }
     }
   }
   if (segs.length == 4 && segs[0] == 'chats' && segs[1] == 'thread') {
@@ -238,6 +278,12 @@ String? resourcePathAlias(String path, [String query = '']) {
       }
       if (segs[3] == 'search' || segs[3] == 'pinned') {
         return '/chats/thread/$id$q';
+      }
+      final mid = int.tryParse(segs[3]);
+      if (mid != null && mid > 0) {
+        return query.isEmpty
+            ? '/chats/thread/$id?msg=$mid'
+            : '/chats/thread/$id?$query&msg=$mid';
       }
     }
   }
@@ -588,6 +634,7 @@ String? resourcePathAlias(String path, [String query = '']) {
     'thread',
     'convo',
     'private',
+    'm',
   };
   if (extraChatRoots.contains(segs[0]) && segs.length == 2) {
     final id = int.tryParse(segs[1]);
@@ -612,6 +659,12 @@ String? resourcePathAlias(String path, [String query = '']) {
       if (segs[2] == 'members' || segs[2] == 'admins') {
         return '/chats/thread/$id/info$q';
       }
+      final mid = int.tryParse(segs[2]);
+      if (mid != null && mid > 0) {
+        return query.isEmpty
+            ? '/chats/thread/$id?msg=$mid'
+            : '/chats/thread/$id?$query&msg=$mid';
+      }
     }
   }
 
@@ -630,6 +683,12 @@ String? resourcePathAlias(String path, [String query = '']) {
       if (segs[2] == 'members' || segs[2] == 'admins') {
         return '/chats/thread/$id/info$q';
       }
+      final mid = int.tryParse(segs[2]);
+      if (mid != null && mid > 0) {
+        return query.isEmpty
+            ? '/chats/thread/$id?msg=$mid'
+            : '/chats/thread/$id?$query&msg=$mid';
+      }
     }
   }
   if (segs[0] == 'f' && segs.length == 3) {
@@ -645,6 +704,30 @@ String? resourcePathAlias(String path, [String query = '']) {
     if (id != null && id > 0) return '${ProfileRoute.path}?userId=$id';
   }
 
+  if (segs[0] == 'share' && segs.length == 3) {
+    final id = int.tryParse(segs[2]);
+    if (id != null && id > 0) {
+      return switch (segs[1]) {
+        'post' => '/post/$id$q',
+        'channel' => '/channel/$id$q',
+        'chat' || 'thread' || 'dm' => '/chats/thread/$id$q',
+        'bot' => '/bots/$id$q',
+        'user' => '${ProfileRoute.path}?userId=$id',
+        'story' => '/stories/$id$q',
+        'reel' => '/reel/$id$q',
+        _ => null,
+      };
+    }
+  }
+  if ((segs[0] == 'call' || segs[0] == 'calls') && segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/chats/thread/$id$q';
+  }
+  if (segs[0] == 'saved' && segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/chats/thread/$id$q';
+  }
+
   if (segs.length == 2) {
     final id = int.tryParse(segs[1]);
     if (id != null && id > 0) {
@@ -654,7 +737,7 @@ String? resourcePathAlias(String path, [String query = '']) {
         'd' => query.isEmpty ? '/donate?to=$id' : '/donate?to=$id&$query',
         'i' => '/paid/invoices/$id$q',
         'f' => '/chats/folders/$id$q',
-        'g' || 't' => '/chats/thread/$id$q',
+        'g' || 't' || 'm' => '/chats/thread/$id$q',
         _ => null,
       };
       if (short != null) return short;
@@ -1243,6 +1326,10 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/notif':
     case '/notification':
       return '${NotificationSettingsRoute.path}$q';
+    case '/go':
+    case '/open':
+    case '/call':
+      return '${ChatsRoute.path}$q';
     default:
       return null;
   }
@@ -1289,25 +1376,14 @@ String? parseDeepLinkToGoPath(String raw) {
           return query == null ? '/invite' : '/invite?$query';
         }
         if (path.isNotEmpty && path != '/') {
+          path = unwrapGoOpenPath(path);
           final reelPath = ReelByIdRoute.goPathFromBrowserPath(path);
           if (reelPath != null) {
             return reelPath;
           }
-          final paidAlias = channelPaidPathAlias(path, query ?? '');
-          if (paidAlias != null) {
-            return paidAlias;
-          }
-          final botAlias = botSectionPathAlias(path, query ?? '');
-          if (botAlias != null) {
-            return botAlias;
-          }
-          final resourceAlias = resourcePathAlias(path, query ?? '');
-          if (resourceAlias != null) {
-            return resourceAlias;
-          }
-          final shortAlias = shortcutPathAlias(path, query ?? '');
-          if (shortAlias != null) {
-            return shortAlias;
+          final leftover = leftoverPathAlias(path, query ?? '');
+          if (leftover != null) {
+            return leftover;
           }
           return query == null ? path : '$path?$query';
         }
@@ -1506,13 +1582,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return stableHomePath;
         }
         final aliasQuery = state.uri.query;
-        final aliased = shortcutPathAlias(state.uri.path, aliasQuery) ??
-            botSectionPathAlias(state.uri.path, aliasQuery) ??
-            resourcePathAlias(state.uri.path, aliasQuery);
+        final unwrapped = unwrapGoOpenPath(incoming);
+        final aliased = leftoverPathAlias(unwrapped, aliasQuery);
         if (aliased != null) {
           final aliasPath = aliased.split('?').first;
           final here = loc.split('?').first;
           if (aliasPath != here) return aliased;
+        }
+        if (unwrapped != incoming) {
+          return aliasQuery.isEmpty ? unwrapped : '$unwrapped?$aliasQuery';
         }
         if (isAuth) return null;
         final locBase = loc.split('?').first;
