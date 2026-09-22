@@ -793,6 +793,51 @@ void main() {
     expect(shortcutPathAlias('/reels'), isNull);
     expect(shortcutPathAlias('/watch'), isNull);
     expect(resourcePathAlias('/app/5'), isNull);
+    expect(resourcePathAlias('/open-media/28'), '/post/28');
+    expect(resourcePathAlias('/goto-chat/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/goto-channel/1'), '/channel/1');
+    expect(resourcePathAlias('/userid/11'), '${ProfileRoute.path}?userId=11');
+    expect(resourcePathAlias('/add-bot/5'), '/bots/5');
+    expect(resourcePathAlias('/appid/5'), '/webapp/5');
+    expect(resourcePathAlias('/invid/9'), '/paid/invoices/9');
+    expect(resourcePathAlias('/c/1/mute'), '/channel/1');
+    expect(resourcePathAlias('/p/28/react'), '/post/28');
+    expect(resourcePathAlias('/post/28/react'), '/post/28');
+    expect(shortcutPathAlias('/call-history'), ChatsRoute.path);
+    expect(shortcutPathAlias('/missed-calls'), ChatsRoute.path);
+    expect(shortcutPathAlias('/chat-archive'), ChatArchivedRoute.path);
+    expect(shortcutPathAlias('/qr-code'), ProfileTabRoute.path);
+    expect(shortcutPathAlias('/lite'), SettingsRoute.path);
+    expect(shortcutPathAlias('/send-gift'), StarGiftsInventoryRoute.path);
+    expect(shortcutPathAlias('/add-bot'), MyBotsRoute.path);
+    expect(shortcutPathAlias('/add-channel'), CreateChannelRoute.path);
+    expect(shortcutPathAlias('/cashout'), CreatorRevenueRoute.path);
+    expect(shortcutPathAlias('/redeem'), StarsWalletRoute.path);
+    expect(shortcutPathAlias('/scheduled-messages'), ScheduledPostsRoute.path);
+    expect(shortcutPathAlias('/auction'), StarGiftsMarketplaceRoute.path);
+    expect(shortcutPathAlias('/boost-channel'), AdsHubRoute.path);
+    expect(shortcutPathAlias('/partner-payout'), PartnerProgramRoute.path);
+    expect(shortcutPathAlias('/web-apps'), MiniAppsRoute.path);
+    expect(shortcutPathAlias('/filters'), ChatFolderNewRoute.path);
+    expect(shortcutPathAlias('/blocked-contacts'), BlockedUsersRoute.path);
+    expect(
+      leftoverPathAlias('/go/call-history'),
+      ChatsRoute.path,
+    );
+    expect(
+      leftoverPathAlias('/go/goto-chat/21'),
+      '/chats/thread/21',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/open-media/28'),
+      '/post/28',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/call-history'),
+      ChatsRoute.path,
+    );
+    expect(shortcutPathAlias('/logout'), isNull);
+    expect(shortcutPathAlias('/delete-account'), isNull);
     expect(
       leftoverPathAlias('/go/openpost/28'),
       '/post/28',
