@@ -1118,6 +1118,69 @@ void main() {
       parseDeepLinkToGoPath('https://haneat.app/app/#/repost-story'),
       StoriesRoute.path,
     );
+    expect(resourcePathAlias('/tglink/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/deeplink/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/jump-to-msg/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/highlightid/9'), '/stories/9');
+    expect(resourcePathAlias('/momentid/9'), '/stories/9');
+    expect(resourcePathAlias('/webappid/5'), '/webapp/5');
+    expect(resourcePathAlias('/miniappid/5'), '/webapp/5');
+    expect(resourcePathAlias('/invoiceid/9'), '/paid/invoices/9');
+    expect(resourcePathAlias('/campaignid/8'), '/ads/8');
+    expect(resourcePathAlias('/giveawayid/1'), '/channel/1');
+    expect(resourcePathAlias('/topicid/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/reel-id/28'), '/reel/28');
+    expect(resourcePathAlias('/share/highlight/9'), '/stories/9');
+    expect(resourcePathAlias('/share/poll/28'), '/post/28');
+    expect(resourcePathAlias('/bookmarks/28'), '/post/28');
+    expect(resourcePathAlias('/chat/21/export'), '/chats/thread/21');
+    expect(resourcePathAlias('/dm/21/copy-link'), '/chats/thread/21');
+    expect(resourcePathAlias('/c/1/suggested'), '/channel/1');
+    expect(resourcePathAlias('/p/28/bookmark'), '/post/28');
+    expect(resourcePathAlias('/post/28/download'), '/post/28');
+    expect(botSectionPathAlias('/bots/5/about'), '/bots/5');
+    expect(botSectionPathAlias('/bot/5/payments'), '/bots/5');
+    expect(shortcutPathAlias('/search-messages'), SearchRoute.path);
+    expect(shortcutPathAlias('/jump-to-date'), ChatsRoute.path);
+    expect(shortcutPathAlias('/compact-list'), SettingsRoute.path);
+    expect(shortcutPathAlias('/inline-bots'), MyBotsRoute.path);
+    expect(shortcutPathAlias('/attach-menu-bots'), MiniAppsRoute.path);
+    expect(shortcutPathAlias('/saved-tags'), SavedPostsRoute.path);
+    expect(shortcutPathAlias('/star-react'), PaidMessageExceptionsRoute.path);
+    expect(shortcutPathAlias('/my-notes'), ProfileTabRoute.path);
+    expect(shortcutPathAlias('/folder-tags'), ChatFolderNewRoute.path);
+    expect(shortcutPathAlias('/calendar-search'), SearchRoute.path);
+    expect(shortcutPathAlias('/view-once-media'), ChatsRoute.path);
+    expect(shortcutPathAlias('/quick-react'), SettingsRoute.path);
+    expect(shortcutPathAlias('/searchmessages'), SearchRoute.path);
+    expect(shortcutPathAlias('/jumptodate'), ChatsRoute.path);
+    expect(shortcutPathAlias('/inlinebots'), MyBotsRoute.path);
+    expect(shortcutPathAlias('/savedtags'), SavedPostsRoute.path);
+    expect(shortcutPathAlias('/mynotes'), ProfileTabRoute.path);
+    expect(
+      leftoverPathAlias('/go/search-messages'),
+      SearchRoute.path,
+    );
+    expect(
+      leftoverPathAlias('/go/tglink/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      leftoverPathAlias('/go/webappid/5'),
+      '/webapp/5',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/jump-to-date'),
+      ChatsRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/tglink/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/inline-bots'),
+      MyBotsRoute.path,
+    );
     expect(shortcutPathAlias('/reels'), isNull);
     expect(shortcutPathAlias('/logout'), isNull);
     expect(shortcutPathAlias('/reels'), isNull);

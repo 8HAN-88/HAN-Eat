@@ -225,7 +225,14 @@ String? resourcePathAlias(String path, [String query = '']) {
           rest == 'hide-members' ||
           rest == 'restrict' ||
           rest == 'topics' ||
-          rest == 'forum') {
+          rest == 'forum' ||
+          rest == 'export' ||
+          rest == 'leave' ||
+          rest == 'report' ||
+          rest == 'copy-link' ||
+          rest == 'title' ||
+          rest == 'monetization' ||
+          rest == 'suggested') {
         return '/channel/$id$q';
       }
       if (rest == 'invite' || rest == 'invite-link') {
@@ -335,7 +342,14 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'topics' ||
           segs[2] == 'forum' ||
           segs[2] == 'discussion' ||
-          segs[2] == 'linked') {
+          segs[2] == 'linked' ||
+          segs[2] == 'export' ||
+          segs[2] == 'leave' ||
+          segs[2] == 'report' ||
+          segs[2] == 'copy-link' ||
+          segs[2] == 'title' ||
+          segs[2] == 'stats' ||
+          segs[2] == 'history') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -396,7 +410,14 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[3] == 'topics' ||
           segs[3] == 'forum' ||
           segs[3] == 'discussion' ||
-          segs[3] == 'linked') {
+          segs[3] == 'linked' ||
+          segs[3] == 'export' ||
+          segs[3] == 'leave' ||
+          segs[3] == 'report' ||
+          segs[3] == 'copy-link' ||
+          segs[3] == 'title' ||
+          segs[3] == 'stats' ||
+          segs[3] == 'history') {
         return '/chats/thread/$id$q';
       }
       if (segs[3] == 'invite' || segs[3] == 'invite-link') {
@@ -535,7 +556,14 @@ String? resourcePathAlias(String path, [String query = '']) {
           rest == 'hide-members' ||
           rest == 'restrict' ||
           rest == 'topics' ||
-          rest == 'forum') {
+          rest == 'forum' ||
+          rest == 'export' ||
+          rest == 'leave' ||
+          rest == 'report' ||
+          rest == 'copy-link' ||
+          rest == 'title' ||
+          rest == 'monetization' ||
+          rest == 'suggested') {
         return '/channel/$id$q';
       }
       if (rest == 'invite' || rest == 'invite-link') {
@@ -600,7 +628,13 @@ String? resourcePathAlias(String path, [String query = '']) {
               segs[2] == 'tips' ||
               segs[2] == 'tip' ||
               segs[2] == 'via' ||
-              segs[2] == 'forwarded')) {
+              segs[2] == 'forwarded' ||
+              segs[2] == 'bookmark' ||
+              segs[2] == 'save' ||
+              segs[2] == 'pin' ||
+              segs[2] == 'hide' ||
+              segs[2] == 'report' ||
+              segs[2] == 'download')) {
         return '/post/$id$q';
       }
       if (segs.length == 3 &&
@@ -641,7 +675,13 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'tips' ||
           segs[2] == 'tip' ||
           segs[2] == 'via' ||
-          segs[2] == 'forwarded') {
+          segs[2] == 'forwarded' ||
+          segs[2] == 'bookmark' ||
+          segs[2] == 'save' ||
+          segs[2] == 'pin' ||
+          segs[2] == 'hide' ||
+          segs[2] == 'report' ||
+          segs[2] == 'download') {
         return '/post/$id$q';
       }
       if (segs[2] == 'share' ||
@@ -781,7 +821,13 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'tips' ||
           segs[2] == 'tip' ||
           segs[2] == 'via' ||
-          segs[2] == 'forwarded') {
+          segs[2] == 'forwarded' ||
+          segs[2] == 'bookmark' ||
+          segs[2] == 'save' ||
+          segs[2] == 'pin' ||
+          segs[2] == 'hide' ||
+          segs[2] == 'report' ||
+          segs[2] == 'download') {
         return '/post/$id$q';
       }
       if (segs[2] == 'share' ||
@@ -936,7 +982,14 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'topics' ||
           segs[2] == 'forum' ||
           segs[2] == 'discussion' ||
-          segs[2] == 'linked') {
+          segs[2] == 'linked' ||
+          segs[2] == 'export' ||
+          segs[2] == 'leave' ||
+          segs[2] == 'report' ||
+          segs[2] == 'copy-link' ||
+          segs[2] == 'title' ||
+          segs[2] == 'stats' ||
+          segs[2] == 'history') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -1004,7 +1057,14 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'topics' ||
           segs[2] == 'forum' ||
           segs[2] == 'discussion' ||
-          segs[2] == 'linked') {
+          segs[2] == 'linked' ||
+          segs[2] == 'export' ||
+          segs[2] == 'leave' ||
+          segs[2] == 'report' ||
+          segs[2] == 'copy-link' ||
+          segs[2] == 'title' ||
+          segs[2] == 'stats' ||
+          segs[2] == 'history') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -1075,8 +1135,11 @@ String? resourcePathAlias(String path, [String query = '']) {
         'doc' ||
         'gif' ||
         'animation' ||
-        'round' =>
+        'round' ||
+        'poll' ||
+        'quiz' =>
           '/post/$id$q',
+        'highlight' || 'moment' => '/stories/$id$q',
         _ => null,
       };
     }
@@ -1224,7 +1287,9 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[0] == 'likers' ||
           segs[0] == 'viewers' ||
           segs[0] == 'reposts' ||
-          segs[0] == 'shares') &&
+          segs[0] == 'shares' ||
+          segs[0] == 'bookmarks' ||
+          segs[0] == 'saves') &&
       segs.length == 2) {
     final id = int.tryParse(segs[1]);
     if (id != null && id > 0) return '/post/$id$q';
@@ -1282,7 +1347,14 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[0] == 'jump-mid' ||
           segs[0] == 'msg-id' ||
           segs[0] == 'message-id' ||
-          segs[0] == 'show-message') &&
+          segs[0] == 'show-message' ||
+          segs[0] == 'tglink' ||
+          segs[0] == 'deeplink' ||
+          segs[0] == 'permalink-msg' ||
+          segs[0] == 'jump-to-msg' ||
+          segs[0] == 'show-mid' ||
+          segs[0] == 'goto-mid' ||
+          segs[0] == 'chatmsg') &&
       segs.length == 3) {
     final cid = int.tryParse(segs[1]);
     final mid = int.tryParse(segs[2]);
@@ -1395,6 +1467,13 @@ String? resourcePathAlias(String path, [String query = '']) {
         'rid' => '/reel/$id$q',
         'hid' => '/stories/$id$q',
         'qid' => '/post/$id$q',
+        'highlightid' || 'momentid' => '/stories/$id$q',
+        'webappid' || 'miniappid' => '/webapp/$id$q',
+        'invoiceid' => '/paid/invoices/$id$q',
+        'campaignid' => '/ads/$id$q',
+        'giveawayid' => '/channel/$id$q',
+        'topicid' => '/chats/thread/$id$q',
+        'reel-id' => '/reel/$id$q',
         _ => null,
       };
       if (opened != null) return opened;
@@ -1434,7 +1513,11 @@ String? botSectionPathAlias(String path, [String query = '']) {
     'invoices' ||
     'invoice' ||
     'stats' ||
-    'analytics' =>
+    'analytics' ||
+    'description' ||
+    'about' ||
+    'payments' ||
+    'privacy' =>
       withExtra('/bots/$id'),
     _ => null,
   };
@@ -3027,6 +3110,92 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/subscriberlist':
     case '/boostlevel':
       return '${ChannelsManagementRoute.path}$q';
+    case '/search-messages':
+    case '/search-media':
+    case '/search-files':
+    case '/search-links':
+    case '/calendar-search':
+    case '/hashtag-suggestions':
+      return '${SearchRoute.path}$q';
+    case '/jump-to-date':
+    case '/scroll-to-date':
+    case '/pinned-list':
+    case '/unpin-all':
+    case '/hide-pinned':
+    case '/view-once-media':
+    case '/send-as-document':
+    case '/caption-below':
+    case '/grouped-media':
+    case '/album-send':
+    case '/suggest-stickers':
+    case '/mention-suggestions':
+    case '/unread-divider':
+    case '/side-menu':
+    case '/tag-reactions':
+      return '${ChatsRoute.path}$q';
+    case '/compact-list':
+    case '/chat-list-mode':
+    case '/three-lines':
+    case '/avatar-size':
+    case '/date-headers':
+    case '/send-uncompressed':
+    case '/auto-night-schedule':
+    case '/sticker-loop':
+    case '/emoji-loop':
+    case '/self-destruct-media':
+    case '/quick-react':
+    case '/color-tags':
+      return '${SettingsRoute.path}$q';
+    case '/inline-bots':
+    case '/recent-bots':
+    case '/command-suggestions':
+      return '${MyBotsRoute.path}$q';
+    case '/attach-menu-bots':
+      return '${MiniAppsRoute.path}$q';
+    case '/saved-tags':
+    case '/message-tags':
+      return '${SavedPostsRoute.path}$q';
+    case '/star-react':
+    case '/paid-react':
+      return '${PaidMessageExceptionsRoute.path}$q';
+    case '/my-notes':
+      return '${ProfileTabRoute.path}$q';
+    case '/folder-tags':
+      return '${ChatFolderNewRoute.path}$q';
+    case '/searchmessages':
+    case '/searchmedia':
+    case '/calendarsearch':
+      return '${SearchRoute.path}$q';
+    case '/jumptodate':
+    case '/pinnedlist':
+    case '/viewonce':
+    case '/sendasdocument':
+    case '/groupedmedia':
+    case '/suggeststickers':
+    case '/sidemenu':
+      return '${ChatsRoute.path}$q';
+    case '/compactlist':
+    case '/chatlistmode':
+    case '/senduncompressed':
+    case '/stickersloop':
+    case '/emojiloop':
+    case '/quickreact':
+      return '${SettingsRoute.path}$q';
+    case '/inlinebots':
+    case '/recentbots':
+      return '${MyBotsRoute.path}$q';
+    case '/attachmenubots':
+      return '${MiniAppsRoute.path}$q';
+    case '/savedtags':
+    case '/messagetags':
+      return '${SavedPostsRoute.path}$q';
+    case '/starreact':
+    case '/paidreact':
+      return '${PaidMessageExceptionsRoute.path}$q';
+    case '/mynotes':
+      return '${ProfileTabRoute.path}$q';
+    case '/foldertags':
+      return '${ChatFolderNewRoute.path}$q';
     default:
       return null;
   }
