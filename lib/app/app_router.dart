@@ -249,7 +249,11 @@ String? resourcePathAlias(String path, [String query = '']) {
           rest == 'offer' ||
           rest == 'suggested-settings' ||
           rest == 'transfer' ||
-          rest == 'ownership') {
+          rest == 'ownership' ||
+          rest == 'post-stories' ||
+          rest == 'manage-gifts' ||
+          rest == 'change-profile' ||
+          rest == 'add-admins') {
         return '/channel/$id$q';
       }
       if (rest == 'invite' || rest == 'invite-link') {
@@ -386,7 +390,12 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'transfer' ||
           segs[2] == 'ownership' ||
           segs[2] == 'speaker' ||
-          segs[2] == 'slow-seconds') {
+          segs[2] == 'slow-seconds' ||
+          segs[2] == 'send-photos' ||
+          segs[2] == 'restrict-media' ||
+          segs[2] == 'manage-topics' ||
+          segs[2] == 'add-admins' ||
+          segs[2] == 'post-stories') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -474,7 +483,12 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[3] == 'transfer' ||
           segs[3] == 'ownership' ||
           segs[3] == 'speaker' ||
-          segs[3] == 'slow-seconds') {
+          segs[3] == 'slow-seconds' ||
+          segs[3] == 'send-photos' ||
+          segs[3] == 'restrict-media' ||
+          segs[3] == 'manage-topics' ||
+          segs[3] == 'add-admins' ||
+          segs[3] == 'post-stories') {
         return '/chats/thread/$id$q';
       }
       if (segs[3] == 'invite' || segs[3] == 'invite-link') {
@@ -637,7 +651,11 @@ String? resourcePathAlias(String path, [String query = '']) {
           rest == 'offer' ||
           rest == 'suggested-settings' ||
           rest == 'transfer' ||
-          rest == 'ownership') {
+          rest == 'ownership' ||
+          rest == 'post-stories' ||
+          rest == 'manage-gifts' ||
+          rest == 'change-profile' ||
+          rest == 'add-admins') {
         return '/channel/$id$q';
       }
       if (rest == 'invite' || rest == 'invite-link') {
@@ -1110,7 +1128,12 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'transfer' ||
           segs[2] == 'ownership' ||
           segs[2] == 'speaker' ||
-          segs[2] == 'slow-seconds') {
+          segs[2] == 'slow-seconds' ||
+          segs[2] == 'send-photos' ||
+          segs[2] == 'restrict-media' ||
+          segs[2] == 'manage-topics' ||
+          segs[2] == 'add-admins' ||
+          segs[2] == 'post-stories') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -1205,7 +1228,12 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'transfer' ||
           segs[2] == 'ownership' ||
           segs[2] == 'speaker' ||
-          segs[2] == 'slow-seconds') {
+          segs[2] == 'slow-seconds' ||
+          segs[2] == 'send-photos' ||
+          segs[2] == 'restrict-media' ||
+          segs[2] == 'manage-topics' ||
+          segs[2] == 'add-admins' ||
+          segs[2] == 'post-stories') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -1520,7 +1548,10 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[0] == 'openlnk' ||
           segs[0] == 'permaurl' ||
           segs[0] == 'msgjump' ||
-          segs[0] == 'chatjump') &&
+          segs[0] == 'chatjump' ||
+          segs[0] == 'tgjump' ||
+          segs[0] == 'hanjump' ||
+          segs[0] == 'deepjump') &&
       segs.length == 3) {
     final cid = int.tryParse(segs[1]);
     final mid = int.tryParse(segs[2]);
@@ -1662,6 +1693,9 @@ String? resourcePathAlias(String path, [String query = '']) {
         'statusid' => '/stories/$id$q',
         'callid' => '/chats/thread/$id$q',
         'inviteid' => '/chats/thread/$id$q',
+        'adminid' || 'memberid' || 'ownerid' => '${ProfileRoute.path}?userId=$id',
+        'topiclnk' => '/chats/thread/$id$q',
+        'invite-lnk' => '/chats/thread/$id$q',
         _ => null,
       };
       if (opened != null) return opened;
@@ -3741,6 +3775,80 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/storystealth':
     case '/wearemoji':
       return '${StoriesRoute.path}$q';
+    case '/send-photos':
+    case '/send-videos':
+    case '/send-files':
+    case '/send-music':
+    case '/send-voice':
+    case '/send-round':
+    case '/send-games':
+    case '/send-inline':
+    case '/send-plain':
+    case '/change-info':
+    case '/post-messages':
+    case '/edit-messages':
+    case '/delete-messages':
+    case '/ban-users':
+    case '/invite-users':
+    case '/pin-messages':
+    case '/manage-topics':
+    case '/manage-video-chats':
+    case '/add-admins':
+    case '/remain-anonymous':
+    case '/post-stories':
+    case '/edit-stories':
+    case '/delete-stories':
+    case '/manage-direct':
+    case '/manage-gifts':
+    case '/change-profile':
+    case '/post-as-channel':
+    case '/edit-admins':
+    case '/custom-admin-title':
+    case '/admin-rank':
+    case '/removed-users':
+    case '/kicked-list':
+    case '/banned-list':
+    case '/restricted-list':
+    case '/restrict-media':
+    case '/restrict-stickers':
+    case '/restrict-gifs':
+    case '/restrict-polls':
+    case '/restrict-embed':
+    case '/restrict-invite':
+    case '/restrict-pin':
+    case '/restrict-info':
+    case '/silent-join':
+    case '/hide-join':
+    case '/show-join':
+    case '/captcha-join':
+    case '/approve-media':
+    case '/mention-all':
+    case '/loop-gifs':
+    case '/sticker-suggest':
+    case '/emoji-suggest':
+    case '/inline-suggest':
+    case '/saved-gif':
+    case '/sendphotos':
+    case '/sendvideos':
+    case '/deletemessages':
+    case '/sendplain':
+    case '/changeinfo':
+    case '/postmessages':
+    case '/banusers':
+    case '/inviteusers':
+    case '/managetopics':
+    case '/addadmins':
+    case '/poststories':
+    case '/managegifts':
+    case '/changeprofile':
+    case '/adminrank':
+    case '/kickedlist':
+    case '/restrictedlist':
+    case '/restrictmedia':
+    case '/silentjoin':
+    case '/mentionall':
+    case '/savedgif':
+      return '${ChatsRoute.path}$q';
     default:
       return null;
   }
