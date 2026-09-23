@@ -253,7 +253,14 @@ String? resourcePathAlias(String path, [String query = '']) {
           rest == 'post-stories' ||
           rest == 'manage-gifts' ||
           rest == 'change-profile' ||
-          rest == 'add-admins') {
+          rest == 'add-admins' ||
+          rest == 'voice-chat' ||
+          rest == 'stream-live' ||
+          rest == 'record-live' ||
+          rest == 'group-call' ||
+          rest == 'start-livestream' ||
+          rest == 'stop-livestream' ||
+          rest == 'schedule-live') {
         return '/channel/$id$q';
       }
       if (rest == 'invite' || rest == 'invite-link') {
@@ -395,7 +402,15 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'restrict-media' ||
           segs[2] == 'manage-topics' ||
           segs[2] == 'add-admins' ||
-          segs[2] == 'post-stories') {
+          segs[2] == 'post-stories' ||
+          segs[2] == 'voice-chat' ||
+          segs[2] == 'raise-hand' ||
+          segs[2] == 'screen-share' ||
+          segs[2] == 'redial' ||
+          segs[2] == 'group-call' ||
+          segs[2] == 'video-chat' ||
+          segs[2] == 'join-voice-chat' ||
+          segs[2] == 'leave-voice-chat') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -488,7 +503,15 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[3] == 'restrict-media' ||
           segs[3] == 'manage-topics' ||
           segs[3] == 'add-admins' ||
-          segs[3] == 'post-stories') {
+          segs[3] == 'post-stories' ||
+          segs[3] == 'voice-chat' ||
+          segs[3] == 'raise-hand' ||
+          segs[3] == 'screen-share' ||
+          segs[3] == 'redial' ||
+          segs[3] == 'group-call' ||
+          segs[3] == 'video-chat' ||
+          segs[3] == 'join-voice-chat' ||
+          segs[3] == 'leave-voice-chat') {
         return '/chats/thread/$id$q';
       }
       if (segs[3] == 'invite' || segs[3] == 'invite-link') {
@@ -655,7 +678,14 @@ String? resourcePathAlias(String path, [String query = '']) {
           rest == 'post-stories' ||
           rest == 'manage-gifts' ||
           rest == 'change-profile' ||
-          rest == 'add-admins') {
+          rest == 'add-admins' ||
+          rest == 'voice-chat' ||
+          rest == 'stream-live' ||
+          rest == 'record-live' ||
+          rest == 'group-call' ||
+          rest == 'start-livestream' ||
+          rest == 'stop-livestream' ||
+          rest == 'schedule-live') {
         return '/channel/$id$q';
       }
       if (rest == 'invite' || rest == 'invite-link') {
@@ -1133,7 +1163,15 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'restrict-media' ||
           segs[2] == 'manage-topics' ||
           segs[2] == 'add-admins' ||
-          segs[2] == 'post-stories') {
+          segs[2] == 'post-stories' ||
+          segs[2] == 'voice-chat' ||
+          segs[2] == 'raise-hand' ||
+          segs[2] == 'screen-share' ||
+          segs[2] == 'redial' ||
+          segs[2] == 'group-call' ||
+          segs[2] == 'video-chat' ||
+          segs[2] == 'join-voice-chat' ||
+          segs[2] == 'leave-voice-chat') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -1233,7 +1271,15 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'restrict-media' ||
           segs[2] == 'manage-topics' ||
           segs[2] == 'add-admins' ||
-          segs[2] == 'post-stories') {
+          segs[2] == 'post-stories' ||
+          segs[2] == 'voice-chat' ||
+          segs[2] == 'raise-hand' ||
+          segs[2] == 'screen-share' ||
+          segs[2] == 'redial' ||
+          segs[2] == 'group-call' ||
+          segs[2] == 'video-chat' ||
+          segs[2] == 'join-voice-chat' ||
+          segs[2] == 'leave-voice-chat') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -1551,7 +1597,11 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[0] == 'chatjump' ||
           segs[0] == 'tgjump' ||
           segs[0] == 'hanjump' ||
-          segs[0] == 'deepjump') &&
+          segs[0] == 'deepjump' ||
+          segs[0] == 'calljump' ||
+          segs[0] == 'livejump' ||
+          segs[0] == 'vcjump' ||
+          segs[0] == 'streamjump') &&
       segs.length == 3) {
     final cid = int.tryParse(segs[1]);
     final mid = int.tryParse(segs[2]);
@@ -1696,6 +1746,9 @@ String? resourcePathAlias(String path, [String query = '']) {
         'adminid' || 'memberid' || 'ownerid' => '${ProfileRoute.path}?userId=$id',
         'topiclnk' => '/chats/thread/$id$q',
         'invite-lnk' => '/chats/thread/$id$q',
+        'liveid' || 'vcid' || 'call-id' || 'vc-id' => '/chats/thread/$id$q',
+        'speakerid' => '/chats/thread/$id$q',
+        'livestreamid' || 'rtmpid' || 'groupcallid' => '/chats/thread/$id$q',
         _ => null,
       };
       if (opened != null) return opened;
@@ -3848,6 +3901,99 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/silentjoin':
     case '/mentionall':
     case '/savedgif':
+      return '${ChatsRoute.path}$q';
+    case '/send-polls':
+    case '/send-stickers':
+    case '/send-gifs':
+    case '/send-embeds':
+    case '/send-locations':
+    case '/send-contacts':
+    case '/change-chat-info':
+    case '/delete-others':
+    case '/ban-members':
+    case '/start-voice-chat':
+    case '/end-voice-chat':
+    case '/voice-chat-settings':
+    case '/record-live':
+    case '/stream-live':
+    case '/manage-live':
+    case '/invite-to-call':
+    case '/call-members':
+    case '/raise-hand':
+    case '/make-speaker':
+    case '/mute-all-call':
+    case '/call-panel':
+    case '/screen-share':
+    case '/share-screen':
+    case '/noise-suppression-call':
+    case '/echo-cancellation':
+    case '/video-source':
+    case '/camera-flip':
+    case '/dual-camera':
+    case '/blur-background':
+    case '/virtual-background':
+    case '/beauty-filter':
+    case '/call-rating':
+    case '/call-feedback':
+    case '/redial':
+    case '/call-callback':
+    case '/decline-call':
+    case '/accept-call':
+    case '/ignore-call':
+    case '/call-waiting':
+    case '/group-call':
+    case '/video-chat':
+    case '/join-voice-chat':
+    case '/leave-voice-chat':
+    case '/mute-participant':
+    case '/kick-from-call':
+    case '/pin-speaker':
+    case '/speaker-view':
+    case '/grid-view':
+    case '/speaker-phone':
+    case '/earpiece':
+    case '/call-invite':
+    case '/call-quality':
+    case '/low-data-call':
+    case '/toggle-video':
+    case '/toggle-mic':
+    case '/call-volume':
+    case '/call-stats':
+    case '/rtmp-stream':
+    case '/live-stream-key':
+    case '/start-livestream':
+    case '/stop-livestream':
+    case '/schedule-live':
+    case '/live-comments':
+    case '/live-reactions':
+      return '${ChatsRoute.path}$q';
+    case '/sendpolls':
+    case '/sendstickers':
+    case '/sendgifs':
+    case '/sendcontacts':
+    case '/startvoicechat':
+    case '/endvoicechat':
+    case '/raisehand':
+    case '/screenshare':
+    case '/sharescreen':
+    case '/redialcall':
+    case '/acceptcall':
+    case '/declinecall':
+    case '/callwaiting':
+    case '/blurbg':
+    case '/dualcamera':
+    case '/groupcall':
+    case '/videochat':
+    case '/joinvoicechat':
+    case '/leavevoicechat':
+    case '/muteparticipant':
+    case '/speakerview':
+    case '/speakerphone':
+    case '/togglevideo':
+    case '/togglemic':
+    case '/startlivestream':
+    case '/stoplivestream':
+    case '/schedulelive':
       return '${ChatsRoute.path}$q';
     default:
       return null;
