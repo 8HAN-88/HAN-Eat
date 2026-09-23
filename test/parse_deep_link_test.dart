@@ -1295,6 +1295,63 @@ void main() {
       parseDeepLinkToGoPath('https://haneat.app/app/#/archive-and-mute'),
       ChatArchivedRoute.path,
     );
+    expect(resourcePathAlias('/tgmsg/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/hanmsg/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/packset/4'), '/stickers/4');
+    expect(resourcePathAlias('/emojiid/4'), '/stickers/4');
+    expect(resourcePathAlias('/uniqueid/9'), StarGiftsInventoryRoute.path);
+    expect(resourcePathAlias('/collectibleid/9'), StarGiftsInventoryRoute.path);
+    expect(resourcePathAlias('/storylnk/9'), '/stories/9');
+    expect(resourcePathAlias('/boostlnk/1'), '/channel/1');
+    expect(resourcePathAlias('/chat/21/invite-expire'), '/chats/thread/21');
+    expect(resourcePathAlias('/dm/21/topic-icon'), '/chats/thread/21');
+    expect(resourcePathAlias('/c/1/offer'), '/channel/1');
+    expect(resourcePathAlias('/p/28/offer'), '/post/28');
+    expect(resourcePathAlias('/post/28/accept'), '/post/28');
+    expect(botSectionPathAlias('/bots/5/affiliate'), '/bots/5');
+    expect(botSectionPathAlias('/bot/5/tos'), '/bots/5');
+    expect(shortcutPathAlias('/featured-stickers'), ChatsRoute.path);
+    expect(shortcutPathAlias('/create-sticker-pack'), ChatsRoute.path);
+    expect(shortcutPathAlias('/wear-gift'), StarGiftsInventoryRoute.path);
+    expect(shortcutPathAlias('/pinned-gifts'), StarGiftsInventoryRoute.path);
+    expect(shortcutPathAlias('/topic-icon'), ChatsRoute.path);
+    expect(shortcutPathAlias('/invite-link-expire'), ChatsRoute.path);
+    expect(shortcutPathAlias('/leave-quietly'), ChatsRoute.path);
+    expect(shortcutPathAlias('/offer-post'), AdsHubRoute.path);
+    expect(shortcutPathAlias('/suggested-posts-settings'), AdsHubRoute.path);
+    expect(shortcutPathAlias('/star-ref'), PartnerProgramRoute.path);
+    expect(shortcutPathAlias('/attach-menu-order'), MiniAppsRoute.path);
+    expect(shortcutPathAlias('/bot-affiliate'), MyBotsRoute.path);
+    expect(shortcutPathAlias('/split-view'), SettingsRoute.path);
+    expect(shortcutPathAlias('/badge-count'), NotificationSettingsRoute.path);
+    expect(shortcutPathAlias('/delete-channel'), ChannelsManagementRoute.path);
+    expect(shortcutPathAlias('/deletechannel'), ChannelsManagementRoute.path);
+    expect(shortcutPathAlias('/weargift'), StarGiftsInventoryRoute.path);
+    expect(shortcutPathAlias('/featuredstickers'), ChatsRoute.path);
+    expect(
+      leftoverPathAlias('/go/featured-stickers'),
+      ChatsRoute.path,
+    );
+    expect(
+      leftoverPathAlias('/go/tgmsg/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      leftoverPathAlias('/go/wear-gift'),
+      StarGiftsInventoryRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/offer-post'),
+      AdsHubRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/tgmsg/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/delete-channel'),
+      ChannelsManagementRoute.path,
+    );
     expect(shortcutPathAlias('/reels'), isNull);
     expect(shortcutPathAlias('/logout'), isNull);
     expect(shortcutPathAlias('/reels'), isNull);
