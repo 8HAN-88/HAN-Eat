@@ -232,7 +232,13 @@ String? resourcePathAlias(String path, [String query = '']) {
           rest == 'copy-link' ||
           rest == 'title' ||
           rest == 'monetization' ||
-          rest == 'suggested') {
+          rest == 'suggested' ||
+          rest == 'description' ||
+          rest == 'photo' ||
+          rest == 'owner' ||
+          rest == 'qr' ||
+          rest == 'clear' ||
+          rest == 'type') {
         return '/channel/$id$q';
       }
       if (rest == 'invite' || rest == 'invite-link') {
@@ -349,7 +355,14 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'copy-link' ||
           segs[2] == 'title' ||
           segs[2] == 'stats' ||
-          segs[2] == 'history') {
+          segs[2] == 'history' ||
+          segs[2] == 'description' ||
+          segs[2] == 'photo' ||
+          segs[2] == 'type' ||
+          segs[2] == 'convert' ||
+          segs[2] == 'owner' ||
+          segs[2] == 'qr' ||
+          segs[2] == 'clear') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -417,7 +430,14 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[3] == 'copy-link' ||
           segs[3] == 'title' ||
           segs[3] == 'stats' ||
-          segs[3] == 'history') {
+          segs[3] == 'history' ||
+          segs[3] == 'description' ||
+          segs[3] == 'photo' ||
+          segs[3] == 'type' ||
+          segs[3] == 'convert' ||
+          segs[3] == 'owner' ||
+          segs[3] == 'qr' ||
+          segs[3] == 'clear') {
         return '/chats/thread/$id$q';
       }
       if (segs[3] == 'invite' || segs[3] == 'invite-link') {
@@ -563,7 +583,13 @@ String? resourcePathAlias(String path, [String query = '']) {
           rest == 'copy-link' ||
           rest == 'title' ||
           rest == 'monetization' ||
-          rest == 'suggested') {
+          rest == 'suggested' ||
+          rest == 'description' ||
+          rest == 'photo' ||
+          rest == 'owner' ||
+          rest == 'qr' ||
+          rest == 'clear' ||
+          rest == 'type') {
         return '/channel/$id$q';
       }
       if (rest == 'invite' || rest == 'invite-link') {
@@ -634,7 +660,10 @@ String? resourcePathAlias(String path, [String query = '']) {
               segs[2] == 'pin' ||
               segs[2] == 'hide' ||
               segs[2] == 'report' ||
-              segs[2] == 'download')) {
+              segs[2] == 'download' ||
+              segs[2] == 'embed' ||
+              segs[2] == 'permalink' ||
+              segs[2] == 'copy')) {
         return '/post/$id$q';
       }
       if (segs.length == 3 &&
@@ -681,7 +710,10 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'pin' ||
           segs[2] == 'hide' ||
           segs[2] == 'report' ||
-          segs[2] == 'download') {
+          segs[2] == 'download' ||
+          segs[2] == 'embed' ||
+          segs[2] == 'permalink' ||
+          segs[2] == 'copy') {
         return '/post/$id$q';
       }
       if (segs[2] == 'share' ||
@@ -827,7 +859,10 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'pin' ||
           segs[2] == 'hide' ||
           segs[2] == 'report' ||
-          segs[2] == 'download') {
+          segs[2] == 'download' ||
+          segs[2] == 'embed' ||
+          segs[2] == 'permalink' ||
+          segs[2] == 'copy') {
         return '/post/$id$q';
       }
       if (segs[2] == 'share' ||
@@ -989,7 +1024,14 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'copy-link' ||
           segs[2] == 'title' ||
           segs[2] == 'stats' ||
-          segs[2] == 'history') {
+          segs[2] == 'history' ||
+          segs[2] == 'description' ||
+          segs[2] == 'photo' ||
+          segs[2] == 'type' ||
+          segs[2] == 'convert' ||
+          segs[2] == 'owner' ||
+          segs[2] == 'qr' ||
+          segs[2] == 'clear') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -1064,7 +1106,14 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'copy-link' ||
           segs[2] == 'title' ||
           segs[2] == 'stats' ||
-          segs[2] == 'history') {
+          segs[2] == 'history' ||
+          segs[2] == 'description' ||
+          segs[2] == 'photo' ||
+          segs[2] == 'type' ||
+          segs[2] == 'convert' ||
+          segs[2] == 'owner' ||
+          segs[2] == 'qr' ||
+          segs[2] == 'clear') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -1137,7 +1186,10 @@ String? resourcePathAlias(String path, [String query = '']) {
         'animation' ||
         'round' ||
         'poll' ||
-        'quiz' =>
+        'quiz' ||
+        'album' ||
+        'comment' ||
+        'location' =>
           '/post/$id$q',
         'highlight' || 'moment' => '/stories/$id$q',
         _ => null,
@@ -1354,7 +1406,12 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[0] == 'jump-to-msg' ||
           segs[0] == 'show-mid' ||
           segs[0] == 'goto-mid' ||
-          segs[0] == 'chatmsg') &&
+          segs[0] == 'chatmsg' ||
+          segs[0] == 'msgurl' ||
+          segs[0] == 'chat-msg' ||
+          segs[0] == 'open-permalink' ||
+          segs[0] == 'show-permalink' ||
+          segs[0] == 'jump-link') &&
       segs.length == 3) {
     final cid = int.tryParse(segs[1]);
     final mid = int.tryParse(segs[2]);
@@ -1474,6 +1531,14 @@ String? resourcePathAlias(String path, [String query = '']) {
         'giveawayid' => '/channel/$id$q',
         'topicid' => '/chats/thread/$id$q',
         'reel-id' => '/reel/$id$q',
+        'highlight-id' || 'moment-id' => '/stories/$id$q',
+        'web-app-id' || 'mini-app-id' => '/webapp/$id$q',
+        'invoice-id' => '/paid/invoices/$id$q',
+        'campaign-id' => '/ads/$id$q',
+        'giveaway-id' => '/channel/$id$q',
+        'topic-id' => '/chats/thread/$id$q',
+        'boost-id' => '/channel/$id$q',
+        'convo-id' => '/chats/thread/$id$q',
         _ => null,
       };
       if (opened != null) return opened;
@@ -1517,7 +1582,10 @@ String? botSectionPathAlias(String path, [String query = '']) {
     'description' ||
     'about' ||
     'payments' ||
-    'privacy' =>
+    'privacy' ||
+    'username' ||
+    'name' ||
+    'avatar' =>
       withExtra('/bots/$id'),
     _ => null,
   };
@@ -3195,6 +3263,81 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/mynotes':
       return '${ProfileTabRoute.path}$q';
     case '/foldertags':
+      return '${ChatFolderNewRoute.path}$q';
+    case '/saved-messages-search':
+    case '/global-msg-search':
+    case '/media-search':
+    case '/file-search':
+    case '/link-search':
+    case '/music-search':
+    case '/voice-search':
+    case '/gif-search':
+    case '/recent-search':
+    case '/clear-recent-search':
+      return '${SearchRoute.path}$q';
+    case '/chat-filter-unread':
+    case '/chat-filter-muted':
+    case '/chat-filter-contacts':
+    case '/chat-filter-groups':
+    case '/chat-filter-channels':
+    case '/chat-filter-bots':
+    case '/new-secret-chat':
+    case '/start-secret':
+    case '/burn-after-read':
+    case '/once-view':
+    case '/ttl-media':
+    case '/spoiler-caption':
+    case '/edit-caption':
+    case '/schedule-send':
+    case '/send-later':
+    case '/remind-me':
+    case '/forward-as-copy':
+    case '/hide-sender':
+    case '/hide-forward':
+    case '/no-author':
+    case '/quote-reply':
+    case '/thread-reply':
+    case '/pin-quietly':
+    case '/unpin-quietly':
+    case '/jump-to-pin':
+    case '/pins-list':
+    case '/mentions-list':
+    case '/seen-list':
+    case '/read-by':
+    case '/played-by':
+      return '${ChatsRoute.path}$q';
+    case '/add-to-folder':
+    case '/remove-from-folder':
+    case '/reorder-folders':
+    case '/share-folder-link':
+    case '/join-folder':
+    case '/leave-folder':
+    case '/hide-folder':
+      return '${ChatFolderNewRoute.path}$q';
+    case '/savedmessagessearch':
+    case '/globalmsgsearch':
+    case '/mediasearch':
+    case '/filesearch':
+    case '/gifsearch':
+    case '/recentsearch':
+      return '${SearchRoute.path}$q';
+    case '/chatfilterunread':
+    case '/newsecretchat':
+    case '/burnafterread':
+    case '/onceview':
+    case '/schedulesend':
+    case '/sendlater':
+    case '/forwardascopy':
+    case '/hidesender':
+    case '/quotereply':
+    case '/pinquietly':
+    case '/pinslist':
+    case '/readby':
+      return '${ChatsRoute.path}$q';
+    case '/addtofolder':
+    case '/reorderfolders':
+    case '/joinfolder':
+    case '/sharefolderlink':
       return '${ChatFolderNewRoute.path}$q';
     default:
       return null;
