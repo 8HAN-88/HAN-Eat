@@ -1352,6 +1352,59 @@ void main() {
       parseDeepLinkToGoPath('https://haneat.app/app/#/delete-channel'),
       ChannelsManagementRoute.path,
     );
+    expect(resourcePathAlias('/permaurl/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/msgjump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/chatjump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/stickersetid/4'), '/stickers/4');
+    expect(resourcePathAlias('/emojisetid/4'), '/stickers/4');
+    expect(resourcePathAlias('/statusid/9'), '/stories/9');
+    expect(resourcePathAlias('/callid/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/inviteid/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/chat/21/transfer'), '/chats/thread/21');
+    expect(resourcePathAlias('/dm/21/speaker'), '/chats/thread/21');
+    expect(resourcePathAlias('/c/1/ownership'), '/channel/1');
+    expect(shortcutPathAlias('/keyboard-shortcuts'), ChatsRoute.path);
+    expect(shortcutPathAlias('/hotkeys'), ChatsRoute.path);
+    expect(shortcutPathAlias('/call-settings'), ChatsRoute.path);
+    expect(shortcutPathAlias('/transfer-ownership'), ChatsRoute.path);
+    expect(shortcutPathAlias('/add-emoji-pack'), ChatsRoute.path);
+    expect(shortcutPathAlias('/external-browser'), SettingsRoute.path);
+    expect(shortcutPathAlias('/reset-cache'), SettingsRoute.path);
+    expect(shortcutPathAlias('/auto-play-videos'), SettingsRoute.path);
+    expect(shortcutPathAlias('/passcode-change'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/terminate-all-others'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/enable-2fa'), TwoFactorSetupRoute.path);
+    expect(shortcutPathAlias('/disable-2fa'), TwoFactorSetupRoute.path);
+    expect(shortcutPathAlias('/folder-color'), ChatFolderNewRoute.path);
+    expect(shortcutPathAlias('/reply-to-story'), StoriesRoute.path);
+    expect(shortcutPathAlias('/story-stealth'), StoriesRoute.path);
+    expect(shortcutPathAlias('/paid-reaction-privacy'), PaidMessageExceptionsRoute.path);
+    expect(shortcutPathAlias('/speakermode'), ChatsRoute.path);
+    expect(shortcutPathAlias('/enable2fa'), TwoFactorSetupRoute.path);
+    expect(
+      leftoverPathAlias('/go/keyboard-shortcuts'),
+      ChatsRoute.path,
+    );
+    expect(
+      leftoverPathAlias('/go/msgjump/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      leftoverPathAlias('/go/reply-to-story'),
+      StoriesRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/hotkeys'),
+      ChatsRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/msgjump/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/enable-2fa'),
+      TwoFactorSetupRoute.path,
+    );
     expect(shortcutPathAlias('/reels'), isNull);
     expect(shortcutPathAlias('/logout'), isNull);
     expect(shortcutPathAlias('/reels'), isNull);

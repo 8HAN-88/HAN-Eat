@@ -247,7 +247,9 @@ String? resourcePathAlias(String path, [String query = '']) {
           rest == 'invite-limit' ||
           rest == 'invite-revoke' ||
           rest == 'offer' ||
-          rest == 'suggested-settings') {
+          rest == 'suggested-settings' ||
+          rest == 'transfer' ||
+          rest == 'ownership') {
         return '/channel/$id$q';
       }
       if (rest == 'invite' || rest == 'invite-link') {
@@ -380,7 +382,11 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'invite-limit' ||
           segs[2] == 'invite-revoke' ||
           segs[2] == 'topic-icon' ||
-          segs[2] == 'topic-color') {
+          segs[2] == 'topic-color' ||
+          segs[2] == 'transfer' ||
+          segs[2] == 'ownership' ||
+          segs[2] == 'speaker' ||
+          segs[2] == 'slow-seconds') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -464,7 +470,11 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[3] == 'invite-limit' ||
           segs[3] == 'invite-revoke' ||
           segs[3] == 'topic-icon' ||
-          segs[3] == 'topic-color') {
+          segs[3] == 'topic-color' ||
+          segs[3] == 'transfer' ||
+          segs[3] == 'ownership' ||
+          segs[3] == 'speaker' ||
+          segs[3] == 'slow-seconds') {
         return '/chats/thread/$id$q';
       }
       if (segs[3] == 'invite' || segs[3] == 'invite-link') {
@@ -625,7 +635,9 @@ String? resourcePathAlias(String path, [String query = '']) {
           rest == 'invite-limit' ||
           rest == 'invite-revoke' ||
           rest == 'offer' ||
-          rest == 'suggested-settings') {
+          rest == 'suggested-settings' ||
+          rest == 'transfer' ||
+          rest == 'ownership') {
         return '/channel/$id$q';
       }
       if (rest == 'invite' || rest == 'invite-link') {
@@ -1094,7 +1106,11 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'invite-limit' ||
           segs[2] == 'invite-revoke' ||
           segs[2] == 'topic-icon' ||
-          segs[2] == 'topic-color') {
+          segs[2] == 'topic-color' ||
+          segs[2] == 'transfer' ||
+          segs[2] == 'ownership' ||
+          segs[2] == 'speaker' ||
+          segs[2] == 'slow-seconds') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -1185,7 +1201,11 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'invite-limit' ||
           segs[2] == 'invite-revoke' ||
           segs[2] == 'topic-icon' ||
-          segs[2] == 'topic-color') {
+          segs[2] == 'topic-color' ||
+          segs[2] == 'transfer' ||
+          segs[2] == 'ownership' ||
+          segs[2] == 'speaker' ||
+          segs[2] == 'slow-seconds') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -1497,7 +1517,10 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[0] == 'hanmsg' ||
           segs[0] == 'deepmsg' ||
           segs[0] == 'permaid' ||
-          segs[0] == 'openlnk') &&
+          segs[0] == 'openlnk' ||
+          segs[0] == 'permaurl' ||
+          segs[0] == 'msgjump' ||
+          segs[0] == 'chatjump') &&
       segs.length == 3) {
     final cid = int.tryParse(segs[1]);
     final mid = int.tryParse(segs[2]);
@@ -1635,6 +1658,10 @@ String? resourcePathAlias(String path, [String query = '']) {
         'uniqueid' || 'collectibleid' => '${StarGiftsInventoryRoute.path}$q',
         'storylnk' => '/stories/$id$q',
         'boostlnk' => '/channel/$id$q',
+        'stickersetid' || 'emojisetid' => '/stickers/$id$q',
+        'statusid' => '/stories/$id$q',
+        'callid' => '/chats/thread/$id$q',
+        'inviteid' => '/chats/thread/$id$q',
         _ => null,
       };
       if (opened != null) return opened;
@@ -3624,6 +3651,96 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return '${NotificationSettingsRoute.path}$q';
     case '/deletechannel':
       return '${ChannelsManagementRoute.path}$q';
+    case '/keyboard-shortcuts':
+    case '/hotkeys':
+    case '/speaker-mode':
+    case '/noise-cancel':
+    case '/call-settings':
+    case '/missed-call':
+    case '/slow-mode-seconds':
+    case '/transfer-ownership':
+    case '/request-admin':
+    case '/invite-link-usage':
+    case '/primary-invite-reset':
+    case '/join-request-approve-all':
+    case '/join-request-decline-all':
+    case '/hide-general-topic':
+    case '/topic-as-chat':
+    case '/sticker-permissions':
+    case '/default-admin-rights':
+    case '/add-emoji-pack':
+    case '/install-emoji':
+    case '/remove-sticker-set':
+    case '/reorder-stickers':
+    case '/loop-stickers':
+    case '/suggest-by-emoji':
+    case '/trending-gifs':
+    case '/saved-emoji':
+    case '/create-sticker-set':
+      return '${ChatsRoute.path}$q';
+    case '/call-privacy':
+    case '/data-for-calls':
+    case '/use-less-data-calls':
+    case '/auto-play-videos':
+    case '/external-browser':
+    case '/link-out':
+    case '/cache-database':
+    case '/reset-cache':
+    case '/rebuild-index':
+    case '/sd-card':
+    case '/download-folder':
+    case '/in-app-browser-always':
+    case '/tag-color':
+    case '/chat-tag':
+      return '${SettingsRoute.path}$q';
+    case '/passcode-change':
+    case '/auto-lock-screen':
+    case '/unlock-pattern':
+    case '/session-terminate':
+    case '/terminate-all-others':
+      return '${AccountSecurityRoute.path}$q';
+    case '/login-email':
+      return '${ProfileAuthRoute.path}$q';
+    case '/recovery-code':
+    case '/cloud-password-change':
+    case '/disable-2fa':
+    case '/enable-2fa':
+      return '${TwoFactorSetupRoute.path}$q';
+    case '/paid-reaction-privacy':
+    case '/star-reaction-privacy':
+      return '${PaidMessageExceptionsRoute.path}$q';
+    case '/folder-color':
+      return '${ChatFolderNewRoute.path}$q';
+    case '/story-stealth':
+    case '/story-hide-from':
+    case '/story-allow':
+    case '/reply-to-story':
+    case '/story-privacy-list':
+    case '/emoji-status-list':
+    case '/wear-emoji':
+      return '${StoriesRoute.path}$q';
+    case '/keyboardshortcuts':
+    case '/speakermode':
+    case '/callsettings':
+    case '/transferownership':
+    case '/addemojipack':
+    case '/trendinggifs':
+      return '${ChatsRoute.path}$q';
+    case '/callprivacy':
+    case '/autoplayvideos':
+    case '/externalbrowser':
+    case '/resetcache':
+      return '${SettingsRoute.path}$q';
+    case '/passcodechange':
+    case '/terminateallothers':
+      return '${AccountSecurityRoute.path}$q';
+    case '/enable2fa':
+    case '/disable2fa':
+      return '${TwoFactorSetupRoute.path}$q';
+    case '/replytostory':
+    case '/storystealth':
+    case '/wearemoji':
+      return '${StoriesRoute.path}$q';
     default:
       return null;
   }
