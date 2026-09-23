@@ -216,7 +216,29 @@ String? resourcePathAlias(String path, [String query = '']) {
           rest == 'color' ||
           rest == 'autodelete' ||
           rest == 'permissions' ||
-          rest == 'antispam') {
+          rest == 'antispam' ||
+          rest == 'sign' ||
+          rest == 'join-to-send' ||
+          rest == 'join-to-comment' ||
+          rest == 'default-permissions' ||
+          rest == 'approve' ||
+          rest == 'hide-members' ||
+          rest == 'restrict' ||
+          rest == 'topics' ||
+          rest == 'forum' ||
+          rest == 'export' ||
+          rest == 'leave' ||
+          rest == 'report' ||
+          rest == 'copy-link' ||
+          rest == 'title' ||
+          rest == 'monetization' ||
+          rest == 'suggested' ||
+          rest == 'description' ||
+          rest == 'photo' ||
+          rest == 'owner' ||
+          rest == 'qr' ||
+          rest == 'clear' ||
+          rest == 'type') {
         return '/channel/$id$q';
       }
       if (rest == 'invite' || rest == 'invite-link') {
@@ -313,7 +335,34 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'permissions' ||
           segs[2] == 'effects' ||
           segs[2] == 'reminders' ||
-          segs[2] == 'antispam') {
+          segs[2] == 'antispam' ||
+          segs[2] == 'reactions' ||
+          segs[2] == 'translate' ||
+          segs[2] == 'seen' ||
+          segs[2] == 'default-permissions' ||
+          segs[2] == 'approve' ||
+          segs[2] == 'join-to-send' ||
+          segs[2] == 'join-to-comment' ||
+          segs[2] == 'hide-members' ||
+          segs[2] == 'restrict' ||
+          segs[2] == 'topics' ||
+          segs[2] == 'forum' ||
+          segs[2] == 'discussion' ||
+          segs[2] == 'linked' ||
+          segs[2] == 'export' ||
+          segs[2] == 'leave' ||
+          segs[2] == 'report' ||
+          segs[2] == 'copy-link' ||
+          segs[2] == 'title' ||
+          segs[2] == 'stats' ||
+          segs[2] == 'history' ||
+          segs[2] == 'description' ||
+          segs[2] == 'photo' ||
+          segs[2] == 'type' ||
+          segs[2] == 'convert' ||
+          segs[2] == 'owner' ||
+          segs[2] == 'qr' ||
+          segs[2] == 'clear') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -361,7 +410,34 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[3] == 'permissions' ||
           segs[3] == 'effects' ||
           segs[3] == 'reminders' ||
-          segs[3] == 'antispam') {
+          segs[3] == 'antispam' ||
+          segs[3] == 'reactions' ||
+          segs[3] == 'translate' ||
+          segs[3] == 'seen' ||
+          segs[3] == 'default-permissions' ||
+          segs[3] == 'approve' ||
+          segs[3] == 'join-to-send' ||
+          segs[3] == 'join-to-comment' ||
+          segs[3] == 'hide-members' ||
+          segs[3] == 'restrict' ||
+          segs[3] == 'topics' ||
+          segs[3] == 'forum' ||
+          segs[3] == 'discussion' ||
+          segs[3] == 'linked' ||
+          segs[3] == 'export' ||
+          segs[3] == 'leave' ||
+          segs[3] == 'report' ||
+          segs[3] == 'copy-link' ||
+          segs[3] == 'title' ||
+          segs[3] == 'stats' ||
+          segs[3] == 'history' ||
+          segs[3] == 'description' ||
+          segs[3] == 'photo' ||
+          segs[3] == 'type' ||
+          segs[3] == 'convert' ||
+          segs[3] == 'owner' ||
+          segs[3] == 'qr' ||
+          segs[3] == 'clear') {
         return '/chats/thread/$id$q';
       }
       if (segs[3] == 'invite' || segs[3] == 'invite-link') {
@@ -491,7 +567,29 @@ String? resourcePathAlias(String path, [String query = '']) {
           rest == 'color' ||
           rest == 'autodelete' ||
           rest == 'permissions' ||
-          rest == 'antispam') {
+          rest == 'antispam' ||
+          rest == 'sign' ||
+          rest == 'join-to-send' ||
+          rest == 'join-to-comment' ||
+          rest == 'default-permissions' ||
+          rest == 'approve' ||
+          rest == 'hide-members' ||
+          rest == 'restrict' ||
+          rest == 'topics' ||
+          rest == 'forum' ||
+          rest == 'export' ||
+          rest == 'leave' ||
+          rest == 'report' ||
+          rest == 'copy-link' ||
+          rest == 'title' ||
+          rest == 'monetization' ||
+          rest == 'suggested' ||
+          rest == 'description' ||
+          rest == 'photo' ||
+          rest == 'owner' ||
+          rest == 'qr' ||
+          rest == 'clear' ||
+          rest == 'type') {
         return '/channel/$id$q';
       }
       if (rest == 'invite' || rest == 'invite-link') {
@@ -553,7 +651,19 @@ String? resourcePathAlias(String path, [String query = '']) {
               segs[2] == 'like' ||
               segs[2] == 'react' ||
               segs[2] == 'reactors' ||
-              segs[2] == 'tips')) {
+              segs[2] == 'tips' ||
+              segs[2] == 'tip' ||
+              segs[2] == 'via' ||
+              segs[2] == 'forwarded' ||
+              segs[2] == 'bookmark' ||
+              segs[2] == 'save' ||
+              segs[2] == 'pin' ||
+              segs[2] == 'hide' ||
+              segs[2] == 'report' ||
+              segs[2] == 'download' ||
+              segs[2] == 'embed' ||
+              segs[2] == 'permalink' ||
+              segs[2] == 'copy')) {
         return '/post/$id$q';
       }
       if (segs.length == 3 &&
@@ -591,7 +701,19 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'like' ||
           segs[2] == 'react' ||
           segs[2] == 'reactors' ||
-          segs[2] == 'tips') {
+          segs[2] == 'tips' ||
+          segs[2] == 'tip' ||
+          segs[2] == 'via' ||
+          segs[2] == 'forwarded' ||
+          segs[2] == 'bookmark' ||
+          segs[2] == 'save' ||
+          segs[2] == 'pin' ||
+          segs[2] == 'hide' ||
+          segs[2] == 'report' ||
+          segs[2] == 'download' ||
+          segs[2] == 'embed' ||
+          segs[2] == 'permalink' ||
+          segs[2] == 'copy') {
         return '/post/$id$q';
       }
       if (segs[2] == 'share' ||
@@ -728,7 +850,19 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'like' ||
           segs[2] == 'react' ||
           segs[2] == 'reactors' ||
-          segs[2] == 'tips') {
+          segs[2] == 'tips' ||
+          segs[2] == 'tip' ||
+          segs[2] == 'via' ||
+          segs[2] == 'forwarded' ||
+          segs[2] == 'bookmark' ||
+          segs[2] == 'save' ||
+          segs[2] == 'pin' ||
+          segs[2] == 'hide' ||
+          segs[2] == 'report' ||
+          segs[2] == 'download' ||
+          segs[2] == 'embed' ||
+          segs[2] == 'permalink' ||
+          segs[2] == 'copy') {
         return '/post/$id$q';
       }
       if (segs[2] == 'share' ||
@@ -870,7 +1004,34 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'permissions' ||
           segs[2] == 'effects' ||
           segs[2] == 'reminders' ||
-          segs[2] == 'antispam') {
+          segs[2] == 'antispam' ||
+          segs[2] == 'reactions' ||
+          segs[2] == 'translate' ||
+          segs[2] == 'seen' ||
+          segs[2] == 'default-permissions' ||
+          segs[2] == 'approve' ||
+          segs[2] == 'join-to-send' ||
+          segs[2] == 'join-to-comment' ||
+          segs[2] == 'hide-members' ||
+          segs[2] == 'restrict' ||
+          segs[2] == 'topics' ||
+          segs[2] == 'forum' ||
+          segs[2] == 'discussion' ||
+          segs[2] == 'linked' ||
+          segs[2] == 'export' ||
+          segs[2] == 'leave' ||
+          segs[2] == 'report' ||
+          segs[2] == 'copy-link' ||
+          segs[2] == 'title' ||
+          segs[2] == 'stats' ||
+          segs[2] == 'history' ||
+          segs[2] == 'description' ||
+          segs[2] == 'photo' ||
+          segs[2] == 'type' ||
+          segs[2] == 'convert' ||
+          segs[2] == 'owner' ||
+          segs[2] == 'qr' ||
+          segs[2] == 'clear') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -925,7 +1086,34 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'permissions' ||
           segs[2] == 'effects' ||
           segs[2] == 'reminders' ||
-          segs[2] == 'antispam') {
+          segs[2] == 'antispam' ||
+          segs[2] == 'reactions' ||
+          segs[2] == 'translate' ||
+          segs[2] == 'seen' ||
+          segs[2] == 'default-permissions' ||
+          segs[2] == 'approve' ||
+          segs[2] == 'join-to-send' ||
+          segs[2] == 'join-to-comment' ||
+          segs[2] == 'hide-members' ||
+          segs[2] == 'restrict' ||
+          segs[2] == 'topics' ||
+          segs[2] == 'forum' ||
+          segs[2] == 'discussion' ||
+          segs[2] == 'linked' ||
+          segs[2] == 'export' ||
+          segs[2] == 'leave' ||
+          segs[2] == 'report' ||
+          segs[2] == 'copy-link' ||
+          segs[2] == 'title' ||
+          segs[2] == 'stats' ||
+          segs[2] == 'history' ||
+          segs[2] == 'description' ||
+          segs[2] == 'photo' ||
+          segs[2] == 'type' ||
+          segs[2] == 'convert' ||
+          segs[2] == 'owner' ||
+          segs[2] == 'qr' ||
+          segs[2] == 'clear') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -988,8 +1176,22 @@ String? resourcePathAlias(String path, [String query = '']) {
         'startapp' || 'start-app' => '/webapp/$id$q',
         'start-bot' || 'startbot' => '/bots/$id$q',
         'contact' || 'profile' => '${ProfileRoute.path}?userId=$id',
-        'media' || 'photo' || 'video' || 'voice' || 'file' || 'doc' =>
+        'media' ||
+        'photo' ||
+        'video' ||
+        'voice' ||
+        'file' ||
+        'doc' ||
+        'gif' ||
+        'animation' ||
+        'round' ||
+        'poll' ||
+        'quiz' ||
+        'album' ||
+        'comment' ||
+        'location' =>
           '/post/$id$q',
+        'highlight' || 'moment' => '/stories/$id$q',
         _ => null,
       };
     }
@@ -1135,7 +1337,11 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[0] == 'reactors' ||
           segs[0] == 'tips' ||
           segs[0] == 'likers' ||
-          segs[0] == 'viewers') &&
+          segs[0] == 'viewers' ||
+          segs[0] == 'reposts' ||
+          segs[0] == 'shares' ||
+          segs[0] == 'bookmarks' ||
+          segs[0] == 'saves') &&
       segs.length == 2) {
     final id = int.tryParse(segs[1]);
     if (id != null && id > 0) return '/post/$id$q';
@@ -1182,7 +1388,30 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[0] == 'tme' ||
           segs[0] == 'permalink' ||
           segs[0] == 'cmsg' ||
-          segs[0] == 'mid') &&
+          segs[0] == 'mid' ||
+          segs[0] == 'smsg' ||
+          segs[0] == 'imsg' ||
+          segs[0] == 'dmsg' ||
+          segs[0] == 'msgid' ||
+          segs[0] == 'msglink' ||
+          segs[0] == 'goto-message' ||
+          segs[0] == 'open-mid' ||
+          segs[0] == 'jump-mid' ||
+          segs[0] == 'msg-id' ||
+          segs[0] == 'message-id' ||
+          segs[0] == 'show-message' ||
+          segs[0] == 'tglink' ||
+          segs[0] == 'deeplink' ||
+          segs[0] == 'permalink-msg' ||
+          segs[0] == 'jump-to-msg' ||
+          segs[0] == 'show-mid' ||
+          segs[0] == 'goto-mid' ||
+          segs[0] == 'chatmsg' ||
+          segs[0] == 'msgurl' ||
+          segs[0] == 'chat-msg' ||
+          segs[0] == 'open-permalink' ||
+          segs[0] == 'show-permalink' ||
+          segs[0] == 'jump-link') &&
       segs.length == 3) {
     final cid = int.tryParse(segs[1]);
     final mid = int.tryParse(segs[2]);
@@ -1282,6 +1511,34 @@ String? resourcePathAlias(String path, [String query = '']) {
         'docid' ||
         'stickerid' =>
           '/post/$id$q',
+        'cid' => '/chats/thread/$id$q',
+        'pid' => '/post/$id$q',
+        'bid' => '/bots/$id$q',
+        'wid' => '/webapp/$id$q',
+        'sid' => '/stories/$id$q',
+        'aid' => '/ads/$id$q',
+        'gid' => '/chats/thread/$id$q',
+        'tid' => '/chats/thread/$id$q',
+        'fid' => '/chats/folders/$id$q',
+        'eid' => '/stickers/$id$q',
+        'rid' => '/reel/$id$q',
+        'hid' => '/stories/$id$q',
+        'qid' => '/post/$id$q',
+        'highlightid' || 'momentid' => '/stories/$id$q',
+        'webappid' || 'miniappid' => '/webapp/$id$q',
+        'invoiceid' => '/paid/invoices/$id$q',
+        'campaignid' => '/ads/$id$q',
+        'giveawayid' => '/channel/$id$q',
+        'topicid' => '/chats/thread/$id$q',
+        'reel-id' => '/reel/$id$q',
+        'highlight-id' || 'moment-id' => '/stories/$id$q',
+        'web-app-id' || 'mini-app-id' => '/webapp/$id$q',
+        'invoice-id' => '/paid/invoices/$id$q',
+        'campaign-id' => '/ads/$id$q',
+        'giveaway-id' => '/channel/$id$q',
+        'topic-id' => '/chats/thread/$id$q',
+        'boost-id' => '/channel/$id$q',
+        'convo-id' => '/chats/thread/$id$q',
         _ => null,
       };
       if (opened != null) return opened;
@@ -1321,7 +1578,14 @@ String? botSectionPathAlias(String path, [String query = '']) {
     'invoices' ||
     'invoice' ||
     'stats' ||
-    'analytics' =>
+    'analytics' ||
+    'description' ||
+    'about' ||
+    'payments' ||
+    'privacy' ||
+    'username' ||
+    'name' ||
+    'avatar' =>
       withExtra('/bots/$id'),
     _ => null,
   };
@@ -2734,6 +2998,347 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return '${BlockedUsersRoute.path}$q';
     case '/channel-color':
       return '${ChannelsManagementRoute.path}$q';
+    case '/saved-messages-settings':
+    case '/default-send-as':
+    case '/linked-chat-settings':
+    case '/discussion-link':
+    case '/sticker-pack-list':
+    case '/emoji-pack-list':
+    case '/unread-folder':
+    case '/personal-chats':
+    case '/groups-folder':
+    case '/send-as-file':
+    case '/sticker-suggestions':
+    case '/hold-to-record':
+    case '/voice-waveform':
+    case '/round-video-notes':
+    case '/video-messages':
+    case '/photo-editor':
+    case '/video-trimmer':
+    case '/seen-by':
+    case '/message-info':
+    case '/silentsend':
+    case '/exportchat':
+    case '/messageeffects':
+      return '${ChatsRoute.path}$q';
+    case '/chat-wallpaper-url':
+    case '/swipe-to-archive':
+    case '/chat-preview':
+    case '/link-preview-settings':
+    case '/autoplay-gifs':
+    case '/in-app-player':
+    case '/save-edited-photos':
+    case '/reply-with-enter':
+    case '/send-with-enter':
+    case '/replace-emoji':
+    case '/big-emoji':
+    case '/quick-reaction':
+    case '/double-tap-react':
+    case '/swipe-to-reply':
+      return '${SettingsRoute.path}$q';
+    case '/folder-invite-link':
+    case '/chat-folders-list':
+    case '/folder-share':
+      return '${ChatFolderNewRoute.path}$q';
+    case '/bots-folder':
+      return '${MyBotsRoute.path}$q';
+    case '/channels-folder':
+      return '${ChannelsManagementRoute.path}$q';
+    case '/push-settings':
+    case '/web-push':
+    case '/show-preview':
+    case '/hide-preview':
+      return '${NotificationSettingsRoute.path}$q';
+    case '/story-views':
+    case '/story-viewers':
+    case '/moments-archive':
+    case '/hide-story':
+    case '/archive-story':
+    case '/save-story':
+    case '/share-story':
+    case '/highlight-story':
+      return '${StoriesRoute.path}$q';
+    case '/upload-reel':
+    case '/community-upload':
+      return '${CreateReelRoute.path}$q';
+    case '/addpeople':
+      return '${ChatNewMessageRoute.path}$q';
+    case '/reportproblem':
+      return '${SupportContactRoute.path}$q';
+    case '/blockanddelete':
+      return '${BlockedUsersRoute.path}$q';
+    case '/giftupgrade':
+    case '/gifttransfer':
+      return '${StarGiftsInventoryRoute.path}$q';
+    case '/starstopup':
+      return '${StarsWalletRoute.path}$q';
+    case '/starswithdraw':
+      return '${CreatorRevenueRoute.path}$q';
+    case '/flexmanage':
+      return '${FlexSubscriptionRoute.path}$q';
+    case '/adscreate':
+      return '${AdsCampaignEditorRoute.path}$q';
+    case '/boostnow':
+      return '${AdsHubRoute.path}$q';
+    case '/partnerinvite':
+      return '${PartnerProgramRoute.path}$q';
+    case '/extraadstoggle':
+      return '${ExtraAdsRoute.path}$q';
+    case '/backupexport':
+      return '${BackupRoute.path}$q';
+    case '/legalterms':
+    case '/abouthanwe':
+      return '${SupportSecurityRoute.path}$q';
+    case '/default-permissions':
+    case '/approve-new-members':
+    case '/slow-mode-timer':
+    case '/forwarded-from':
+    case '/inline-result':
+    case '/iv-page':
+    case '/cached-page':
+    case '/invite-links':
+    case '/pending-requests':
+    case '/member-list':
+    case '/banned-users':
+    case '/history-for-new':
+    case '/chat-admins':
+    case '/protected-content':
+    case '/no-forwards':
+    case '/send-as-channel':
+    case '/anonymous-posting':
+    case '/mark-all-read':
+    case '/read-all':
+    case '/all-chats-folder':
+    case '/non-contacts':
+    case '/keep-archived':
+    case '/unarchive-on-new':
+      return '${ChatsRoute.path}$q';
+    case '/auto-translate':
+    case '/show-seconds':
+    case '/read-time':
+    case '/play-time':
+    case '/message-timestamps':
+    case '/exact-time':
+    case '/date-format':
+    case '/12-hour':
+    case '/24-hour':
+    case '/disable-animations':
+    case '/in-app-browser':
+    case '/open-links-in-app':
+    case '/secret-chat-settings':
+    case '/self-destruct-timer':
+    case '/screenshot-notify':
+    case '/secret-ttl':
+      return '${SettingsRoute.path}$q';
+    case '/via-bot':
+      return '${MyBotsRoute.path}$q';
+    case '/post-stats':
+      return '${AppAnalyticsRoute.path}$q';
+    case '/repost-story':
+    case '/stories-stealth':
+    case '/stealth-mode':
+      return '${StoriesRoute.path}$q';
+    case '/close-friends-story':
+      return '${CloseFriendsRoute.path}$q';
+    case '/channel-admins':
+    case '/subscriber-list':
+    case '/recent-subscribers':
+    case '/boost-level':
+    case '/channel-boost':
+      return '${ChannelsManagementRoute.path}$q';
+    case '/defaultpermissions':
+    case '/approvenewmembers':
+    case '/slowmodetimer':
+    case '/forwardedfrom':
+    case '/inlineresult':
+    case '/ivpage':
+    case '/cachedpage':
+    case '/invitelinks':
+    case '/pendingrequests':
+    case '/memberlist':
+    case '/bannedusers':
+    case '/markallread':
+      return '${ChatsRoute.path}$q';
+    case '/showseconds':
+    case '/readtime':
+    case '/playtime':
+    case '/inappbrowser':
+    case '/secretttl':
+      return '${SettingsRoute.path}$q';
+    case '/viabot':
+      return '${MyBotsRoute.path}$q';
+    case '/poststats':
+      return '${AppAnalyticsRoute.path}$q';
+    case '/repoststory':
+    case '/stealthmode':
+      return '${StoriesRoute.path}$q';
+    case '/closefriendsstory':
+      return '${CloseFriendsRoute.path}$q';
+    case '/channeladmins':
+    case '/subscriberlist':
+    case '/boostlevel':
+      return '${ChannelsManagementRoute.path}$q';
+    case '/search-messages':
+    case '/search-media':
+    case '/search-files':
+    case '/search-links':
+    case '/calendar-search':
+    case '/hashtag-suggestions':
+      return '${SearchRoute.path}$q';
+    case '/jump-to-date':
+    case '/scroll-to-date':
+    case '/pinned-list':
+    case '/unpin-all':
+    case '/hide-pinned':
+    case '/view-once-media':
+    case '/send-as-document':
+    case '/caption-below':
+    case '/grouped-media':
+    case '/album-send':
+    case '/suggest-stickers':
+    case '/mention-suggestions':
+    case '/unread-divider':
+    case '/side-menu':
+    case '/tag-reactions':
+      return '${ChatsRoute.path}$q';
+    case '/compact-list':
+    case '/chat-list-mode':
+    case '/three-lines':
+    case '/avatar-size':
+    case '/date-headers':
+    case '/send-uncompressed':
+    case '/auto-night-schedule':
+    case '/sticker-loop':
+    case '/emoji-loop':
+    case '/self-destruct-media':
+    case '/quick-react':
+    case '/color-tags':
+      return '${SettingsRoute.path}$q';
+    case '/inline-bots':
+    case '/recent-bots':
+    case '/command-suggestions':
+      return '${MyBotsRoute.path}$q';
+    case '/attach-menu-bots':
+      return '${MiniAppsRoute.path}$q';
+    case '/saved-tags':
+    case '/message-tags':
+      return '${SavedPostsRoute.path}$q';
+    case '/star-react':
+    case '/paid-react':
+      return '${PaidMessageExceptionsRoute.path}$q';
+    case '/my-notes':
+      return '${ProfileTabRoute.path}$q';
+    case '/folder-tags':
+      return '${ChatFolderNewRoute.path}$q';
+    case '/searchmessages':
+    case '/searchmedia':
+    case '/calendarsearch':
+      return '${SearchRoute.path}$q';
+    case '/jumptodate':
+    case '/pinnedlist':
+    case '/viewonce':
+    case '/sendasdocument':
+    case '/groupedmedia':
+    case '/suggeststickers':
+    case '/sidemenu':
+      return '${ChatsRoute.path}$q';
+    case '/compactlist':
+    case '/chatlistmode':
+    case '/senduncompressed':
+    case '/stickersloop':
+    case '/emojiloop':
+    case '/quickreact':
+      return '${SettingsRoute.path}$q';
+    case '/inlinebots':
+    case '/recentbots':
+      return '${MyBotsRoute.path}$q';
+    case '/attachmenubots':
+      return '${MiniAppsRoute.path}$q';
+    case '/savedtags':
+    case '/messagetags':
+      return '${SavedPostsRoute.path}$q';
+    case '/starreact':
+    case '/paidreact':
+      return '${PaidMessageExceptionsRoute.path}$q';
+    case '/mynotes':
+      return '${ProfileTabRoute.path}$q';
+    case '/foldertags':
+      return '${ChatFolderNewRoute.path}$q';
+    case '/saved-messages-search':
+    case '/global-msg-search':
+    case '/media-search':
+    case '/file-search':
+    case '/link-search':
+    case '/music-search':
+    case '/voice-search':
+    case '/gif-search':
+    case '/recent-search':
+    case '/clear-recent-search':
+      return '${SearchRoute.path}$q';
+    case '/chat-filter-unread':
+    case '/chat-filter-muted':
+    case '/chat-filter-contacts':
+    case '/chat-filter-groups':
+    case '/chat-filter-channels':
+    case '/chat-filter-bots':
+    case '/new-secret-chat':
+    case '/start-secret':
+    case '/burn-after-read':
+    case '/once-view':
+    case '/ttl-media':
+    case '/spoiler-caption':
+    case '/edit-caption':
+    case '/schedule-send':
+    case '/send-later':
+    case '/remind-me':
+    case '/forward-as-copy':
+    case '/hide-sender':
+    case '/hide-forward':
+    case '/no-author':
+    case '/quote-reply':
+    case '/thread-reply':
+    case '/pin-quietly':
+    case '/unpin-quietly':
+    case '/jump-to-pin':
+    case '/pins-list':
+    case '/mentions-list':
+    case '/seen-list':
+    case '/read-by':
+    case '/played-by':
+      return '${ChatsRoute.path}$q';
+    case '/add-to-folder':
+    case '/remove-from-folder':
+    case '/reorder-folders':
+    case '/share-folder-link':
+    case '/join-folder':
+    case '/leave-folder':
+    case '/hide-folder':
+      return '${ChatFolderNewRoute.path}$q';
+    case '/savedmessagessearch':
+    case '/globalmsgsearch':
+    case '/mediasearch':
+    case '/filesearch':
+    case '/gifsearch':
+    case '/recentsearch':
+      return '${SearchRoute.path}$q';
+    case '/chatfilterunread':
+    case '/newsecretchat':
+    case '/burnafterread':
+    case '/onceview':
+    case '/schedulesend':
+    case '/sendlater':
+    case '/forwardascopy':
+    case '/hidesender':
+    case '/quotereply':
+    case '/pinquietly':
+    case '/pinslist':
+    case '/readby':
+      return '${ChatsRoute.path}$q';
+    case '/addtofolder':
+    case '/reorderfolders':
+    case '/joinfolder':
+    case '/sharefolderlink':
+      return '${ChatFolderNewRoute.path}$q';
     default:
       return null;
   }
