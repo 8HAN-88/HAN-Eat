@@ -1405,6 +1405,57 @@ void main() {
       parseDeepLinkToGoPath('https://haneat.app/app/#/enable-2fa'),
       TwoFactorSetupRoute.path,
     );
+    expect(resourcePathAlias('/tgjump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/hanjump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/deepjump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/adminid/11'), '${ProfileRoute.path}?userId=11');
+    expect(resourcePathAlias('/memberid/11'), '${ProfileRoute.path}?userId=11');
+    expect(resourcePathAlias('/ownerid/11'), '${ProfileRoute.path}?userId=11');
+    expect(resourcePathAlias('/topiclnk/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/invite-lnk/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/chat/21/send-photos'), '/chats/thread/21');
+    expect(resourcePathAlias('/dm/21/manage-topics'), '/chats/thread/21');
+    expect(resourcePathAlias('/c/1/post-stories'), '/channel/1');
+    expect(shortcutPathAlias('/send-photos'), ChatsRoute.path);
+    expect(shortcutPathAlias('/manage-topics'), ChatsRoute.path);
+    expect(shortcutPathAlias('/add-admins'), ChatsRoute.path);
+    expect(shortcutPathAlias('/post-stories'), ChatsRoute.path);
+    expect(shortcutPathAlias('/restrict-media'), ChatsRoute.path);
+    expect(shortcutPathAlias('/silent-join'), ChatsRoute.path);
+    expect(shortcutPathAlias('/mention-all'), ChatsRoute.path);
+    expect(shortcutPathAlias('/saved-gif'), ChatsRoute.path);
+    expect(shortcutPathAlias('/delete-messages'), ChatsRoute.path);
+    expect(shortcutPathAlias('/ban-users'), ChatsRoute.path);
+    expect(shortcutPathAlias('/admin-rank'), ChatsRoute.path);
+    expect(shortcutPathAlias('/manage-gifts'), ChatsRoute.path);
+    expect(shortcutPathAlias('/change-profile'), ChatsRoute.path);
+    expect(shortcutPathAlias('/sendphotos'), ChatsRoute.path);
+    expect(shortcutPathAlias('/deletemessages'), ChatsRoute.path);
+    expect(shortcutPathAlias('/poststories'), ChatsRoute.path);
+    expect(
+      leftoverPathAlias('/go/send-photos'),
+      ChatsRoute.path,
+    );
+    expect(
+      leftoverPathAlias('/go/tgjump/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      leftoverPathAlias('/go/adminid/11'),
+      '${ProfileRoute.path}?userId=11',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/manage-topics'),
+      ChatsRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/tgjump/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/delete-messages'),
+      ChatsRoute.path,
+    );
     expect(shortcutPathAlias('/reels'), isNull);
     expect(shortcutPathAlias('/logout'), isNull);
     expect(shortcutPathAlias('/reels'), isNull);
