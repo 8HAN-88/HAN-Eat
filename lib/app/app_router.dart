@@ -242,7 +242,12 @@ String? resourcePathAlias(String path, [String query = '']) {
           rest == 'username' ||
           rest == 'about' ||
           rest == 'rules' ||
-          rest == 'welcome') {
+          rest == 'welcome' ||
+          rest == 'invite-expire' ||
+          rest == 'invite-limit' ||
+          rest == 'invite-revoke' ||
+          rest == 'offer' ||
+          rest == 'suggested-settings') {
         return '/channel/$id$q';
       }
       if (rest == 'invite' || rest == 'invite-link') {
@@ -370,7 +375,12 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'username' ||
           segs[2] == 'about' ||
           segs[2] == 'rules' ||
-          segs[2] == 'welcome') {
+          segs[2] == 'welcome' ||
+          segs[2] == 'invite-expire' ||
+          segs[2] == 'invite-limit' ||
+          segs[2] == 'invite-revoke' ||
+          segs[2] == 'topic-icon' ||
+          segs[2] == 'topic-color') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -449,7 +459,12 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[3] == 'username' ||
           segs[3] == 'about' ||
           segs[3] == 'rules' ||
-          segs[3] == 'welcome') {
+          segs[3] == 'welcome' ||
+          segs[3] == 'invite-expire' ||
+          segs[3] == 'invite-limit' ||
+          segs[3] == 'invite-revoke' ||
+          segs[3] == 'topic-icon' ||
+          segs[3] == 'topic-color') {
         return '/chats/thread/$id$q';
       }
       if (segs[3] == 'invite' || segs[3] == 'invite-link') {
@@ -605,7 +620,12 @@ String? resourcePathAlias(String path, [String query = '']) {
           rest == 'username' ||
           rest == 'about' ||
           rest == 'rules' ||
-          rest == 'welcome') {
+          rest == 'welcome' ||
+          rest == 'invite-expire' ||
+          rest == 'invite-limit' ||
+          rest == 'invite-revoke' ||
+          rest == 'offer' ||
+          rest == 'suggested-settings') {
         return '/channel/$id$q';
       }
       if (rest == 'invite' || rest == 'invite-link') {
@@ -682,7 +702,10 @@ String? resourcePathAlias(String path, [String query = '']) {
               segs[2] == 'copy' ||
               segs[2] == 'open' ||
               segs[2] == 'full' ||
-              segs[2] == 'zoom')) {
+              segs[2] == 'zoom' ||
+              segs[2] == 'offer' ||
+              segs[2] == 'accept' ||
+              segs[2] == 'reject')) {
         return '/post/$id$q';
       }
       if (segs.length == 3 &&
@@ -735,7 +758,10 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'copy' ||
           segs[2] == 'open' ||
           segs[2] == 'full' ||
-          segs[2] == 'zoom') {
+          segs[2] == 'zoom' ||
+          segs[2] == 'offer' ||
+          segs[2] == 'accept' ||
+          segs[2] == 'reject') {
         return '/post/$id$q';
       }
       if (segs[2] == 'share' ||
@@ -887,7 +913,10 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'copy' ||
           segs[2] == 'open' ||
           segs[2] == 'full' ||
-          segs[2] == 'zoom') {
+          segs[2] == 'zoom' ||
+          segs[2] == 'offer' ||
+          segs[2] == 'accept' ||
+          segs[2] == 'reject') {
         return '/post/$id$q';
       }
       if (segs[2] == 'share' ||
@@ -1060,7 +1089,12 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'username' ||
           segs[2] == 'about' ||
           segs[2] == 'rules' ||
-          segs[2] == 'welcome') {
+          segs[2] == 'welcome' ||
+          segs[2] == 'invite-expire' ||
+          segs[2] == 'invite-limit' ||
+          segs[2] == 'invite-revoke' ||
+          segs[2] == 'topic-icon' ||
+          segs[2] == 'topic-color') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -1146,7 +1180,12 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'username' ||
           segs[2] == 'about' ||
           segs[2] == 'rules' ||
-          segs[2] == 'welcome') {
+          segs[2] == 'welcome' ||
+          segs[2] == 'invite-expire' ||
+          segs[2] == 'invite-limit' ||
+          segs[2] == 'invite-revoke' ||
+          segs[2] == 'topic-icon' ||
+          segs[2] == 'topic-color') {
         return '/chats/thread/$id$q';
       }
       final mid = int.tryParse(segs[2]);
@@ -1453,7 +1492,12 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[0] == 'han-msg' ||
           segs[0] == 'deep-msg' ||
           segs[0] == 'permalink-id' ||
-          segs[0] == 'open-link') &&
+          segs[0] == 'open-link' ||
+          segs[0] == 'tgmsg' ||
+          segs[0] == 'hanmsg' ||
+          segs[0] == 'deepmsg' ||
+          segs[0] == 'permaid' ||
+          segs[0] == 'openlnk') &&
       segs.length == 3) {
     final cid = int.tryParse(segs[1]);
     final mid = int.tryParse(segs[2]);
@@ -1586,6 +1630,11 @@ String? resourcePathAlias(String path, [String query = '']) {
         'unique-id' || 'collectible-id' => '${StarGiftsInventoryRoute.path}$q',
         'boostid' => '/channel/$id$q',
         'storylink' => '/stories/$id$q',
+        'packset' => '/stickers/$id$q',
+        'emojiid' => '/stickers/$id$q',
+        'uniqueid' || 'collectibleid' => '${StarGiftsInventoryRoute.path}$q',
+        'storylnk' => '/stories/$id$q',
+        'boostlnk' => '/channel/$id$q',
         _ => null,
       };
       if (opened != null) return opened;
@@ -1635,7 +1684,10 @@ String? botSectionPathAlias(String path, [String query = '']) {
     'avatar' ||
     'language' ||
     'users' ||
-    'group' =>
+    'group' ||
+    'affiliate' ||
+    'privacy-policy' ||
+    'tos' =>
       withExtra('/bots/$id'),
     _ => null,
   };
@@ -3465,6 +3517,113 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/archivedstickers':
     case '/ivalways':
       return '${ChatsRoute.path}$q';
+    case '/featured-stickers':
+    case '/trending-stickers':
+    case '/export-stickers':
+    case '/import-stickers':
+    case '/create-sticker-pack':
+    case '/edit-sticker-pack':
+    case '/sticker-sets-order':
+    case '/emoji-sets-order':
+    case '/recent-emoji':
+    case '/frequent-stickers':
+    case '/archived-gifs':
+    case '/saved-reactions':
+    case '/reaction-order':
+    case '/quick-reaction-choose':
+    case '/channel-reactions':
+    case '/group-reactions':
+    case '/restrict-reactions':
+    case '/custom-reaction':
+    case '/default-emoji-status':
+    case '/collectible-status':
+    case '/topic-icon':
+    case '/topic-color':
+    case '/close-all-topics':
+    case '/forum-as-messages':
+    case '/topics-as-tabs':
+    case '/general-topic-hide':
+    case '/invite-link-expire':
+    case '/invite-link-limit':
+    case '/invite-link-revoke':
+    case '/invite-expire':
+    case '/invite-limit':
+    case '/leave-quietly':
+    case '/report-spam-and-leave':
+      return '${ChatsRoute.path}$q';
+    case '/wear-gift':
+    case '/unwear-gift':
+    case '/pinned-gifts':
+    case '/hide-gifts':
+    case '/show-gifts':
+    case '/gift-profile':
+    case '/wear-collectible':
+      return '${StarGiftsInventoryRoute.path}$q';
+    case '/suggested-posts-settings':
+    case '/offer-post':
+    case '/accept-suggested':
+    case '/reject-suggested':
+    case '/ads-revenue':
+    case '/channel-ad-revenue':
+      return '${AdsHubRoute.path}$q';
+    case '/star-ref':
+      return '${PartnerProgramRoute.path}$q';
+    case '/attach-menu-order':
+    case '/remove-attach-bot':
+    case '/side-menu-bots':
+    case '/webapp-settings':
+      return '${MiniAppsRoute.path}$q';
+    case '/bot-privacy-policy':
+    case '/bot-affiliate':
+    case '/affiliate-bot':
+      return '${MyBotsRoute.path}$q';
+    case '/split-view':
+    case '/tablet-mode':
+    case '/floating-window':
+    case '/multi-window':
+      return '${SettingsRoute.path}$q';
+    case '/badge-count':
+    case '/dock-icon':
+    case '/desktop-notifications':
+      return '${NotificationSettingsRoute.path}$q';
+    case '/delete-channel':
+    case '/remove-channel':
+      return '${ChannelsManagementRoute.path}$q';
+    case '/featuredstickers':
+    case '/trendingstickers':
+    case '/createstickerpack':
+    case '/recentemoji':
+    case '/topicicon':
+    case '/closealltopics':
+    case '/invitelinkexpire':
+    case '/leavequietly':
+      return '${ChatsRoute.path}$q';
+    case '/weargift':
+    case '/unweargift':
+    case '/pinnedgifts':
+    case '/hidegifts':
+      return '${StarGiftsInventoryRoute.path}$q';
+    case '/offerpost':
+    case '/acceptsuggested':
+    case '/adsrevenue':
+      return '${AdsHubRoute.path}$q';
+    case '/starref':
+      return '${PartnerProgramRoute.path}$q';
+    case '/attachmenuorder':
+    case '/removeattachbot':
+    case '/webappsettings':
+      return '${MiniAppsRoute.path}$q';
+    case '/botaffiliate':
+    case '/affiliatebot':
+      return '${MyBotsRoute.path}$q';
+    case '/splitview':
+    case '/tabletmode':
+      return '${SettingsRoute.path}$q';
+    case '/badgecount':
+    case '/dockicon':
+      return '${NotificationSettingsRoute.path}$q';
+    case '/deletechannel':
+      return '${ChannelsManagementRoute.path}$q';
     default:
       return null;
   }
