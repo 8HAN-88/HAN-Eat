@@ -1240,6 +1240,61 @@ void main() {
       parseDeepLinkToGoPath('https://haneat.app/app/#/add-to-folder'),
       ChatFolderNewRoute.path,
     );
+    expect(resourcePathAlias('/tg-msg/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/han-msg/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/deep-msg/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/pack-set/4'), '/stickers/4');
+    expect(resourcePathAlias('/custom-emoji-id/4'), '/stickers/4');
+    expect(resourcePathAlias('/unique-id/9'), StarGiftsInventoryRoute.path);
+    expect(resourcePathAlias('/collectible-id/9'), StarGiftsInventoryRoute.path);
+    expect(resourcePathAlias('/boostid/1'), '/channel/1');
+    expect(resourcePathAlias('/storylink/9'), '/stories/9');
+    expect(resourcePathAlias('/share/dice/28'), '/post/28');
+    expect(resourcePathAlias('/share/venue/28'), '/post/28');
+    expect(resourcePathAlias('/copies/28'), '/post/28');
+    expect(resourcePathAlias('/chat/21/about'), '/chats/thread/21');
+    expect(resourcePathAlias('/dm/21/rules'), '/chats/thread/21');
+    expect(resourcePathAlias('/c/1/welcome'), '/channel/1');
+    expect(resourcePathAlias('/p/28/open'), '/post/28');
+    expect(resourcePathAlias('/post/28/zoom'), '/post/28');
+    expect(botSectionPathAlias('/bots/5/language'), '/bots/5');
+    expect(botSectionPathAlias('/bot/5/group'), '/bots/5');
+    expect(shortcutPathAlias('/swipe-to-delete'), SettingsRoute.path);
+    expect(shortcutPathAlias('/message-translation'), SettingsRoute.path);
+    expect(shortcutPathAlias('/pip-player'), SettingsRoute.path);
+    expect(shortcutPathAlias('/voip-proxy'), SettingsRoute.path);
+    expect(shortcutPathAlias('/last-seen-except'), SettingsRoute.path);
+    expect(shortcutPathAlias('/archive-and-mute'), ChatArchivedRoute.path);
+    expect(shortcutPathAlias('/raise-to-speak'), ChatsRoute.path);
+    expect(shortcutPathAlias('/archived-stickers'), ChatsRoute.path);
+    expect(shortcutPathAlias('/iv-always'), ChatsRoute.path);
+    expect(shortcutPathAlias('/swipetodelete'), SettingsRoute.path);
+    expect(shortcutPathAlias('/archiveandmute'), ChatArchivedRoute.path);
+    expect(shortcutPathAlias('/raisetospeak'), ChatsRoute.path);
+    expect(
+      leftoverPathAlias('/go/swipe-to-delete'),
+      SettingsRoute.path,
+    );
+    expect(
+      leftoverPathAlias('/go/tg-msg/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      leftoverPathAlias('/go/storylink/9'),
+      '/stories/9',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/pip-player'),
+      SettingsRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/tg-msg/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/archive-and-mute'),
+      ChatArchivedRoute.path,
+    );
     expect(shortcutPathAlias('/reels'), isNull);
     expect(shortcutPathAlias('/logout'), isNull);
     expect(shortcutPathAlias('/reels'), isNull);
