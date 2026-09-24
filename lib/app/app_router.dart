@@ -200,13 +200,45 @@ String? leftoverResourceCallMedia(String kind) {
 }
 
 String pathWithCallQuery(String path, String media, [String query = '']) {
-  final parts = <String>[];
-  if (query.isNotEmpty) parts.add(query);
-  if (!RegExp(r'(^|&)call=').hasMatch(query)) {
+  final split = path.split('?');
+  final base = split.first;
+  final existing = split.length > 1 ? split.sublist(1).join('?') : '';
+  final parts = <String>[
+    if (existing.isNotEmpty) existing,
+    if (query.isNotEmpty) query,
+  ];
+  final joined = parts.join('&');
+  if (!RegExp(r'(^|&)call=').hasMatch(joined)) {
     parts.add('call=$media');
   }
-  if (parts.isEmpty) return path;
-  return '$path?${parts.join('&')}';
+  if (parts.isEmpty) return base;
+  return '$base?${parts.join('&')}';
+}
+
+String? leftoverProfileCallMedia(String rest) {
+  switch (rest) {
+    case 'call':
+    case 'voice':
+    case 'audio':
+    case 'voice-chat':
+    case 'redial':
+      return 'voice';
+    case 'video':
+    case 'videocall':
+    case 'video-chat':
+    case 'screen-share':
+      return 'video';
+    default:
+      return null;
+  }
+}
+
+String leftoverProfileOpenPath(int id, String rest, [String query = '']) {
+  final media = leftoverProfileCallMedia(rest);
+  if (media != null) {
+    return pathWithCallQuery(ProfileRoute.withUserId(id), media, query);
+  }
+  return ProfileRoute.withUserId(id);
 }
 
 String leftoverChatOpenPath(int id, String rest, [String query = '']) {
@@ -641,6 +673,10 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'highlights') {
         return ProfileRoute.withUserId(id);
       }
+      final profileCall = leftoverProfileCallMedia(segs[2]);
+      if (profileCall != null) {
+        return leftoverProfileOpenPath(id, segs[2], query);
+      }
     }
   }
   if ((segs[0] == 'user' || segs[0] == 'users') && segs.length == 3) {
@@ -653,6 +689,10 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'highlights' ||
           segs[2] == 'posts') {
         return ProfileRoute.withUserId(id);
+      }
+      final profileCall = leftoverProfileCallMedia(segs[2]);
+      if (profileCall != null) {
+        return leftoverProfileOpenPath(id, segs[2], query);
       }
     }
   }
@@ -1443,7 +1483,9 @@ String? resourcePathAlias(String path, [String query = '']) {
   }
   if ((segs[0] == 'call' || segs[0] == 'calls') && segs.length == 2) {
     final id = int.tryParse(segs[1]);
-    if (id != null && id > 0) return '/chats/thread/$id$q';
+    if (id != null && id > 0) {
+      return pathWithCallQuery('/chats/thread/$id', 'voice', query);
+    }
   }
   if ((segs[0] == 'topic' || segs[0] == 'forum') && segs.length == 2) {
     final id = int.tryParse(segs[1]);
@@ -5777,9 +5819,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: ProfileRoute.name,
         pageBuilder: (context, state) {
           final userId = state.uri.queryParameters['userId'];
+          final callRaw =
+              (state.uri.queryParameters['call'] ?? '').toLowerCase();
+          final initialCallMedia = switch (callRaw) {
+            'voice' || 'audio' || 'phone' => 'voice',
+            'video' || 'cam' || 'camera' => 'video',
+            _ => null,
+          };
           return MaterialPage(
             child: ProfileScreen(
               userId: userId != null ? int.tryParse(userId) : null,
+              initialCallMedia: initialCallMedia,
             ),
           );
         },

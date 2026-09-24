@@ -7,9 +7,11 @@ import 'package:go_router/go_router.dart';
 import '../../../app/app_router.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/chat_service.dart';
+import '../../calls/presentation/call_coordinator.dart';
 import '../application/chat_open_direct.dart';
 import '../../../services/server_config.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../utils/session_snackbar.dart';
 import '../../../widgets/app_empty_state.dart';
 
 class ChatPeopleSearchScreen extends StatefulWidget {
@@ -67,6 +69,37 @@ class _ChatPeopleSearchScreenState extends State<ChatPeopleSearchScreen> {
   void _scheduleSearch() {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 350), _search);
+  }
+
+  Future<void> _startCall(ChatUserSearchItem user, String media) async {
+    try {
+      final conv = await ChatOpenDirect.openNow(user.id, peer: user.brief);
+      final real = conv.id > 0 ? conv : await ChatOpenDirect.resolve(user.id);
+      if (!mounted) return;
+      if (real.id <= 0) {
+        context.pushReplacement(
+          pathWithCallQuery(ChatThreadRoute.pathFor(real), media),
+          extra: real,
+        );
+        return;
+      }
+      await CallCoordinator.instance.openOutgoing(
+        conversationId: real.id,
+        media: media,
+        context: context,
+        peerName: user.brief.name,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: media == 'video'
+            ? 'Не удалось начать видеозвонок'
+            : 'Не удалось начать звонок',
+        onRetry: () => unawaited(_startCall(user, media)),
+      );
+    }
   }
 
   Future<void> _openChat(ChatUserSearchItem user) async {
@@ -257,6 +290,11 @@ class _ChatPeopleSearchScreenState extends State<ChatPeopleSearchScreen> {
                         tooltip: 'Написать',
                         icon: const Icon(Icons.chat_bubble_outline),
                         onPressed: () => _openChat(user),
+                      ),
+                      IconButton(
+                        tooltip: 'Позвонить',
+                        icon: const Icon(Icons.call_outlined),
+                        onPressed: () => unawaited(_startCall(user, 'voice')),
                       ),
                     ],
                   ),

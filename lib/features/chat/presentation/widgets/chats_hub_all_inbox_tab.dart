@@ -18,10 +18,13 @@ import '../../../../services/channel_sheet_prefs.dart';
 import '../../../../services/chat_cache_service.dart';
 import '../../../../services/chat_folder_store.dart';
 import '../../../../services/chat_hub_ui_prefs.dart';
+import '../../../../services/auth_service.dart';
 import '../../../../services/chat_service.dart';
 import '../../../../services/chat_thread_ui_prefs.dart';
 import '../../../../services/user_realtime_service.dart';
 import '../../../../utils/api_error_parser.dart';
+import '../../../../utils/session_snackbar.dart';
+import '../../../calls/presentation/call_coordinator.dart';
 import '../../../../widgets/app_empty_state.dart';
 import '../../../../widgets/chat_inbox_skeleton.dart';
 import '../../../../widgets/telegram_ui.dart';
@@ -2163,6 +2166,38 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     }
   }
 
+  bool _canStartCallFromHub(ChatConversation chat) {
+    if (chat.isSaved || chat.id <= 0) return false;
+    if (!chat.isGroup) return chat.peer != null;
+    final me = AuthService.instance.currentUser?.id;
+    return chat.amICanManageVideoChats ||
+        (chat.createdByUserId != null && chat.createdByUserId == me);
+  }
+
+  Future<void> _startCallFromHub(ChatConversation chat, String media) async {
+    if (!_canStartCallFromHub(chat)) return;
+    try {
+      await CallCoordinator.instance.openOutgoing(
+        conversationId: chat.id,
+        media: media,
+        context: context,
+        peerName: chat.isGroup
+            ? (chat.title ?? 'Группа')
+            : chat.peer?.name,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: media == 'video'
+            ? 'Не удалось начать видеозвонок'
+            : 'Не удалось начать звонок',
+        onRetry: () => unawaited(_startCallFromHub(chat, media)),
+      );
+    }
+  }
+
   void _showChatHubActions(ChatConversation chat) {
     showTelegramActionSheet<void>(
       context: context,
@@ -2177,6 +2212,18 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
               ),
             ]
           : [
+              if (_canStartCallFromHub(chat)) ...[
+                TelegramActionSheetAction(
+                  icon: Icons.call_outlined,
+                  title: chat.isGroup ? 'Групповой звонок' : 'Аудиозвонок',
+                  onTap: () => unawaited(_startCallFromHub(chat, 'voice')),
+                ),
+                TelegramActionSheetAction(
+                  icon: Icons.videocam_outlined,
+                  title: chat.isGroup ? 'Групповой видеозвонок' : 'Видеозвонок',
+                  onTap: () => unawaited(_startCallFromHub(chat, 'video')),
+                ),
+              ],
               TelegramActionSheetAction(
                 icon: Icons.folder_outlined,
                 title: 'Добавить в папку',

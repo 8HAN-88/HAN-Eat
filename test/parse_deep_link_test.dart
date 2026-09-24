@@ -488,7 +488,7 @@ void main() {
     expect(resourcePathAlias('/chats/21/456'), '/chats/thread/21?msg=456');
     expect(resourcePathAlias('/share/post/28'), '/post/28');
     expect(resourcePathAlias('/share/reel/28'), '/reel/28');
-    expect(resourcePathAlias('/call/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/call/21'), '/chats/thread/21?call=voice');
     expect(resourcePathAlias('/saved/21'), '/chats/thread/21');
     expect(unwrapGoOpenPath('/go/c/1/info'), '/c/1/info');
     expect(unwrapGoOpenPath('/open/chats/21'), '/chats/21');
@@ -1500,6 +1500,37 @@ void main() {
     );
     expect(leftoverThreadCallMedia('video-chat'), 'video');
     expect(leftoverThreadCallMedia('leave-voice-chat'), isNull);
+    expect(leftoverProfileCallMedia('call'), 'voice');
+    expect(leftoverProfileCallMedia('video'), 'video');
+    expect(leftoverProfileCallMedia('stories'), isNull);
+    expect(
+      leftoverProfileOpenPath(11, 'call'),
+      '${ProfileRoute.path}?userId=11&call=voice',
+    );
+    expect(
+      leftoverProfileOpenPath(11, 'video'),
+      '${ProfileRoute.path}?userId=11&call=video',
+    );
+    expect(
+      resourcePathAlias('/user/11/call'),
+      '${ProfileRoute.path}?userId=11&call=voice',
+    );
+    expect(
+      resourcePathAlias('/profile/11/video'),
+      '${ProfileRoute.path}?userId=11&call=video',
+    );
+    expect(
+      leftoverPathAlias('/go/user/11/voice-chat'),
+      '${ProfileRoute.path}?userId=11&call=voice',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/user/11/call'),
+      '${ProfileRoute.path}?userId=11&call=voice',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/calls/21'),
+      '/chats/thread/21?call=voice',
+    );
     expect(leftoverResourceCallMedia('liveid'), 'voice');
     expect(leftoverResourceCallMedia('inviteid'), isNull);
     expect(

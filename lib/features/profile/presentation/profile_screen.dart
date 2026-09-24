@@ -62,8 +62,9 @@ user_service.UserProfile _userProfileFromAuthUser(User u) {
 
 class ProfileScreen extends ConsumerStatefulWidget {
   final int? userId; // Если null, показываем текущего пользователя
+  final String? initialCallMedia;
 
-  const ProfileScreen({super.key, this.userId});
+  const ProfileScreen({super.key, this.userId, this.initialCallMedia});
 
   @override
   ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
@@ -79,6 +80,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   bool _isFollowing = false;
   bool _isFollowActionRunning = false;
   bool _isOpeningChat = false;
+  bool _leftoverCallStarted = false;
   bool _isSendingGift = false;
   bool _isSendingTip = false;
   final Set<int> _loadedTabs = {0};
@@ -285,8 +287,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         _syncTabController(profileUserId: _profile?.user.id);
         setState(() => _isLoading = false);
         unawaited(_loadProfileGifts());
+        _maybeStartLeftoverCall();
       }
     }
+  }
+
+  void _maybeStartLeftoverCall() {
+    if (_leftoverCallStarted) return;
+    final media = widget.initialCallMedia;
+    if (media != 'voice' && media != 'video') return;
+    final String callMedia = media!;
+    final user = _profile?.user;
+    if (user == null) return;
+    if (_isOwnProfileView(profileUserId: user.id)) return;
+    _leftoverCallStarted = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_startCallFromProfile(user, callMedia));
+    });
   }
 
   Future<void> _loadProfileGifts() async {
