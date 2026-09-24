@@ -504,7 +504,11 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'voice' ||
           segs[2] == 'audio' ||
           segs[2] == 'video' ||
-          segs[2] == 'videocall') {
+          segs[2] == 'videocall' ||
+          segs[2] == 'select-messages' ||
+          segs[2] == 'mute-forever' ||
+          segs[2] == 'business-hours' ||
+          segs[2] == 'set-wallpaper') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -610,7 +614,11 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[3] == 'voice' ||
           segs[3] == 'audio' ||
           segs[3] == 'video' ||
-          segs[3] == 'videocall') {
+          segs[3] == 'videocall' ||
+          segs[3] == 'select-messages' ||
+          segs[3] == 'mute-forever' ||
+          segs[3] == 'business-hours' ||
+          segs[3] == 'set-wallpaper') {
         return leftoverChatOpenPath(id, segs[3], query);
       }
       if (segs[3] == 'invite' || segs[3] == 'invite-link') {
@@ -1283,7 +1291,11 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'voice' ||
           segs[2] == 'audio' ||
           segs[2] == 'video' ||
-          segs[2] == 'videocall') {
+          segs[2] == 'videocall' ||
+          segs[2] == 'select-messages' ||
+          segs[2] == 'mute-forever' ||
+          segs[2] == 'business-hours' ||
+          segs[2] == 'set-wallpaper') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -1396,7 +1408,11 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'voice' ||
           segs[2] == 'audio' ||
           segs[2] == 'video' ||
-          segs[2] == 'videocall') {
+          segs[2] == 'videocall' ||
+          segs[2] == 'select-messages' ||
+          segs[2] == 'mute-forever' ||
+          segs[2] == 'business-hours' ||
+          segs[2] == 'set-wallpaper') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -1720,7 +1736,9 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[0] == 'calljump' ||
           segs[0] == 'livejump' ||
           segs[0] == 'vcjump' ||
-          segs[0] == 'streamjump') &&
+          segs[0] == 'streamjump' ||
+          segs[0] == 'pinjump' ||
+          segs[0] == 'mentionjump') &&
       segs.length == 3) {
     final cid = int.tryParse(segs[1]);
     final mid = int.tryParse(segs[2]);
@@ -1870,6 +1888,7 @@ String? resourcePathAlias(String path, [String query = '']) {
         'speakerid' => pathWithCallQuery('/chats/thread/$id', 'voice', query),
         'livestreamid' || 'rtmpid' || 'groupcallid' =>
           pathWithCallQuery('/chats/thread/$id', 'voice', query),
+        'fromid' || 'toid' || 'senderid' => '${ProfileRoute.path}?userId=$id',
         _ => null,
       };
       if (opened != null) return opened;
@@ -4116,6 +4135,66 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/stoplivestream':
     case '/schedulelive':
       return '${ChatsRoute.path}$q';
+    case '/business-hours':
+    case '/opening-hours':
+    case '/greeting-message':
+    case '/away-message':
+    case '/quick-replies':
+    case '/chatbot-replies':
+    case '/select-messages':
+    case '/forward-selected':
+    case '/delete-selected':
+    case '/copy-selected':
+    case '/save-selected':
+    case '/share-selected':
+    case '/report-selected':
+    case '/premium-stickers':
+    case '/copy-protection':
+    case '/no-copy':
+      return '${ChatsRoute.path}$q';
+    case '/mute-forever':
+    case '/mute-1h':
+    case '/mute-8h':
+    case '/mute-2d':
+    case '/custom-mute':
+    case '/vibrate':
+    case '/led-color':
+    case '/priority-notifications':
+      return '${NotificationSettingsRoute.path}$q';
+    case '/swipe-to-mute':
+    case '/swipe-to-read':
+    case '/swipe-to-pin':
+    case '/set-chat-wallpaper':
+    case '/reset-wallpaper':
+    case '/upload-wallpaper':
+      return '${SettingsRoute.path}$q';
+    case '/stars-giveaway':
+      return '${AdsHubRoute.path}$q';
+    case '/businesshours':
+    case '/greetingmessage':
+    case '/awaymessage':
+    case '/quickreplies':
+    case '/selectmessages':
+    case '/forwardselected':
+    case '/deleteselected':
+    case '/premiumstickers':
+    case '/copyprotection':
+    case '/nocopy':
+      return '${ChatsRoute.path}$q';
+    case '/muteforever':
+    case '/mute1h':
+    case '/custommute':
+    case '/ledcolor':
+    case '/prioritynotif':
+      return '${NotificationSettingsRoute.path}$q';
+    case '/swipetomute':
+    case '/swipetoread':
+    case '/swipetopin':
+    case '/resetchatwallpaper':
+    case '/uploadwallpaper':
+      return '${SettingsRoute.path}$q';
+    case '/starsgiveaway':
+      return '${AdsHubRoute.path}$q';
     default:
       return null;
   }
