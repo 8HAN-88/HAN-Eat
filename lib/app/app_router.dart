@@ -512,7 +512,10 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'poll-results' ||
           segs[2] == 'message-link' ||
           segs[2] == 'hide-caption' ||
-          segs[2] == 'view-replies') {
+          segs[2] == 'view-replies' ||
+          segs[2] == 'sticker-search' ||
+          segs[2] == 'crop-photo' ||
+          segs[2] == 'location-picker') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -626,7 +629,10 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[3] == 'poll-results' ||
           segs[3] == 'message-link' ||
           segs[3] == 'hide-caption' ||
-          segs[3] == 'view-replies') {
+          segs[3] == 'view-replies' ||
+          segs[3] == 'sticker-search' ||
+          segs[3] == 'crop-photo' ||
+          segs[3] == 'location-picker') {
         return leftoverChatOpenPath(id, segs[3], query);
       }
       if (segs[3] == 'invite' || segs[3] == 'invite-link') {
@@ -1307,7 +1313,10 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'poll-results' ||
           segs[2] == 'message-link' ||
           segs[2] == 'hide-caption' ||
-          segs[2] == 'view-replies') {
+          segs[2] == 'view-replies' ||
+          segs[2] == 'sticker-search' ||
+          segs[2] == 'crop-photo' ||
+          segs[2] == 'location-picker') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -1428,7 +1437,10 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'poll-results' ||
           segs[2] == 'message-link' ||
           segs[2] == 'hide-caption' ||
-          segs[2] == 'view-replies') {
+          segs[2] == 'view-replies' ||
+          segs[2] == 'sticker-search' ||
+          segs[2] == 'crop-photo' ||
+          segs[2] == 'location-picker') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -1756,7 +1768,9 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[0] == 'pinjump' ||
           segs[0] == 'mentionjump' ||
           segs[0] == 'replyjump' ||
-          segs[0] == 'reactjump') &&
+          segs[0] == 'reactjump' ||
+          segs[0] == 'mediajump' ||
+          segs[0] == 'albumjump') &&
       segs.length == 3) {
     final cid = int.tryParse(segs[1]);
     final mid = int.tryParse(segs[2]);
@@ -1909,6 +1923,8 @@ String? resourcePathAlias(String path, [String query = '']) {
         'fromid' || 'toid' || 'senderid' => '${ProfileRoute.path}?userId=$id',
         'replyid' => '/chats/thread/$id$q',
         'reactid' || 'pollid' || 'voteid' => '/post/$id$q',
+        'albumid' => '/post/$id$q',
+        'editid' => '/post/$id/edit$q',
         _ => null,
       };
       if (opened != null) return opened;
@@ -4258,6 +4274,41 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return '${ChatNewMessageRoute.path}$q';
     case '/openinbrowser':
     case '/alwaystranscribe':
+      return '${SettingsRoute.path}$q';
+    case '/sticker-search':
+    case '/emoji-search':
+      return '${SearchRoute.path}$q';
+    case '/attach-music':
+    case '/draw-on-photo':
+    case '/crop-photo':
+    case '/quality-selector':
+    case '/timer-photo':
+    case '/weather':
+    case '/share-location-live':
+    case '/stop-live-location':
+    case '/nearby-places':
+    case '/venues':
+    case '/location-picker':
+      return '${ChatsRoute.path}$q';
+    case '/hd-photo':
+    case '/hd-video':
+    case '/no-compression':
+    case '/compress-image':
+      return '${SettingsRoute.path}$q';
+    case '/stickersearch':
+    case '/emojisearch':
+      return '${SearchRoute.path}$q';
+    case '/attachmusic':
+    case '/drawonphoto':
+    case '/cropphoto':
+    case '/timerphoto':
+    case '/locationpicker':
+    case '/nearbyplaces':
+    case '/stoplivelocation':
+      return '${ChatsRoute.path}$q';
+    case '/hdphoto':
+    case '/hdvideo':
+    case '/nocompression':
       return '${SettingsRoute.path}$q';
     default:
       return null;

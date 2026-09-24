@@ -1708,6 +1708,46 @@ void main() {
       parseDeepLinkToGoPath('https://haneat.app/app/#/pollid/28'),
       '/post/28',
     );
+    expect(shortcutPathAlias('/sticker-search'), SearchRoute.path);
+    expect(shortcutPathAlias('/emoji-search'), SearchRoute.path);
+    expect(shortcutPathAlias('/attach-music'), ChatsRoute.path);
+    expect(shortcutPathAlias('/crop-photo'), ChatsRoute.path);
+    expect(shortcutPathAlias('/weather'), ChatsRoute.path);
+    expect(shortcutPathAlias('/location-picker'), ChatsRoute.path);
+    expect(shortcutPathAlias('/stop-live-location'), ChatsRoute.path);
+    expect(shortcutPathAlias('/hd-photo'), SettingsRoute.path);
+    expect(shortcutPathAlias('/no-compression'), SettingsRoute.path);
+    expect(shortcutPathAlias('/stickersearch'), SearchRoute.path);
+    expect(shortcutPathAlias('/cropphoto'), ChatsRoute.path);
+    expect(shortcutPathAlias('/hdphoto'), SettingsRoute.path);
+    expect(resourcePathAlias('/mediajump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/albumjump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/albumid/28'), '/post/28');
+    expect(resourcePathAlias('/editid/28'), '/post/28/edit');
+    expect(
+      resourcePathAlias('/chat/21/location-picker'),
+      '/chats/thread/21',
+    );
+    expect(
+      leftoverPathAlias('/go/sticker-search'),
+      SearchRoute.path,
+    );
+    expect(
+      leftoverPathAlias('/go/mediajump/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/weather'),
+      ChatsRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/albumjump/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/editid/28'),
+      '/post/28/edit',
+    );
     expect(shortcutPathAlias('/reels'), isNull);
     expect(shortcutPathAlias('/logout'), isNull);
     expect(shortcutPathAlias('/reels'), isNull);
