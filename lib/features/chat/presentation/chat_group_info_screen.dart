@@ -17,6 +17,8 @@ import '../../../widgets/stars_pay_helper.dart';
 import '../../../services/server_config.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../utils/presence_format.dart';
+import '../../../utils/session_snackbar.dart';
+import '../../calls/presentation/call_coordinator.dart';
 import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../application/chat_inbox_optimistic.dart';
@@ -171,6 +173,30 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       _conversation.amICanManagePostingPermissions || _isCreator;
   bool get _canChangeInfo => _conversation.amICanChangeInfo || _isCreator;
   bool get _canInviteUsers => _conversation.amICanInviteUsers || _isCreator;
+  bool get _canStartGroupCall =>
+      _conversation.amICanManageVideoChats || _isCreator;
+
+  Future<void> _startGroupCall(String media) async {
+    if (_busy) return;
+    try {
+      await CallCoordinator.instance.openOutgoing(
+        conversationId: _conversation.id,
+        media: media,
+        context: context,
+        peerName: _conversation.title ?? 'Группа',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: media == 'video'
+            ? 'Не удалось начать групповой видеозвонок'
+            : 'Не удалось начать групповой звонок',
+        onRetry: () => unawaited(_startGroupCall(media)),
+      );
+    }
+  }
 
   @override
   void initState() {
@@ -1896,6 +1922,20 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
             }
           },
         ),
+        actions: [
+          if (_canStartGroupCall && !_loading && _error == null) ...[
+            IconButton(
+              tooltip: 'Групповой звонок',
+              onPressed: () => unawaited(_startGroupCall('voice')),
+              icon: const Icon(Icons.call_outlined),
+            ),
+            IconButton(
+              tooltip: 'Групповой видеозвонок',
+              onPressed: () => unawaited(_startGroupCall('video')),
+              icon: const Icon(Icons.videocam_outlined),
+            ),
+          ],
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())

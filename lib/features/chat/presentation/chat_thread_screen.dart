@@ -132,6 +132,7 @@ class ChatThreadLoaderScreen extends ConsumerStatefulWidget {
     this.initialJumpMessageId,
     this.initialDraftText,
     this.initialPrivateReply,
+    this.initialCallMedia,
   });
 
   final int conversationId;
@@ -140,6 +141,7 @@ class ChatThreadLoaderScreen extends ConsumerStatefulWidget {
   final int? initialJumpMessageId;
   final String? initialDraftText;
   final ChatPrivateReplyQuote? initialPrivateReply;
+  final String? initialCallMedia;
 
   @override
   ConsumerState<ChatThreadLoaderScreen> createState() =>
@@ -263,6 +265,7 @@ class _ChatThreadLoaderScreenState
           initialJumpMessageId: widget.initialJumpMessageId,
           initialDraftText: widget.initialDraftText,
           initialPrivateReply: widget.initialPrivateReply,
+          initialCallMedia: widget.initialCallMedia,
         ),
       );
     }
@@ -310,12 +313,14 @@ class ChatThreadScreen extends StatefulWidget {
     this.initialJumpMessageId,
     this.initialDraftText,
     this.initialPrivateReply,
+    this.initialCallMedia,
   });
 
   final ChatConversation conversation;
   final int? initialJumpMessageId;
   final String? initialDraftText;
   final ChatPrivateReplyQuote? initialPrivateReply;
+  final String? initialCallMedia;
 
   int get conversationId => conversation.id;
 
@@ -614,6 +619,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   int _pollFailureCount = 0;
   int _scheduledPendingCount = 0;
   int? _pendingInitialJumpMessageId;
+  bool _leftoverCallStarted = false;
   int? _focusedMessageId;
   Timer? _focusedMessageTimer;
   Timer? _slowModeCountdownTimer;
@@ -764,6 +770,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     } else {
       _loading = false;
     }
+    _maybeStartLeftoverCall();
     _startPolling();
     _syncAutoDeleteTicker();
     // Fallback poll; primary presence updates come via user.presence SSE.
@@ -1008,6 +1015,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _refreshConversation();
     _kickTextOutbound();
     if (mounted) setState(() {});
+    _maybeStartLeftoverCall();
+  }
+
+  void _maybeStartLeftoverCall() {
+    if (_leftoverCallStarted) return;
+    final media = widget.initialCallMedia;
+    if (media != 'voice' && media != 'video') return;
+    if (_conversation.isSaved) return;
+    if (_conversation.id <= 0) return;
+    _leftoverCallStarted = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(media == 'video' ? _startVideoCall() : _startVoiceCall());
+    });
   }
 
   void _onWebTabHidden() {

@@ -17,6 +17,7 @@ import '../../saved/presentation/saved_posts_screen.dart';
 import 'package:go_router/go_router.dart';
 import 'package:han_eat/app/app_router.dart';
 import 'package:han_eat/core/theme/app_tokens.dart';
+import '../../calls/presentation/call_coordinator.dart';
 import '../../chat/application/chat_open_direct.dart';
 import '../../../models/chat_models.dart';
 import 'package:han_eat/widgets/app_avatar.dart';
@@ -328,6 +329,41 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         username: user.username,
         avatarUrl: user.avatarUrl,
       );
+
+  Future<void> _startCallFromProfile(User user, String media) async {
+    if (_isOpeningChat) return;
+    setState(() => _isOpeningChat = true);
+    try {
+      final conv = await ChatOpenDirect.openNow(user.id, peer: _briefFor(user));
+      final real = conv.id > 0 ? conv : await ChatOpenDirect.resolve(user.id);
+      if (!mounted) return;
+      if (real.id <= 0) {
+        context.push(
+          pathWithCallQuery(ChatThreadRoute.pathFor(real), media),
+          extra: real,
+        );
+        return;
+      }
+      await CallCoordinator.instance.openOutgoing(
+        conversationId: real.id,
+        media: media,
+        context: context,
+        peerName: user.name,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: media == 'video'
+            ? 'Не удалось начать видеозвонок'
+            : 'Не удалось начать звонок',
+        onRetry: () => unawaited(_startCallFromProfile(user, media)),
+      );
+    } finally {
+      if (mounted) setState(() => _isOpeningChat = false);
+    }
+  }
 
   Future<void> _openChat(User user) async {
     if (_isOpeningChat) return;
@@ -1107,6 +1143,34 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                             : () => unawaited(_sendStarsFromProfile(user)),
                         icon: const Icon(Icons.star_rounded, size: 18),
                         label: const Text('Звёзды'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _isOpeningChat
+                            ? null
+                            : () => unawaited(
+                                  _startCallFromProfile(user, 'voice'),
+                                ),
+                        icon: const Icon(Icons.call_outlined, size: 18),
+                        label: const Text('Позвонить'),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _isOpeningChat
+                            ? null
+                            : () => unawaited(
+                                  _startCallFromProfile(user, 'video'),
+                                ),
+                        icon: const Icon(Icons.videocam_outlined, size: 18),
+                        label: const Text('Видео'),
                       ),
                     ),
                   ],

@@ -586,9 +586,12 @@ void main() {
     expect(resourcePathAlias('/c/1/boost'), '/channel/1');
     expect(resourcePathAlias('/channel/1/live'), '/channel/1');
     expect(resourcePathAlias('/channels/1/voicechat'), '/channel/1');
-    expect(resourcePathAlias('/chat/21/call'), '/chats/thread/21');
-    expect(resourcePathAlias('/dm/21/voice'), '/chats/thread/21');
-    expect(resourcePathAlias('/chats/thread/21/video'), '/chats/thread/21');
+    expect(resourcePathAlias('/chat/21/call'), '/chats/thread/21?call=voice');
+    expect(resourcePathAlias('/dm/21/voice'), '/chats/thread/21?call=voice');
+    expect(
+      resourcePathAlias('/chats/thread/21/video'),
+      '/chats/thread/21?call=video',
+    );
     expect(
       resourcePathAlias('/profile/11/stories'),
       ProfileRoute.withUserId(11),
@@ -630,7 +633,7 @@ void main() {
     );
     expect(
       parseDeepLinkToGoPath('https://haneat.app/app/#/chat/21/call'),
-      '/chats/thread/21',
+      '/chats/thread/21?call=voice',
     );
     expect(
       parseDeepLinkToGoPath('https://haneat.app/quiz/28'),
@@ -1358,7 +1361,7 @@ void main() {
     expect(resourcePathAlias('/stickersetid/4'), '/stickers/4');
     expect(resourcePathAlias('/emojisetid/4'), '/stickers/4');
     expect(resourcePathAlias('/statusid/9'), '/stories/9');
-    expect(resourcePathAlias('/callid/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/callid/21'), '/chats/thread/21?call=voice');
     expect(resourcePathAlias('/inviteid/21'), '/chats/thread/21');
     expect(resourcePathAlias('/chat/21/transfer'), '/chats/thread/21');
     expect(resourcePathAlias('/dm/21/speaker'), '/chats/thread/21');
@@ -1460,19 +1463,53 @@ void main() {
     expect(resourcePathAlias('/livejump/21/456'), '/chats/thread/21?msg=456');
     expect(resourcePathAlias('/vcjump/21/456'), '/chats/thread/21?msg=456');
     expect(resourcePathAlias('/streamjump/21/456'), '/chats/thread/21?msg=456');
-    expect(resourcePathAlias('/liveid/21'), '/chats/thread/21');
-    expect(resourcePathAlias('/vcid/21'), '/chats/thread/21');
-    expect(resourcePathAlias('/call-id/21'), '/chats/thread/21');
-    expect(resourcePathAlias('/vc-id/21'), '/chats/thread/21');
-    expect(resourcePathAlias('/speakerid/21'), '/chats/thread/21');
-    expect(resourcePathAlias('/livestreamid/21'), '/chats/thread/21');
-    expect(resourcePathAlias('/groupcallid/21'), '/chats/thread/21');
-    expect(resourcePathAlias('/chat/21/voice-chat'), '/chats/thread/21');
-    expect(resourcePathAlias('/chat/21/raise-hand'), '/chats/thread/21');
-    expect(resourcePathAlias('/chat/21/screen-share'), '/chats/thread/21');
-    expect(resourcePathAlias('/chat/21/redial'), '/chats/thread/21');
-    expect(resourcePathAlias('/chat/21/group-call'), '/chats/thread/21');
-    expect(resourcePathAlias('/chat/21/video-chat'), '/chats/thread/21');
+    expect(resourcePathAlias('/liveid/21'), '/chats/thread/21?call=voice');
+    expect(resourcePathAlias('/vcid/21'), '/chats/thread/21?call=voice');
+    expect(resourcePathAlias('/call-id/21'), '/chats/thread/21?call=voice');
+    expect(resourcePathAlias('/vc-id/21'), '/chats/thread/21?call=voice');
+    expect(resourcePathAlias('/speakerid/21'), '/chats/thread/21?call=voice');
+    expect(resourcePathAlias('/livestreamid/21'), '/chats/thread/21?call=voice');
+    expect(resourcePathAlias('/groupcallid/21'), '/chats/thread/21?call=voice');
+    expect(resourcePathAlias('/callid/21'), '/chats/thread/21?call=voice');
+    expect(
+      resourcePathAlias('/chat/21/voice-chat'),
+      '/chats/thread/21?call=voice',
+    );
+    expect(
+      resourcePathAlias('/chat/21/raise-hand'),
+      '/chats/thread/21?call=voice',
+    );
+    expect(
+      resourcePathAlias('/chat/21/screen-share'),
+      '/chats/thread/21?call=video',
+    );
+    expect(resourcePathAlias('/chat/21/redial'), '/chats/thread/21?call=voice');
+    expect(
+      resourcePathAlias('/chat/21/group-call'),
+      '/chats/thread/21?call=voice',
+    );
+    expect(
+      resourcePathAlias('/chat/21/video-chat'),
+      '/chats/thread/21?call=video',
+    );
+    expect(resourcePathAlias('/chat/21/call'), '/chats/thread/21?call=voice');
+    expect(resourcePathAlias('/chat/21/video'), '/chats/thread/21?call=video');
+    expect(
+      leftoverThreadCallMedia('voice-chat'),
+      'voice',
+    );
+    expect(leftoverThreadCallMedia('video-chat'), 'video');
+    expect(leftoverThreadCallMedia('leave-voice-chat'), isNull);
+    expect(leftoverResourceCallMedia('liveid'), 'voice');
+    expect(leftoverResourceCallMedia('inviteid'), isNull);
+    expect(
+      leftoverChatOpenPath(21, 'voice-chat'),
+      '/chats/thread/21?call=voice',
+    );
+    expect(
+      leftoverChatOpenPath(21, 'leave-voice-chat'),
+      '/chats/thread/21',
+    );
     expect(resourcePathAlias('/c/1/record-live'), '/channel/1');
     expect(resourcePathAlias('/c/1/stream-live'), '/channel/1');
     expect(resourcePathAlias('/c/1/voice-chat'), '/channel/1');
@@ -1524,6 +1561,26 @@ void main() {
     expect(
       parseDeepLinkToGoPath('https://haneat.app/app/#/accept-call'),
       ChatsRoute.path,
+    );
+    expect(
+      leftoverPathAlias('/go/chat/21/voice-chat'),
+      '/chats/thread/21?call=voice',
+    );
+    expect(
+      leftoverPathAlias('/go/chat/21/video-chat'),
+      '/chats/thread/21?call=video',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/chat/21/voice-chat'),
+      '/chats/thread/21?call=voice',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/chat/21/redial'),
+      '/chats/thread/21?call=voice',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/liveid/21'),
+      '/chats/thread/21?call=voice',
     );
     expect(shortcutPathAlias('/reels'), isNull);
     expect(shortcutPathAlias('/logout'), isNull);
