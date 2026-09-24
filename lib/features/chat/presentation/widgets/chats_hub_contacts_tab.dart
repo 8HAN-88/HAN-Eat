@@ -14,7 +14,9 @@ import '../../../../services/api_reachability_service.dart';
 import '../../../../services/app_invite_service.dart';
 import '../../../../services/auth_service.dart';
 import '../../../../services/chat_service.dart';
+import '../../../calls/presentation/call_coordinator.dart';
 import '../../application/chat_open_direct.dart';
+import '../../../../utils/session_snackbar.dart';
 import '../../../../services/phone_contacts_service.dart';
 import '../../../../services/phone_link_prompt_store.dart';
 import '../../../../utils/api_error_parser.dart';
@@ -380,6 +382,52 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
     }
   }
 
+  Future<void> _startCallWithUser(
+    int userId, {
+    required String media,
+    ChatUserBrief? peer,
+  }) async {
+    try {
+      ChatUserBrief? resolved = peer;
+      if (resolved == null) {
+        for (final contact in _items) {
+          if (contact.user.id == userId) {
+            resolved = contact.user;
+            break;
+          }
+        }
+      }
+      final conv = await ChatOpenDirect.openNow(userId, peer: resolved);
+      final real = conv.id > 0 ? conv : await ChatOpenDirect.resolve(userId);
+      if (!context.mounted) return;
+      if (real.id <= 0) {
+        await context.push(
+          pathWithCallQuery(ChatThreadRoute.pathFor(real), media),
+          extra: real,
+        );
+        return;
+      }
+      await CallCoordinator.instance.openOutgoing(
+        conversationId: real.id,
+        media: media,
+        context: context,
+        peerName: resolved?.name,
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: media == 'video'
+            ? 'Не удалось начать видеозвонок'
+            : 'Не удалось начать звонок',
+        onRetry: () => unawaited(
+          _startCallWithUser(userId, media: media, peer: peer),
+        ),
+      );
+    }
+  }
+
   Future<void> _openChatWithUser(int userId) async {
     try {
       ChatUserBrief? peer;
@@ -696,6 +744,22 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
                         switch (value) {
                           case 'chat':
                             _openChatWithUser(contact.user.id);
+                          case 'call':
+                            unawaited(
+                              _startCallWithUser(
+                                contact.user.id,
+                                media: 'voice',
+                                peer: contact.user,
+                              ),
+                            );
+                          case 'video':
+                            unawaited(
+                              _startCallWithUser(
+                                contact.user.id,
+                                media: 'video',
+                                peer: contact.user,
+                              ),
+                            );
                           case 'remove':
                             _removeHanEatContact(
                               contact.user.id,
@@ -707,6 +771,14 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
                         const PopupMenuItem(
                           value: 'chat',
                           child: Text('Написать'),
+                        ),
+                        const PopupMenuItem(
+                          value: 'call',
+                          child: Text('Позвонить'),
+                        ),
+                        const PopupMenuItem(
+                          value: 'video',
+                          child: Text('Видеозвонок'),
                         ),
                         const PopupMenuItem(
                           value: 'remove',
