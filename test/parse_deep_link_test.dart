@@ -1662,6 +1662,52 @@ void main() {
       parseDeepLinkToGoPath('https://haneat.app/app/#/fromid/11'),
       '${ProfileRoute.path}?userId=11',
     );
+    expect(shortcutPathAlias('/hide-caption'), ChatsRoute.path);
+    expect(shortcutPathAlias('/spoiler-text'), ChatsRoute.path);
+    expect(shortcutPathAlias('/silent-forward'), ChatsRoute.path);
+    expect(shortcutPathAlias('/translate-this'), ChatsRoute.path);
+    expect(shortcutPathAlias('/message-link'), ChatsRoute.path);
+    expect(shortcutPathAlias('/view-replies'), ChatsRoute.path);
+    expect(shortcutPathAlias('/poll-results'), ChatsRoute.path);
+    expect(shortcutPathAlias('/close-poll'), ChatsRoute.path);
+    expect(shortcutPathAlias('/add-to-contacts'), ChatNewMessageRoute.path);
+    expect(shortcutPathAlias('/share-contact-card'), ChatNewMessageRoute.path);
+    expect(shortcutPathAlias('/open-in-browser'), SettingsRoute.path);
+    expect(shortcutPathAlias('/always-transcribe'), SettingsRoute.path);
+    expect(shortcutPathAlias('/hidecaption'), ChatsRoute.path);
+    expect(shortcutPathAlias('/pollresults'), ChatsRoute.path);
+    expect(shortcutPathAlias('/addtocontacts'), ChatNewMessageRoute.path);
+    expect(shortcutPathAlias('/openinbrowser'), SettingsRoute.path);
+    expect(resourcePathAlias('/replyjump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/reactjump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/replyid/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/reactid/28'), '/post/28');
+    expect(resourcePathAlias('/pollid/28'), '/post/28');
+    expect(resourcePathAlias('/voteid/28'), '/post/28');
+    expect(
+      resourcePathAlias('/chat/21/poll-results'),
+      '/chats/thread/21',
+    );
+    expect(
+      leftoverPathAlias('/go/poll-results'),
+      ChatsRoute.path,
+    );
+    expect(
+      leftoverPathAlias('/go/replyjump/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/hide-caption'),
+      ChatsRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/reactjump/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/pollid/28'),
+      '/post/28',
+    );
     expect(shortcutPathAlias('/reels'), isNull);
     expect(shortcutPathAlias('/logout'), isNull);
     expect(shortcutPathAlias('/reels'), isNull);

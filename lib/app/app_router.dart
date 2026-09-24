@@ -508,7 +508,11 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'select-messages' ||
           segs[2] == 'mute-forever' ||
           segs[2] == 'business-hours' ||
-          segs[2] == 'set-wallpaper') {
+          segs[2] == 'set-wallpaper' ||
+          segs[2] == 'poll-results' ||
+          segs[2] == 'message-link' ||
+          segs[2] == 'hide-caption' ||
+          segs[2] == 'view-replies') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -618,7 +622,11 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[3] == 'select-messages' ||
           segs[3] == 'mute-forever' ||
           segs[3] == 'business-hours' ||
-          segs[3] == 'set-wallpaper') {
+          segs[3] == 'set-wallpaper' ||
+          segs[3] == 'poll-results' ||
+          segs[3] == 'message-link' ||
+          segs[3] == 'hide-caption' ||
+          segs[3] == 'view-replies') {
         return leftoverChatOpenPath(id, segs[3], query);
       }
       if (segs[3] == 'invite' || segs[3] == 'invite-link') {
@@ -1295,7 +1303,11 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'select-messages' ||
           segs[2] == 'mute-forever' ||
           segs[2] == 'business-hours' ||
-          segs[2] == 'set-wallpaper') {
+          segs[2] == 'set-wallpaper' ||
+          segs[2] == 'poll-results' ||
+          segs[2] == 'message-link' ||
+          segs[2] == 'hide-caption' ||
+          segs[2] == 'view-replies') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -1412,7 +1424,11 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'select-messages' ||
           segs[2] == 'mute-forever' ||
           segs[2] == 'business-hours' ||
-          segs[2] == 'set-wallpaper') {
+          segs[2] == 'set-wallpaper' ||
+          segs[2] == 'poll-results' ||
+          segs[2] == 'message-link' ||
+          segs[2] == 'hide-caption' ||
+          segs[2] == 'view-replies') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -1738,7 +1754,9 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[0] == 'vcjump' ||
           segs[0] == 'streamjump' ||
           segs[0] == 'pinjump' ||
-          segs[0] == 'mentionjump') &&
+          segs[0] == 'mentionjump' ||
+          segs[0] == 'replyjump' ||
+          segs[0] == 'reactjump') &&
       segs.length == 3) {
     final cid = int.tryParse(segs[1]);
     final mid = int.tryParse(segs[2]);
@@ -1889,6 +1907,8 @@ String? resourcePathAlias(String path, [String query = '']) {
         'livestreamid' || 'rtmpid' || 'groupcallid' =>
           pathWithCallQuery('/chats/thread/$id', 'voice', query),
         'fromid' || 'toid' || 'senderid' => '${ProfileRoute.path}?userId=$id',
+        'replyid' => '/chats/thread/$id$q',
+        'reactid' || 'pollid' || 'voteid' => '/post/$id$q',
         _ => null,
       };
       if (opened != null) return opened;
@@ -4195,6 +4215,50 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return '${SettingsRoute.path}$q';
     case '/starsgiveaway':
       return '${AdsHubRoute.path}$q';
+    case '/hide-caption':
+    case '/spoiler-text':
+    case '/silent-forward':
+    case '/translate-this':
+    case '/save-to-downloads':
+    case '/copy-message-link':
+    case '/message-link':
+    case '/show-in-chat':
+    case '/jump-to-reply':
+    case '/view-replies':
+    case '/poll-results':
+    case '/quiz-results':
+    case '/show-votes':
+    case '/anonymous-votes':
+    case '/retract-vote':
+    case '/close-poll':
+    case '/stop-quiz':
+      return '${ChatsRoute.path}$q';
+    case '/share-contact-card':
+    case '/add-to-contacts':
+      return '${ChatNewMessageRoute.path}$q';
+    case '/open-in-browser':
+    case '/download-for-offline':
+    case '/always-transcribe':
+      return '${SettingsRoute.path}$q';
+    case '/hidecaption':
+    case '/spoilertext':
+    case '/silentforward':
+    case '/translatethis':
+    case '/messagelink':
+    case '/showinchat':
+    case '/jumptoreply':
+    case '/viewreplies':
+    case '/pollresults':
+    case '/quizresults':
+    case '/showvotes':
+    case '/closepoll':
+      return '${ChatsRoute.path}$q';
+    case '/sharecontactcard':
+    case '/addtocontacts':
+      return '${ChatNewMessageRoute.path}$q';
+    case '/openinbrowser':
+    case '/alwaystranscribe':
+      return '${SettingsRoute.path}$q';
     default:
       return null;
   }
