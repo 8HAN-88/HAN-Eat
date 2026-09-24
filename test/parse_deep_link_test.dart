@@ -1613,6 +1613,55 @@ void main() {
       parseDeepLinkToGoPath('https://haneat.app/app/#/liveid/21'),
       '/chats/thread/21?call=voice',
     );
+    expect(shortcutPathAlias('/business-hours'), ChatsRoute.path);
+    expect(shortcutPathAlias('/greeting-message'), ChatsRoute.path);
+    expect(shortcutPathAlias('/away-message'), ChatsRoute.path);
+    expect(shortcutPathAlias('/quick-replies'), ChatsRoute.path);
+    expect(shortcutPathAlias('/select-messages'), ChatsRoute.path);
+    expect(shortcutPathAlias('/forward-selected'), ChatsRoute.path);
+    expect(shortcutPathAlias('/premium-stickers'), ChatsRoute.path);
+    expect(shortcutPathAlias('/copy-protection'), ChatsRoute.path);
+    expect(shortcutPathAlias('/mute-forever'), NotificationSettingsRoute.path);
+    expect(shortcutPathAlias('/mute-1h'), NotificationSettingsRoute.path);
+    expect(shortcutPathAlias('/vibrate'), NotificationSettingsRoute.path);
+    expect(shortcutPathAlias('/swipe-to-mute'), SettingsRoute.path);
+    expect(shortcutPathAlias('/set-chat-wallpaper'), SettingsRoute.path);
+    expect(shortcutPathAlias('/reset-wallpaper'), SettingsRoute.path);
+    expect(shortcutPathAlias('/stars-giveaway'), AdsHubRoute.path);
+    expect(shortcutPathAlias('/businesshours'), ChatsRoute.path);
+    expect(shortcutPathAlias('/selectmessages'), ChatsRoute.path);
+    expect(shortcutPathAlias('/muteforever'), NotificationSettingsRoute.path);
+    expect(shortcutPathAlias('/swipetomute'), SettingsRoute.path);
+    expect(shortcutPathAlias('/starsgiveaway'), AdsHubRoute.path);
+    expect(resourcePathAlias('/pinjump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/mentionjump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/fromid/11'), '${ProfileRoute.path}?userId=11');
+    expect(resourcePathAlias('/toid/11'), '${ProfileRoute.path}?userId=11');
+    expect(resourcePathAlias('/senderid/11'), '${ProfileRoute.path}?userId=11');
+    expect(
+      resourcePathAlias('/chat/21/select-messages'),
+      '/chats/thread/21',
+    );
+    expect(
+      leftoverPathAlias('/go/business-hours'),
+      ChatsRoute.path,
+    );
+    expect(
+      leftoverPathAlias('/go/pinjump/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/select-messages'),
+      ChatsRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/mentionjump/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/fromid/11'),
+      '${ProfileRoute.path}?userId=11',
+    );
     expect(shortcutPathAlias('/reels'), isNull);
     expect(shortcutPathAlias('/logout'), isNull);
     expect(shortcutPathAlias('/reels'), isNull);
