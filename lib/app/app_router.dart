@@ -515,7 +515,17 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'view-replies' ||
           segs[2] == 'sticker-search' ||
           segs[2] == 'crop-photo' ||
-          segs[2] == 'location-picker') {
+          segs[2] == 'location-picker' ||
+          segs[2] == 'set-commands' ||
+          segs[2] == 'edit-commands' ||
+          segs[2] == 'bot-commands' ||
+          segs[2] == 'menu-button' ||
+          segs[2] == 'inline-feedback' ||
+          segs[2] == 'switch-pm' ||
+          segs[2] == 'webapp-data' ||
+          segs[2] == 'clear-drafts' ||
+          segs[2] == 'pin-draft' ||
+          segs[2] == 'saved-drafts') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -632,7 +642,17 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[3] == 'view-replies' ||
           segs[3] == 'sticker-search' ||
           segs[3] == 'crop-photo' ||
-          segs[3] == 'location-picker') {
+          segs[3] == 'location-picker' ||
+          segs[3] == 'set-commands' ||
+          segs[3] == 'edit-commands' ||
+          segs[3] == 'bot-commands' ||
+          segs[3] == 'menu-button' ||
+          segs[3] == 'inline-feedback' ||
+          segs[3] == 'switch-pm' ||
+          segs[3] == 'webapp-data' ||
+          segs[3] == 'clear-drafts' ||
+          segs[3] == 'pin-draft' ||
+          segs[3] == 'saved-drafts') {
         return leftoverChatOpenPath(id, segs[3], query);
       }
       if (segs[3] == 'invite' || segs[3] == 'invite-link') {
@@ -1316,7 +1336,17 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'view-replies' ||
           segs[2] == 'sticker-search' ||
           segs[2] == 'crop-photo' ||
-          segs[2] == 'location-picker') {
+          segs[2] == 'location-picker' ||
+          segs[2] == 'set-commands' ||
+          segs[2] == 'edit-commands' ||
+          segs[2] == 'bot-commands' ||
+          segs[2] == 'menu-button' ||
+          segs[2] == 'inline-feedback' ||
+          segs[2] == 'switch-pm' ||
+          segs[2] == 'webapp-data' ||
+          segs[2] == 'clear-drafts' ||
+          segs[2] == 'pin-draft' ||
+          segs[2] == 'saved-drafts') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -1440,7 +1470,17 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'view-replies' ||
           segs[2] == 'sticker-search' ||
           segs[2] == 'crop-photo' ||
-          segs[2] == 'location-picker') {
+          segs[2] == 'location-picker' ||
+          segs[2] == 'set-commands' ||
+          segs[2] == 'edit-commands' ||
+          segs[2] == 'bot-commands' ||
+          segs[2] == 'menu-button' ||
+          segs[2] == 'inline-feedback' ||
+          segs[2] == 'switch-pm' ||
+          segs[2] == 'webapp-data' ||
+          segs[2] == 'clear-drafts' ||
+          segs[2] == 'pin-draft' ||
+          segs[2] == 'saved-drafts') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -1770,7 +1810,13 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[0] == 'replyjump' ||
           segs[0] == 'reactjump' ||
           segs[0] == 'mediajump' ||
-          segs[0] == 'albumjump') &&
+          segs[0] == 'albumjump' ||
+          segs[0] == 'storyjump' ||
+          segs[0] == 'highlightjump' ||
+          segs[0] == 'botjump' ||
+          segs[0] == 'cmdjump' ||
+          segs[0] == 'menujump' ||
+          segs[0] == 'draftjump') &&
       segs.length == 3) {
     final cid = int.tryParse(segs[1]);
     final mid = int.tryParse(segs[2]);
@@ -1925,6 +1971,9 @@ String? resourcePathAlias(String path, [String query = '']) {
         'reactid' || 'pollid' || 'voteid' => '/post/$id$q',
         'albumid' => '/post/$id$q',
         'editid' => '/post/$id/edit$q',
+        'cmdid' || 'commandid' => '/bots/$id$q',
+        'menuid' || 'menubuttonid' => '/webapp/$id$q',
+        'draftid' || 'reminderid' => '/chats/thread/$id$q',
         _ => null,
       };
       if (opened != null) return opened;
@@ -4310,6 +4359,41 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/hdvideo':
     case '/nocompression':
       return '${SettingsRoute.path}$q';
+    case '/always-on-top':
+    case '/compact-mode':
+    case '/tray-icon':
+      return '${SettingsRoute.path}$q';
+    case '/bot-commands':
+    case '/set-commands':
+    case '/edit-commands':
+    case '/menu-button':
+    case '/inline-feedback':
+    case '/switch-pm':
+    case '/webapp-data':
+      return '${MyBotsRoute.path}$q';
+    case '/draft-list':
+    case '/saved-drafts':
+    case '/clear-drafts':
+    case '/pin-draft':
+    case '/schedule-list':
+    case '/reminders-list':
+      return '${ScheduledPostsRoute.path}$q';
+    case '/alwaysontop':
+    case '/compactmode':
+    case '/trayicon':
+      return '${SettingsRoute.path}$q';
+    case '/botcommands':
+    case '/setcommands':
+    case '/editcommands':
+    case '/menubutton':
+    case '/switchpm':
+    case '/webappdata':
+      return '${MyBotsRoute.path}$q';
+    case '/draftlist':
+    case '/saveddrafts':
+    case '/cleardrafts':
+    case '/scheduledlist':
+      return '${ScheduledPostsRoute.path}$q';
     default:
       return null;
   }

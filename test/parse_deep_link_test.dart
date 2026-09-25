@@ -1748,6 +1748,52 @@ void main() {
       parseDeepLinkToGoPath('https://haneat.app/app/#/editid/28'),
       '/post/28/edit',
     );
+    expect(shortcutPathAlias('/always-on-top'), SettingsRoute.path);
+    expect(shortcutPathAlias('/compact-mode'), SettingsRoute.path);
+    expect(shortcutPathAlias('/tray-icon'), SettingsRoute.path);
+    expect(shortcutPathAlias('/bot-commands'), MyBotsRoute.path);
+    expect(shortcutPathAlias('/set-commands'), MyBotsRoute.path);
+    expect(shortcutPathAlias('/menu-button'), MyBotsRoute.path);
+    expect(shortcutPathAlias('/switch-pm'), MyBotsRoute.path);
+    expect(shortcutPathAlias('/webapp-data'), MyBotsRoute.path);
+    expect(shortcutPathAlias('/draft-list'), ScheduledPostsRoute.path);
+    expect(shortcutPathAlias('/saved-drafts'), ScheduledPostsRoute.path);
+    expect(shortcutPathAlias('/clear-drafts'), ScheduledPostsRoute.path);
+    expect(shortcutPathAlias('/schedule-list'), ScheduledPostsRoute.path);
+    expect(shortcutPathAlias('/alwaysontop'), SettingsRoute.path);
+    expect(shortcutPathAlias('/botcommands'), MyBotsRoute.path);
+    expect(shortcutPathAlias('/draftlist'), ScheduledPostsRoute.path);
+    expect(resourcePathAlias('/storyjump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/botjump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/cmdjump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/draftjump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/cmdid/28'), '/bots/28');
+    expect(resourcePathAlias('/menuid/28'), '/webapp/28');
+    expect(resourcePathAlias('/draftid/21'), '/chats/thread/21');
+    expect(
+      resourcePathAlias('/chat/21/set-commands'),
+      '/chats/thread/21',
+    );
+    expect(
+      leftoverPathAlias('/go/bot-commands'),
+      MyBotsRoute.path,
+    );
+    expect(
+      leftoverPathAlias('/go/storyjump/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/compact-mode'),
+      SettingsRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/cmdjump/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/cmdid/28'),
+      '/bots/28',
+    );
     expect(shortcutPathAlias('/reels'), isNull);
     expect(shortcutPathAlias('/logout'), isNull);
     expect(shortcutPathAlias('/reels'), isNull);
