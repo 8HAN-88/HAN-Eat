@@ -525,7 +525,18 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'webapp-data' ||
           segs[2] == 'clear-drafts' ||
           segs[2] == 'pin-draft' ||
-          segs[2] == 'saved-drafts') {
+          segs[2] == 'saved-drafts' ||
+          segs[2] == 'waveform' ||
+          segs[2] == 'voice-message' ||
+          segs[2] == 'video-note' ||
+          segs[2] == 'round-video' ||
+          segs[2] == 'playback-speed' ||
+          segs[2] == 'lock-record' ||
+          segs[2] == 'cancel-recording' ||
+          segs[2] == 'discard-voice' ||
+          segs[2] == 'show-original' ||
+          segs[2] == 'hide-translation' ||
+          segs[2] == 'translate-to') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -652,7 +663,18 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[3] == 'webapp-data' ||
           segs[3] == 'clear-drafts' ||
           segs[3] == 'pin-draft' ||
-          segs[3] == 'saved-drafts') {
+          segs[3] == 'saved-drafts' ||
+          segs[3] == 'waveform' ||
+          segs[3] == 'voice-message' ||
+          segs[3] == 'video-note' ||
+          segs[3] == 'round-video' ||
+          segs[3] == 'playback-speed' ||
+          segs[3] == 'lock-record' ||
+          segs[3] == 'cancel-recording' ||
+          segs[3] == 'discard-voice' ||
+          segs[3] == 'show-original' ||
+          segs[3] == 'hide-translation' ||
+          segs[3] == 'translate-to') {
         return leftoverChatOpenPath(id, segs[3], query);
       }
       if (segs[3] == 'invite' || segs[3] == 'invite-link') {
@@ -1346,7 +1368,18 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'webapp-data' ||
           segs[2] == 'clear-drafts' ||
           segs[2] == 'pin-draft' ||
-          segs[2] == 'saved-drafts') {
+          segs[2] == 'saved-drafts' ||
+          segs[2] == 'waveform' ||
+          segs[2] == 'voice-message' ||
+          segs[2] == 'video-note' ||
+          segs[2] == 'round-video' ||
+          segs[2] == 'playback-speed' ||
+          segs[2] == 'lock-record' ||
+          segs[2] == 'cancel-recording' ||
+          segs[2] == 'discard-voice' ||
+          segs[2] == 'show-original' ||
+          segs[2] == 'hide-translation' ||
+          segs[2] == 'translate-to') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -1480,7 +1513,18 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'webapp-data' ||
           segs[2] == 'clear-drafts' ||
           segs[2] == 'pin-draft' ||
-          segs[2] == 'saved-drafts') {
+          segs[2] == 'saved-drafts' ||
+          segs[2] == 'waveform' ||
+          segs[2] == 'voice-message' ||
+          segs[2] == 'video-note' ||
+          segs[2] == 'round-video' ||
+          segs[2] == 'playback-speed' ||
+          segs[2] == 'lock-record' ||
+          segs[2] == 'cancel-recording' ||
+          segs[2] == 'discard-voice' ||
+          segs[2] == 'show-original' ||
+          segs[2] == 'hide-translation' ||
+          segs[2] == 'translate-to') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -1816,7 +1860,11 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[0] == 'botjump' ||
           segs[0] == 'cmdjump' ||
           segs[0] == 'menujump' ||
-          segs[0] == 'draftjump') &&
+          segs[0] == 'draftjump' ||
+          segs[0] == 'voicejump' ||
+          segs[0] == 'notejump' ||
+          segs[0] == 'roundjump' ||
+          segs[0] == 'transjump') &&
       segs.length == 3) {
     final cid = int.tryParse(segs[1]);
     final mid = int.tryParse(segs[2]);
@@ -1974,6 +2022,8 @@ String? resourcePathAlias(String path, [String query = '']) {
         'cmdid' || 'commandid' => '/bots/$id$q',
         'menuid' || 'menubuttonid' => '/webapp/$id$q',
         'draftid' || 'reminderid' => '/chats/thread/$id$q',
+        'noteid' || 'roundid' || 'waveformid' => '/post/$id$q',
+        'transid' => '/chats/thread/$id$q',
         _ => null,
       };
       if (opened != null) return opened;
@@ -4394,6 +4444,45 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/cleardrafts':
     case '/scheduledlist':
       return '${ScheduledPostsRoute.path}$q';
+    case '/waveform':
+    case '/voice-message':
+    case '/round-video':
+    case '/video-note':
+    case '/playback-speed':
+    case '/lock-record':
+    case '/cancel-recording':
+    case '/discard-voice':
+    case '/show-original':
+    case '/hide-translation':
+    case '/translate-to':
+      return '${ChatsRoute.path}$q';
+    case '/fingerprint':
+    case '/face-id':
+      return '${AccountSecurityRoute.path}$q';
+    case '/hide-last-seen':
+    case '/forwards-privacy':
+    case '/manage-storage':
+    case '/download-manager':
+      return '${SettingsRoute.path}$q';
+    case '/in-app-vibrate':
+      return '${NotificationSettingsRoute.path}$q';
+    case '/voicemessage':
+    case '/roundvideo':
+    case '/videonote':
+    case '/playbackspeed':
+    case '/lockrecord':
+    case '/showoriginal':
+    case '/hidetranslation':
+    case '/translateto':
+      return '${ChatsRoute.path}$q';
+    case '/faceid':
+      return '${AccountSecurityRoute.path}$q';
+    case '/hidelastseen':
+    case '/forwardsprivacy':
+    case '/managestorage':
+      return '${SettingsRoute.path}$q';
+    case '/inappvibrate':
+      return '${NotificationSettingsRoute.path}$q';
     default:
       return null;
   }

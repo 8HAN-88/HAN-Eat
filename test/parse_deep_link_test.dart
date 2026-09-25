@@ -1794,6 +1794,54 @@ void main() {
       parseDeepLinkToGoPath('https://haneat.app/app/#/cmdid/28'),
       '/bots/28',
     );
+    expect(shortcutPathAlias('/waveform'), ChatsRoute.path);
+    expect(shortcutPathAlias('/voice-message'), ChatsRoute.path);
+    expect(shortcutPathAlias('/round-video'), ChatsRoute.path);
+    expect(shortcutPathAlias('/video-note'), ChatsRoute.path);
+    expect(shortcutPathAlias('/playback-speed'), ChatsRoute.path);
+    expect(shortcutPathAlias('/lock-record'), ChatsRoute.path);
+    expect(shortcutPathAlias('/show-original'), ChatsRoute.path);
+    expect(shortcutPathAlias('/hide-translation'), ChatsRoute.path);
+    expect(shortcutPathAlias('/translate-to'), ChatsRoute.path);
+    expect(shortcutPathAlias('/fingerprint'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/face-id'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/hide-last-seen'), SettingsRoute.path);
+    expect(shortcutPathAlias('/forwards-privacy'), SettingsRoute.path);
+    expect(shortcutPathAlias('/manage-storage'), SettingsRoute.path);
+    expect(shortcutPathAlias('/in-app-vibrate'), NotificationSettingsRoute.path);
+    expect(shortcutPathAlias('/voicemessage'), ChatsRoute.path);
+    expect(shortcutPathAlias('/hidelastseen'), SettingsRoute.path);
+    expect(resourcePathAlias('/voicejump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/notejump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/transjump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/noteid/28'), '/post/28');
+    expect(resourcePathAlias('/roundid/28'), '/post/28');
+    expect(resourcePathAlias('/waveformid/28'), '/post/28');
+    expect(resourcePathAlias('/transid/21'), '/chats/thread/21');
+    expect(
+      resourcePathAlias('/chat/21/voice-message'),
+      '/chats/thread/21',
+    );
+    expect(
+      leftoverPathAlias('/go/voice-message'),
+      ChatsRoute.path,
+    );
+    expect(
+      leftoverPathAlias('/go/voicejump/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/hide-translation'),
+      ChatsRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/notejump/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/noteid/28'),
+      '/post/28',
+    );
     expect(shortcutPathAlias('/reels'), isNull);
     expect(shortcutPathAlias('/logout'), isNull);
     expect(shortcutPathAlias('/reels'), isNull);
