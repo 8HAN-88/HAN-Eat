@@ -536,7 +536,19 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'discard-voice' ||
           segs[2] == 'show-original' ||
           segs[2] == 'hide-translation' ||
-          segs[2] == 'translate-to') {
+          segs[2] == 'translate-to' ||
+          segs[2] == 'send-by-enter' ||
+          segs[2] == 'chat-color' ||
+          segs[2] == 'two-lines' ||
+          segs[2] == 'loop-gif' ||
+          segs[2] == 'auto-save-media' ||
+          segs[2] == 'hide-sponsored' ||
+          segs[2] == 'business-intro' ||
+          segs[2] == 'business-location' ||
+          segs[2] == 'search-hashtags' ||
+          segs[2] == 'topic-list' ||
+          segs[2] == 'copy-phone' ||
+          segs[2] == 'share-my-number') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -674,7 +686,19 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[3] == 'discard-voice' ||
           segs[3] == 'show-original' ||
           segs[3] == 'hide-translation' ||
-          segs[3] == 'translate-to') {
+          segs[3] == 'translate-to' ||
+          segs[3] == 'send-by-enter' ||
+          segs[3] == 'chat-color' ||
+          segs[3] == 'two-lines' ||
+          segs[3] == 'loop-gif' ||
+          segs[3] == 'auto-save-media' ||
+          segs[3] == 'hide-sponsored' ||
+          segs[3] == 'business-intro' ||
+          segs[3] == 'business-location' ||
+          segs[3] == 'search-hashtags' ||
+          segs[3] == 'topic-list' ||
+          segs[3] == 'copy-phone' ||
+          segs[3] == 'share-my-number') {
         return leftoverChatOpenPath(id, segs[3], query);
       }
       if (segs[3] == 'invite' || segs[3] == 'invite-link') {
@@ -1379,7 +1403,19 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'discard-voice' ||
           segs[2] == 'show-original' ||
           segs[2] == 'hide-translation' ||
-          segs[2] == 'translate-to') {
+          segs[2] == 'translate-to' ||
+          segs[2] == 'send-by-enter' ||
+          segs[2] == 'chat-color' ||
+          segs[2] == 'two-lines' ||
+          segs[2] == 'loop-gif' ||
+          segs[2] == 'auto-save-media' ||
+          segs[2] == 'hide-sponsored' ||
+          segs[2] == 'business-intro' ||
+          segs[2] == 'business-location' ||
+          segs[2] == 'search-hashtags' ||
+          segs[2] == 'topic-list' ||
+          segs[2] == 'copy-phone' ||
+          segs[2] == 'share-my-number') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -1524,7 +1560,19 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'discard-voice' ||
           segs[2] == 'show-original' ||
           segs[2] == 'hide-translation' ||
-          segs[2] == 'translate-to') {
+          segs[2] == 'translate-to' ||
+          segs[2] == 'send-by-enter' ||
+          segs[2] == 'chat-color' ||
+          segs[2] == 'two-lines' ||
+          segs[2] == 'loop-gif' ||
+          segs[2] == 'auto-save-media' ||
+          segs[2] == 'hide-sponsored' ||
+          segs[2] == 'business-intro' ||
+          segs[2] == 'business-location' ||
+          segs[2] == 'search-hashtags' ||
+          segs[2] == 'topic-list' ||
+          segs[2] == 'copy-phone' ||
+          segs[2] == 'share-my-number') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -1864,7 +1912,13 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[0] == 'voicejump' ||
           segs[0] == 'notejump' ||
           segs[0] == 'roundjump' ||
-          segs[0] == 'transjump') &&
+          segs[0] == 'transjump' ||
+          segs[0] == 'folderjump' ||
+          segs[0] == 'stickerjump' ||
+          segs[0] == 'giftjump' ||
+          segs[0] == 'adjump' ||
+          segs[0] == 'hashtagjump' ||
+          segs[0] == 'colorjump') &&
       segs.length == 3) {
     final cid = int.tryParse(segs[1]);
     final mid = int.tryParse(segs[2]);
@@ -2024,6 +2078,8 @@ String? resourcePathAlias(String path, [String query = '']) {
         'draftid' || 'reminderid' => '/chats/thread/$id$q',
         'noteid' || 'roundid' || 'waveformid' => '/post/$id$q',
         'transid' => '/chats/thread/$id$q',
+        'colorid' || 'themeid' || 'hashtagid' => '/chats/thread/$id$q',
+        'sponsoredid' => '/ads/$id$q',
         _ => null,
       };
       if (opened != null) return opened;
@@ -4483,6 +4539,55 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return '${SettingsRoute.path}$q';
     case '/inappvibrate':
       return '${NotificationSettingsRoute.path}$q';
+    case '/send-by-enter':
+    case '/enter-to-send':
+    case '/loop-gif':
+    case '/emoji-suggestions':
+    case '/auto-save-media':
+    case '/two-lines':
+    case '/compact-chat-list':
+    case '/chat-list-style':
+    case '/default-tab':
+    case '/startup-screen':
+    case '/chat-color':
+    case '/battery-usage':
+      return '${SettingsRoute.path}$q';
+    case '/business-intro':
+    case '/business-location':
+    case '/topic-list':
+      return '${ChatsRoute.path}$q';
+    case '/sponsored-info':
+    case '/hide-sponsored':
+    case '/about-this-ad':
+    case '/why-this-ad':
+    case '/payment-method':
+      return '${AdsHubRoute.path}$q';
+    case '/search-hashtags':
+      return '${SearchRoute.path}$q';
+    case '/copy-phone':
+    case '/share-my-number':
+      return '${ChatNewMessageRoute.path}$q';
+    case '/sendbyenter':
+    case '/entertosend':
+    case '/loopgif':
+    case '/emojisuggestions':
+    case '/autosavemedia':
+    case '/twolines':
+    case '/defaulttab':
+    case '/chatcolor':
+      return '${SettingsRoute.path}$q';
+    case '/businessintro':
+    case '/businesslocation':
+      return '${ChatsRoute.path}$q';
+    case '/sponsoredinfo':
+    case '/hidesponsored':
+    case '/aboutthisad':
+      return '${AdsHubRoute.path}$q';
+    case '/searchhashtags':
+      return '${SearchRoute.path}$q';
+    case '/copyphone':
+    case '/sharemynumber':
+      return '${ChatNewMessageRoute.path}$q';
     default:
       return null;
   }
