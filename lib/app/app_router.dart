@@ -548,7 +548,19 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'search-hashtags' ||
           segs[2] == 'topic-list' ||
           segs[2] == 'copy-phone' ||
-          segs[2] == 'share-my-number') {
+          segs[2] == 'share-my-number' ||
+          segs[2] == 'pip' ||
+          segs[2] == 'fullscreen' ||
+          segs[2] == 'subtitles' ||
+          segs[2] == 'video-quality' ||
+          segs[2] == 'cast' ||
+          segs[2] == 'airplay' ||
+          segs[2] == 'night-accent' ||
+          segs[2] == 'follow-system' ||
+          segs[2] == 'language-pack' ||
+          segs[2] == 'saved-cards' ||
+          segs[2] == 'avatars-in-list' ||
+          segs[2] == 'message-preview') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -698,7 +710,19 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[3] == 'search-hashtags' ||
           segs[3] == 'topic-list' ||
           segs[3] == 'copy-phone' ||
-          segs[3] == 'share-my-number') {
+          segs[3] == 'share-my-number' ||
+          segs[3] == 'pip' ||
+          segs[3] == 'fullscreen' ||
+          segs[3] == 'subtitles' ||
+          segs[3] == 'video-quality' ||
+          segs[3] == 'cast' ||
+          segs[3] == 'airplay' ||
+          segs[3] == 'night-accent' ||
+          segs[3] == 'follow-system' ||
+          segs[3] == 'language-pack' ||
+          segs[3] == 'saved-cards' ||
+          segs[3] == 'avatars-in-list' ||
+          segs[3] == 'message-preview') {
         return leftoverChatOpenPath(id, segs[3], query);
       }
       if (segs[3] == 'invite' || segs[3] == 'invite-link') {
@@ -1415,7 +1439,19 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'search-hashtags' ||
           segs[2] == 'topic-list' ||
           segs[2] == 'copy-phone' ||
-          segs[2] == 'share-my-number') {
+          segs[2] == 'share-my-number' ||
+          segs[2] == 'pip' ||
+          segs[2] == 'fullscreen' ||
+          segs[2] == 'subtitles' ||
+          segs[2] == 'video-quality' ||
+          segs[2] == 'cast' ||
+          segs[2] == 'airplay' ||
+          segs[2] == 'night-accent' ||
+          segs[2] == 'follow-system' ||
+          segs[2] == 'language-pack' ||
+          segs[2] == 'saved-cards' ||
+          segs[2] == 'avatars-in-list' ||
+          segs[2] == 'message-preview') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -1572,7 +1608,19 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'search-hashtags' ||
           segs[2] == 'topic-list' ||
           segs[2] == 'copy-phone' ||
-          segs[2] == 'share-my-number') {
+          segs[2] == 'share-my-number' ||
+          segs[2] == 'pip' ||
+          segs[2] == 'fullscreen' ||
+          segs[2] == 'subtitles' ||
+          segs[2] == 'video-quality' ||
+          segs[2] == 'cast' ||
+          segs[2] == 'airplay' ||
+          segs[2] == 'night-accent' ||
+          segs[2] == 'follow-system' ||
+          segs[2] == 'language-pack' ||
+          segs[2] == 'saved-cards' ||
+          segs[2] == 'avatars-in-list' ||
+          segs[2] == 'message-preview') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -1918,7 +1966,11 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[0] == 'giftjump' ||
           segs[0] == 'adjump' ||
           segs[0] == 'hashtagjump' ||
-          segs[0] == 'colorjump') &&
+          segs[0] == 'colorjump' ||
+          segs[0] == 'pipjump' ||
+          segs[0] == 'qualityjump' ||
+          segs[0] == 'langjump' ||
+          segs[0] == 'cardjump') &&
       segs.length == 3) {
     final cid = int.tryParse(segs[1]);
     final mid = int.tryParse(segs[2]);
@@ -2080,6 +2132,8 @@ String? resourcePathAlias(String path, [String query = '']) {
         'transid' => '/chats/thread/$id$q',
         'colorid' || 'themeid' || 'hashtagid' => '/chats/thread/$id$q',
         'sponsoredid' => '/ads/$id$q',
+        'cardid' => '/paid/invoices/$id$q',
+        'qualityid' || 'pipid' => '/post/$id$q',
         _ => null,
       };
       if (opened != null) return opened;
@@ -4588,6 +4642,55 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/copyphone':
     case '/sharemynumber':
       return '${ChatNewMessageRoute.path}$q';
+    case '/pip':
+    case '/picture-in-picture':
+    case '/mini-player':
+    case '/theater-mode':
+    case '/fullscreen':
+    case '/closed-captions':
+    case '/subtitles':
+      return '${ChatsRoute.path}$q';
+    case '/video-quality':
+    case '/playback-quality':
+    case '/cast':
+    case '/airplay':
+    case '/avatars-in-list':
+    case '/show-avatars':
+    case '/night-accent':
+    case '/follow-system':
+    case '/archive-swipe':
+    case '/message-preview':
+    case '/save-to-camera-roll':
+    case '/pause-downloads':
+    case '/premium-emoji':
+    case '/language-pack':
+    case '/change-language':
+      return '${SettingsRoute.path}$q';
+    case '/saved-cards':
+    case '/add-card':
+    case '/topup-stars':
+      return '${StarsWalletRoute.path}$q';
+    case '/pictureinpicture':
+    case '/miniplayer':
+    case '/theatermode':
+    case '/closedcaptions':
+      return '${ChatsRoute.path}$q';
+    case '/videoquality':
+    case '/playbackquality':
+    case '/avatarsinlist':
+    case '/showavatars':
+    case '/nightaccent':
+    case '/followsystem':
+    case '/archiveswipe':
+    case '/messagepreview':
+    case '/languagepack':
+    case '/changelanguage':
+    case '/premiumemoji':
+      return '${SettingsRoute.path}$q';
+    case '/savedcards':
+    case '/addcard':
+    case '/topupstars':
+      return '${StarsWalletRoute.path}$q';
     default:
       return null;
   }

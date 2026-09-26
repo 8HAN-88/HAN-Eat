@@ -1895,6 +1895,61 @@ void main() {
       parseDeepLinkToGoPath('https://haneat.app/app/#/sponsoredid/28'),
       '/ads/28',
     );
+    expect(shortcutPathAlias('/pip'), ChatsRoute.path);
+    expect(shortcutPathAlias('/picture-in-picture'), ChatsRoute.path);
+    expect(shortcutPathAlias('/mini-player'), ChatsRoute.path);
+    expect(shortcutPathAlias('/theater-mode'), ChatsRoute.path);
+    expect(shortcutPathAlias('/fullscreen'), ChatsRoute.path);
+    expect(shortcutPathAlias('/closed-captions'), ChatsRoute.path);
+    expect(shortcutPathAlias('/subtitles'), ChatsRoute.path);
+    expect(shortcutPathAlias('/video-quality'), SettingsRoute.path);
+    expect(shortcutPathAlias('/playback-quality'), SettingsRoute.path);
+    expect(shortcutPathAlias('/cast'), SettingsRoute.path);
+    expect(shortcutPathAlias('/airplay'), SettingsRoute.path);
+    expect(shortcutPathAlias('/avatars-in-list'), SettingsRoute.path);
+    expect(shortcutPathAlias('/night-accent'), SettingsRoute.path);
+    expect(shortcutPathAlias('/follow-system'), SettingsRoute.path);
+    expect(shortcutPathAlias('/archive-swipe'), SettingsRoute.path);
+    expect(shortcutPathAlias('/message-preview'), SettingsRoute.path);
+    expect(shortcutPathAlias('/language-pack'), SettingsRoute.path);
+    expect(shortcutPathAlias('/change-language'), SettingsRoute.path);
+    expect(shortcutPathAlias('/premium-emoji'), SettingsRoute.path);
+    expect(shortcutPathAlias('/saved-cards'), StarsWalletRoute.path);
+    expect(shortcutPathAlias('/add-card'), StarsWalletRoute.path);
+    expect(shortcutPathAlias('/topup-stars'), StarsWalletRoute.path);
+    expect(shortcutPathAlias('/miniplayer'), ChatsRoute.path);
+    expect(shortcutPathAlias('/nightaccent'), SettingsRoute.path);
+    expect(shortcutPathAlias('/savedcards'), StarsWalletRoute.path);
+    expect(resourcePathAlias('/pipjump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/qualityjump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/langjump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/cardid/28'), '/paid/invoices/28');
+    expect(resourcePathAlias('/qualityid/28'), '/post/28');
+    expect(resourcePathAlias('/pipid/28'), '/post/28');
+    expect(
+      resourcePathAlias('/chat/21/pip'),
+      '/chats/thread/21',
+    );
+    expect(
+      leftoverPathAlias('/go/picture-in-picture'),
+      ChatsRoute.path,
+    );
+    expect(
+      leftoverPathAlias('/go/pipjump/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/follow-system'),
+      SettingsRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/qualityjump/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/cardid/28'),
+      '/paid/invoices/28',
+    );
     expect(shortcutPathAlias('/reels'), isNull);
     expect(shortcutPathAlias('/logout'), isNull);
     expect(shortcutPathAlias('/reels'), isNull);
