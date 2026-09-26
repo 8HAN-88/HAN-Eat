@@ -79,6 +79,20 @@ class _SubscriptionsFeedScreenState
     await _loadFeed(refresh: true);
   }
 
+  void _onPostUpdated(PostModel updated) {
+    final i = _posts.indexWhere((p) => p.id == updated.id);
+    if (i == -1 || !mounted) return;
+    final cur = _posts[i];
+    if (cur.isLiked == updated.isLiked &&
+        cur.likesCount == updated.likesCount &&
+        cur.isSaved == updated.isSaved &&
+        cur.isReposted == updated.isReposted &&
+        cur.repostsCount == updated.repostsCount) {
+      return;
+    }
+    setState(() => _posts[i] = updated);
+  }
+
   @override
   bool get wantKeepAlive => true;
 
@@ -173,7 +187,7 @@ class _SubscriptionsFeedScreenState
       if (!mounted) return;
       if (cached.isNotEmpty) {
         setState(() {
-          _posts = cached;
+          _posts = mergeIncomingFeedPosts(_posts, cached);
           _nextCursor = null;
           _hasMore = true;
           _servingFromCache = true;
@@ -203,7 +217,7 @@ class _SubscriptionsFeedScreenState
       if (!mounted) return;
       if (cached.isNotEmpty) {
         setState(() {
-          _posts = cached;
+          _posts = mergeIncomingFeedPosts(_posts, cached);
           _nextCursor = null;
           _hasMore = false;
           _lastLoadError = null;
@@ -225,8 +239,9 @@ class _SubscriptionsFeedScreenState
       );
 
       if (!mounted) return;
-      final nextPosts =
-          refresh ? response.items : <PostModel>[..._posts, ...response.items];
+      final nextPosts = refresh
+          ? mergeIncomingFeedPosts(_posts, response.items)
+          : <PostModel>[..._posts, ...response.items];
       setState(() {
         _posts = nextPosts;
         _nextCursor = response.nextCursor;
@@ -246,7 +261,7 @@ class _SubscriptionsFeedScreenState
         if (!mounted) return;
         if (cached.isNotEmpty) {
           setState(() {
-            _posts = cached;
+            _posts = mergeIncomingFeedPosts(_posts, cached);
             _nextCursor = null;
             _hasMore = false;
             _lastLoadError = null;
@@ -446,6 +461,7 @@ class _SubscriptionsFeedScreenState
                           child: NewPostCard(
                             key: ValueKey('following_post_${post.id}'),
                             post: post,
+                            onPostUpdated: _onPostUpdated,
                             onCommentTap: () {
                               FeedAnalyticsService.openDetail(
                                 post,
