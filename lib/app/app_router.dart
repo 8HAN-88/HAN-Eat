@@ -171,11 +171,19 @@ String? leftoverThreadCallMedia(String rest) {
     case 'call':
     case 'voice':
     case 'audio':
+    case 'mute-mic':
+    case 'end-call':
+    case 'hold-call':
+    case 'add-to-call':
+    case 'speaker-out':
+    case 'noise-suppress':
       return 'voice';
     case 'screen-share':
     case 'video-chat':
     case 'video':
     case 'videocall':
+    case 'flip-camera':
+    case 'camera-off':
       return 'video';
     default:
       return null;
@@ -222,11 +230,18 @@ String? leftoverProfileCallMedia(String rest) {
     case 'audio':
     case 'voice-chat':
     case 'redial':
+    case 'mute-mic':
+    case 'end-call':
+    case 'hold-call':
+    case 'add-to-call':
+    case 'speaker-out':
       return 'voice';
     case 'video':
     case 'videocall':
     case 'video-chat':
     case 'screen-share':
+    case 'flip-camera':
+    case 'camera-off':
       return 'video';
     default:
       return null;
@@ -560,7 +575,17 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'language-pack' ||
           segs[2] == 'saved-cards' ||
           segs[2] == 'avatars-in-list' ||
-          segs[2] == 'message-preview') {
+          segs[2] == 'message-preview' ||
+          segs[2] == 'mute-mic' ||
+          segs[2] == 'flip-camera' ||
+          segs[2] == 'end-call' ||
+          segs[2] == 'hold-call' ||
+          segs[2] == 'add-to-call' ||
+          segs[2] == 'hide-typing' ||
+          segs[2] == 'quote-text' ||
+          segs[2] == 'backup-now' ||
+          segs[2] == 'app-lock' ||
+          segs[2] == 'report-ad') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -722,7 +747,17 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[3] == 'language-pack' ||
           segs[3] == 'saved-cards' ||
           segs[3] == 'avatars-in-list' ||
-          segs[3] == 'message-preview') {
+          segs[3] == 'message-preview' ||
+          segs[3] == 'mute-mic' ||
+          segs[3] == 'flip-camera' ||
+          segs[3] == 'end-call' ||
+          segs[3] == 'hold-call' ||
+          segs[3] == 'add-to-call' ||
+          segs[3] == 'hide-typing' ||
+          segs[3] == 'quote-text' ||
+          segs[3] == 'backup-now' ||
+          segs[3] == 'app-lock' ||
+          segs[3] == 'report-ad') {
         return leftoverChatOpenPath(id, segs[3], query);
       }
       if (segs[3] == 'invite' || segs[3] == 'invite-link') {
@@ -1451,7 +1486,17 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'language-pack' ||
           segs[2] == 'saved-cards' ||
           segs[2] == 'avatars-in-list' ||
-          segs[2] == 'message-preview') {
+          segs[2] == 'message-preview' ||
+          segs[2] == 'mute-mic' ||
+          segs[2] == 'flip-camera' ||
+          segs[2] == 'end-call' ||
+          segs[2] == 'hold-call' ||
+          segs[2] == 'add-to-call' ||
+          segs[2] == 'hide-typing' ||
+          segs[2] == 'quote-text' ||
+          segs[2] == 'backup-now' ||
+          segs[2] == 'app-lock' ||
+          segs[2] == 'report-ad') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -1620,7 +1665,17 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'language-pack' ||
           segs[2] == 'saved-cards' ||
           segs[2] == 'avatars-in-list' ||
-          segs[2] == 'message-preview') {
+          segs[2] == 'message-preview' ||
+          segs[2] == 'mute-mic' ||
+          segs[2] == 'flip-camera' ||
+          segs[2] == 'end-call' ||
+          segs[2] == 'hold-call' ||
+          segs[2] == 'add-to-call' ||
+          segs[2] == 'hide-typing' ||
+          segs[2] == 'quote-text' ||
+          segs[2] == 'backup-now' ||
+          segs[2] == 'app-lock' ||
+          segs[2] == 'report-ad') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -1970,7 +2025,12 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[0] == 'pipjump' ||
           segs[0] == 'qualityjump' ||
           segs[0] == 'langjump' ||
-          segs[0] == 'cardjump') &&
+          segs[0] == 'cardjump' ||
+          segs[0] == 'secretjump' ||
+          segs[0] == 'exportjump' ||
+          segs[0] == 'backupjump' ||
+          segs[0] == 'lockjump' ||
+          segs[0] == 'quotejump') &&
       segs.length == 3) {
     final cid = int.tryParse(segs[1]);
     final mid = int.tryParse(segs[2]);
@@ -2134,6 +2194,9 @@ String? resourcePathAlias(String path, [String query = '']) {
         'sponsoredid' => '/ads/$id$q',
         'cardid' => '/paid/invoices/$id$q',
         'qualityid' || 'pipid' => '/post/$id$q',
+        'secretid' || 'exportid' || 'backupid' || 'lockid' =>
+          '/chats/thread/$id$q',
+        'quoteid' => '/post/$id$q',
         _ => null,
       };
       if (opened != null) return opened;
@@ -4691,6 +4754,55 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/addcard':
     case '/topupstars':
       return '${StarsWalletRoute.path}$q';
+    case '/mute-mic':
+    case '/flip-camera':
+    case '/end-call':
+    case '/speaker-out':
+    case '/camera-off':
+    case '/hold-call':
+    case '/add-to-call':
+    case '/noise-suppress':
+    case '/quote-text':
+      return '${ChatsRoute.path}$q';
+    case '/hide-typing':
+    case '/hide-online':
+    case '/hide-photo':
+    case '/hide-calls':
+    case '/work-mode':
+    case '/personal-mode':
+    case '/import-data':
+    case '/chat-export':
+    case '/download-history':
+    case '/backup-now':
+    case '/restore-backup':
+      return '${SettingsRoute.path}$q';
+    case '/local-passcode':
+    case '/app-lock':
+      return '${AccountSecurityRoute.path}$q';
+    case '/report-ad':
+    case '/ad-info':
+    case '/why-ad':
+    case '/hide-ad':
+      return '${AdsHubRoute.path}$q';
+    case '/mutemic':
+    case '/flipcamera':
+    case '/endcall':
+    case '/holdcall':
+    case '/quotetext':
+      return '${ChatsRoute.path}$q';
+    case '/hidetyping':
+    case '/hideonline':
+    case '/hidephoto':
+    case '/workmode':
+    case '/personalmode':
+    case '/backupnow':
+    case '/restorebackup':
+      return '${SettingsRoute.path}$q';
+    case '/applock':
+      return '${AccountSecurityRoute.path}$q';
+    case '/reportad':
+    case '/adinfo':
+      return '${AdsHubRoute.path}$q';
     default:
       return null;
   }

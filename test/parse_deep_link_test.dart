@@ -1950,6 +1950,66 @@ void main() {
       parseDeepLinkToGoPath('https://haneat.app/app/#/cardid/28'),
       '/paid/invoices/28',
     );
+    expect(shortcutPathAlias('/mute-mic'), ChatsRoute.path);
+    expect(shortcutPathAlias('/flip-camera'), ChatsRoute.path);
+    expect(shortcutPathAlias('/end-call'), ChatsRoute.path);
+    expect(shortcutPathAlias('/hold-call'), ChatsRoute.path);
+    expect(shortcutPathAlias('/add-to-call'), ChatsRoute.path);
+    expect(shortcutPathAlias('/quote-text'), ChatsRoute.path);
+    expect(shortcutPathAlias('/hide-typing'), SettingsRoute.path);
+    expect(shortcutPathAlias('/hide-online'), SettingsRoute.path);
+    expect(shortcutPathAlias('/hide-photo'), SettingsRoute.path);
+    expect(shortcutPathAlias('/work-mode'), SettingsRoute.path);
+    expect(shortcutPathAlias('/personal-mode'), SettingsRoute.path);
+    expect(shortcutPathAlias('/backup-now'), SettingsRoute.path);
+    expect(shortcutPathAlias('/restore-backup'), SettingsRoute.path);
+    expect(shortcutPathAlias('/chat-export'), SettingsRoute.path);
+    expect(shortcutPathAlias('/app-lock'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/local-passcode'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/report-ad'), AdsHubRoute.path);
+    expect(shortcutPathAlias('/ad-info'), AdsHubRoute.path);
+    expect(shortcutPathAlias('/mutemic'), ChatsRoute.path);
+    expect(shortcutPathAlias('/hidetyping'), SettingsRoute.path);
+    expect(shortcutPathAlias('/applock'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/reportad'), AdsHubRoute.path);
+    expect(
+      resourcePathAlias('/chat/21/mute-mic'),
+      '/chats/thread/21?call=voice',
+    );
+    expect(
+      resourcePathAlias('/chat/21/flip-camera'),
+      '/chats/thread/21?call=video',
+    );
+    expect(
+      resourcePathAlias('/chat/21/quote-text'),
+      '/chats/thread/21',
+    );
+    expect(resourcePathAlias('/secretjump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/backupjump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/quotejump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/secretid/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/backupid/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/quoteid/28'), '/post/28');
+    expect(
+      leftoverPathAlias('/go/hide-typing'),
+      SettingsRoute.path,
+    );
+    expect(
+      leftoverPathAlias('/go/secretjump/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/app-lock'),
+      AccountSecurityRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/backupjump/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/quoteid/28'),
+      '/post/28',
+    );
     expect(shortcutPathAlias('/reels'), isNull);
     expect(shortcutPathAlias('/logout'), isNull);
     expect(shortcutPathAlias('/reels'), isNull);
