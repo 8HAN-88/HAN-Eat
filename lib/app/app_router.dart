@@ -585,7 +585,15 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'quote-text' ||
           segs[2] == 'backup-now' ||
           segs[2] == 'app-lock' ||
-          segs[2] == 'report-ad') {
+          segs[2] == 'report-ad' ||
+          segs[2] == 'unread-filter' ||
+          segs[2] == 'muted-filter' ||
+          segs[2] == 'select-text' ||
+          segs[2] == 'copy-text' ||
+          segs[2] == 'block-sender' ||
+          segs[2] == 'report-fake' ||
+          segs[2] == 'long-press-react' ||
+          segs[2] == 'tap-to-record') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -757,7 +765,15 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[3] == 'quote-text' ||
           segs[3] == 'backup-now' ||
           segs[3] == 'app-lock' ||
-          segs[3] == 'report-ad') {
+          segs[3] == 'report-ad' ||
+          segs[3] == 'unread-filter' ||
+          segs[3] == 'muted-filter' ||
+          segs[3] == 'select-text' ||
+          segs[3] == 'copy-text' ||
+          segs[3] == 'block-sender' ||
+          segs[3] == 'report-fake' ||
+          segs[3] == 'long-press-react' ||
+          segs[3] == 'tap-to-record') {
         return leftoverChatOpenPath(id, segs[3], query);
       }
       if (segs[3] == 'invite' || segs[3] == 'invite-link') {
@@ -1496,7 +1512,15 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'quote-text' ||
           segs[2] == 'backup-now' ||
           segs[2] == 'app-lock' ||
-          segs[2] == 'report-ad') {
+          segs[2] == 'report-ad' ||
+          segs[2] == 'unread-filter' ||
+          segs[2] == 'muted-filter' ||
+          segs[2] == 'select-text' ||
+          segs[2] == 'copy-text' ||
+          segs[2] == 'block-sender' ||
+          segs[2] == 'report-fake' ||
+          segs[2] == 'long-press-react' ||
+          segs[2] == 'tap-to-record') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -1675,7 +1699,15 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'quote-text' ||
           segs[2] == 'backup-now' ||
           segs[2] == 'app-lock' ||
-          segs[2] == 'report-ad') {
+          segs[2] == 'report-ad' ||
+          segs[2] == 'unread-filter' ||
+          segs[2] == 'muted-filter' ||
+          segs[2] == 'select-text' ||
+          segs[2] == 'copy-text' ||
+          segs[2] == 'block-sender' ||
+          segs[2] == 'report-fake' ||
+          segs[2] == 'long-press-react' ||
+          segs[2] == 'tap-to-record') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -2030,7 +2062,10 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[0] == 'exportjump' ||
           segs[0] == 'backupjump' ||
           segs[0] == 'lockjump' ||
-          segs[0] == 'quotejump') &&
+          segs[0] == 'quotejump' ||
+          segs[0] == 'filterjump' ||
+          segs[0] == 'swipejump' ||
+          segs[0] == 'tabjump') &&
       segs.length == 3) {
     final cid = int.tryParse(segs[1]);
     final mid = int.tryParse(segs[2]);
@@ -2197,6 +2232,9 @@ String? resourcePathAlias(String path, [String query = '']) {
         'secretid' || 'exportid' || 'backupid' || 'lockid' =>
           '/chats/thread/$id$q',
         'quoteid' => '/post/$id$q',
+        'filterid' => '/chats/folders/$id$q',
+        'tabid' || 'gestureid' => '/chats/thread/$id$q',
+        'reactsetid' => '/post/$id$q',
         _ => null,
       };
       if (opened != null) return opened;
@@ -4803,6 +4841,48 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/reportad':
     case '/adinfo':
       return '${AdsHubRoute.path}$q';
+    case '/unread-filter':
+    case '/muted-filter':
+    case '/contacts-filter':
+    case '/bots-filter':
+    case '/channels-filter':
+    case '/groups-filter':
+    case '/saved-messages-tab':
+    case '/archived-chats-tab':
+    case '/folder-tabs':
+    case '/chat-filters':
+    case '/select-text':
+    case '/copy-text':
+    case '/block-sender':
+    case '/report-fake':
+      return '${ChatsRoute.path}$q';
+    case '/long-press-react':
+    case '/shake-to-report':
+    case '/volume-to-scroll':
+    case '/tap-to-record':
+    case '/incoming-privacy':
+    case '/calls-privacy':
+    case '/hide-profile-photo':
+    case '/app-language':
+    case '/chat-for-business':
+    case '/work-hours':
+      return '${SettingsRoute.path}$q';
+    case '/unreadfilter':
+    case '/mutedfilter':
+    case '/botsfilter':
+    case '/channelfilter':
+    case '/selecttext':
+    case '/copytext':
+    case '/blocksender':
+    case '/reportfake':
+      return '${ChatsRoute.path}$q';
+    case '/longpressreact':
+    case '/taptorecord':
+    case '/incomingprivacy':
+    case '/callsprivacy':
+    case '/applanguage':
+    case '/workhours':
+      return '${SettingsRoute.path}$q';
     default:
       return null;
   }
