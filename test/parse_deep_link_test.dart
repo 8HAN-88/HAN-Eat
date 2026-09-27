@@ -2010,6 +2010,64 @@ void main() {
       parseDeepLinkToGoPath('https://haneat.app/app/#/quoteid/28'),
       '/post/28',
     );
+    expect(shortcutPathAlias('/unread-filter'), ChatsRoute.path);
+    expect(shortcutPathAlias('/muted-filter'), ChatsRoute.path);
+    expect(shortcutPathAlias('/contacts-filter'), ChatsRoute.path);
+    expect(shortcutPathAlias('/bots-filter'), ChatsRoute.path);
+    expect(shortcutPathAlias('/channels-filter'), ChatsRoute.path);
+    expect(shortcutPathAlias('/groups-filter'), ChatsRoute.path);
+    expect(shortcutPathAlias('/saved-messages-tab'), ChatsRoute.path);
+    expect(shortcutPathAlias('/archived-chats-tab'), ChatsRoute.path);
+    expect(shortcutPathAlias('/folder-tabs'), ChatsRoute.path);
+    expect(shortcutPathAlias('/chat-filters'), ChatsRoute.path);
+    expect(shortcutPathAlias('/select-text'), ChatsRoute.path);
+    expect(shortcutPathAlias('/copy-text'), ChatsRoute.path);
+    expect(shortcutPathAlias('/block-sender'), ChatsRoute.path);
+    expect(shortcutPathAlias('/report-fake'), ChatsRoute.path);
+    expect(shortcutPathAlias('/long-press-react'), SettingsRoute.path);
+    expect(shortcutPathAlias('/shake-to-report'), SettingsRoute.path);
+    expect(shortcutPathAlias('/tap-to-record'), SettingsRoute.path);
+    expect(shortcutPathAlias('/incoming-privacy'), SettingsRoute.path);
+    expect(shortcutPathAlias('/calls-privacy'), SettingsRoute.path);
+    expect(shortcutPathAlias('/app-language'), SettingsRoute.path);
+    expect(shortcutPathAlias('/work-hours'), SettingsRoute.path);
+    expect(shortcutPathAlias('/unreadfilter'), ChatsRoute.path);
+    expect(shortcutPathAlias('/reportfake'), ChatsRoute.path);
+    expect(shortcutPathAlias('/applanguage'), SettingsRoute.path);
+    expect(
+      resourcePathAlias('/chat/21/unread-filter'),
+      '/chats/thread/21',
+    );
+    expect(
+      resourcePathAlias('/chat/21/block-sender'),
+      '/chats/thread/21',
+    );
+    expect(resourcePathAlias('/filterjump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/swipejump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/tabjump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/filterid/7'), '/chats/folders/7');
+    expect(resourcePathAlias('/tabid/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/reactsetid/28'), '/post/28');
+    expect(
+      leftoverPathAlias('/go/unread-filter'),
+      ChatsRoute.path,
+    );
+    expect(
+      leftoverPathAlias('/go/filterjump/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/chat-filters'),
+      ChatsRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/swipejump/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/filterid/7'),
+      '/chats/folders/7',
+    );
     expect(shortcutPathAlias('/reels'), isNull);
     expect(shortcutPathAlias('/logout'), isNull);
     expect(shortcutPathAlias('/reels'), isNull);
