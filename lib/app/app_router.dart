@@ -593,7 +593,15 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'block-sender' ||
           segs[2] == 'report-fake' ||
           segs[2] == 'long-press-react' ||
-          segs[2] == 'tap-to-record') {
+          segs[2] == 'tap-to-record' ||
+          segs[2] == 'bot-inline' ||
+          segs[2] == 'switch-inline' ||
+          segs[2] == 'attach-menu' ||
+          segs[2] == 'inline-query' ||
+          segs[2] == 'gift-wear' ||
+          segs[2] == 'unique-gift' ||
+          segs[2] == 'disappearing-photo' ||
+          segs[2] == 'secret-timer') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -773,7 +781,15 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[3] == 'block-sender' ||
           segs[3] == 'report-fake' ||
           segs[3] == 'long-press-react' ||
-          segs[3] == 'tap-to-record') {
+          segs[3] == 'tap-to-record' ||
+          segs[3] == 'bot-inline' ||
+          segs[3] == 'switch-inline' ||
+          segs[3] == 'attach-menu' ||
+          segs[3] == 'inline-query' ||
+          segs[3] == 'gift-wear' ||
+          segs[3] == 'unique-gift' ||
+          segs[3] == 'disappearing-photo' ||
+          segs[3] == 'secret-timer') {
         return leftoverChatOpenPath(id, segs[3], query);
       }
       if (segs[3] == 'invite' || segs[3] == 'invite-link') {
@@ -1520,7 +1536,15 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'block-sender' ||
           segs[2] == 'report-fake' ||
           segs[2] == 'long-press-react' ||
-          segs[2] == 'tap-to-record') {
+          segs[2] == 'tap-to-record' ||
+          segs[2] == 'bot-inline' ||
+          segs[2] == 'switch-inline' ||
+          segs[2] == 'attach-menu' ||
+          segs[2] == 'inline-query' ||
+          segs[2] == 'gift-wear' ||
+          segs[2] == 'unique-gift' ||
+          segs[2] == 'disappearing-photo' ||
+          segs[2] == 'secret-timer') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -1707,7 +1731,15 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'block-sender' ||
           segs[2] == 'report-fake' ||
           segs[2] == 'long-press-react' ||
-          segs[2] == 'tap-to-record') {
+          segs[2] == 'tap-to-record' ||
+          segs[2] == 'bot-inline' ||
+          segs[2] == 'switch-inline' ||
+          segs[2] == 'attach-menu' ||
+          segs[2] == 'inline-query' ||
+          segs[2] == 'gift-wear' ||
+          segs[2] == 'unique-gift' ||
+          segs[2] == 'disappearing-photo' ||
+          segs[2] == 'secret-timer') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -2065,7 +2097,11 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[0] == 'quotejump' ||
           segs[0] == 'filterjump' ||
           segs[0] == 'swipejump' ||
-          segs[0] == 'tabjump') &&
+          segs[0] == 'tabjump' ||
+          segs[0] == 'inlinejump' ||
+          segs[0] == 'queryjump' ||
+          segs[0] == 'wearjump' ||
+          segs[0] == 'webjump') &&
       segs.length == 3) {
     final cid = int.tryParse(segs[1]);
     final mid = int.tryParse(segs[2]);
@@ -2235,6 +2271,10 @@ String? resourcePathAlias(String path, [String query = '']) {
         'filterid' => '/chats/folders/$id$q',
         'tabid' || 'gestureid' => '/chats/thread/$id$q',
         'reactsetid' => '/post/$id$q',
+        'queryid' => '/bots/$id$q',
+        'wearid' => '${StarGiftsInventoryRoute.path}$q',
+        'timerid' => '/chats/thread/$id$q',
+        'webviewid' => '/webapp/$id$q',
         _ => null,
       };
       if (opened != null) return opened;
@@ -4883,6 +4923,48 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/applanguage':
     case '/workhours':
       return '${SettingsRoute.path}$q';
+    case '/bot-inline':
+    case '/switch-inline':
+    case '/inline-query':
+    case '/default-placeholder':
+      return '${MyBotsRoute.path}$q';
+    case '/attach-menu':
+    case '/web-view':
+    case '/main-miniapp':
+      return '${MiniAppsRoute.path}$q';
+    case '/gift-wear':
+    case '/collectible-info':
+    case '/unique-gift':
+      return '${StarGiftsInventoryRoute.path}$q';
+    case '/resale-price':
+      return '${StarGiftsMarketplaceRoute.path}$q';
+    case '/story-repost':
+    case '/story-highlight':
+    case '/stealth-story':
+      return '${StoriesRoute.path}$q';
+    case '/disappearing-photo':
+    case '/secret-timer':
+    case '/self-destruct-photo':
+      return '${ChatsRoute.path}$q';
+    case '/botinline':
+    case '/switchinline':
+    case '/inlinequery':
+      return '${MyBotsRoute.path}$q';
+    case '/attachmenu':
+    case '/webview':
+    case '/mainminiapp':
+      return '${MiniAppsRoute.path}$q';
+    case '/giftwear':
+    case '/uniquegift':
+      return '${StarGiftsInventoryRoute.path}$q';
+    case '/resaleprice':
+      return '${StarGiftsMarketplaceRoute.path}$q';
+    case '/storyrepost':
+    case '/stealthstory':
+      return '${StoriesRoute.path}$q';
+    case '/secrettimer':
+    case '/disappearingphoto':
+      return '${ChatsRoute.path}$q';
     default:
       return null;
   }

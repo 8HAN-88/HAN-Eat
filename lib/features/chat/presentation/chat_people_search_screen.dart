@@ -296,6 +296,11 @@ class _ChatPeopleSearchScreenState extends State<ChatPeopleSearchScreen> {
                         icon: const Icon(Icons.call_outlined),
                         onPressed: () => unawaited(_startCall(user, 'voice')),
                       ),
+                      IconButton(
+                        tooltip: 'Видеозвонок',
+                        icon: const Icon(Icons.videocam_outlined),
+                        onPressed: () => unawaited(_startCall(user, 'video')),
+                      ),
                     ],
                   ),
                   onTap: () => _openChat(user),
