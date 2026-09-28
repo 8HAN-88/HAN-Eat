@@ -177,6 +177,13 @@ String? leftoverThreadCallMedia(String rest) {
     case 'add-to-call':
     case 'speaker-out':
     case 'noise-suppress':
+    case 'incoming-call':
+    case 'outgoing-call':
+    case 'start-call':
+    case 'voice-call':
+    case 'join-call':
+    case 'answer-call':
+    case 'ringing':
       return 'voice';
     case 'screen-share':
     case 'video-chat':
@@ -184,6 +191,10 @@ String? leftoverThreadCallMedia(String rest) {
     case 'videocall':
     case 'flip-camera':
     case 'camera-off':
+    case 'start-video':
+    case 'video-call':
+    case 'group-video':
+    case 'end-video':
       return 'video';
     default:
       return null;
@@ -202,6 +213,11 @@ String? leftoverResourceCallMedia(String kind) {
     case 'groupcallid':
     case 'callid':
       return 'voice';
+    case 'videocallid':
+    case 'vcallid':
+    case 'videocall-id':
+    case 'video-call-id':
+      return 'video';
     default:
       return null;
   }
@@ -235,6 +251,13 @@ String? leftoverProfileCallMedia(String rest) {
     case 'hold-call':
     case 'add-to-call':
     case 'speaker-out':
+    case 'incoming-call':
+    case 'outgoing-call':
+    case 'start-call':
+    case 'voice-call':
+    case 'join-call':
+    case 'answer-call':
+    case 'ringing':
       return 'voice';
     case 'video':
     case 'videocall':
@@ -242,6 +265,10 @@ String? leftoverProfileCallMedia(String rest) {
     case 'screen-share':
     case 'flip-camera':
     case 'camera-off':
+    case 'start-video':
+    case 'video-call':
+    case 'group-video':
+    case 'end-video':
       return 'video';
     default:
       return null;
@@ -609,7 +636,19 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'share-invite' ||
           segs[2] == 'silent-channel-post' ||
           segs[2] == 'signature-post' ||
-          segs[2] == 'scheduled-voice') {
+          segs[2] == 'scheduled-voice' ||
+          segs[2] == 'incoming-call' ||
+          segs[2] == 'outgoing-call' ||
+          segs[2] == 'start-call' ||
+          segs[2] == 'voice-call' ||
+          segs[2] == 'join-call' ||
+          segs[2] == 'answer-call' ||
+          segs[2] == 'start-video' ||
+          segs[2] == 'video-call' ||
+          segs[2] == 'group-video' ||
+          segs[2] == 'reel-share' ||
+          segs[2] == 'reel-like' ||
+          segs[2] == 'reel-comment') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -805,7 +844,19 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[3] == 'share-invite' ||
           segs[3] == 'silent-channel-post' ||
           segs[3] == 'signature-post' ||
-          segs[3] == 'scheduled-voice') {
+          segs[3] == 'scheduled-voice' ||
+          segs[3] == 'incoming-call' ||
+          segs[3] == 'outgoing-call' ||
+          segs[3] == 'start-call' ||
+          segs[3] == 'voice-call' ||
+          segs[3] == 'join-call' ||
+          segs[3] == 'answer-call' ||
+          segs[3] == 'start-video' ||
+          segs[3] == 'video-call' ||
+          segs[3] == 'group-video' ||
+          segs[3] == 'reel-share' ||
+          segs[3] == 'reel-like' ||
+          segs[3] == 'reel-comment') {
         return leftoverChatOpenPath(id, segs[3], query);
       }
       if (segs[3] == 'invite' || segs[3] == 'invite-link') {
@@ -1568,7 +1619,19 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'share-invite' ||
           segs[2] == 'silent-channel-post' ||
           segs[2] == 'signature-post' ||
-          segs[2] == 'scheduled-voice') {
+          segs[2] == 'scheduled-voice' ||
+          segs[2] == 'incoming-call' ||
+          segs[2] == 'outgoing-call' ||
+          segs[2] == 'start-call' ||
+          segs[2] == 'voice-call' ||
+          segs[2] == 'join-call' ||
+          segs[2] == 'answer-call' ||
+          segs[2] == 'start-video' ||
+          segs[2] == 'video-call' ||
+          segs[2] == 'group-video' ||
+          segs[2] == 'reel-share' ||
+          segs[2] == 'reel-like' ||
+          segs[2] == 'reel-comment') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -1771,7 +1834,19 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'share-invite' ||
           segs[2] == 'silent-channel-post' ||
           segs[2] == 'signature-post' ||
-          segs[2] == 'scheduled-voice') {
+          segs[2] == 'scheduled-voice' ||
+          segs[2] == 'incoming-call' ||
+          segs[2] == 'outgoing-call' ||
+          segs[2] == 'start-call' ||
+          segs[2] == 'voice-call' ||
+          segs[2] == 'join-call' ||
+          segs[2] == 'answer-call' ||
+          segs[2] == 'start-video' ||
+          segs[2] == 'video-call' ||
+          segs[2] == 'group-video' ||
+          segs[2] == 'reel-share' ||
+          segs[2] == 'reel-like' ||
+          segs[2] == 'reel-comment') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -2137,7 +2212,9 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[0] == 'proxyjump' ||
           segs[0] == 'invitejump' ||
           segs[0] == 'dnsjump' ||
-          segs[0] == 'signjump') &&
+          segs[0] == 'signjump' ||
+          segs[0] == 'reeljump' ||
+          segs[0] == 'clipjump') &&
       segs.length == 3) {
     final cid = int.tryParse(segs[1]);
     final mid = int.tryParse(segs[2]);
@@ -2157,6 +2234,10 @@ String? resourcePathAlias(String path, [String query = '']) {
   if (segs.length == 2) {
     final id = int.tryParse(segs[1]);
     if (id != null && id > 0) {
+      final callMedia = leftoverResourceCallMedia(segs[0]);
+      if (callMedia != null) {
+        return pathWithCallQuery('/chats/thread/$id', callMedia, query);
+      }
       final opened = switch (segs[0]) {
         'openpost' || 'open-post' => '/post/$id$q',
         'openchat' || 'open-chat' => '/chats/thread/$id$q',
@@ -2314,6 +2395,8 @@ String? resourcePathAlias(String path, [String query = '']) {
         'proxyid' || 'dnsid' => '/chats/thread/$id$q',
         'signid' => '/channel/$id$q',
         'smsid' => '/chats/thread/$id$q',
+        'reelshareid' || 'reellikeid' || 'reelcommentid' || 'reelsaveid' =>
+          '/reel/$id$q',
         _ => null,
       };
       if (opened != null) return opened;
@@ -5049,6 +5132,41 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/signaturepost':
     case '/authorsignature':
       return '${ChannelsManagementRoute.path}$q';
+    case '/incoming-call':
+    case '/outgoing-call':
+    case '/start-call':
+    case '/voice-call':
+    case '/join-call':
+    case '/answer-call':
+    case '/ringing':
+    case '/start-video':
+    case '/video-call':
+    case '/group-video':
+    case '/end-video':
+      return '${ChatsRoute.path}$q';
+    case '/reel-share':
+    case '/reel-like':
+    case '/reel-comment':
+    case '/reel-save':
+    case '/reel-repost':
+    case '/reel-sound':
+    case '/reel-caption':
+    case '/reel-music':
+      return '${ReelsRoute.path}$q';
+    case '/incomingcall':
+    case '/outgoingcall':
+    case '/startcall':
+    case '/voicecall':
+    case '/videocall':
+    case '/startvideo':
+    case '/groupvideo':
+    case '/joincall':
+      return '${ChatsRoute.path}$q';
+    case '/reelshare':
+    case '/reellike':
+    case '/reelcomment':
+    case '/reelsave':
+      return '${ReelsRoute.path}$q';
     default:
       return null;
   }

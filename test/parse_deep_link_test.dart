@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:han_eat/app/app_router.dart';
 import 'package:han_eat/features/bots/presentation/bot_detail_screen.dart';
+import 'package:han_eat/features/reels/application/dom_video_touch_policy.dart';
 
 void main() {
   test('PWA /app/ is not a GoRouter location', () {
@@ -2178,6 +2179,82 @@ void main() {
       parseDeepLinkToGoPath('https://haneat.app/app/#/signid/1'),
       '/channel/1',
     );
+    expect(leftoverThreadCallMedia('start-call'), 'voice');
+    expect(leftoverThreadCallMedia('video-call'), 'video');
+    expect(leftoverThreadCallMedia('group-video'), 'video');
+    expect(leftoverProfileCallMedia('voice-call'), 'voice');
+    expect(leftoverProfileCallMedia('start-video'), 'video');
+    expect(leftoverResourceCallMedia('videocallid'), 'video');
+    expect(leftoverResourceCallMedia('vcallid'), 'video');
+    expect(shortcutPathAlias('/incoming-call'), ChatsRoute.path);
+    expect(shortcutPathAlias('/start-call'), ChatsRoute.path);
+    expect(shortcutPathAlias('/voice-call'), ChatsRoute.path);
+    expect(shortcutPathAlias('/video-call'), ChatsRoute.path);
+    expect(shortcutPathAlias('/start-video'), ChatsRoute.path);
+    expect(shortcutPathAlias('/group-video'), ChatsRoute.path);
+    expect(shortcutPathAlias('/answer-call'), ChatsRoute.path);
+    expect(shortcutPathAlias('/reel-share'), ReelsRoute.path);
+    expect(shortcutPathAlias('/reel-like'), ReelsRoute.path);
+    expect(shortcutPathAlias('/reel-comment'), ReelsRoute.path);
+    expect(shortcutPathAlias('/reel-save'), ReelsRoute.path);
+    expect(shortcutPathAlias('/reel-sound'), ReelsRoute.path);
+    expect(shortcutPathAlias('/videocall'), ChatsRoute.path);
+    expect(shortcutPathAlias('/reelshare'), ReelsRoute.path);
+    expect(
+      resourcePathAlias('/chat/21/start-call'),
+      '/chats/thread/21?call=voice',
+    );
+    expect(
+      resourcePathAlias('/chat/21/video-call'),
+      '/chats/thread/21?call=video',
+    );
+    expect(
+      resourcePathAlias('/chat/21/reel-share'),
+      '/chats/thread/21',
+    );
+    expect(
+      resourcePathAlias('/user/11/video-call'),
+      '${ProfileRoute.path}?userId=11&call=video',
+    );
+    expect(
+      resourcePathAlias('/videocallid/21'),
+      '/chats/thread/21?call=video',
+    );
+    expect(resourcePathAlias('/reelshareid/28'), '/reel/28');
+    expect(resourcePathAlias('/reellikeid/28'), '/reel/28');
+    expect(resourcePathAlias('/reeljump/21/456'), '/chats/thread/21?msg=456');
+    expect(
+      leftoverPathAlias('/go/video-call'),
+      ChatsRoute.path,
+    );
+    expect(
+      leftoverPathAlias('/go/reel-share'),
+      ReelsRoute.path,
+    );
+    expect(
+      leftoverPathAlias('/go/videocallid/21'),
+      '/chats/thread/21?call=video',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/start-video'),
+      ChatsRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/reel-comment'),
+      ReelsRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/videocallid/21'),
+      '/chats/thread/21?call=video',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/reelshareid/28'),
+      '/reel/28',
+    );
+    expect(shortcutPathAlias('/shorts'), isNull);
+    expect(shortcutPathAlias('/clips'), isNull);
+    expect(shortcutPathAlias('/watch'), isNull);
+    expect(DomVideoTouchPolicy.allowHtmlElementViewVideo, isFalse);
     expect(shortcutPathAlias('/reels'), isNull);
     expect(shortcutPathAlias('/logout'), isNull);
     expect(shortcutPathAlias('/reels'), isNull);
