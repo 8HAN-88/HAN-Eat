@@ -2068,6 +2068,61 @@ void main() {
       parseDeepLinkToGoPath('https://haneat.app/app/#/filterid/7'),
       '/chats/folders/7',
     );
+    expect(shortcutPathAlias('/bot-inline'), MyBotsRoute.path);
+    expect(shortcutPathAlias('/switch-inline'), MyBotsRoute.path);
+    expect(shortcutPathAlias('/inline-query'), MyBotsRoute.path);
+    expect(shortcutPathAlias('/default-placeholder'), MyBotsRoute.path);
+    expect(shortcutPathAlias('/attach-menu'), MiniAppsRoute.path);
+    expect(shortcutPathAlias('/web-view'), MiniAppsRoute.path);
+    expect(shortcutPathAlias('/main-miniapp'), MiniAppsRoute.path);
+    expect(shortcutPathAlias('/gift-wear'), StarGiftsInventoryRoute.path);
+    expect(shortcutPathAlias('/collectible-info'), StarGiftsInventoryRoute.path);
+    expect(shortcutPathAlias('/unique-gift'), StarGiftsInventoryRoute.path);
+    expect(shortcutPathAlias('/resale-price'), StarGiftsMarketplaceRoute.path);
+    expect(shortcutPathAlias('/story-repost'), StoriesRoute.path);
+    expect(shortcutPathAlias('/story-highlight'), StoriesRoute.path);
+    expect(shortcutPathAlias('/stealth-story'), StoriesRoute.path);
+    expect(shortcutPathAlias('/disappearing-photo'), ChatsRoute.path);
+    expect(shortcutPathAlias('/secret-timer'), ChatsRoute.path);
+    expect(shortcutPathAlias('/botinline'), MyBotsRoute.path);
+    expect(shortcutPathAlias('/webview'), MiniAppsRoute.path);
+    expect(shortcutPathAlias('/giftwear'), StarGiftsInventoryRoute.path);
+    expect(shortcutPathAlias('/secrettimer'), ChatsRoute.path);
+    expect(
+      resourcePathAlias('/chat/21/bot-inline'),
+      '/chats/thread/21',
+    );
+    expect(
+      resourcePathAlias('/chat/21/gift-wear'),
+      '/chats/thread/21',
+    );
+    expect(resourcePathAlias('/inlinejump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/queryjump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/wearjump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/queryid/28'), '/bots/28');
+    expect(resourcePathAlias('/wearid/28'), StarGiftsInventoryRoute.path);
+    expect(resourcePathAlias('/webviewid/28'), '/webapp/28');
+    expect(resourcePathAlias('/timerid/21'), '/chats/thread/21');
+    expect(
+      leftoverPathAlias('/go/bot-inline'),
+      MyBotsRoute.path,
+    );
+    expect(
+      leftoverPathAlias('/go/inlinejump/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/web-view'),
+      MiniAppsRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/queryjump/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/queryid/28'),
+      '/bots/28',
+    );
     expect(shortcutPathAlias('/reels'), isNull);
     expect(shortcutPathAlias('/logout'), isNull);
     expect(shortcutPathAlias('/reels'), isNull);
