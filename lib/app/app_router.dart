@@ -4950,7 +4950,6 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/switchinline':
     case '/inlinequery':
       return '${MyBotsRoute.path}$q';
-    case '/attachmenu':
     case '/webview':
     case '/mainminiapp':
       return '${MiniAppsRoute.path}$q';
