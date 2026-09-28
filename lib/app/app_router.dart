@@ -601,7 +601,15 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'gift-wear' ||
           segs[2] == 'unique-gift' ||
           segs[2] == 'disappearing-photo' ||
-          segs[2] == 'secret-timer') {
+          segs[2] == 'secret-timer' ||
+          segs[2] == 'proxy-add' ||
+          segs[2] == 'custom-dns' ||
+          segs[2] == 'qr-share' ||
+          segs[2] == 'invite-sms' ||
+          segs[2] == 'share-invite' ||
+          segs[2] == 'silent-channel-post' ||
+          segs[2] == 'signature-post' ||
+          segs[2] == 'scheduled-voice') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -789,7 +797,15 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[3] == 'gift-wear' ||
           segs[3] == 'unique-gift' ||
           segs[3] == 'disappearing-photo' ||
-          segs[3] == 'secret-timer') {
+          segs[3] == 'secret-timer' ||
+          segs[3] == 'proxy-add' ||
+          segs[3] == 'custom-dns' ||
+          segs[3] == 'qr-share' ||
+          segs[3] == 'invite-sms' ||
+          segs[3] == 'share-invite' ||
+          segs[3] == 'silent-channel-post' ||
+          segs[3] == 'signature-post' ||
+          segs[3] == 'scheduled-voice') {
         return leftoverChatOpenPath(id, segs[3], query);
       }
       if (segs[3] == 'invite' || segs[3] == 'invite-link') {
@@ -1544,7 +1560,15 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'gift-wear' ||
           segs[2] == 'unique-gift' ||
           segs[2] == 'disappearing-photo' ||
-          segs[2] == 'secret-timer') {
+          segs[2] == 'secret-timer' ||
+          segs[2] == 'proxy-add' ||
+          segs[2] == 'custom-dns' ||
+          segs[2] == 'qr-share' ||
+          segs[2] == 'invite-sms' ||
+          segs[2] == 'share-invite' ||
+          segs[2] == 'silent-channel-post' ||
+          segs[2] == 'signature-post' ||
+          segs[2] == 'scheduled-voice') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -1739,7 +1763,15 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[2] == 'gift-wear' ||
           segs[2] == 'unique-gift' ||
           segs[2] == 'disappearing-photo' ||
-          segs[2] == 'secret-timer') {
+          segs[2] == 'secret-timer' ||
+          segs[2] == 'proxy-add' ||
+          segs[2] == 'custom-dns' ||
+          segs[2] == 'qr-share' ||
+          segs[2] == 'invite-sms' ||
+          segs[2] == 'share-invite' ||
+          segs[2] == 'silent-channel-post' ||
+          segs[2] == 'signature-post' ||
+          segs[2] == 'scheduled-voice') {
         return leftoverChatOpenPath(id, segs[2], query);
       }
       final mid = int.tryParse(segs[2]);
@@ -2101,7 +2133,11 @@ String? resourcePathAlias(String path, [String query = '']) {
           segs[0] == 'inlinejump' ||
           segs[0] == 'queryjump' ||
           segs[0] == 'wearjump' ||
-          segs[0] == 'webjump') &&
+          segs[0] == 'webjump' ||
+          segs[0] == 'proxyjump' ||
+          segs[0] == 'invitejump' ||
+          segs[0] == 'dnsjump' ||
+          segs[0] == 'signjump') &&
       segs.length == 3) {
     final cid = int.tryParse(segs[1]);
     final mid = int.tryParse(segs[2]);
@@ -2275,6 +2311,9 @@ String? resourcePathAlias(String path, [String query = '']) {
         'wearid' => '${StarGiftsInventoryRoute.path}$q',
         'timerid' => '/chats/thread/$id$q',
         'webviewid' => '/webapp/$id$q',
+        'proxyid' || 'dnsid' => '/chats/thread/$id$q',
+        'signid' => '/channel/$id$q',
+        'smsid' => '/chats/thread/$id$q',
         _ => null,
       };
       if (opened != null) return opened;
@@ -4964,6 +5003,52 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/secrettimer':
     case '/disappearingphoto':
       return '${ChatsRoute.path}$q';
+    case '/proxy-add':
+    case '/custom-dns':
+    case '/ipv6-only':
+    case '/auto-download-videos':
+    case '/dc-id':
+    case '/test-server':
+      return '${SettingsRoute.path}$q';
+    case '/qr-share':
+    case '/invite-sms':
+    case '/share-invite':
+      return '${PartnerProgramRoute.path}$q';
+    case '/scan-contact':
+    case '/add-by-username':
+    case '/nearby-people':
+      return '${ChatNewMessageRoute.path}$q';
+    case '/global-search-people':
+      return '${SearchRoute.path}$q';
+    case '/scheduled-voice':
+      return '${ScheduledPostsRoute.path}$q';
+    case '/silent-channel-post':
+    case '/signature-post':
+    case '/author-signature':
+      return '${ChannelsManagementRoute.path}$q';
+    case '/comment-discussion':
+      return '${ChatsRoute.path}$q';
+    case '/proxyadd':
+    case '/customdns':
+    case '/ipv6only':
+    case '/autodownloadvideos':
+    case '/dcid':
+    case '/testserver':
+      return '${SettingsRoute.path}$q';
+    case '/qrshare':
+    case '/invitesms':
+    case '/shareinvite':
+      return '${PartnerProgramRoute.path}$q';
+    case '/scancontact':
+    case '/addbyusername':
+    case '/nearbypeople':
+      return '${ChatNewMessageRoute.path}$q';
+    case '/scheduledvoice':
+      return '${ScheduledPostsRoute.path}$q';
+    case '/silentchannelpost':
+    case '/signaturepost':
+    case '/authorsignature':
+      return '${ChannelsManagementRoute.path}$q';
     default:
       return null;
   }

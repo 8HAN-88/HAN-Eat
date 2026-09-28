@@ -2123,6 +2123,61 @@ void main() {
       parseDeepLinkToGoPath('https://haneat.app/app/#/queryid/28'),
       '/bots/28',
     );
+    expect(shortcutPathAlias('/proxy-add'), SettingsRoute.path);
+    expect(shortcutPathAlias('/custom-dns'), SettingsRoute.path);
+    expect(shortcutPathAlias('/ipv6-only'), SettingsRoute.path);
+    expect(shortcutPathAlias('/auto-download-videos'), SettingsRoute.path);
+    expect(shortcutPathAlias('/dc-id'), SettingsRoute.path);
+    expect(shortcutPathAlias('/test-server'), SettingsRoute.path);
+    expect(shortcutPathAlias('/qr-share'), PartnerProgramRoute.path);
+    expect(shortcutPathAlias('/invite-sms'), PartnerProgramRoute.path);
+    expect(shortcutPathAlias('/share-invite'), PartnerProgramRoute.path);
+    expect(shortcutPathAlias('/scan-contact'), ChatNewMessageRoute.path);
+    expect(shortcutPathAlias('/add-by-username'), ChatNewMessageRoute.path);
+    expect(shortcutPathAlias('/nearby-people'), ChatNewMessageRoute.path);
+    expect(shortcutPathAlias('/global-search-people'), SearchRoute.path);
+    expect(shortcutPathAlias('/scheduled-voice'), ScheduledPostsRoute.path);
+    expect(shortcutPathAlias('/silent-channel-post'), ChannelsManagementRoute.path);
+    expect(shortcutPathAlias('/signature-post'), ChannelsManagementRoute.path);
+    expect(shortcutPathAlias('/author-signature'), ChannelsManagementRoute.path);
+    expect(shortcutPathAlias('/comment-discussion'), ChatsRoute.path);
+    expect(shortcutPathAlias('/proxyadd'), SettingsRoute.path);
+    expect(shortcutPathAlias('/qrshare'), PartnerProgramRoute.path);
+    expect(shortcutPathAlias('/scancontact'), ChatNewMessageRoute.path);
+    expect(
+      resourcePathAlias('/chat/21/proxy-add'),
+      '/chats/thread/21',
+    );
+    expect(
+      resourcePathAlias('/chat/21/share-invite'),
+      '/chats/thread/21',
+    );
+    expect(resourcePathAlias('/proxyjump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/invitejump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/signjump/21/456'), '/chats/thread/21?msg=456');
+    expect(resourcePathAlias('/proxyid/21'), '/chats/thread/21');
+    expect(resourcePathAlias('/signid/1'), '/channel/1');
+    expect(resourcePathAlias('/smsid/21'), '/chats/thread/21');
+    expect(
+      leftoverPathAlias('/go/proxy-add'),
+      SettingsRoute.path,
+    );
+    expect(
+      leftoverPathAlias('/go/invitejump/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/qr-share'),
+      PartnerProgramRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/signjump/21/456'),
+      '/chats/thread/21?msg=456',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/signid/1'),
+      '/channel/1',
+    );
     expect(shortcutPathAlias('/reels'), isNull);
     expect(shortcutPathAlias('/logout'), isNull);
     expect(shortcutPathAlias('/reels'), isNull);
