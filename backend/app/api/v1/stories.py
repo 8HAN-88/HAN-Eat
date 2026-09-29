@@ -88,7 +88,9 @@ def _active_story_query(db: Session):
     )
 
 
-def _author_response(user: User) -> StoryAuthorResponse:
+def _author_response(user: Optional[User], fallback_id: int = 0) -> StoryAuthorResponse:
+    if user is None:
+        return StoryAuthorResponse(id=fallback_id, name="Пользователь")
     return StoryAuthorResponse(
         id=user.id,
         name=user.name,
@@ -135,6 +137,8 @@ def _to_response(
 ) -> StoryResponse:
     user = story.user
     reactions, my_reaction = _reaction_summaries(db, story.id, viewer_id)
+    created = story.created_at or datetime.utcnow()
+    expires = story.expires_at or (created + timedelta(hours=24))
     return StoryResponse(
         id=story.id,
         user_id=story.user_id,
@@ -144,9 +148,9 @@ def _to_response(
         caption=story.caption,
         visibility=story.visibility,
         views_count=story.views_count or 0,
-        created_at=story.created_at.isoformat(),
-        expires_at=story.expires_at.isoformat(),
-        author=_author_response(user),
+        created_at=created.isoformat(),
+        expires_at=expires.isoformat(),
+        author=_author_response(user, fallback_id=int(story.user_id or 0)),
         reactions=reactions,
         my_reaction=my_reaction,
     )

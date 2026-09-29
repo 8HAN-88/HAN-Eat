@@ -135,20 +135,19 @@ async def test_view_private_blocked(db_session):
 
 
 @pytest.mark.asyncio
-async def test_list_skips_stories_without_author(db_session):
+async def test_list_skips_stories_without_media(db_session):
     owner = _user(db_session, 1, "Owner")
     live = _story(db_session, owner, "public")
-    orphan = Story(
-        user_id=owner.id,
-        media_url="https://cdn.example/orphan.jpg",
-        media_type="image",
-        visibility="public",
-        expires_at=datetime.utcnow() + timedelta(hours=12),
+    db_session.add(
+        Story(
+            user_id=owner.id,
+            media_url="",
+            media_type="image",
+            visibility="public",
+            expires_at=datetime.utcnow() + timedelta(hours=12),
+        )
     )
-    db_session.add(orphan)
     db_session.commit()
-    db_session.refresh(orphan)
-    orphan.user = None
 
     listed = await stories_api.list_active_stories(
         current_user=owner, db=db_session
