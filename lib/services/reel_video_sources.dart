@@ -131,15 +131,27 @@ class ReelVideoSources {
     final media = body['media'];
     if (media is List) {
       for (final item in media) {
-        if (item is Map<String, dynamic> && item['type'] == 'video') {
-          original = _resolve(item['url']);
-          mp4_480 = _resolve(item['mp4_480p_url']);
-          mp4_720 = _resolve(item['mp4_720p_url']);
-          mp4_1080 = _resolve(item['mp4_1080p_url']);
-          hls = _resolve(item['hls_url']);
-          thumb = _resolve(item['thumbnail_url'] ?? item['thumbnail']);
-          break;
+        if (item is! Map) continue;
+        final map = Map<String, dynamic>.from(item);
+        final type = '${map['type'] ?? ''}'.trim().toLowerCase();
+        final hasTranscode = _resolve(map['mp4_480p_url']) != null ||
+            _resolve(map['mp4_720p_url']) != null ||
+            _resolve(map['mp4_1080p_url']) != null ||
+            _resolve(map['hls_url']) != null;
+        final url = _resolve(map['url']);
+        final urlLooksVideo = url != null && _looksLikeVideoUrl(url);
+        if (type != 'video' &&
+            type != 'reel' &&
+            !(type.isEmpty && (hasTranscode || urlLooksVideo))) {
+          continue;
         }
+        original = _resolve(map['url']);
+        mp4_480 = _resolve(map['mp4_480p_url']);
+        mp4_720 = _resolve(map['mp4_720p_url']);
+        mp4_1080 = _resolve(map['mp4_1080p_url']);
+        hls = _resolve(map['hls_url']);
+        thumb = _resolve(map['thumbnail_url'] ?? map['thumbnail']);
+        break;
       }
     }
 
@@ -154,6 +166,14 @@ class ReelVideoSources {
       hls: hls,
       thumbnail: thumb,
     );
+  }
+
+  static bool _looksLikeVideoUrl(String url) {
+    final lower = url.toLowerCase();
+    return lower.contains('.mp4') ||
+        lower.contains('.m3u8') ||
+        lower.contains('.webm') ||
+        lower.contains('.mov');
   }
 
   static String? _resolve(dynamic raw) {

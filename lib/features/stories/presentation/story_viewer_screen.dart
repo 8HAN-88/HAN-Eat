@@ -310,7 +310,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     _videoController?.dispose();
     _videoController = null;
 
-    final url = ServerConfig.resolveMediaUrl(_currentStory.mediaUrl);
+    final url = ServerConfig.resolvePlaybackMediaUrl(_currentStory.mediaUrl);
     try {
       final controller = await VideoPlayerHelper.createPreparedController(
         url,
@@ -860,7 +860,9 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
   }
 
   Widget _buildStoryContent(StoryItem story) {
-    final url = ServerConfig.resolveMediaUrl(story.mediaUrl);
+    final url = story.isVideo
+        ? ServerConfig.resolvePlaybackMediaUrl(story.mediaUrl)
+        : ServerConfig.resolveSameOriginUploadUrl(story.mediaUrl);
 
     if (story.isVideo) {
       return _videoController != null && _videoController!.value.isInitialized

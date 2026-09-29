@@ -9,6 +9,25 @@ import '../../../services/story_feed_cache.dart';
 import 'story_models.dart';
 
 class StoryService {
+  static List<StoryDto> parseStoryList(dynamic data) {
+    final raw = data is List
+        ? data
+        : (data is Map && data['items'] is List)
+            ? data['items'] as List
+            : const [];
+    final stories = <StoryDto>[];
+    for (final item in raw) {
+      if (item is! Map) continue;
+      try {
+        final story = StoryDto.fromJson(Map<String, dynamic>.from(item));
+        if (story.isPlayable && !story.isExpired) {
+          stories.add(story);
+        }
+      } catch (_) {}
+    }
+    return stories;
+  }
+
   static Future<List<StoryDto>> fetchActiveStories({int limit = 100}) async {
     try {
       final response = await http.get(
@@ -16,12 +35,7 @@ class StoryService {
         headers: await ApiService.authHeaders(),
       );
       ApiService.ensureSuccess(response);
-      final data = jsonDecode(response.body) as List<dynamic>;
-      final stories = data
-          .whereType<Map>()
-          .map((item) => StoryDto.fromJson(Map<String, dynamic>.from(item)))
-          .where((story) => !story.isExpired)
-          .toList();
+      final stories = parseStoryList(jsonDecode(response.body));
       await StoryFeedCache.save(stories);
       return stories;
     } catch (_) {
@@ -37,11 +51,7 @@ class StoryService {
       headers: await ApiService.authHeaders(),
     );
     ApiService.ensureSuccess(response);
-    final data = jsonDecode(response.body) as List<dynamic>;
-    return data
-        .map((item) => StoryDto.fromJson(item as Map<String, dynamic>))
-        .where((story) => !story.isExpired)
-        .toList();
+    return parseStoryList(jsonDecode(response.body));
   }
 
   static Future<StoryDto> createStory(StoryCreateRequest request) async {

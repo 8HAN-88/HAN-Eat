@@ -109,6 +109,23 @@ void main() {
       );
     });
 
+    test('fromPostBody reads loosely typed media maps and reel type', () {
+      final parsed = ReelVideoSources.fromPostBody({
+        'media': [
+          <dynamic, dynamic>{
+            'type': 'reel',
+            'url': 'https://cdn/original.mp4',
+            'mp4_480p_url': 'https://cdn/480.mp4',
+            'thumbnail': 'https://cdn/thumb.jpg',
+          },
+        ],
+      });
+      expect(parsed.original, 'https://cdn/original.mp4');
+      expect(parsed.mp4_480p, 'https://cdn/480.mp4');
+      expect(parsed.thumbnail, 'https://cdn/thumb.jpg');
+      expect(parsed.isEmpty, isFalse);
+    });
+
     test('fromPostBody reads all fields', () {
       final parsed = ReelVideoSources.fromPostBody({
         'media': [

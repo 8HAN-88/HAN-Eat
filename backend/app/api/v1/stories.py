@@ -246,7 +246,11 @@ async def list_active_stories(
         .limit(limit)
         .all()
     )
-    return [_to_response(story, db, viewer_id=current_user.id) for story in stories]
+    return [
+        _to_response(story, db, viewer_id=current_user.id)
+        for story in stories
+        if story.user is not None and story.media_url
+    ]
 
 
 @router.get("/mine", response_model=List[StoryResponse])
@@ -260,7 +264,11 @@ async def list_my_stories(
         .order_by(Story.created_at.desc())
         .all()
     )
-    return [_to_response(story, db, viewer_id=current_user.id) for story in stories]
+    return [
+        _to_response(story, db, viewer_id=current_user.id)
+        for story in stories
+        if story.user is not None and story.media_url
+    ]
 
 
 @router.post("", response_model=StoryResponse, status_code=status.HTTP_201_CREATED)

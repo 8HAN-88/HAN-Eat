@@ -43,11 +43,17 @@ class StoryFeedCache {
       if (raw == null || raw.isEmpty) return const [];
       final map = jsonDecode(raw) as Map<String, dynamic>;
       final list = map['stories'] as List<dynamic>? ?? const [];
-      return list
-          .whereType<Map>()
-          .map((e) => StoryDto.fromJson(Map<String, dynamic>.from(e)))
-          .where((s) => !s.isExpired)
-          .toList();
+      final stories = <StoryDto>[];
+      for (final item in list) {
+        if (item is! Map) continue;
+        try {
+          final story = StoryDto.fromJson(Map<String, dynamic>.from(item));
+          if (story.isPlayable && !story.isExpired) {
+            stories.add(story);
+          }
+        } catch (_) {}
+      }
+      return stories;
     } catch (e) {
       if (kDebugMode) debugPrint('StoryFeedCache.load: $e');
       return const [];

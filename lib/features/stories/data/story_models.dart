@@ -1,3 +1,32 @@
+int _storyJsonInt(Object? raw) {
+  if (raw is int) return raw;
+  if (raw is num) return raw.toInt();
+  if (raw is String) return int.tryParse(raw.trim()) ?? 0;
+  return 0;
+}
+
+String? _storyJsonString(Object? raw) {
+  if (raw is String) {
+    final trimmed = raw.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+  return null;
+}
+
+DateTime? _storyJsonDate(Object? raw) {
+  if (raw is DateTime) return raw.toLocal();
+  if (raw is String && raw.trim().isNotEmpty) {
+    return DateTime.tryParse(raw.trim())?.toLocal();
+  }
+  return null;
+}
+
+Map<String, dynamic>? _storyJsonMap(Object? raw) {
+  if (raw is Map<String, dynamic>) return raw;
+  if (raw is Map) return Map<String, dynamic>.from(raw);
+  return null;
+}
+
 class StoryAuthor {
   const StoryAuthor({
     required this.id,
@@ -12,10 +41,10 @@ class StoryAuthor {
   final String? avatarUrl;
 
   factory StoryAuthor.fromJson(Map<String, dynamic> json) => StoryAuthor(
-        id: (json['id'] as num?)?.toInt() ?? 0,
-        name: json['name'] as String? ?? 'Пользователь',
-        username: json['username'] as String?,
-        avatarUrl: json['avatar_url'] as String?,
+        id: _storyJsonInt(json['id']),
+        name: _storyJsonString(json['name']) ?? 'Пользователь',
+        username: _storyJsonString(json['username']),
+        avatarUrl: _storyJsonString(json['avatar_url']),
       );
 
   Map<String, dynamic> toJson() => {
@@ -37,8 +66,8 @@ class StoryReactionSummary {
 
   factory StoryReactionSummary.fromJson(Map<String, dynamic> json) =>
       StoryReactionSummary(
-        emoji: json['emoji'] as String? ?? '',
-        count: (json['count'] as num?)?.toInt() ?? 0,
+        emoji: _storyJsonString(json['emoji']) ?? '',
+        count: _storyJsonInt(json['count']),
       );
 
   Map<String, dynamic> toJson() => {
@@ -83,26 +112,33 @@ class StoryDto {
 
   factory StoryDto.fromJson(Map<String, dynamic> json) {
     final rawReactions = json['reactions'] as List<dynamic>? ?? const [];
+    final createdAt = _storyJsonDate(json['created_at']) ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+    final expiresAt = _storyJsonDate(json['expires_at']) ??
+        createdAt.add(const Duration(hours: 24));
+    final authorMap = _storyJsonMap(json['author']);
     return StoryDto(
-      id: json['id'] as int,
-      userId: json['user_id'] as int,
-      mediaUrl: json['media_url'] as String,
-      thumbnailUrl: json['thumbnail_url'] as String?,
-      mediaType: json['media_type'] as String? ?? 'image',
-      caption: json['caption'] as String?,
-      visibility: json['visibility'] as String? ?? 'public',
-      viewsCount: json['views_count'] as int? ?? 0,
-      createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
-      expiresAt: DateTime.parse(json['expires_at'] as String).toLocal(),
-      author: StoryAuthor.fromJson(json['author'] as Map<String, dynamic>),
+      id: _storyJsonInt(json['id']),
+      userId: _storyJsonInt(json['user_id']),
+      mediaUrl: _storyJsonString(json['media_url']) ?? '',
+      thumbnailUrl: _storyJsonString(json['thumbnail_url']),
+      mediaType: _storyJsonString(json['media_type']) ?? 'image',
+      caption: _storyJsonString(json['caption']),
+      visibility: _storyJsonString(json['visibility']) ?? 'public',
+      viewsCount: _storyJsonInt(json['views_count']),
+      createdAt: createdAt,
+      expiresAt: expiresAt,
+      author: StoryAuthor.fromJson(authorMap ?? const {}),
       reactions: rawReactions
-          .whereType<Map<String, dynamic>>()
-          .map(StoryReactionSummary.fromJson)
+          .whereType<Map>()
+          .map((e) => StoryReactionSummary.fromJson(Map<String, dynamic>.from(e)))
           .where((e) => e.emoji.isNotEmpty)
           .toList(),
-      myReaction: json['my_reaction'] as String?,
+      myReaction: _storyJsonString(json['my_reaction']),
     );
   }
+
+  bool get isPlayable => id > 0 && mediaUrl.trim().isNotEmpty;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -156,9 +192,10 @@ class StoryViewerDto {
   final String? reaction;
 
   factory StoryViewerDto.fromJson(Map<String, dynamic> json) => StoryViewerDto(
-        user: StoryAuthor.fromJson(json['user'] as Map<String, dynamic>),
-        viewedAt: DateTime.parse(json['viewed_at'] as String).toLocal(),
-        reaction: json['reaction'] as String?,
+        user: StoryAuthor.fromJson(_storyJsonMap(json['user']) ?? const {}),
+        viewedAt: _storyJsonDate(json['viewed_at']) ??
+            DateTime.fromMillisecondsSinceEpoch(0),
+        reaction: _storyJsonString(json['reaction']),
       );
 }
 
@@ -174,10 +211,11 @@ class StoryViewersPage {
   factory StoryViewersPage.fromJson(Map<String, dynamic> json) {
     final raw = json['items'] as List<dynamic>? ?? const [];
     return StoryViewersPage(
-      viewsCount: json['views_count'] as int? ?? 0,
+      viewsCount: _storyJsonInt(json['views_count']),
       items: raw
-          .whereType<Map<String, dynamic>>()
-          .map(StoryViewerDto.fromJson)
+          .whereType<Map>()
+          .map((e) => StoryViewerDto.fromJson(Map<String, dynamic>.from(e)))
+          .where((e) => e.user.id > 0)
           .toList(),
     );
   }
