@@ -69,6 +69,43 @@ void main() {
     expect(post.commentsCount, 1);
   });
 
+  test('fromJson accepts web-style nums and nested maps', () {
+    final post = PostModel.fromJson({
+      'id': 28.0,
+      'type': 'reel',
+      'status': 'published',
+      'created_at': '2026-01-01T00:00:00.000Z',
+      'user_id': 11.0,
+      'price_stars': 9.0,
+      'likes_count': 2.0,
+      'comments_count': 0,
+      'reposts_count': 0,
+      'views_count': 4.0,
+      'is_liked': false,
+      'body': <dynamic, dynamic>{
+        'media': [
+          <dynamic, dynamic>{
+            'type': 'reel',
+            'url': 'https://cdn/original.mp4',
+            'mp4_480p_url': 'https://cdn/480.mp4',
+            'thumbnail_url': 'https://cdn/thumb.jpg',
+          },
+        ],
+      },
+      'author': <dynamic, dynamic>{
+        'id': 11.0,
+        'name': 'Анна',
+      },
+    });
+    expect(post.id, 28);
+    expect(post.userId, 11);
+    expect(post.priceStars, 9);
+    expect(post.author?.id, 11);
+    expect(post.reelVideoSources.original, 'https://cdn/original.mp4');
+    expect(post.videoUrl, 'https://cdn/480.mp4');
+    expect(post.videoThumbnail, 'https://cdn/thumb.jpg');
+  });
+
   test('commentsCount reads numeric string', () {
     final post = PostModel.fromJson({
       'id': 8,

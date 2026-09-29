@@ -135,6 +135,27 @@ async def test_view_private_blocked(db_session):
 
 
 @pytest.mark.asyncio
+async def test_list_skips_stories_without_media(db_session):
+    owner = _user(db_session, 1, "Owner")
+    live = _story(db_session, owner, "public")
+    db_session.add(
+        Story(
+            user_id=owner.id,
+            media_url="",
+            media_type="image",
+            visibility="public",
+            expires_at=datetime.utcnow() + timedelta(hours=12),
+        )
+    )
+    db_session.commit()
+
+    listed = await stories_api.list_active_stories(
+        current_user=owner, db=db_session
+    )
+    assert {s.id for s in listed} == {live.id}
+
+
+@pytest.mark.asyncio
 async def test_react_followers_requires_follow(db_session):
     owner = _user(db_session, 1, "Owner")
     stranger = _user(db_session, 2, "Stranger")

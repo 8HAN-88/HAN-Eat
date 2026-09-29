@@ -174,20 +174,22 @@ class PostModel {
   String? get videoThumbnail {
     final direct = body?['video_thumbnail'];
     if (direct is String && direct.trim().isNotEmpty) {
-      return ServerConfig.resolveMediaUrl(direct.trim());
+      return ServerConfig.resolveSameOriginUploadUrl(direct.trim());
     }
     final media = body?['media'];
     if (media is List) {
       for (final item in media) {
-        if (item is Map<String, dynamic> && item['type'] == 'video') {
-          final t = item['thumbnail_url'] ?? item['thumbnail'];
-          if (t is String && t.trim().isNotEmpty) {
-            return ServerConfig.resolveMediaUrl(t.trim());
-          }
+        if (item is! Map) continue;
+        final map = Map<String, dynamic>.from(item);
+        final type = '${map['type'] ?? ''}'.trim().toLowerCase();
+        if (type.isNotEmpty && type != 'video' && type != 'reel') continue;
+        final t = map['thumbnail_url'] ?? map['thumbnail'];
+        if (t is String && t.trim().isNotEmpty) {
+          return ServerConfig.resolveSameOriginUploadUrl(t.trim());
         }
       }
     }
-    return null;
+    return reelVideoSources.thumbnail;
   }
 
   PostModel({
@@ -281,10 +283,9 @@ class PostModel {
   factory PostModel.fromJson(Map<String, dynamic> json) {
     // Обрабатываем ID - может быть int или строка вида "spoonacular_123"
     int parsedId;
-    if (json['id'] is int) {
-      parsedId = json['id'] as int;
-    } else if (json['id'] is String) {
-      final idStr = json['id'] as String;
+    final rawId = json['id'];
+    if (rawId is String) {
+      final idStr = rawId;
       if (idStr.startsWith('spoonacular_')) {
         // Legacy catalog ids: spoonacular_<n>
         final numPart = idStr.replaceFirst('spoonacular_', '');
@@ -297,7 +298,7 @@ class PostModel {
         parsedId = int.tryParse(idStr) ?? 0;
       }
     } else {
-      parsedId = 0;
+      parsedId = _jsonCount(rawId);
     }
     
     final createdAtRaw = json['created_at'];
@@ -326,9 +327,15 @@ class PostModel {
       publishedAt: json['published_at'] != null && json['published_at'] is String
           ? DateTime.parse(json['published_at'] as String)
           : null,
-      userId: json['user_id'] as int,
-      communityId: json['community_id'] as int? ?? json['channel_id'] as int?, // Поддержка channel_id
-      body: json['body'] as Map<String, dynamic>?,
+      userId: _jsonCount(json['user_id']),
+      communityId: json['community_id'] != null
+          ? _jsonCount(json['community_id'])
+          : json['channel_id'] != null
+              ? _jsonCount(json['channel_id'])
+              : null,
+      body: json['body'] is Map
+          ? Map<String, dynamic>.from(json['body'] as Map)
+          : null,
       tags: json['tags'] != null
           ? List<String>.from(json['tags'] as List)
           : null,
@@ -346,7 +353,7 @@ class PostModel {
           json['isPromoted'] as bool? ??
           false,
       isPaid: json['is_paid'] as bool? ?? false,
-      priceStars: json['price_stars'] as int? ?? 0,
+      priceStars: _jsonCount(json['price_stars']),
       previewMode: json['preview_mode'] as String? ?? 'teaser',
       purchased: json['purchased'] as bool? ?? !(json['is_paid'] as bool? ?? false),
       isLiked: json['is_liked'] as bool? ?? false,
@@ -357,14 +364,20 @@ class PostModel {
           .map((e) => PostReactionChip.fromJson(Map<String, dynamic>.from(e)))
           .where((e) => e.emoji.isNotEmpty && e.count > 0)
           .toList(),
-      author: json['author'] != null
-          ? PostAuthorModel.fromJson(json['author'] as Map<String, dynamic>)
+      author: json['author'] is Map
+          ? PostAuthorModel.fromJson(
+              Map<String, dynamic>.from(json['author'] as Map),
+            )
           : null,
-      repostedBy: json['reposted_by'] != null
-          ? PostAuthorModel.fromJson(json['reposted_by'] as Map<String, dynamic>)
+      repostedBy: json['reposted_by'] is Map
+          ? PostAuthorModel.fromJson(
+              Map<String, dynamic>.from(json['reposted_by'] as Map),
+            )
           : null,
-      channel: json['channel'] != null
-          ? ChannelModel.fromJson(json['channel'] as Map<String, dynamic>)
+      channel: json['channel'] is Map
+          ? ChannelModel.fromJson(
+              Map<String, dynamic>.from(json['channel'] as Map),
+            )
           : null,
       visibility: json['visibility'] as String? ?? 'public',
     );
@@ -531,8 +544,8 @@ class PostAuthorModel {
   factory PostAuthorModel.fromJson(Map<String, dynamic> json) {
     final rawAvatar = json['avatar_url'] as String?;
     return PostAuthorModel(
-      id: json['id'] as int,
-      name: json['name'] as String,
+      id: _jsonCount(json['id']),
+      name: json['name'] as String? ?? 'Пользователь',
       username: json['username'] as String?,
       avatarUrl: rawAvatar != null && rawAvatar.isNotEmpty
           ? ServerConfig.resolveMediaUrl(rawAvatar)
@@ -573,8 +586,8 @@ class ChannelModel {
     final rawAvatar = json['avatar_url'] as String?;
     final rawCover = json['cover_url'] as String?;
     return ChannelModel(
-      id: json['id'] as int,
-      name: json['name'] as String,
+      id: _jsonCount(json['id']),
+      name: json['name'] as String? ?? 'Канал',
       slug: json['slug'] as String? ?? '',
       avatarUrl: rawAvatar != null && rawAvatar.isNotEmpty
           ? ServerConfig.resolveMediaUrl(rawAvatar)

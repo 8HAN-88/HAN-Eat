@@ -221,7 +221,7 @@ class _StoryGroupCard extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             Image.network(
-              ServerConfig.resolveMediaUrl(previewUrl),
+              ServerConfig.resolveSameOriginUploadUrl(previewUrl),
               fit: BoxFit.cover,
               errorBuilder: (_, __, ___) => Container(
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,

@@ -2407,6 +2407,19 @@ void main() {
     expect(parseDeepLinkToGoPath('haneat://reel/28'), '/reel/28');
   });
 
+  test('stories and reels routes stay themselves', () {
+    expect(leftoverPathAlias('/stories'), isNull);
+    expect(leftoverPathAlias('/stories/28'), isNull);
+    expect(leftoverPathAlias('/reels'), isNull);
+    expect(leftoverPathAlias('/reel/28'), isNull);
+    expect(shortcutPathAlias('/reels'), isNull);
+    expect(shortcutPathAlias('/stories'), isNull);
+    expect(parseDeepLinkToGoPath('https://haneat.app/stories'), '/stories');
+    expect(parseDeepLinkToGoPath('https://haneat.app/reels'), '/reels');
+    expect(parseDeepLinkToGoPath('https://haneat.app/app/#/stories'), '/stories');
+    expect(parseDeepLinkToGoPath('https://haneat.app/app/#/reels'), '/reels');
+  });
+
   test('HTML forgot-password on localhost opens the Flutter screen', () {
     expect(
       parseDeepLinkToGoPath(

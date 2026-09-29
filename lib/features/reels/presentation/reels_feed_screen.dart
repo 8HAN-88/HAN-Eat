@@ -1390,9 +1390,6 @@ class _ReelCardState extends ConsumerState<ReelCard>
   }
 
   Widget _buildVideoPlaceholder() {
-    if (_useDomLayer) {
-      return const SizedBox.expand();
-    }
     if (widget.videoInitFailed || _domFailed) {
       final htmlUrl = _safariHtmlVideoUrl();
       if (WebHtmlReelVideo.isSupported &&
@@ -1446,9 +1443,10 @@ class _ReelCardState extends ConsumerState<ReelCard>
             placeholder: (_, __) => Container(color: Colors.grey[900]),
             errorWidget: (_, __, ___) => Container(color: Colors.grey[900]),
           ),
-          const Center(
-            child: CircularProgressIndicator(color: Colors.white),
-          ),
+          if (!_useDomLayer)
+            const Center(
+              child: CircularProgressIndicator(color: Colors.white),
+            ),
         ],
       );
     }
@@ -1484,9 +1482,7 @@ class _ReelCardState extends ConsumerState<ReelCard>
         children: [
           Container(
             color: _useDomLayer ? Colors.transparent : Colors.black,
-            child: _useDomLayer
-                ? const SizedBox.expand()
-                : Center(child: _buildVideoPlaceholder()),
+            child: Center(child: _buildVideoPlaceholder()),
           ),
           if (_useDomLayer)
             Positioned.fill(
