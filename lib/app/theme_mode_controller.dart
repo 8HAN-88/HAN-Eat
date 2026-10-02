@@ -14,8 +14,11 @@ class ThemeModeController extends StateNotifier<ThemeMode> {
   // Web social UI is neo-dark. Starting on ThemeMode.system with a light OS
   // theme paints white Material scaffolds during boot/login (= "white screen").
   ThemeModeController() : super(kIsWeb ? ThemeMode.dark : ThemeMode.system) {
-    _load();
+    _ready = _load();
   }
+
+  late final Future<void> _ready;
+  Future<void> get ready => _ready;
 
   static Future<ThemeMode> _loadStored() async {
     final prefs = await SharedPreferences.getInstance();
@@ -23,10 +26,11 @@ class ThemeModeController extends StateNotifier<ThemeMode> {
     if (v == null) return kIsWeb ? ThemeMode.dark : ThemeMode.system;
     switch (v) {
       case 'light':
-        // Keep explicit light if user chose it, but never default to it on web.
         return ThemeMode.light;
       case 'dark':
         return ThemeMode.dark;
+      case 'system':
+        return ThemeMode.system;
       default:
         return kIsWeb ? ThemeMode.dark : ThemeMode.system;
     }

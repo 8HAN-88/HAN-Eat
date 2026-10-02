@@ -194,48 +194,54 @@ class _MainFeedScreenState extends ConsumerState<MainFeedScreen>
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
+    final isReelsTab = _tabController.index == 2;
     return Scaffold(
+      backgroundColor: isReelsTab ? Colors.transparent : null,
       extendBody: true,
       body: Stack(
         fit: StackFit.expand,
         children: [
-          AppGradientBackground(
-            child: ValueListenableBuilder<bool>(
-              valueListenable: feedScrollChromeHidden,
-              builder: (context, hidden, child) {
-                final isReels = _tabController.index == 2;
-                final topInset = isReels
-                    ? 0.0
-                    : (hidden ? 0.0 : feedChromeTopInset(context));
-                return AnimatedPadding(
-                  duration: kFeedScrollChromeDuration,
-                  curve: kFeedScrollChromeCurve,
-                  padding: EdgeInsets.only(top: topInset),
-                  child: child,
-                );
-              },
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  SubscriptionsFeedScreen(
-                    deferLoad: kIsWeb && !_activatedTabs.contains(0),
-                    externalFeedType: _subsFeedType,
-                    externalSortMode: _subsSortMode,
-                  ),
-                  NewFeedScreen(
-                    hideScaffold: true,
-                    deferLoad: kIsWeb && !_activatedTabs.contains(1),
-                    externalFeedType: _recFeedType,
-                    externalSortMode: _recSortMode,
-                  ),
-                  ReelsFeedScreen(
-                    hideScaffold: true,
-                    isTabVisible: _tabController.index == 2,
-                    externalFollowingOnly: _reelsFollowingOnly,
-                  ),
-                ],
-              ),
-            ),
+          Builder(
+            builder: (context) {
+              final isReels = _tabController.index == 2;
+              final tabs = ValueListenableBuilder<bool>(
+                valueListenable: feedScrollChromeHidden,
+                builder: (context, hidden, child) {
+                  final topInset = isReels
+                      ? 0.0
+                      : (hidden ? 0.0 : feedChromeTopInset(context));
+                  return AnimatedPadding(
+                    duration: kFeedScrollChromeDuration,
+                    curve: kFeedScrollChromeCurve,
+                    padding: EdgeInsets.only(top: topInset),
+                    child: child,
+                  );
+                },
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    SubscriptionsFeedScreen(
+                      deferLoad: kIsWeb && !_activatedTabs.contains(0),
+                      externalFeedType: _subsFeedType,
+                      externalSortMode: _subsSortMode,
+                    ),
+                    NewFeedScreen(
+                      hideScaffold: true,
+                      deferLoad: kIsWeb && !_activatedTabs.contains(1),
+                      externalFeedType: _recFeedType,
+                      externalSortMode: _recSortMode,
+                    ),
+                    ReelsFeedScreen(
+                      hideScaffold: true,
+                      isTabVisible: _tabController.index == 2,
+                      externalFollowingOnly: _reelsFollowingOnly,
+                    ),
+                  ],
+                ),
+              );
+              if (isReels) return tabs;
+              return AppGradientBackground(child: tabs);
+            },
           ),
           Positioned(
             top: 0,

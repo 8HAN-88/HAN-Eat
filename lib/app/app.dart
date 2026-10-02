@@ -17,6 +17,7 @@ import '../services/auth_service.dart';
 import '../services/user_realtime_service.dart';
 import '../services/web_app_update_service.dart';
 import '../core/web/boot_ready_signal.dart';
+import '../core/web/web_theme_sync.dart';
 import '../features/reels/application/dom_video_touch_policy.dart';
 import '../features/settings/application/subscription_status_provider.dart';
 import '../widgets/web_dom_video_layer.dart';
@@ -100,16 +101,14 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
     try {
       final router = ref.watch(appRouterProvider);
       final themeMode = ref.watch(themeModeProvider);
-      // On web always prefer dark surfaces so system light mode cannot flash a
-      // white Material canvas before prefs/theme resolve.
-      final effectiveThemeMode = kIsWeb ? ThemeMode.dark : themeMode;
 
       return MaterialApp.router(
         key: ValueKey<int>(_bootAttempt),
         title: AppVariant.current.appTitle,
         theme: AppTheme.light(),
         darkTheme: AppTheme.dark(),
-        themeMode: effectiveThemeMode,
+        themeMode: themeMode,
+        color: kIsWeb ? Colors.transparent : null,
         routerConfig: router,
         debugShowCheckedModeBanner: false,
         localizationsDelegates: const [
@@ -124,13 +123,17 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
         locale: const Locale('ru', 'RU'),
         builder: (context, child) {
           final theme = Theme.of(context);
-          const safeCanvas = Color(0xFF0F1319);
-          final canvas = kIsWeb ? safeCanvas : theme.scaffoldBackgroundColor;
+          final isDark = theme.brightness == Brightness.dark;
+          syncWebDocumentTheme(isDark: isDark);
+          final canvas = kIsWeb
+              ? Colors.transparent
+              : theme.scaffoldBackgroundColor;
           final defaultBody = theme.textTheme.bodyMedium ?? const TextStyle();
+          final onSurface = theme.colorScheme.onSurface;
           final media = MediaQuery.of(context);
           final content = child ??
               Scaffold(
-                backgroundColor: canvas,
+                backgroundColor: theme.scaffoldBackgroundColor,
                 body: Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -147,7 +150,9 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
                       const SizedBox(height: 16),
                       Text(
                         'Загрузка ${AppVariant.current.appTitle}…',
-                        style: theme.textTheme.bodyLarge?.copyWith(color: Colors.white),
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: onSurface,
+                        ),
                       ),
                     ],
                   ),
@@ -163,7 +168,7 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
             child: ColoredBox(
               color: canvas,
               child: DefaultTextStyle(
-                style: defaultBody.copyWith(color: Colors.white),
+                style: defaultBody.copyWith(color: onSurface),
                 child: Listener(
                   onPointerDown: (_) =>
                       DomVideoTouchPolicy.markUserInteracted(),

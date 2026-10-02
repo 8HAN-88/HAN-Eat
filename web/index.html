@@ -212,6 +212,16 @@
       left: 0 !important;
       top: 0 !important;
     }
+    html.hanwe-theme-light,
+    html.hanwe-theme-light body {
+      background: var(--bg, #F4F4F5);
+      color: var(--text, #121821);
+    }
+    html.hanwe-reel-see-through flutter-view,
+    html.hanwe-reel-see-through flt-glass-pane,
+    html.hanwe-reel-see-through canvas {
+      background-color: transparent !important;
+    }
     video.hanwe-dom-reel {
       pointer-events: none !important;
       z-index: 0 !important;
@@ -257,10 +267,18 @@
           try {
             var splash = document.getElementById('boot-splash');
             if (splash && splash.parentNode) splash.parentNode.removeChild(splash);
-            document.querySelectorAll('video.hanwe-dom-reel, #hanwe-reel-touch')
+            document.querySelectorAll('#hanwe-reel-touch')
               .forEach(function (n) {
                 try { if (n.parentNode) n.parentNode.removeChild(n); } catch (err) {}
               });
+            var live = document.documentElement &&
+              document.documentElement.classList.contains('hanwe-reel-live');
+            if (!live) {
+              document.querySelectorAll('video.hanwe-dom-reel')
+                .forEach(function (n) {
+                  try { if (n.parentNode) n.parentNode.removeChild(n); } catch (err) {}
+                });
+            }
           } catch (err) {}
         }
         window.hanKillLaunchOverlays = hanKillLaunchOverlays;
