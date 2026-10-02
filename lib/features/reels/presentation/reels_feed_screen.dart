@@ -924,7 +924,9 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
 
     final reelFeed = kIsWeb
         ? ColoredBox(
-            color: Colors.black,
+            color: WebDomVideoLayer.isPreferred
+                ? Colors.transparent
+                : Colors.black,
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 430),
@@ -939,7 +941,9 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
     }
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: WebDomVideoLayer.isPreferred
+          ? Colors.transparent
+          : Colors.black,
       body: reelFeed,
     );
   }
@@ -1390,6 +1394,9 @@ class _ReelCardState extends ConsumerState<ReelCard>
   }
 
   Widget _buildVideoPlaceholder() {
+    if (_useDomLayer) {
+      return const SizedBox.expand();
+    }
     if (widget.videoInitFailed || _domFailed) {
       final htmlUrl = _safariHtmlVideoUrl();
       if (WebHtmlReelVideo.isSupported &&
@@ -1443,10 +1450,9 @@ class _ReelCardState extends ConsumerState<ReelCard>
             placeholder: (_, __) => Container(color: Colors.grey[900]),
             errorWidget: (_, __, ___) => Container(color: Colors.grey[900]),
           ),
-          if (!_useDomLayer)
-            const Center(
-              child: CircularProgressIndicator(color: Colors.white),
-            ),
+          const Center(
+            child: CircularProgressIndicator(color: Colors.white),
+          ),
         ],
       );
     }

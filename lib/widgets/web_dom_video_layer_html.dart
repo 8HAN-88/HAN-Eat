@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
 import '../core/platform/web_page_visibility.dart';
+import '../core/web/web_theme_sync.dart';
 import '../features/reels/application/dom_video_touch_policy.dart';
 
 bool get isDomReelVideoPreferred {
@@ -612,6 +613,7 @@ class _DomReelHostState extends State<_DomReelHost> {
     }
 
     _ensureFlutterAboveVideo();
+    setWebReelSeeThrough(true);
     _holdShield(
       _ShieldRect(offset.dx, offset.dy, size.width, size.height),
     );
@@ -707,6 +709,7 @@ class _DomReelHostState extends State<_DomReelHost> {
   }
 
   void _hide() {
+    setWebReelSeeThrough(false);
     _dropShield();
     final video = _videos[_id];
     if (video == null) return;
