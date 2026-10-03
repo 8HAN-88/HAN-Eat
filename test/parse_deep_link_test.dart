@@ -2440,4 +2440,48 @@ void main() {
       '/verify-email?email=user%40test.local',
     );
   });
+
+  test('leftover paid hashes open live Flex / Stars / ads screens', () {
+    expect(shortcutPathAlias('/stars-reaction'), PaidMessageExceptionsRoute.path);
+    expect(shortcutPathAlias('/send-paid'), PaidMessageExceptionsRoute.path);
+    expect(shortcutPathAlias('/send-paid-message'), PaidMessageExceptionsRoute.path);
+    expect(shortcutPathAlias('/paid-dm'), PaidMessageExceptionsRoute.path);
+    expect(shortcutPathAlias('/channel-ads'), AdsHubRoute.path);
+    expect(shortcutPathAlias('/giveaway-boost'), AdsHubRoute.path);
+    expect(shortcutPathAlias('/ads-boost'), AdsHubRoute.path);
+    expect(shortcutPathAlias('/stars-pack'), StarsWalletRoute.path);
+    expect(shortcutPathAlias('/paid-stars'), StarsWalletRoute.path);
+    expect(shortcutPathAlias('/unlock-media'), StarsWalletRoute.path);
+    expect(shortcutPathAlias('/flex-catalog'), FlexSubscriptionRoute.path);
+    expect(shortcutPathAlias('/buy-premium'), FlexSubscriptionRoute.path);
+    expect(shortcutPathAlias('/gift-market'), StarGiftsMarketplaceRoute.path);
+    expect(shortcutPathAlias('/starsreaction'), PaidMessageExceptionsRoute.path);
+    expect(shortcutPathAlias('/sendpaid'), PaidMessageExceptionsRoute.path);
+    expect(shortcutPathAlias('/channelads'), AdsHubRoute.path);
+    expect(shortcutPathAlias('/giveawayboost'), AdsHubRoute.path);
+    expect(shortcutPathAlias('/buypremium'), FlexSubscriptionRoute.path);
+    expect(shortcutPathAlias('/giftmarket'), StarGiftsMarketplaceRoute.path);
+    expect(leftoverPathAlias('/go/stars-reaction'), PaidMessageExceptionsRoute.path);
+    expect(leftoverPathAlias('/go/channel-ads'), AdsHubRoute.path);
+    expect(resourcePathAlias('/starsid/28'), '/paid/invoices/28');
+    expect(resourcePathAlias('/flexid/18'), FlexSubscriptionRoute.pathWithLevel(18));
+    expect(resourcePathAlias('/adsboostid/7'), '/ads/7');
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/stars-reaction'),
+      PaidMessageExceptionsRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/send-paid'),
+      PaidMessageExceptionsRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/giveaway-boost'),
+      AdsHubRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/flex-catalog'),
+      FlexSubscriptionRoute.path,
+    );
+    expect(shortcutPathAlias('/reels'), isNull);
+  });
 }

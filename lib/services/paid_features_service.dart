@@ -7,6 +7,27 @@ import 'api_service.dart';
 import 'auth_service.dart';
 import 'payment_service.dart';
 
+int _paidJsonInt(Object? raw, [int fallback = 0]) {
+  if (raw is int) return raw;
+  if (raw is num) return raw.toInt();
+  if (raw is String) return int.tryParse(raw.trim()) ?? fallback;
+  return fallback;
+}
+
+int? _paidJsonIntOrNull(Object? raw) {
+  if (raw == null) return null;
+  if (raw is int) return raw;
+  if (raw is num) return raw.toInt();
+  if (raw is String) return int.tryParse(raw.trim());
+  return null;
+}
+
+Map<String, dynamic>? _paidJsonMap(Object? raw) {
+  if (raw is Map<String, dynamic>) return raw;
+  if (raw is Map) return Map<String, dynamic>.from(raw);
+  return null;
+}
+
 class PaidFeaturesService {
   static String get baseUrl => '${ApiService.baseUrl}/api/v1';
 
@@ -970,9 +991,9 @@ class StarsBalance {
   final int creatorPendingStars;
 
   factory StarsBalance.fromJson(Map<String, dynamic> json) => StarsBalance(
-        balance: json['balance'] as int? ?? 0,
-        creatorAvailableStars: json['creator_available_stars'] as int? ?? 0,
-        creatorPendingStars: json['creator_pending_stars'] as int? ?? 0,
+        balance: _paidJsonInt(json['balance'], 0),
+        creatorAvailableStars: _paidJsonInt(json['creator_available_stars'], 0),
+        creatorPendingStars: _paidJsonInt(json['creator_pending_stars'], 0),
       );
 }
 
@@ -991,10 +1012,10 @@ class DonateStarsResult {
 
   factory DonateStarsResult.fromJson(Map<String, dynamic> json) =>
       DonateStarsResult(
-        transactionId: json['transaction_id'] as int? ?? 0,
-        balance: json['balance'] as int? ?? 0,
-        messageId: json['message_id'] as int?,
-        conversationId: json['conversation_id'] as int?,
+        transactionId: _paidJsonInt(json['transaction_id'], 0),
+        balance: _paidJsonInt(json['balance'], 0),
+        messageId: _paidJsonIntOrNull(json['message_id']),
+        conversationId: _paidJsonIntOrNull(json['conversation_id']),
       );
 }
 
@@ -1013,8 +1034,8 @@ class StarPackage {
 
   factory StarPackage.fromJson(Map<String, dynamic> json) => StarPackage(
         id: json['id'] as String,
-        stars: json['stars'] as int? ?? 0,
-        priceRub: json['price_rub'] as int? ?? 0,
+        stars: _paidJsonInt(json['stars'], 0),
+        priceRub: _paidJsonInt(json['price_rub'], 0),
         title: json['title'] as String? ?? '',
       );
 }
@@ -1034,10 +1055,10 @@ class PurchaseContentResult {
 
   factory PurchaseContentResult.fromJson(Map<String, dynamic> json) =>
       PurchaseContentResult(
-        postId: json['post_id'] as int? ?? 0,
+        postId: _paidJsonInt(json['post_id'], 0),
         purchased: json['purchased'] as bool? ?? false,
-        amountStars: json['amount_stars'] as int? ?? 0,
-        balance: json['balance'] as int? ?? 0,
+        amountStars: _paidJsonInt(json['amount_stars'], 0),
+        balance: _paidJsonInt(json['balance'], 0),
       );
 }
 
@@ -1064,15 +1085,15 @@ class StarTransaction {
 
   factory StarTransaction.fromJson(Map<String, dynamic> json) =>
       StarTransaction(
-        id: json['id'] as int? ?? 0,
-        amount: json['amount'] as int? ?? 0,
+        id: _paidJsonInt(json['id'], 0),
+        amount: _paidJsonInt(json['amount'], 0),
         type: json['type'] as String? ?? '',
         status: json['status'] as String? ?? '',
         createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ??
             DateTime.fromMillisecondsSinceEpoch(0),
-        counterpartyUserId: json['counterparty_user_id'] as int?,
+        counterpartyUserId: _paidJsonIntOrNull(json['counterparty_user_id']),
         referenceType: json['reference_type'] as String?,
-        referenceId: json['reference_id'] as int?,
+        referenceId: _paidJsonIntOrNull(json['reference_id']),
       );
 }
 
@@ -1109,9 +1130,9 @@ class CreatorPayoutRequest {
 
   factory CreatorPayoutRequest.fromJson(Map<String, dynamic> json) =>
       CreatorPayoutRequest(
-        id: json['id'] as int? ?? 0,
-        creatorUserId: json['creator_user_id'] as int? ?? 0,
-        amountStars: json['amount_stars'] as int? ?? 0,
+        id: _paidJsonInt(json['id'], 0),
+        creatorUserId: _paidJsonInt(json['creator_user_id'], 0),
+        amountStars: _paidJsonInt(json['amount_stars'], 0),
         amountRub: (json['amount_rub'] as num?)?.toDouble() ?? 0,
         status: json['status'] as String? ?? 'pending',
         note: json['note'] as String?,
@@ -1144,9 +1165,9 @@ class GroupPaidSettings {
 
   factory GroupPaidSettings.fromJson(Map<String, dynamic> json) =>
       GroupPaidSettings(
-        conversationId: json['conversation_id'] as int? ?? 0,
+        conversationId: _paidJsonInt(json['conversation_id'], 0),
         isPaid: json['is_paid'] as bool? ?? false,
-        monthlyPriceStars: json['monthly_price_stars'] as int? ?? 0,
+        monthlyPriceStars: _paidJsonInt(json['monthly_price_stars'], 0),
         subscribed: json['subscribed'] as bool? ?? false,
         expiresAt: DateTime.tryParse(json['expires_at'] as String? ?? ''),
         autoRenew: json['auto_renew'] as bool? ?? false,
@@ -1166,9 +1187,9 @@ class RefundPaidMediaResult {
 
   factory RefundPaidMediaResult.fromJson(Map<String, dynamic> json) =>
       RefundPaidMediaResult(
-        messageId: json['message_id'] as int? ?? 0,
-        refunded: json['refunded'] as int? ?? 0,
-        balance: json['balance'] as int? ?? 0,
+        messageId: _paidJsonInt(json['message_id'], 0),
+        refunded: _paidJsonInt(json['refunded'], 0),
+        balance: _paidJsonInt(json['balance'], 0),
       );
 }
 
@@ -1187,10 +1208,10 @@ class PurchaseMessageResult {
 
   factory PurchaseMessageResult.fromJson(Map<String, dynamic> json) =>
       PurchaseMessageResult(
-        messageId: json['message_id'] as int? ?? 0,
+        messageId: _paidJsonInt(json['message_id'], 0),
         purchased: json['purchased'] as bool? ?? false,
-        amountStars: json['amount_stars'] as int? ?? 0,
-        balance: json['balance'] as int? ?? 0,
+        amountStars: _paidJsonInt(json['amount_stars'], 0),
+        balance: _paidJsonInt(json['balance'], 0),
       );
 }
 
@@ -1224,17 +1245,17 @@ class StarGift {
   bool get isSoldOut => isLimited && remaining != null && remaining! <= 0;
 
   factory StarGift.fromJson(Map<String, dynamic> json) => StarGift(
-        id: json['id'] as int? ?? 0,
+        id: _paidJsonInt(json['id'], 0),
         slug: json['slug'] as String? ?? '',
         title: json['title'] as String? ?? '',
         emoji: json['emoji'] as String? ?? '🎁',
-        stars: json['stars'] as int? ?? 0,
+        stars: _paidJsonInt(json['stars'], 0),
         isLimited: json['is_limited'] as bool? ?? false,
-        totalSupply: json['total_supply'] as int?,
-        soldCount: json['sold_count'] as int? ?? 0,
-        remaining: json['remaining'] as int?,
-        upgradeStars: json['upgrade_stars'] as int? ?? 0,
-        transferStars: json['transfer_stars'] as int? ?? 0,
+        totalSupply: _paidJsonIntOrNull(json['total_supply']),
+        soldCount: _paidJsonInt(json['sold_count'], 0),
+        remaining: _paidJsonIntOrNull(json['remaining']),
+        upgradeStars: _paidJsonInt(json['upgrade_stars'], 0),
+        transferStars: _paidJsonInt(json['transfer_stars'], 0),
       );
 }
 
@@ -1256,12 +1277,12 @@ class SendGiftResult {
   final int? userGiftId;
 
   factory SendGiftResult.fromJson(Map<String, dynamic> json) => SendGiftResult(
-        messageId: json['message_id'] as int? ?? 0,
-        conversationId: json['conversation_id'] as int? ?? 0,
-        giftId: json['gift_id'] as int? ?? 0,
-        stars: json['stars'] as int? ?? 0,
-        balance: json['balance'] as int? ?? 0,
-        userGiftId: json['user_gift_id'] as int?,
+        messageId: _paidJsonInt(json['message_id'], 0),
+        conversationId: _paidJsonInt(json['conversation_id'], 0),
+        giftId: _paidJsonInt(json['gift_id'], 0),
+        stars: _paidJsonInt(json['stars'], 0),
+        balance: _paidJsonInt(json['balance'], 0),
+        userGiftId: _paidJsonIntOrNull(json['user_gift_id']),
       );
 }
 
@@ -1370,14 +1391,14 @@ class UserStarGift {
   }
 
   factory UserStarGift.fromJson(Map<String, dynamic> json) => UserStarGift(
-        id: json['id'] as int? ?? 0,
-        ownerId: json['owner_id'] as int? ?? 0,
-        senderId: json['sender_id'] as int?,
+        id: _paidJsonInt(json['id'], 0),
+        ownerId: _paidJsonInt(json['owner_id'], 0),
+        senderId: _paidJsonIntOrNull(json['sender_id']),
         senderName: json['sender_name'] as String?,
         senderUsername: json['sender_username'] as String?,
-        giftId: json['gift_id'] as int?,
-        messageId: json['message_id'] as int?,
-        stars: json['stars'] as int? ?? 0,
+        giftId: _paidJsonIntOrNull(json['gift_id']),
+        messageId: _paidJsonIntOrNull(json['message_id']),
+        stars: _paidJsonInt(json['stars'], 0),
         slug: json['slug'] as String? ?? 'gift',
         title: json['title'] as String? ?? 'Подарок',
         emoji: json['emoji'] as String? ?? '🎁',
@@ -1386,17 +1407,17 @@ class UserStarGift {
         isDisplayed: json['is_displayed'] as bool? ?? true,
         isCollectible: json['is_collectible'] as bool? ?? false,
         isAnonymous: json['is_anonymous'] as bool? ?? false,
-        serial: json['serial'] as int?,
-        transferredFromUserId: json['transferred_from_user_id'] as int?,
-        listedStars: json['listed_stars'] as int?,
+        serial: _paidJsonIntOrNull(json['serial']),
+        transferredFromUserId: _paidJsonIntOrNull(json['transferred_from_user_id']),
+        listedStars: _paidJsonIntOrNull(json['listed_stars']),
         listedAt: DateTime.tryParse(json['listed_at'] as String? ?? ''),
         isWorn: json['is_worn'] as bool? ?? false,
-        displayOrder: json['display_order'] as int? ?? 0,
+        displayOrder: _paidJsonInt(json['display_order'], 0),
         sellerName: json['seller_name'] as String?,
         sellerUsername: json['seller_username'] as String?,
-        upgradeStars: json['upgrade_stars'] as int? ?? 0,
-        transferStars: json['transfer_stars'] as int? ?? 0,
-        totalSupply: json['total_supply'] as int?,
+        upgradeStars: _paidJsonInt(json['upgrade_stars'], 0),
+        transferStars: _paidJsonInt(json['transfer_stars'], 0),
+        totalSupply: _paidJsonIntOrNull(json['total_supply']),
         convertedAt: DateTime.tryParse(json['converted_at'] as String? ?? ''),
         createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
       );
@@ -1414,9 +1435,9 @@ class ConvertGiftResult {
   factory ConvertGiftResult.fromJson(Map<String, dynamic> json) =>
       ConvertGiftResult(
         gift: UserStarGift.fromJson(
-          json['gift'] as Map<String, dynamic>? ?? const {},
+          _paidJsonMap(json['gift']) ?? const {},
         ),
-        balance: json['balance'] as int? ?? 0,
+        balance: _paidJsonInt(json['balance'], 0),
       );
 }
 
@@ -1441,13 +1462,13 @@ class ChannelSubscriptionInfo {
 
   factory ChannelSubscriptionInfo.fromJson(Map<String, dynamic> json) =>
       ChannelSubscriptionInfo(
-        channelId: json['channel_id'] as int? ?? 0,
+        channelId: _paidJsonInt(json['channel_id'], 0),
         status: json['status'] as String? ?? 'none',
-        amountStars: json['amount_stars'] as int? ?? 0,
+        amountStars: _paidJsonInt(json['amount_stars'], 0),
         expiresAt: DateTime.tryParse(json['expires_at'] as String? ?? ''),
         autoRenew: json['auto_renew'] as bool? ?? false,
         isActive: json['is_active'] as bool? ?? false,
-        monthlyPriceStars: json['monthly_price_stars'] as int? ?? 0,
+        monthlyPriceStars: _paidJsonInt(json['monthly_price_stars'], 0),
       );
 }
 
@@ -1474,7 +1495,7 @@ class PaidMessageExceptionUser {
 
   factory PaidMessageExceptionUser.fromJson(Map<String, dynamic> json) =>
       PaidMessageExceptionUser(
-        id: json['id'] as int? ?? 0,
+        id: _paidJsonInt(json['id'], 0),
         name: json['name'] as String?,
         username: json['username'] as String?,
         avatarUrl: json['avatar_url'] as String?,
@@ -1524,24 +1545,24 @@ class StarGiveaway {
   bool get isPremiumPrize => prizeType == 'premium' && premiumMonths > 0;
 
   factory StarGiveaway.fromJson(Map<String, dynamic> json) => StarGiveaway(
-        id: json['id'] as int? ?? 0,
-        channelId: json['channel_id'] as int? ?? 0,
-        creatorUserId: json['creator_user_id'] as int? ?? 0,
-        prizeStars: json['prize_stars'] as int? ?? 0,
-        winnersCount: json['winners_count'] as int? ?? 0,
-        totalEscrowStars: json['total_escrow_stars'] as int? ?? 0,
+        id: _paidJsonInt(json['id'], 0),
+        channelId: _paidJsonInt(json['channel_id'], 0),
+        creatorUserId: _paidJsonInt(json['creator_user_id'], 0),
+        prizeStars: _paidJsonInt(json['prize_stars'], 0),
+        winnersCount: _paidJsonInt(json['winners_count'], 0),
+        totalEscrowStars: _paidJsonInt(json['total_escrow_stars'], 0),
         status: json['status'] as String? ?? 'active',
         endsAt: DateTime.tryParse(json['ends_at'] as String? ?? '') ??
             DateTime.fromMillisecondsSinceEpoch(0),
         requireMembership: json['require_membership'] as bool? ?? true,
-        participantsCount: json['participants_count'] as int? ?? 0,
+        participantsCount: _paidJsonInt(json['participants_count'], 0),
         title: json['title'] as String?,
         completedAt: DateTime.tryParse(json['completed_at'] as String? ?? ''),
         createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
         joinedByMe: json['joined_by_me'] as bool? ?? false,
         isWinner: json['is_winner'] as bool? ?? false,
         prizeType: json['prize_type'] as String? ?? 'stars',
-        premiumMonths: json['premium_months'] as int? ?? 0,
+        premiumMonths: _paidJsonInt(json['premium_months'], 0),
       );
 }
 
@@ -1582,14 +1603,14 @@ class ChannelSuggestedPost {
 
   factory ChannelSuggestedPost.fromJson(Map<String, dynamic> json) =>
       ChannelSuggestedPost(
-        id: json['id'] as int? ?? 0,
-        channelId: json['channel_id'] as int? ?? 0,
-        authorId: json['author_id'] as int? ?? 0,
+        id: _paidJsonInt(json['id'], 0),
+        channelId: _paidJsonInt(json['channel_id'], 0),
+        authorId: _paidJsonInt(json['author_id'], 0),
         text: json['text'] as String? ?? '',
-        amountStars: json['amount_stars'] as int? ?? 0,
+        amountStars: _paidJsonInt(json['amount_stars'], 0),
         status: json['status'] as String? ?? 'pending',
         mediaUrl: json['media_url'] as String?,
-        postId: json['post_id'] as int?,
+        postId: _paidJsonIntOrNull(json['post_id']),
         createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
         authorName: json['author_name'] as String?,
         authorUsername: json['author_username'] as String?,
@@ -1619,11 +1640,11 @@ class StarGiveawayWinner {
 
   factory StarGiveawayWinner.fromJson(Map<String, dynamic> json) =>
       StarGiveawayWinner(
-        userId: json['user_id'] as int? ?? 0,
+        userId: _paidJsonInt(json['user_id'], 0),
         name: json['name'] as String? ?? 'User',
         username: json['username'] as String?,
         avatarUrl: json['avatar_url'] as String?,
-        prizeStars: json['prize_stars'] as int? ?? 0,
+        prizeStars: _paidJsonInt(json['prize_stars'], 0),
       );
 }
 
@@ -1645,10 +1666,10 @@ class StarGiveawayWinnersResult {
   factory StarGiveawayWinnersResult.fromJson(Map<String, dynamic> json) {
     final raw = json['winners'] as List<dynamic>? ?? const [];
     return StarGiveawayWinnersResult(
-      giveawayId: json['giveaway_id'] as int? ?? 0,
+      giveawayId: _paidJsonInt(json['giveaway_id'], 0),
       status: json['status'] as String? ?? '',
-      prizeStars: json['prize_stars'] as int? ?? 0,
-      winnersCount: json['winners_count'] as int? ?? 0,
+      prizeStars: _paidJsonInt(json['prize_stars'], 0),
+      winnersCount: _paidJsonInt(json['winners_count'], 0),
       winners: raw
           .map((e) => StarGiveawayWinner.fromJson(e as Map<String, dynamic>))
           .toList(growable: false),
@@ -1692,13 +1713,13 @@ class StarInvoice {
   bool get isPayable => status == 'pending';
 
   factory StarInvoice.fromJson(Map<String, dynamic> json) => StarInvoice(
-        id: json['id'] as int? ?? 0,
-        botId: json['bot_id'] as int? ?? 0,
-        creatorUserId: json['creator_user_id'] as int? ?? 0,
-        payerUserId: json['payer_user_id'] as int?,
+        id: _paidJsonInt(json['id'], 0),
+        botId: _paidJsonInt(json['bot_id'], 0),
+        creatorUserId: _paidJsonInt(json['creator_user_id'], 0),
+        payerUserId: _paidJsonIntOrNull(json['payer_user_id']),
         title: json['title'] as String? ?? '',
         description: json['description'] as String?,
-        amountStars: json['amount_stars'] as int? ?? 0,
+        amountStars: _paidJsonInt(json['amount_stars'], 0),
         payload: json['payload'] as String?,
         status: json['status'] as String? ?? 'pending',
         expiresAt: DateTime.tryParse(json['expires_at'] as String? ?? ''),
@@ -1721,8 +1742,8 @@ class PayInvoiceResult {
   factory PayInvoiceResult.fromJson(Map<String, dynamic> json) =>
       PayInvoiceResult(
         invoice: StarInvoice.fromJson(
-          json['invoice'] as Map<String, dynamic>? ?? const {},
+          _paidJsonMap(json['invoice']) ?? const {},
         ),
-        balance: json['balance'] as int? ?? 0,
+        balance: _paidJsonInt(json['balance'], 0),
       );
 }

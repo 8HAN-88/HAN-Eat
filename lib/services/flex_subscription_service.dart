@@ -7,6 +7,27 @@ import '../utils/api_error_parser.dart';
 import 'api_service.dart';
 import 'auth_service.dart';
 
+int _flexJsonInt(Object? raw, [int fallback = 0]) {
+  if (raw is int) return raw;
+  if (raw is num) return raw.toInt();
+  if (raw is String) return int.tryParse(raw.trim()) ?? fallback;
+  return fallback;
+}
+
+int? _flexJsonIntOrNull(Object? raw) {
+  if (raw == null) return null;
+  if (raw is int) return raw;
+  if (raw is num) return raw.toInt();
+  if (raw is String) return int.tryParse(raw.trim());
+  return null;
+}
+
+Map<String, dynamic>? _flexJsonMap(Object? raw) {
+  if (raw is Map<String, dynamic>) return raw;
+  if (raw is Map) return Map<String, dynamic>.from(raw);
+  return null;
+}
+
 class FlexSubscriptionApi {
   static String get baseUrl => '${ApiService.baseUrl}/api/v1/flex';
 
@@ -31,7 +52,9 @@ class FlexSubscriptionApi {
     final response =
         await http.get(Uri.parse('$baseUrl/me'), headers: await _headers());
     if (response.statusCode == 200) {
-      return FlexMe.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+      return FlexMe.fromJson(
+        _flexJsonMap(jsonDecode(response.body)) ?? const {},
+      );
     }
     _throw(response, 'Не удалось загрузить подписку');
   }
@@ -41,7 +64,8 @@ class FlexSubscriptionApi {
         await http.get(Uri.parse('$baseUrl/shop'), headers: await _headers());
     if (response.statusCode == 200) {
       return FlexShop.fromJson(
-          jsonDecode(response.body) as Map<String, dynamic>);
+        _flexJsonMap(jsonDecode(response.body)) ?? const {},
+      );
     }
     _throw(response, 'Не удалось загрузить магазин функций');
   }
@@ -54,7 +78,8 @@ class FlexSubscriptionApi {
     );
     if (response.statusCode == 200) {
       return FlexPreview.fromJson(
-          jsonDecode(response.body) as Map<String, dynamic>);
+        _flexJsonMap(jsonDecode(response.body)) ?? const {},
+      );
     }
     _throw(response, 'Не удалось построить превью');
   }
@@ -70,7 +95,9 @@ class FlexSubscriptionApi {
       }),
     );
     if (response.statusCode == 200) {
-      return FlexMe.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+      return FlexMe.fromJson(
+        _flexJsonMap(jsonDecode(response.body)) ?? const {},
+      );
     }
     _throw(response, 'Не удалось сохранить конфигурацию');
   }
@@ -83,7 +110,9 @@ class FlexSubscriptionApi {
       body: jsonEncode({'feature_id': featureId, 'target_level': targetLevel}),
     );
     if (response.statusCode == 200) {
-      return FlexMe.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+      return FlexMe.fromJson(
+        _flexJsonMap(jsonDecode(response.body)) ?? const {},
+      );
     }
     _throw(response, 'Нельзя переместить функцию');
   }
@@ -116,7 +145,7 @@ class FlexSubscriptionApi {
     );
     if (response.statusCode == 200) {
       return FlexAdminCatalog.fromJson(
-        jsonDecode(response.body) as Map<String, dynamic>,
+        _flexJsonMap(jsonDecode(response.body)) ?? const {},
       );
     }
     _throw(response, 'Не удалось загрузить каталог');
@@ -184,16 +213,16 @@ class FlexFeature {
   }
 
   factory FlexFeature.fromJson(Map<String, dynamic> json) => FlexFeature(
-        id: json['id'] as int? ?? 0,
+        id: _flexJsonInt(json['id'], 0),
         slug: json['slug'] as String? ?? '',
         title: json['title'] as String? ?? '',
         description: json['description'] as String?,
         icon: json['icon'] as String?,
-        assignedLevel: json['assigned_level'] as int? ??
-            json['default_level'] as int? ??
+        assignedLevel: _flexJsonIntOrNull(json['assigned_level']) ??
+            _flexJsonIntOrNull(json['default_level']) ??
             1,
-        minLevel: json['min_level'] as int? ?? 1,
-        maxLevel: json['max_level'] as int? ?? 79,
+        minLevel: _flexJsonInt(json['min_level'], 1),
+        maxLevel: _flexJsonInt(json['max_level'], 79),
         featureType: json['feature_type'] as String? ?? 'movable',
         movable: json['movable'] as bool? ?? true,
         required: json['required'] as bool? ?? false,
@@ -219,8 +248,8 @@ class FlexBlock {
   factory FlexBlock.fromJson(Map<String, dynamic> json) => FlexBlock(
         key: json['key'] as String? ?? '',
         title: json['title'] as String? ?? '',
-        minLevel: json['min_level'] as int? ?? 1,
-        maxLevel: json['max_level'] as int? ?? 79,
+        minLevel: _flexJsonInt(json['min_level'], 1),
+        maxLevel: _flexJsonInt(json['max_level'], 79),
       );
 }
 
@@ -258,14 +287,14 @@ class FlexMe {
   bool get canCheckout => checkoutAvailable && !legalConsentRequired;
 
   factory FlexMe.fromJson(Map<String, dynamic> json) => FlexMe(
-        currentLevel: json['current_level'] as int? ?? 0,
-        priceRub: json['price_rub'] as int? ?? 0,
-        maxLevel: json['max_level'] as int? ?? 79,
+        currentLevel: _flexJsonInt(json['current_level'], 0),
+        priceRub: _flexJsonInt(json['price_rub'], 0),
+        maxLevel: _flexJsonInt(json['max_level'], 79),
         active: json['active'] as bool? ?? false,
-        nextLevel: json['next_level'] as int?,
-        nextPriceRub: json['next_price_rub'] as int?,
-        nextFeature: json['next_feature'] is Map<String, dynamic>
-            ? FlexFeature.fromJson(json['next_feature'] as Map<String, dynamic>)
+        nextLevel: _flexJsonIntOrNull(json['next_level']),
+        nextPriceRub: _flexJsonIntOrNull(json['next_price_rub']),
+        nextFeature: _flexJsonMap(json['next_feature']) != null
+            ? FlexFeature.fromJson(_flexJsonMap(json['next_feature'])!)
             : null,
         expiresAt: json['expires_at'] as String?,
         checkoutAvailable: json['checkout_available'] as bool? ?? true,
@@ -273,11 +302,11 @@ class FlexMe {
         checkoutMessage: json['checkout_message'] as String?,
         levels: [
           for (final raw in (json['levels'] as List<dynamic>? ?? const []))
-            if (raw is Map<String, dynamic>) FlexFeature.fromJson(raw),
+            if (_flexJsonMap(raw) != null) FlexFeature.fromJson(_flexJsonMap(raw)!),
         ],
         blocks: [
           for (final raw in (json['blocks'] as List<dynamic>? ?? const []))
-            if (raw is Map<String, dynamic>) FlexBlock.fromJson(raw),
+            if (_flexJsonMap(raw) != null) FlexBlock.fromJson(_flexJsonMap(raw)!),
         ],
       );
 }
@@ -299,13 +328,13 @@ class FlexShop {
   bool get canCheckout => checkoutAvailable && !legalConsentRequired;
 
   factory FlexShop.fromJson(Map<String, dynamic> json) => FlexShop(
-        currentLevel: json['current_level'] as int? ?? 0,
+        currentLevel: _flexJsonInt(json['current_level'], 0),
         checkoutAvailable: json['checkout_available'] as bool? ?? true,
         legalConsentRequired: json['legal_consent_required'] as bool? ?? false,
         checkoutMessage: json['checkout_message'] as String?,
         features: [
           for (final raw in (json['features'] as List<dynamic>? ?? const []))
-            if (raw is Map<String, dynamic>) FlexFeature.fromJson(raw),
+            if (_flexJsonMap(raw) != null) FlexFeature.fromJson(_flexJsonMap(raw)!),
         ],
       );
 }
@@ -338,32 +367,32 @@ class FlexPreview {
   final int deltaRub;
 
   factory FlexPreview.fromJson(Map<String, dynamic> json) => FlexPreview(
-        level: json['level'] as int? ?? 1,
-        priceRub: json['price_rub'] as int? ?? 0,
-        nextLevel: json['next_level'] as int?,
-        nextPriceRub: json['next_price_rub'] as int?,
-        nextFeature: json['next_feature'] is Map<String, dynamic>
-            ? FlexFeature.fromJson(json['next_feature'] as Map<String, dynamic>)
+        level: _flexJsonInt(json['level'], 1),
+        priceRub: _flexJsonInt(json['price_rub'], 0),
+        nextLevel: _flexJsonIntOrNull(json['next_level']),
+        nextPriceRub: _flexJsonIntOrNull(json['next_price_rub']),
+        nextFeature: _flexJsonMap(json['next_feature']) != null
+            ? FlexFeature.fromJson(_flexJsonMap(json['next_feature'])!)
             : null,
         nextFeatures: [
           for (final raw
               in (json['next_features'] as List<dynamic>? ?? const []))
-            if (raw is Map<String, dynamic>) FlexFeature.fromJson(raw),
+            if (_flexJsonMap(raw) != null) FlexFeature.fromJson(_flexJsonMap(raw)!),
         ],
         features: [
           for (final raw in (json['features'] as List<dynamic>? ?? const []))
-            if (raw is Map<String, dynamic>) FlexFeature.fromJson(raw),
+            if (_flexJsonMap(raw) != null) FlexFeature.fromJson(_flexJsonMap(raw)!),
         ],
         disabled: [
           for (final raw in (json['disabled'] as List<dynamic>? ?? const []))
-            if (raw is Map<String, dynamic>) FlexFeature.fromJson(raw),
+            if (_flexJsonMap(raw) != null) FlexFeature.fromJson(_flexJsonMap(raw)!),
         ],
         added: [
           for (final raw in (json['added'] as List<dynamic>? ?? const []))
-            if (raw is Map<String, dynamic>) FlexFeature.fromJson(raw),
+            if (_flexJsonMap(raw) != null) FlexFeature.fromJson(_flexJsonMap(raw)!),
         ],
         needsConfirm: json['needs_confirm'] as bool? ?? false,
-        deltaRub: json['delta_rub'] as int? ?? 0,
+        deltaRub: _flexJsonInt(json['delta_rub'], 0),
       );
 }
 
@@ -376,11 +405,11 @@ class FlexAdminCatalog {
       FlexAdminCatalog(
         features: [
           for (final raw in (json['features'] as List<dynamic>? ?? const []))
-            if (raw is Map<String, dynamic>) FlexFeature.fromJson(raw),
+            if (_flexJsonMap(raw) != null) FlexFeature.fromJson(_flexJsonMap(raw)!),
         ],
         blocks: [
           for (final raw in (json['blocks'] as List<dynamic>? ?? const []))
-            if (raw is Map<String, dynamic>) FlexBlock.fromJson(raw),
+            if (_flexJsonMap(raw) != null) FlexBlock.fromJson(_flexJsonMap(raw)!),
         ],
       );
 }

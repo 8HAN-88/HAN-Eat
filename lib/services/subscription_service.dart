@@ -4,6 +4,26 @@ import 'package:http/http.dart' as http;
 import 'auth_service.dart';
 import 'api_service.dart';
 
+int _subJsonInt(Object? raw, [int fallback = 0]) {
+  if (raw is int) return raw;
+  if (raw is num) return raw.toInt();
+  if (raw is String) return int.tryParse(raw.trim()) ?? fallback;
+  return fallback;
+}
+
+double _subJsonDouble(Object? raw, [double fallback = 0]) {
+  if (raw is double) return raw;
+  if (raw is num) return raw.toDouble();
+  if (raw is String) return double.tryParse(raw.trim()) ?? fallback;
+  return fallback;
+}
+
+Map<String, dynamic>? _subJsonMap(Object? raw) {
+  if (raw is Map<String, dynamic>) return raw;
+  if (raw is Map) return Map<String, dynamic>.from(raw);
+  return null;
+}
+
 class SubscriptionService {
   static String get baseUrl => '${ApiService.baseUrl}/api/v1';
   
@@ -210,6 +230,20 @@ class SubscriptionStatusResponse {
   bool get canAdvancedStats => hasEntitlement('advanced_stats');
   bool get canOfflineSaved => hasEntitlement('offline_saved_posts');
   bool get canAiAssist => hasAi || hasEntitlement('ai_priority_speed');
+  bool get hasAdFree => hasEntitlement('ad_free');
+  bool get hasPremiumBadge => hasEntitlement('premium_badge');
+  bool get hasProfileDecoration => hasEntitlement('profile_decoration');
+  bool get hasLargerUploads => hasEntitlement('larger_uploads');
+  bool get hasChatTranslation => hasEntitlement('chat_translation');
+  bool get hasExtraPins => hasEntitlement('extra_pins');
+  bool get hasPrivacyPlus => hasEntitlement('privacy_plus');
+  bool get hasGifSearch => hasEntitlement('gif_search');
+  bool get hasStoryViewers => hasEntitlement('story_viewers');
+  bool get hasScheduledMessages => hasEntitlement('scheduled_messages');
+  bool get hasSilentSend => hasEntitlement('silent_send');
+  bool get hasLiveLocation => hasEntitlement('live_location');
+  bool get hasPremiumStickers => hasEntitlement('premium_stickers');
+  bool get hasMessageEffects => hasEntitlement('message_effects');
 
   bool trialEligibleFor(String product) =>
       trialEligible?[product] == true;
@@ -217,17 +251,17 @@ class SubscriptionStatusResponse {
   factory SubscriptionStatusResponse.fromJson(Map<String, dynamic> json) {
     final raw = json['entitlements'];
     Map<String, bool> ent = {};
-    if (raw is Map<String, dynamic>) {
+    if (raw is Map) {
       for (final e in raw.entries) {
-        ent[e.key] = e.value == true;
+        ent['${e.key}'] = e.value == true;
       }
     }
     final expireRaw = json['subscription_expire_at'] ?? json['expires_at'];
     Map<String, bool>? trialElig;
     final trialRaw = json['trial_eligible'];
-    if (trialRaw is Map<String, dynamic>) {
+    if (trialRaw is Map) {
       trialElig = {
-        for (final e in trialRaw.entries) e.key: e.value == true,
+        for (final e in trialRaw.entries) '${e.key}': e.value == true,
       };
     }
     return SubscriptionStatusResponse(
@@ -236,22 +270,21 @@ class SubscriptionStatusResponse {
       hasCreator: json['has_creator'] as bool? ?? false,
       isActive: json['is_active'] as bool? ?? false,
       subscriptionStatus: json['subscription_status'] as String? ?? 'active',
-      subscription: json['subscription'] != null
-          ? SubscriptionData.fromJson(json['subscription'] as Map<String, dynamic>)
+      subscription: _subJsonMap(json['subscription']) != null
+          ? SubscriptionData.fromJson(_subJsonMap(json['subscription'])!)
           : null,
       subscriptionType: json['subscription_type'] as String? ?? 'free',
-      expiresAt: expireRaw != null ? DateTime.parse(expireRaw as String) : null,
+      expiresAt: DateTime.tryParse('$expireRaw'),
       platform: json['platform'] as String?,
       autoRenew: json['auto_renew'] as bool? ?? false,
       entitlements: ent,
       trialEligible: trialElig,
       inGracePeriod: json['in_grace_period'] as bool? ?? false,
-      upgradeOptions: (json['upgrade_options'] as List<dynamic>?)
-              ?.map((e) => SubscriptionUpgradeOption.fromJson(
-                    e as Map<String, dynamic>,
-                  ))
-              .toList() ??
-          const [],
+      upgradeOptions: [
+        for (final raw in (json['upgrade_options'] as List<dynamic>? ?? const []))
+          if (_subJsonMap(raw) != null)
+            SubscriptionUpgradeOption.fromJson(_subJsonMap(raw)!),
+      ],
     );
   }
 
@@ -296,18 +329,18 @@ class SubscriptionUpgradeOption {
   });
 
   factory SubscriptionUpgradeOption.fromJson(Map<String, dynamic> json) {
-    final monthly = (json['monthly_price'] as num?)?.toDouble() ?? 0;
-    final full = (json['full_price'] as num?)?.toDouble() ?? monthly;
-    final due = (json['amount_due'] as num?)?.toDouble() ?? full;
+    final monthly = _subJsonDouble(json['monthly_price']);
+    final full = _subJsonDouble(json['full_price'], monthly);
+    final due = _subJsonDouble(json['amount_due'], full);
     return SubscriptionUpgradeOption(
-      product: json['product'] as String,
-      name: json['name'] as String? ?? json['product'] as String,
+      product: json['product'] as String? ?? '',
+      name: json['name'] as String? ?? json['product'] as String? ?? '',
       monthlyPrice: monthly,
       reason: json['reason'] as String?,
       fullPrice: full,
       amountDue: due,
-      creditRub: (json['credit_rub'] as num?)?.toDouble() ?? 0,
-      remainingDays: json['remaining_days'] as int? ?? 0,
+      creditRub: _subJsonDouble(json['credit_rub']),
+      remainingDays: _subJsonInt(json['remaining_days']),
       isUpgrade: json['is_upgrade'] as bool? ?? false,
     );
   }
@@ -340,17 +373,16 @@ class SubscriptionData {
   
   factory SubscriptionData.fromJson(Map<String, dynamic> json) {
     return SubscriptionData(
-      id: json['id'] as int,
-      plan: json['plan'] as String,
+      id: _subJsonInt(json['id']),
+      plan: json['plan'] as String? ?? '',
       product: json['product'] as String? ?? 'pro',
-      status: json['status'] as String,
+      status: json['status'] as String? ?? '',
       paymentProvider: json['payment_provider'] as String?,
-      amount: (json['amount'] as num).toDouble(),
-      currency: json['currency'] as String,
-      startedAt: DateTime.parse(json['started_at'] as String),
-      expiresAt: json['expires_at'] != null
-          ? DateTime.parse(json['expires_at'] as String)
-          : null,
+      amount: _subJsonDouble(json['amount']),
+      currency: json['currency'] as String? ?? 'RUB',
+      startedAt: DateTime.tryParse('${json['started_at'] ?? ''}') ??
+          DateTime.fromMillisecondsSinceEpoch(0),
+      expiresAt: DateTime.tryParse('${json['expires_at'] ?? ''}'),
       autoRenew: json['auto_renew'] as bool? ?? true,
     );
   }
@@ -370,7 +402,9 @@ class CreateSubscriptionResponse {
   factory CreateSubscriptionResponse.fromJson(Map<String, dynamic> json) {
     return CreateSubscriptionResponse(
       success: json['success'] as bool,
-      subscription: SubscriptionData.fromJson(json['subscription'] as Map<String, dynamic>),
+      subscription: SubscriptionData.fromJson(
+        _subJsonMap(json['subscription']) ?? const {},
+      ),
       message: json['message'] as String,
     );
   }
@@ -385,9 +419,11 @@ class SubscriptionHistoryResponse {
   
   factory SubscriptionHistoryResponse.fromJson(Map<String, dynamic> json) {
     return SubscriptionHistoryResponse(
-      subscriptions: (json['subscriptions'] as List<dynamic>)
-          .map((item) => SubscriptionData.fromJson(item as Map<String, dynamic>))
-          .toList(),
+      subscriptions: [
+        for (final item in (json['subscriptions'] as List<dynamic>? ?? const []))
+          if (_subJsonMap(item) != null)
+            SubscriptionData.fromJson(_subJsonMap(item)!),
+      ],
     );
   }
 }
@@ -408,7 +444,7 @@ class CancelSubscriptionResponse {
   factory CancelSubscriptionResponse.fromJson(Map<String, dynamic> json) {
     return CancelSubscriptionResponse(
       success: json['success'] as bool,
-      ticketId: json['ticket_id'] as int,
+      ticketId: _subJsonInt(json['ticket_id']),
       message: json['message'] as String,
       note: json['note'] as String,
     );
