@@ -2381,6 +2381,10 @@ String? resourcePathAlias(String path, [String query = '']) {
         'colorid' || 'themeid' || 'hashtagid' => '/chats/thread/$id$q',
         'sponsoredid' => '/ads/$id$q',
         'cardid' => '/paid/invoices/$id$q',
+        'starsid' || 'starid' || 'paidid' || 'paid-id' =>
+          '/paid/invoices/$id$q',
+        'flexid' || 'flex-id' => FlexSubscriptionRoute.pathWithLevel(id),
+        'adsboostid' || 'giveawayboostid' => '/ads/$id$q',
         'qualityid' || 'pipid' => '/post/$id$q',
         'secretid' || 'exportid' || 'backupid' || 'lockid' =>
           '/chats/thread/$id$q',
@@ -5167,6 +5171,100 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/reelcomment':
     case '/reelsave':
       return '${ReelsRoute.path}$q';
+    case '/stars-reaction':
+    case '/star-reaction':
+    case '/stars-react':
+    case '/react-stars':
+    case '/send-paid':
+    case '/send-paid-message':
+    case '/send-paid-media':
+    case '/paid-dm':
+    case '/message-price':
+    case '/paid-group':
+    case '/group-paid':
+      return '${PaidMessageExceptionsRoute.path}$q';
+    case '/channel-ads':
+    case '/channel-advertising':
+    case '/sponsor-channel':
+    case '/ads-boost':
+    case '/post-boost':
+    case '/story-boost':
+    case '/channel-monetize':
+    case '/giveaway-boost':
+    case '/boost-giveaway':
+    case '/premium-giveaway':
+    case '/flex-giveaway':
+    case '/stars-giveaways':
+      return '${AdsHubRoute.path}$q';
+    case '/stars-pack':
+    case '/star-pack':
+    case '/buy-star-pack':
+    case '/stars-packages':
+    case '/stars-donate':
+    case '/stars-tip':
+    case '/tip-stars':
+    case '/stars-refund':
+    case '/paid-stars':
+    case '/paid-content':
+    case '/unlock-media':
+    case '/paid-unlock':
+      return '${StarsWalletRoute.path}$q';
+    case '/flex-catalog':
+    case '/premium-features':
+    case '/upgrade-flex':
+    case '/flex-trial':
+    case '/buy-premium':
+      return '${FlexSubscriptionRoute.path}$q';
+    case '/collectible-gifts':
+    case '/gift-market':
+      return '${StarGiftsMarketplaceRoute.path}$q';
+    case '/starsreaction':
+    case '/starreaction':
+    case '/starsreact':
+    case '/reactstars':
+    case '/sendpaid':
+    case '/sendpaidmessage':
+    case '/sendpaidmedia':
+    case '/paiddm':
+    case '/messageprice':
+    case '/paidgroup':
+    case '/grouppaid':
+      return '${PaidMessageExceptionsRoute.path}$q';
+    case '/channelads':
+    case '/channeladvertising':
+    case '/sponsorchannel':
+    case '/adsboost':
+    case '/postboost':
+    case '/storyboost':
+    case '/channelmonetize':
+    case '/giveawayboost':
+    case '/boostgiveaway':
+    case '/premiumgiveaway':
+    case '/flexgiveaway':
+    case '/starsgiveaways':
+      return '${AdsHubRoute.path}$q';
+    case '/starspack':
+    case '/starpack':
+    case '/buystarpack':
+    case '/starspackages':
+    case '/starsdonate':
+    case '/starstip':
+    case '/tipstars':
+    case '/starsrefund':
+    case '/paidstars':
+    case '/paidcontent':
+    case '/unlockmedia':
+    case '/paidunlock':
+      return '${StarsWalletRoute.path}$q';
+    case '/flexcatalog':
+    case '/premiumfeatures':
+    case '/upgradeflex':
+    case '/flextrial':
+    case '/buypremium':
+      return '${FlexSubscriptionRoute.path}$q';
+    case '/collectiblegifts':
+    case '/giftmarket':
+      return '${StarGiftsMarketplaceRoute.path}$q';
     default:
       return null;
   }
