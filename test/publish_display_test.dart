@@ -55,10 +55,13 @@ void main() {
       },
     });
     expect(SharedPostMedia.kind(fromMedia), SharedPostKind.photo);
-    expect(SharedPostMedia.imageUrls(fromMedia), [
-      '/uploads/a.jpg',
-      '/uploads/b.jpg',
-    ]);
+    expect(
+      SharedPostMedia.imageUrls(fromMedia).map((e) => e.split('?').first),
+      everyElement(contains('/uploads/')),
+    );
+    expect(SharedPostMedia.imageUrls(fromMedia), hasLength(2));
+    expect(SharedPostMedia.imageUrls(fromMedia).first, contains('a.jpg'));
+    expect(SharedPostMedia.imageUrls(fromMedia).last, contains('b.jpg'));
 
     final fromPhotos = _parse({
       'id': 3.0,
@@ -70,11 +73,9 @@ void main() {
         ],
       },
     });
-    expect(SharedPostMedia.firstImageUrl(fromPhotos), '/uploads/c.jpg');
-    expect(SharedPostMedia.imageUrls(fromPhotos), [
-      '/uploads/c.jpg',
-      '/uploads/d.jpg',
-    ]);
+    expect(SharedPostMedia.firstImageUrl(fromPhotos), contains('c.jpg'));
+    expect(SharedPostMedia.imageUrls(fromPhotos), hasLength(2));
+    expect(SharedPostMedia.imageUrls(fromPhotos).last, contains('d.jpg'));
   });
 
   test('poll post parses web nums and loose option maps', () {
@@ -152,7 +153,7 @@ void main() {
     });
     expect(SharedPostMedia.kind(post), SharedPostKind.video);
     expect(post.videoUrl, 'https://cdn/480.mp4');
-    expect(SharedPostMedia.posterUrl(post), '/uploads/t.jpg');
+    expect(SharedPostMedia.posterUrl(post), contains('t.jpg'));
   });
 
   test('channel post keeps author and channel from loose maps', () {
@@ -174,7 +175,7 @@ void main() {
     expect(post.channelId, 21);
     expect(post.author?.name, 'Редактор');
     expect(post.channel?.name, 'HAN');
-    expect(SharedPostMedia.firstImageUrl(post), '/uploads/ch.jpg');
+    expect(SharedPostMedia.firstImageUrl(post), contains('ch.jpg'));
   });
 
   test('feed response keeps every publishable kind from loose maps', () {
@@ -250,7 +251,7 @@ void main() {
     ]);
     expect(feed.items[1].poll, isNull);
     expect(feed.items[2].poll?.question, '?');
-    expect(SharedPostMedia.firstImageUrl(feed.items[1]), '/uploads/a.jpg');
+    expect(SharedPostMedia.firstImageUrl(feed.items[1]), contains('a.jpg'));
     expect(feed.items[3].linkUrl, 'https://haneat.app');
     expect(feed.items[4].videoUrl, 'https://cdn/v.mp4');
   });

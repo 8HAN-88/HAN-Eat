@@ -137,7 +137,9 @@ class Post {
   String? get linkPreview => body?['link_preview'] as String?;
   Map<String, dynamic>? get linkMeta {
     final raw = body?['link_meta'];
-    return raw is Map<String, dynamic> ? raw : null;
+    if (raw is Map<String, dynamic>) return raw;
+    if (raw is Map) return Map<String, dynamic>.from(raw);
+    return null;
   }
 
   String? get linkTitle => linkMeta?['title'] as String? ?? linkPreview;

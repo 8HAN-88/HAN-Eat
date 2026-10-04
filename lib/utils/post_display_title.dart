@@ -14,7 +14,7 @@ bool isMeaningfulPostTitle(String? value) {
 
 String? resolvePostDisplayTitle({
   String? title,
-  Map<String, dynamic>? body,
+  Map? body,
 }) {
   final candidates = <String?>[
     title?.trim(),
@@ -59,7 +59,7 @@ String? resolveFeedCaptionText({
   return null;
 }
 
-String? extractLegacyBodyImageUrl(Map<String, dynamic>? body) {
+String? extractLegacyBodyImageUrl(Map? body) {
   if (body == null) return null;
   for (final key in ['image', 'source_image']) {
     final v = body[key]?.toString().trim();
