@@ -6,7 +6,48 @@ import '../utils/api_error_parser.dart';
 import 'api_service.dart';
 import 'auth_service.dart';
 
+int _adJsonInt(Object? raw, [int fallback = 0]) {
+  if (raw is int) return raw;
+  if (raw is num) return raw.toInt();
+  if (raw is String) return int.tryParse(raw.trim()) ?? fallback;
+  return fallback;
+}
+
+int? _adJsonIntOrNull(Object? raw) {
+  if (raw == null) return null;
+  if (raw is int) return raw;
+  if (raw is num) return raw.toInt();
+  if (raw is String) return int.tryParse(raw.trim());
+  return null;
+}
+
+Map<String, dynamic>? _adJsonMap(Object? raw) {
+  if (raw is Map<String, dynamic>) return raw;
+  if (raw is Map) return Map<String, dynamic>.from(raw);
+  return null;
+}
+
 class AdsService {
+  static List<AdCampaign> parseCampaignList(Object? raw) {
+    Object? items = raw;
+    if (raw is Map) {
+      items = raw['campaigns'] ?? raw['items'] ?? raw['ads'];
+    }
+    if (items is! List) return const [];
+    return [
+      for (final item in items)
+        if (item is Map) AdCampaign.fromJson(Map<String, dynamic>.from(item)),
+    ].where((e) => e.id > 0).toList(growable: false);
+  }
+
+  static FeedAdItem? parseFeedAd(Object? raw) {
+    final map = _adJsonMap(raw);
+    if (map == null) return null;
+    final item = FeedAdItem.fromJson(map);
+    return item.campaignId > 0 ? item : null;
+  }
+
+
   static String get baseUrl => '${ApiService.baseUrl}/api/v1';
 
   static Future<Map<String, String>> _headers() async {
@@ -66,11 +107,7 @@ class AdsService {
       headers: await _headers(),
     );
     if (response.statusCode == 200) {
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      return (data['campaigns'] as List<dynamic>? ?? const [])
-          .whereType<Map>()
-          .map((e) => AdCampaign.fromJson(Map<String, dynamic>.from(e)))
-          .toList();
+      return parseCampaignList(jsonDecode(response.body));
     }
     _throwForResponse(response, 'Не удалось загрузить кампании');
   }
@@ -82,7 +119,7 @@ class AdsService {
     );
     if (response.statusCode == 200) {
       return AdCampaign.fromJson(
-        jsonDecode(response.body) as Map<String, dynamic>,
+        _adJsonMap(jsonDecode(response.body)) ?? const {},
       );
     }
     _throwForResponse(response, 'Не удалось загрузить кампанию');
@@ -96,7 +133,7 @@ class AdsService {
     );
     if (response.statusCode == 201 || response.statusCode == 200) {
       return AdCampaign.fromJson(
-        jsonDecode(response.body) as Map<String, dynamic>,
+        _adJsonMap(jsonDecode(response.body)) ?? const {},
       );
     }
     _throwForResponse(response, 'Не удалось создать кампанию');
@@ -110,7 +147,7 @@ class AdsService {
     );
     if (response.statusCode == 200) {
       return AdCampaign.fromJson(
-        jsonDecode(response.body) as Map<String, dynamic>,
+        _adJsonMap(jsonDecode(response.body)) ?? const {},
       );
     }
     _throwForResponse(response, 'Не удалось сохранить кампанию');
@@ -124,7 +161,7 @@ class AdsService {
     );
     if (response.statusCode == 200) {
       return AdCampaign.fromJson(
-        jsonDecode(response.body) as Map<String, dynamic>,
+        _adJsonMap(jsonDecode(response.body)) ?? const {},
       );
     }
     _throwForResponse(response, 'Не удалось отправить на модерацию');
@@ -137,7 +174,7 @@ class AdsService {
     );
     if (response.statusCode == 200) {
       return AdCampaign.fromJson(
-        jsonDecode(response.body) as Map<String, dynamic>,
+        _adJsonMap(jsonDecode(response.body)) ?? const {},
       );
     }
     _throwForResponse(response, 'Не удалось поставить на паузу');
@@ -150,7 +187,7 @@ class AdsService {
     );
     if (response.statusCode == 200) {
       return AdCampaign.fromJson(
-        jsonDecode(response.body) as Map<String, dynamic>,
+        _adJsonMap(jsonDecode(response.body)) ?? const {},
       );
     }
     _throwForResponse(response, 'Не удалось возобновить кампанию');
@@ -191,7 +228,7 @@ class AdsService {
     );
     if (response.statusCode == 200) {
       return AdCampaign.fromJson(
-        jsonDecode(response.body) as Map<String, dynamic>,
+        _adJsonMap(jsonDecode(response.body)) ?? const {},
       );
     }
     _throwForResponse(response, 'Не удалось архивировать кампанию');
@@ -207,11 +244,7 @@ class AdsService {
       headers: await _headers(),
     );
     if (response.statusCode == 200) {
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      return (data['campaigns'] as List<dynamic>? ?? const [])
-          .whereType<Map>()
-          .map((e) => AdCampaign.fromJson(Map<String, dynamic>.from(e)))
-          .toList();
+      return parseCampaignList(jsonDecode(response.body));
     }
     _throwForResponse(response, 'Не удалось загрузить очередь рекламы');
   }
@@ -223,7 +256,7 @@ class AdsService {
     );
     if (response.statusCode == 200) {
       return AdCampaign.fromJson(
-        jsonDecode(response.body) as Map<String, dynamic>,
+        _adJsonMap(jsonDecode(response.body)) ?? const {},
       );
     }
     _throwForResponse(response, 'Не удалось одобрить кампанию');
@@ -237,7 +270,7 @@ class AdsService {
     );
     if (response.statusCode == 200) {
       return AdCampaign.fromJson(
-        jsonDecode(response.body) as Map<String, dynamic>,
+        _adJsonMap(jsonDecode(response.body)) ?? const {},
       );
     }
     _throwForResponse(response, 'Не удалось отклонить кампанию');
@@ -317,7 +350,7 @@ class AdCreative {
   final String? advertiserName;
 
   factory AdCreative.fromJson(Map<String, dynamic> json) => AdCreative(
-        id: (json['id'] as num?)?.toInt(),
+        id: _adJsonIntOrNull(json['id']),
         title: json['title'] as String? ?? '',
         body: json['body'] as String? ?? '',
         ctaLabel: json['cta_label'] as String? ?? 'Подробнее',
@@ -339,7 +372,7 @@ class AdAdvertiser {
   final String? username;
 
   factory AdAdvertiser.fromJson(Map<String, dynamic> json) => AdAdvertiser(
-        id: (json['id'] as num?)?.toInt() ?? 0,
+        id: _adJsonInt(json['id']),
         name: json['name'] as String?,
         username: json['username'] as String?,
       );
@@ -433,8 +466,8 @@ class AdCampaign {
 
   factory AdCampaign.fromJson(Map<String, dynamic> json) {
     return AdCampaign(
-      id: (json['id'] as num?)?.toInt() ?? 0,
-      advertiserId: (json['advertiser_id'] as num?)?.toInt() ?? 0,
+      id: _adJsonInt(json['id']),
+      advertiserId: _adJsonInt(json['advertiser_id']),
       name: json['name'] as String? ?? 'Кампания',
       status: json['status'] as String? ?? 'draft',
       isLive: json['is_live'] as bool? ?? false,
@@ -443,11 +476,11 @@ class AdCampaign {
           .toList(),
       destinationType: json['destination_type'] as String? ?? 'url',
       destinationUrl: json['destination_url'] as String?,
-      destinationChannelId: (json['destination_channel_id'] as num?)?.toInt(),
-      destinationPostId: (json['destination_post_id'] as num?)?.toInt(),
+      destinationChannelId: _adJsonIntOrNull(json['destination_channel_id']),
+      destinationPostId: _adJsonIntOrNull(json['destination_post_id']),
       startsAt: json['starts_at'] as String?,
       endsAt: json['ends_at'] as String?,
-      dailyCap: (json['daily_cap'] as num?)?.toInt(),
+      dailyCap: _adJsonIntOrNull(json['daily_cap']),
       rejectionReason: json['rejection_reason'] as String?,
       reviewedAt: json['reviewed_at'] as String?,
       createdAt: json['created_at'] as String?,
@@ -522,18 +555,40 @@ class FeedAdItem {
       );
 
   factory FeedAdItem.fromJson(Map<String, dynamic> json) {
+    final nested = _adJsonMap(json['campaign']) ?? _adJsonMap(json['creative']);
+    final creative = _adJsonMap(json['creative']) ??
+        _adJsonMap(nested?['creative']) ??
+        const <String, dynamic>{};
+    String read(String key) {
+      final direct = json[key];
+      if (direct is String && direct.trim().isNotEmpty) return direct.trim();
+      final fromCreative = creative[key];
+      if (fromCreative is String && fromCreative.trim().isNotEmpty) {
+        return fromCreative.trim();
+      }
+      return '';
+    }
+
     return FeedAdItem(
-      campaignId: (json['campaign_id'] as num?)?.toInt() ?? 0,
-      creativeId: (json['creative_id'] as num?)?.toInt(),
-      title: json['title'] as String? ?? '',
-      body: json['body'] as String? ?? '',
-      ctaLabel: json['cta_label'] as String? ?? 'Подробнее',
-      imageUrl: json['image_url'] as String?,
-      advertiserName: json['advertiser_name'] as String?,
-      destinationType: json['destination_type'] as String? ?? 'url',
-      destinationUrl: json['destination_url'] as String?,
-      destinationChannelId: (json['destination_channel_id'] as num?)?.toInt(),
-      destinationPostId: (json['destination_post_id'] as num?)?.toInt(),
+      campaignId: _adJsonInt(json['campaign_id'] ?? nested?['id']),
+      creativeId: _adJsonIntOrNull(json['creative_id'] ?? creative['id']),
+      title: read('title'),
+      body: read('body'),
+      ctaLabel: read('cta_label').isEmpty ? 'Подробнее' : read('cta_label'),
+      imageUrl: read('image_url').isEmpty ? null : read('image_url'),
+      advertiserName:
+          read('advertiser_name').isEmpty ? null : read('advertiser_name'),
+      destinationType: (json['destination_type'] as String?) ??
+          (nested?['destination_type'] as String?) ??
+          'url',
+      destinationUrl: json['destination_url'] as String? ??
+          nested?['destination_url'] as String?,
+      destinationChannelId: _adJsonIntOrNull(
+        json['destination_channel_id'] ?? nested?['destination_channel_id'],
+      ),
+      destinationPostId: _adJsonIntOrNull(
+        json['destination_post_id'] ?? nested?['destination_post_id'],
+      ),
       surface: json['surface'] as String? ?? 'feed',
     );
   }

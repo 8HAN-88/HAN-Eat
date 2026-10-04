@@ -5327,6 +5327,34 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/publishreel':
     case '/addreel':
       return '${CreateReelRoute.path}$q';
+    case '/publish-ad':
+    case '/place-ad':
+    case '/buy-ad':
+    case '/run-ad':
+    case '/start-ad':
+    case '/new-campaign':
+    case '/ad-new':
+    case '/promote-ad':
+      return '${AdsCampaignEditorRoute.path}$q';
+    case '/show-ad':
+    case '/view-ad':
+    case '/my-ads':
+    case '/ad-list':
+      return '${AdsHubRoute.path}$q';
+    case '/publishad':
+    case '/placead':
+    case '/buyad':
+    case '/runad':
+    case '/startad':
+    case '/newcampaign':
+    case '/adnew':
+    case '/promotead':
+      return '${AdsCampaignEditorRoute.path}$q';
+    case '/showad':
+    case '/viewad':
+    case '/myads':
+    case '/adlist':
+      return '${AdsHubRoute.path}$q';
     default:
       return null;
   }
