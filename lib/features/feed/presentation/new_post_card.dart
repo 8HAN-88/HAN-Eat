@@ -18,6 +18,7 @@ import '../../../utils/session_snackbar.dart';
 import '../../../widgets/telegram_photo_grid.dart';
 import '../../../utils/number_formatter.dart';
 import '../../../utils/post_display_title.dart';
+import '../../../utils/shared_post_media.dart';
 import '../../../widgets/post_card_container.dart';
 import '../../../widgets/feed_video_player.dart';
 import '../../../services/server_config.dart';
@@ -1654,13 +1655,10 @@ class _NewPostCardState extends State<NewPostCard>
     // Если media пустой, пытаемся собрать превью из известных полей body.
     List<dynamic>? effectiveMedia = media;
     if (media == null || media.isEmpty) {
-      final imageUrl = _extractLegacyBodyImageUrl(body);
-      if (imageUrl != null && imageUrl.isNotEmpty) {
+      final photoUrls = SharedPostMedia.imageUrls(post);
+      if (photoUrls.isNotEmpty) {
         effectiveMedia = [
-          {
-            'type': 'image',
-            'url': imageUrl,
-          }
+          for (final url in photoUrls) {'type': 'image', 'url': url},
         ];
       } else if (post.videoUrl != null && post.videoUrl!.isNotEmpty) {
         effectiveMedia = [
@@ -1702,9 +1700,13 @@ class _NewPostCardState extends State<NewPostCard>
 
       // Извлекаем URL изображений (с proxy для legacy CDN при необходимости)
       final imageUrls = images
-          .map((img) => img['url'] as String?)
+          .map((img) {
+            if (img is! Map) return null;
+            final raw = img['url'] ?? img['src'] ?? img['image'];
+            final url = raw?.toString().trim() ?? '';
+            return url.isEmpty ? null : url;
+          })
           .whereType<String>()
-          .where((url) => url.isNotEmpty)
           .map((url) => _getProxyUrl(url))
           .toList();
 
@@ -1775,9 +1777,6 @@ class _NewPostCardState extends State<NewPostCard>
 
     return const SizedBox.shrink();
   }
-
-  String? _extractLegacyBodyImageUrl(Map<String, dynamic> body) =>
-      extractLegacyBodyImageUrl(body);
 
   bool _isImageMediaItem(dynamic item) {
     if (item is! Map) return false;

@@ -1,3 +1,16 @@
+int _miniJsonInt(Object? raw, [int fallback = 0]) {
+  if (raw is int) return raw;
+  if (raw is num) return raw.toInt();
+  if (raw is String) return int.tryParse(raw.trim()) ?? fallback;
+  return fallback;
+}
+
+Map<String, dynamic>? _miniJsonMap(Object? raw) {
+  if (raw is Map<String, dynamic>) return raw;
+  if (raw is Map) return Map<String, dynamic>.from(raw);
+  return null;
+}
+
 class MiniAppItem {
   const MiniAppItem({
     required this.id,
@@ -75,8 +88,8 @@ class MiniAppItem {
 
   factory MiniAppItem.fromJson(Map<String, dynamic> json) {
     return MiniAppItem(
-      id: (json['id'] as num?)?.toInt() ?? 0,
-      botId: (json['bot_id'] as num?)?.toInt() ?? 0,
+      id: _miniJsonInt(json['id']),
+      botId: _miniJsonInt(json['bot_id']),
       botUsername: json['bot_username'] as String? ?? '',
       botName: json['bot_name'] as String? ?? '',
       name: json['name'] as String? ?? '',
@@ -183,11 +196,10 @@ class MiniAppLaunchContext {
 
   factory MiniAppLaunchContext.fromJson(Map<String, dynamic> json) {
     return MiniAppLaunchContext(
-      miniappId: (json['miniapp_id'] as num?)?.toInt() ?? 0,
+      miniappId: _miniJsonInt(json['miniapp_id']),
       url: json['url'] as String? ?? '',
       initData: json['init_data'] as String? ?? '{}',
-      initDataUnsafe:
-          (json['init_data_unsafe'] as Map<String, dynamic>?) ?? const {},
+      initDataUnsafe: _miniJsonMap(json['init_data_unsafe']) ?? const {},
     );
   }
 }

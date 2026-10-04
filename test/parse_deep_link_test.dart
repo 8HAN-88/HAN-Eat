@@ -2484,4 +2484,41 @@ void main() {
     );
     expect(shortcutPathAlias('/reels'), isNull);
   });
+
+  test('leftover publish hashes open create / show screens', () {
+    expect(shortcutPathAlias('/create-miniapp'), MiniAppsRoute.path);
+    expect(shortcutPathAlias('/open-miniapp'), MiniAppsRoute.path);
+    expect(shortcutPathAlias('/launch-miniapp'), MiniAppsRoute.path);
+    expect(shortcutPathAlias('/new-webapp'), MiniAppsRoute.path);
+    expect(shortcutPathAlias('/publish-post'), CreatePostRoute.path);
+    expect(shortcutPathAlias('/share-post'), CreatePostRoute.path);
+    expect(shortcutPathAlias('/new-photo'), CreatePostRoute.pathWithType('photo'));
+    expect(shortcutPathAlias('/new-album'), CreatePostRoute.pathWithType('photo'));
+    expect(shortcutPathAlias('/new-poll'), CreatePostRoute.pathWithType('poll'));
+    expect(shortcutPathAlias('/new-link'), CreatePostRoute.pathWithType('link'));
+    expect(shortcutPathAlias('/publish-story'), StoryCreateRoute.path);
+    expect(shortcutPathAlias('/publish-reel'), CreateReelRoute.path);
+    expect(shortcutPathAlias('/newphoto'), CreatePostRoute.pathWithType('photo'));
+    expect(shortcutPathAlias('/newpoll'), CreatePostRoute.pathWithType('poll'));
+    expect(shortcutPathAlias('/createminiapp'), MiniAppsRoute.path);
+    expect(CreatePostRoute.typeFromQuery('album'), 'photo');
+    expect(CreatePostRoute.typeFromQuery('POLL'), 'poll');
+    expect(leftoverPathAlias('/go/new-photo'), CreatePostRoute.pathWithType('photo'));
+    expect(leftoverPathAlias('/go/create-miniapp'), MiniAppsRoute.path);
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/new-photo'),
+      CreatePostRoute.pathWithType('photo'),
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/open-miniapp'),
+      MiniAppsRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/publish-reel'),
+      CreateReelRoute.path,
+    );
+    expect(shortcutPathAlias('/reels'), isNull);
+    expect(shortcutPathAlias('/shorts'), isNull);
+    expect(shortcutPathAlias('/clips'), isNull);
+  });
 }

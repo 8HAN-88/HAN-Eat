@@ -18,30 +18,65 @@ class SharedPostMedia {
 
   static bool isVideo(PostModel post) => kind(post) == SharedPostKind.video;
 
-  static String? firstImageUrl(PostModel post) {
+  static String? _imageUrlFromItem(Object? item) {
+    if (item is String) {
+      final url = item.trim();
+      return url.isEmpty ? null : url;
+    }
+    if (item is Map) {
+      final type = '${item['type'] ?? ''}'.trim().toLowerCase();
+      if (type == 'video' || type == 'reel') return null;
+      final raw = item['url'] ?? item['src'] ?? item['image'] ?? item['photo'];
+      final url = raw?.toString().trim() ?? '';
+      return url.isEmpty ? null : url;
+    }
+    return null;
+  }
+
+  static List<String> imageUrls(PostModel post) {
+    final out = <String>[];
+    final seen = <String>{};
+    void add(String? raw) {
+      final url = raw?.trim() ?? '';
+      if (url.isEmpty) return;
+      final resolved = ServerConfig.resolveMediaUrl(url);
+      if (resolved.isEmpty || !seen.add(resolved)) return;
+      out.add(resolved);
+    }
+
     final body = post.body;
     if (body != null) {
       final photos = body['photos'];
       if (photos is List) {
         for (final item in photos) {
-          final url = item.toString().trim();
-          if (url.isNotEmpty) return ServerConfig.resolveMediaUrl(url);
+          add(_imageUrlFromItem(item));
         }
       }
       final media = body['media'];
       if (media is List) {
         for (final item in media) {
-          if (item is! Map) continue;
-          final type = '${item['type'] ?? ''}';
-          if (type != 'image' && type != 'photo') continue;
-          final url = item['url']?.toString().trim() ?? '';
-          if (url.isNotEmpty) return ServerConfig.resolveMediaUrl(url);
+          if (item is! Map) {
+            add(_imageUrlFromItem(item));
+            continue;
+          }
+          final type = '${item['type'] ?? ''}'.trim().toLowerCase();
+          if (type == 'video' || type == 'reel') continue;
+          if (type.isEmpty ||
+              type == 'image' ||
+              type == 'photo' ||
+              type == 'picture') {
+            add(_imageUrlFromItem(item));
+          }
         }
       }
     }
-    final legacy = extractLegacyBodyImageUrl(body);
-    if (legacy == null || legacy.isEmpty) return null;
-    return ServerConfig.resolveMediaUrl(legacy);
+    add(extractLegacyBodyImageUrl(body));
+    return out;
+  }
+
+  static String? firstImageUrl(PostModel post) {
+    final urls = imageUrls(post);
+    return urls.isEmpty ? null : urls.first;
   }
 
   static String? posterUrl(PostModel post) {

@@ -5265,6 +5265,68 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/collectiblegifts':
     case '/giftmarket':
       return '${StarGiftsMarketplaceRoute.path}$q';
+    case '/create-miniapp':
+    case '/new-miniapp':
+    case '/add-miniapp':
+    case '/open-miniapp':
+    case '/launch-miniapp':
+    case '/show-miniapp':
+    case '/view-miniapp':
+    case '/new-webapp':
+    case '/create-webapp':
+    case '/add-app':
+      return '${MiniAppsRoute.path}$q';
+    case '/publish-post':
+    case '/share-post':
+      return '${CreatePostRoute.path}$q';
+    case '/new-photo':
+    case '/add-photo':
+    case '/new-album':
+    case '/add-album':
+      return CreatePostRoute.pathWithType('photo');
+    case '/new-poll':
+    case '/add-poll':
+      return CreatePostRoute.pathWithType('poll');
+    case '/new-link':
+    case '/add-link':
+      return CreatePostRoute.pathWithType('link');
+    case '/publish-story':
+    case '/new-moment':
+      return '${StoryCreateRoute.path}$q';
+    case '/publish-reel':
+    case '/add-reel':
+      return '${CreateReelRoute.path}$q';
+    case '/createminiapp':
+    case '/newminiapp':
+    case '/addminiapp':
+    case '/openminiapp':
+    case '/launchminiapp':
+    case '/showminiapp':
+    case '/viewminiapp':
+    case '/newwebapp':
+    case '/createwebapp':
+    case '/addapp':
+      return '${MiniAppsRoute.path}$q';
+    case '/publishpost':
+    case '/sharepost':
+      return '${CreatePostRoute.path}$q';
+    case '/newphoto':
+    case '/addphoto':
+    case '/newalbum':
+    case '/addalbum':
+      return CreatePostRoute.pathWithType('photo');
+    case '/newpoll':
+    case '/addpoll':
+      return CreatePostRoute.pathWithType('poll');
+    case '/newlink':
+    case '/addlink':
+      return CreatePostRoute.pathWithType('link');
+    case '/publishstory':
+    case '/newmoment':
+      return '${StoryCreateRoute.path}$q';
+    case '/publishreel':
+    case '/addreel':
+      return '${CreateReelRoute.path}$q';
     default:
       return null;
   }
@@ -7017,8 +7079,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: CreatePostRoute.path,
         name: CreatePostRoute.name,
-        pageBuilder: (context, state) =>
-            const MaterialPage(child: CreatePostScreen()),
+        pageBuilder: (context, state) {
+          final type = CreatePostRoute.typeFromQuery(
+            state.uri.queryParameters['type'],
+          );
+          return MaterialPage(child: CreatePostScreen(initialType: type));
+        },
       ),
             GoRoute(
         path: CreateReelRoute.path,
@@ -8576,6 +8642,21 @@ class SupportContactRoute {
 class CreatePostRoute {
   static const path = '/create-post';
   static const name = 'create_post';
+
+  static const allowedTypes = {'text', 'photo', 'poll', 'link', 'reel'};
+
+  static String typeFromQuery(String? raw) {
+    final type = (raw ?? '').trim().toLowerCase();
+    if (type == 'album' || type == 'image' || type == 'images') return 'photo';
+    if (allowedTypes.contains(type)) return type;
+    return 'text';
+  }
+
+  static String pathWithType(String type) {
+    final resolved = typeFromQuery(type);
+    if (resolved == 'text') return path;
+    return '$path?type=${Uri.encodeComponent(resolved)}';
+  }
 }
 
 

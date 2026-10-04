@@ -23,7 +23,7 @@ String? resolvePostDisplayTitle({
     body?['name']?.toString().trim(),
   ];
   final nested = body?['recipe'];
-  if (nested is Map<String, dynamic>) {
+  if (nested is Map) {
     candidates.add(nested['title']?.toString().trim());
   }
   for (final c in candidates) {
@@ -66,7 +66,7 @@ String? extractLegacyBodyImageUrl(Map<String, dynamic>? body) {
     if (v != null && v.isNotEmpty) return v;
   }
   final nested = body['recipe'];
-  if (nested is Map<String, dynamic>) {
+  if (nested is Map) {
     for (final key in ['image', 'source_image']) {
       final v = nested[key]?.toString().trim();
       if (v != null && v.isNotEmpty) return v;

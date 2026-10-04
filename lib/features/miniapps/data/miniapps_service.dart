@@ -6,6 +6,19 @@ import '../../../services/api_service.dart';
 import 'miniapp_models.dart';
 
 class MiniAppsService {
+  /// Каталог/мои приложения: web JSON часто приходит как Map, не Map<String, dynamic>.
+  static List<MiniAppItem> parseItemList(Object? raw) {
+    Object? items = raw;
+    if (raw is Map) {
+      items = raw['items'] ?? raw['miniapps'] ?? raw['apps'];
+    }
+    if (items is! List) return const [];
+    return [
+      for (final item in items)
+        if (item is Map) MiniAppItem.fromJson(Map<String, dynamic>.from(item)),
+    ].where((e) => e.id > 0 && e.url.trim().isNotEmpty).toList(growable: false);
+  }
+
   static Future<List<MiniAppItem>> fetchCatalog({
     String? query,
     String? category,
@@ -27,12 +40,7 @@ class MiniAppsService {
       headers: await ApiService.authHeaders(),
     );
     ApiService.ensureSuccess(response);
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final items = data['items'] as List<dynamic>? ?? const [];
-    return items
-        .whereType<Map<String, dynamic>>()
-        .map(MiniAppItem.fromJson)
-        .toList(growable: false);
+    return parseItemList(jsonDecode(response.body));
   }
 
   static Future<List<MiniAppItem>> fetchMyMiniApps() async {
@@ -41,12 +49,7 @@ class MiniAppsService {
       headers: await ApiService.authHeaders(),
     );
     ApiService.ensureSuccess(response);
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final items = data['items'] as List<dynamic>? ?? const [];
-    return items
-        .whereType<Map<String, dynamic>>()
-        .map(MiniAppItem.fromJson)
-        .toList(growable: false);
+    return parseItemList(jsonDecode(response.body));
   }
 
   static Future<List<MiniAppItem>> fetchByBot(int botId) async {
@@ -55,12 +58,7 @@ class MiniAppsService {
       headers: await ApiService.authHeaders(),
     );
     ApiService.ensureSuccess(response);
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final items = data['items'] as List<dynamic>? ?? const [];
-    return items
-        .whereType<Map<String, dynamic>>()
-        .map(MiniAppItem.fromJson)
-        .toList(growable: false);
+    return parseItemList(jsonDecode(response.body));
   }
 
   static Future<MiniAppItem> createMiniApp(MiniAppCreateRequest request) async {
@@ -70,7 +68,9 @@ class MiniAppsService {
       body: jsonEncode(request.toJson()),
     );
     ApiService.ensureSuccess(response);
-    return MiniAppItem.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return MiniAppItem.fromJson(
+      Map<String, dynamic>.from(jsonDecode(response.body) as Map),
+    );
   }
 
   static Future<MiniAppItem> updateMiniApp(
@@ -84,7 +84,7 @@ class MiniAppsService {
     );
     ApiService.ensureSuccess(response);
     return MiniAppItem.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
+      Map<String, dynamic>.from(jsonDecode(response.body) as Map),
     );
   }
 
@@ -128,7 +128,7 @@ class MiniAppsService {
     );
     ApiService.ensureSuccess(response);
     return MiniAppLaunchContext.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
+      Map<String, dynamic>.from(jsonDecode(response.body) as Map),
     );
   }
 
@@ -168,12 +168,7 @@ class MiniAppsService {
       headers: await ApiService.authHeaders(),
     );
     ApiService.ensureSuccess(response);
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final items = data['items'] as List<dynamic>? ?? const [];
-    return items
-        .whereType<Map<String, dynamic>>()
-        .map(MiniAppItem.fromJson)
-        .toList(growable: false);
+    return parseItemList(jsonDecode(response.body));
   }
 
   static Future<MiniAppItem> moderateMiniApp({
@@ -192,7 +187,7 @@ class MiniAppsService {
     );
     ApiService.ensureSuccess(response);
     return MiniAppItem.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
+      Map<String, dynamic>.from(jsonDecode(response.body) as Map),
     );
   }
 }

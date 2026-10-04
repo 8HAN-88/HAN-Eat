@@ -26,8 +26,8 @@ class PostCommentPreview {
 
   factory PostCommentPreview.fromJson(Map<String, dynamic> json) {
     return PostCommentPreview(
-      id: (json['id'] as num?)?.toInt() ?? 0,
-      userId: (json['user_id'] as num?)?.toInt() ?? 0,
+      id: _jsonCount(json['id']),
+      userId: _jsonCount(json['user_id']),
       authorName: json['author_name'] as String? ?? 'Пользователь',
       text: (json['text'] as String? ?? '').trim(),
     );
@@ -56,7 +56,7 @@ class PostLikerPreview {
 
   factory PostLikerPreview.fromJson(Map<String, dynamic> json) {
     return PostLikerPreview(
-      id: (json['id'] as num?)?.toInt() ?? 0,
+      id: _jsonCount(json['id']),
       name: json['name'] as String? ?? 'Пользователь',
       username: json['username'] as String?,
       avatarUrl: json['avatar_url'] as String?,
@@ -140,9 +140,9 @@ class PostModel {
 
   PollData? get poll {
     final pollData = body?['poll'];
-    if (pollData is Map<String, dynamic>) {
+    if (pollData is Map) {
       try {
-        return PollData.fromJson(pollData);
+        return PollData.fromJson(Map<String, dynamic>.from(pollData));
       } catch (_) {
         return null;
       }

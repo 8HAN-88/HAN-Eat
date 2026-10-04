@@ -90,6 +90,20 @@ void main() {
       );
       expect(SharedPostMedia.firstImageUrl(photo), 'https://cdn/a.jpg');
       expect(SharedPostMedia.posterUrl(photo), 'https://cdn/a.jpg');
+      expect(
+        SharedPostMedia.imageUrls(
+          _post(
+            type: 'photo',
+            body: {
+              'photos': [
+                'https://cdn/a.jpg',
+                {'url': 'https://cdn/b.jpg'},
+              ],
+            },
+          ),
+        ),
+        ['https://cdn/a.jpg', 'https://cdn/b.jpg'],
+      );
 
       final reel = _post(
         type: 'reel',

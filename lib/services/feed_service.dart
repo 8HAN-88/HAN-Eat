@@ -239,7 +239,11 @@ class FeedWatchNextItem {
 
   factory FeedWatchNextItem.fromJson(Map<String, dynamic> json) {
     return FeedWatchNextItem(
-      id: (json['id'] as num?)?.toInt() ?? 0,
+      id: json['id'] is int
+          ? json['id'] as int
+          : json['id'] is num
+              ? (json['id'] as num).toInt()
+              : int.tryParse('${json['id'] ?? ''}') ?? 0,
       title: json['title'] as String?,
       type: json['type'] as String?,
       description: json['description'] as String?,
