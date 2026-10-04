@@ -45,13 +45,16 @@ void main() {
     expect(campaign.statusLabel, 'Черновик');
   });
 
-  test('FeedResponse skips unknown item kinds such as ads', () {
+  test('FeedResponse keeps ads as showable slots, not as posts', () {
     final response = FeedResponse.fromJson({
       'items': [
         {
           'kind': 'ad',
-          'campaign_id': 1,
+          'campaign_id': 1.0,
           'title': 'Реклама',
+          'cta_label': 'Открыть',
+          'destination_type': 'url',
+          'destination_url': 'https://haneat.app',
         },
         {
           'id': 42,
@@ -69,5 +72,9 @@ void main() {
     expect(response.items, hasLength(1));
     expect(response.items.single.id, 42);
     expect(response.items.single.title, 'Обычный пост');
+    expect(response.ads, hasLength(1));
+    expect(response.ads.single.item.campaignId, 1);
+    expect(response.ads.single.item.title, 'Реклама');
+    expect(response.ads.single.insertBeforePostIndex, 0);
   });
 }

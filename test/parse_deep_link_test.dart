@@ -2521,4 +2521,28 @@ void main() {
     expect(shortcutPathAlias('/shorts'), isNull);
     expect(shortcutPathAlias('/clips'), isNull);
   });
+
+  test('leftover ad publish hashes open the campaign editor or ads hub', () {
+    expect(shortcutPathAlias('/publish-ad'), AdsCampaignEditorRoute.path);
+    expect(shortcutPathAlias('/place-ad'), AdsCampaignEditorRoute.path);
+    expect(shortcutPathAlias('/buy-ad'), AdsCampaignEditorRoute.path);
+    expect(shortcutPathAlias('/new-campaign'), AdsCampaignEditorRoute.path);
+    expect(shortcutPathAlias('/promote-ad'), AdsCampaignEditorRoute.path);
+    expect(shortcutPathAlias('/show-ad'), AdsHubRoute.path);
+    expect(shortcutPathAlias('/my-ads'), AdsHubRoute.path);
+    expect(shortcutPathAlias('/ad-list'), AdsHubRoute.path);
+    expect(shortcutPathAlias('/publishad'), AdsCampaignEditorRoute.path);
+    expect(shortcutPathAlias('/myads'), AdsHubRoute.path);
+    expect(leftoverPathAlias('/go/publish-ad'), AdsCampaignEditorRoute.path);
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/publish-ad'),
+      AdsCampaignEditorRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/my-ads'),
+      AdsHubRoute.path,
+    );
+    expect(shortcutPathAlias('/new-ad'), AdsCampaignEditorRoute.path);
+    expect(shortcutPathAlias('/reels'), isNull);
+  });
 }
