@@ -14,7 +14,7 @@ bool isMeaningfulPostTitle(String? value) {
 
 String? resolvePostDisplayTitle({
   String? title,
-  Map<String, dynamic>? body,
+  Map? body,
 }) {
   final candidates = <String?>[
     title?.trim(),
@@ -23,7 +23,7 @@ String? resolvePostDisplayTitle({
     body?['name']?.toString().trim(),
   ];
   final nested = body?['recipe'];
-  if (nested is Map<String, dynamic>) {
+  if (nested is Map) {
     candidates.add(nested['title']?.toString().trim());
   }
   for (final c in candidates) {
@@ -59,14 +59,14 @@ String? resolveFeedCaptionText({
   return null;
 }
 
-String? extractLegacyBodyImageUrl(Map<String, dynamic>? body) {
+String? extractLegacyBodyImageUrl(Map? body) {
   if (body == null) return null;
   for (final key in ['image', 'source_image']) {
     final v = body[key]?.toString().trim();
     if (v != null && v.isNotEmpty) return v;
   }
   final nested = body['recipe'];
-  if (nested is Map<String, dynamic>) {
+  if (nested is Map) {
     for (final key in ['image', 'source_image']) {
       final v = nested[key]?.toString().trim();
       if (v != null && v.isNotEmpty) return v;

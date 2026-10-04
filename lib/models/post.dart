@@ -137,7 +137,9 @@ class Post {
   String? get linkPreview => body?['link_preview'] as String?;
   Map<String, dynamic>? get linkMeta {
     final raw = body?['link_meta'];
-    return raw is Map<String, dynamic> ? raw : null;
+    if (raw is Map<String, dynamic>) return raw;
+    if (raw is Map) return Map<String, dynamic>.from(raw);
+    return null;
   }
 
   String? get linkTitle => linkMeta?['title'] as String? ?? linkPreview;
@@ -147,9 +149,9 @@ class Post {
 
   PollData? get poll {
     final pollData = body?['poll'];
-    if (pollData is Map<String, dynamic>) {
+    if (pollData is Map) {
       try {
-        return PollData.fromJson(pollData);
+        return PollData.fromJson(Map<String, dynamic>.from(pollData));
       } catch (e) {
         return null;
       }
@@ -158,9 +160,9 @@ class Post {
   }
   Post? get repostedPost {
     final reposted = body?['reposted_post'];
-    if (reposted is Map<String, dynamic>) {
+    if (reposted is Map) {
       try {
-        return Post.fromJson(reposted);
+        return Post.fromJson(Map<String, dynamic>.from(reposted));
       } catch (e) {
         return null;
       }
@@ -265,14 +267,19 @@ class PollData {
   }
 
   factory PollData.fromJson(Map<String, dynamic> json) {
-    final options = (json['options'] as List<dynamic>?)
-            ?.map((e) => PollOption.fromJson(e as Map<String, dynamic>))
-            .toList() ??
-        [];
+    final options = [
+      for (final e in (json['options'] as List<dynamic>? ?? const []))
+        if (e is Map) PollOption.fromJson(Map<String, dynamic>.from(e)),
+    ];
+    final voted = json['voted_option_index'];
     return PollData(
       question: json['question'] as String? ?? '',
       options: options,
-      votedOptionIndex: json['voted_option_index'] as int?,
+      votedOptionIndex: voted is int
+          ? voted
+          : voted is num
+              ? voted.toInt()
+              : int.tryParse('$voted'),
       isClosed: json['is_closed'] as bool? ?? false,
     );
   }
@@ -295,9 +302,19 @@ class PollOption {
   factory PollOption.fromJson(Map<String, dynamic> json) {
     return PollOption(
       text: json['text'] as String? ?? '',
-      votes: json['votes'] as int? ?? 0,
-      percentage: (json['percentage'] as num?)?.toDouble() ?? 0.0,
-      index: json['index'] as int? ?? 0,
+      votes: json['votes'] is int
+          ? json['votes'] as int
+          : json['votes'] is num
+              ? (json['votes'] as num).toInt()
+              : int.tryParse('${json['votes'] ?? ''}') ?? 0,
+      percentage: (json['percentage'] as num?)?.toDouble() ??
+          double.tryParse('${json['percentage'] ?? ''}') ??
+          0.0,
+      index: json['index'] is int
+          ? json['index'] as int
+          : json['index'] is num
+              ? (json['index'] as num).toInt()
+              : int.tryParse('${json['index'] ?? ''}') ?? 0,
     );
   }
 }
