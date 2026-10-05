@@ -5355,6 +5355,30 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/myads':
     case '/adlist':
       return '${AdsHubRoute.path}$q';
+    case '/add-members':
+    case '/invite-group':
+    case '/new-supergroup':
+    case '/create-supergroup':
+    case '/add-to-group':
+    case '/assemble-group':
+    case '/make-group':
+    case '/start-group':
+      return '${ChatCreateGroupRoute.path}$q';
+    case '/group-settings':
+    case '/group-members':
+      return '${ChatsRoute.path}$q';
+    case '/addmembers':
+    case '/invitegroup':
+    case '/newsupergroup':
+    case '/createsupergroup':
+    case '/addtogroup':
+    case '/assemblegroup':
+    case '/makegroup':
+    case '/startgroup':
+      return '${ChatCreateGroupRoute.path}$q';
+    case '/groupsettings':
+    case '/groupmembers':
+      return '${ChatsRoute.path}$q';
     default:
       return null;
   }

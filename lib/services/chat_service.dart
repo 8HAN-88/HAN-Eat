@@ -14,6 +14,19 @@ import 'auth_service.dart';
 import 'chat_cache_service.dart';
 import 'server_config.dart';
 
+Map<String, dynamic>? _chatJsonMap(Object? raw) {
+  if (raw is Map<String, dynamic>) return raw;
+  if (raw is Map) return Map<String, dynamic>.from(raw);
+  return null;
+}
+
+int _chatJsonInt(Object? raw, [int fallback = 0]) {
+  if (raw is int) return raw;
+  if (raw is num) return raw.toInt();
+  if (raw is String) return int.tryParse(raw.trim()) ?? fallback;
+  return fallback;
+}
+
 class ChatService {
   static String get _base => ServerConfig.apiBaseUrl;
   static const _requestTimeout = Duration(seconds: 12);
@@ -201,17 +214,7 @@ class ChatService {
     );
     final response = await _get(uri);
     _ensureOk(response, 'Не удалось загрузить чаты');
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final items = data['items'] as List<dynamic>? ?? [];
-    final out = <ChatConversation>[];
-    for (final raw in items) {
-      if (raw is! Map<String, dynamic>) continue;
-      try {
-        out.add(ChatConversation.fromJson(raw));
-      } catch (_) {
-        // Пропускаем битые записи — не роняем весь список.
-      }
-    }
+    final out = parseConversationList(jsonDecode(response.body));
     unawaited(ChatCacheService.saveConversations(
       out.where((c) => !c.isSaved).toList(growable: false),
     ));
@@ -223,9 +226,7 @@ class ChatService {
     final uri = Uri.parse('$_base/chats/saved');
     final response = await _get(uri);
     _ensureOk(response, 'Не удалось открыть избранное');
-    return ChatConversation.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return parseConversation(jsonDecode(response.body));
   }
 
   static Future<void> pingPresence() async {
@@ -246,9 +247,7 @@ class ChatService {
     final uri = Uri.parse('$_base/chats/$conversationId');
     final response = await _get(uri);
     _ensureOk(response, 'Не удалось загрузить чат');
-    return ChatConversation.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return parseConversation(jsonDecode(response.body));
   }
 
   static Future<ChatConversation> createGroupChat({
@@ -264,24 +263,172 @@ class ChatService {
       }),
     );
     _ensureOk(response, 'Не удалось создать группу');
-    return ChatConversation.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return parseConversation(jsonDecode(response.body));
+  }
+
+  static ChatConversation parseConversation(Object? raw) {
+    final map = _chatJsonMap(raw);
+    if (map == null) {
+      throw const FormatException('ChatConversation: invalid payload');
+    }
+    return ChatConversation.fromJson(map);
+  }
+
+  static List<ChatConversation> parseConversationList(Object? raw) {
+    Object? items = raw;
+    if (raw is Map) {
+      items = raw['items'] ?? raw['chats'] ?? raw['conversations'];
+    }
+    if (items is! List) return const [];
+    final out = <ChatConversation>[];
+    for (final item in items) {
+      if (item is! Map) continue;
+      try {
+        final conv = ChatConversation.fromJson(Map<String, dynamic>.from(item));
+        if (conv.id > 0) out.add(conv);
+      } catch (_) {}
+    }
+    return out;
+  }
+
+  static List<ChatUserBrief> parseMemberList(Object? raw) {
+    Object? items = raw;
+    if (raw is Map) {
+      items = raw['items'] ?? raw['members'];
+    }
+    if (items is! List) return const [];
+    final out = <ChatUserBrief>[];
+    for (final item in items) {
+      if (item is! Map) continue;
+      try {
+        final user = ChatUserBrief.fromJson(Map<String, dynamic>.from(item));
+        if (user.id > 0) out.add(user);
+      } catch (_) {}
+    }
+    return out;
+  }
+
+  static List<ChatContact> parseContactList(Object? raw) {
+    Object? items = raw;
+    if (raw is Map) {
+      items = raw['items'] ?? raw['contacts'];
+    }
+    if (items is! List) return const [];
+    final out = <ChatContact>[];
+    for (final item in items) {
+      if (item is! Map) continue;
+      try {
+        final contact = ChatContact.fromJson(Map<String, dynamic>.from(item));
+        if (contact.id > 0 && contact.user.id > 0) out.add(contact);
+      } catch (_) {}
+    }
+    return out;
+  }
+
+  static ChatJoinByInviteResult parseJoinByInvite(Object? raw) {
+    final map = _chatJsonMap(raw);
+    if (map == null) {
+      throw const FormatException('ChatJoinByInviteResult: invalid payload');
+    }
+    return ChatJoinByInviteResult.fromJson(map);
+  }
+
+  static int parseAddedCount(Object? raw) {
+    if (raw is Map) {
+      return _chatJsonInt(raw['added'] ?? raw['count']);
+    }
+    return _chatJsonInt(raw);
+  }
+
+  static ChatGroupInviteLink parseInviteLink(Object? raw) {
+    final map = _chatJsonMap(raw);
+    if (map == null) {
+      throw const FormatException('ChatGroupInviteLink: invalid payload');
+    }
+    return ChatGroupInviteLink.fromJson(map);
+  }
+
+  static List<ChatGroupInviteLink> parseInviteLinkList(Object? raw) {
+    Object? items = raw;
+    if (raw is Map) items = raw['items'] ?? raw['links'];
+    if (items is! List) return const [];
+    final out = <ChatGroupInviteLink>[];
+    for (final item in items) {
+      if (item is! Map) continue;
+      try {
+        final link = ChatGroupInviteLink.fromJson(Map<String, dynamic>.from(item));
+        if (link.token.isNotEmpty) out.add(link);
+      } catch (_) {}
+    }
+    return out;
+  }
+
+  static List<ChatGroupBanEntry> parseGroupBanList(Object? raw) {
+    Object? items = raw;
+    if (raw is Map) items = raw['items'] ?? raw['bans'];
+    if (items is! List) return const [];
+    final out = <ChatGroupBanEntry>[];
+    for (final item in items) {
+      if (item is! Map) continue;
+      try {
+        out.add(ChatGroupBanEntry.fromJson(Map<String, dynamic>.from(item)));
+      } catch (_) {}
+    }
+    return out;
+  }
+
+  static List<ChatGroupJoinRequest> parseJoinRequestList(Object? raw) {
+    Object? items = raw;
+    if (raw is Map) items = raw['items'] ?? raw['requests'];
+    if (items is! List) return const [];
+    final out = <ChatGroupJoinRequest>[];
+    for (final item in items) {
+      if (item is! Map) continue;
+      try {
+        final row = ChatGroupJoinRequest.fromJson(Map<String, dynamic>.from(item));
+        if (row.id > 0) out.add(row);
+      } catch (_) {}
+    }
+    return out;
+  }
+
+  static List<ChatJoinRequestsInboxItem> parseJoinRequestInbox(Object? raw) {
+    Object? items = raw;
+    if (raw is Map) items = raw['items'] ?? raw['inbox'];
+    if (items is! List) return const [];
+    final out = <ChatJoinRequestsInboxItem>[];
+    for (final item in items) {
+      if (item is! Map) continue;
+      try {
+        final row =
+            ChatJoinRequestsInboxItem.fromJson(Map<String, dynamic>.from(item));
+        if (row.id > 0 && row.conversation.id > 0) out.add(row);
+      } catch (_) {}
+    }
+    return out;
+  }
+
+  static List<ChatGroupModerationLogItem> parseModerationLog(Object? raw) {
+    Object? items = raw;
+    if (raw is Map) items = raw['items'] ?? raw['log'];
+    if (items is! List) return const [];
+    final out = <ChatGroupModerationLogItem>[];
+    for (final item in items) {
+      if (item is! Map) continue;
+      try {
+        final row =
+            ChatGroupModerationLogItem.fromJson(Map<String, dynamic>.from(item));
+        if (row.id > 0) out.add(row);
+      } catch (_) {}
+    }
+    return out;
   }
 
   static Future<List<ChatUserBrief>> listMembers(int conversationId) async {
     final uri = Uri.parse('$_base/chats/$conversationId/members');
     final response = await _get(uri);
     _ensureOk(response, 'Не удалось загрузить участников');
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final items = data['items'] as List<dynamic>? ?? [];
-    final out = <ChatUserBrief>[];
-    for (final raw in items) {
-      if (raw is Map<String, dynamic>) {
-        out.add(ChatUserBrief.fromJson(raw));
-      }
-    }
-    return out;
+    return parseMemberList(jsonDecode(response.body));
   }
 
   static Future<void> setArchived({
@@ -303,9 +450,7 @@ class ChatService {
       body: jsonEncode({'user_id': userId}),
     );
     _ensureOk(response, 'Не удалось открыть чат');
-    return ChatConversation.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return parseConversation(jsonDecode(response.body));
   }
 
   static Future<
@@ -1448,16 +1593,7 @@ class ChatService {
     final uri = Uri.parse('$_base/contacts');
     final response = await _get(uri);
     _ensureOk(response, 'Не удалось загрузить контакты');
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final items = data['items'] as List<dynamic>? ?? [];
-    final out = <ChatContact>[];
-    for (final raw in items) {
-      if (raw is! Map<String, dynamic>) continue;
-      try {
-        out.add(ChatContact.fromJson(raw));
-      } catch (_) {}
-    }
-    return out;
+    return parseContactList(jsonDecode(response.body));
   }
 
   static Future<void> addContact(int userId) async {
@@ -1555,9 +1691,7 @@ class ChatService {
       body: jsonEncode({'title': title}),
     );
     _ensureOk(response, 'Не удалось переименовать группу');
-    return ChatConversation.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return parseConversation(jsonDecode(response.body));
   }
 
   static Future<ChatConversation> updateGroupAvatar({
@@ -1570,9 +1704,7 @@ class ChatService {
       body: jsonEncode({'avatar_url': avatarUrl}),
     );
     _ensureOk(response, 'Не удалось обновить фото группы');
-    return ChatConversation.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return parseConversation(jsonDecode(response.body));
   }
 
   static Future<ChatConversation> setGroupOnlyAdminsCanPost({
@@ -1585,9 +1717,7 @@ class ChatService {
       body: jsonEncode({'only_admins_can_post': onlyAdminsCanPost}),
     );
     _ensureOk(response, 'Не удалось обновить права отправки');
-    return ChatConversation.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return parseConversation(jsonDecode(response.body));
   }
 
   static Future<ChatConversation> setGroupJoinByRequestEnabled({
@@ -1600,9 +1730,7 @@ class ChatService {
       body: jsonEncode({'join_by_request_enabled': enabled}),
     );
     _ensureOk(response, 'Не удалось обновить режим вступления');
-    return ChatConversation.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return parseConversation(jsonDecode(response.body));
   }
 
   static Future<ChatConversation> setGroupProtectContent({
@@ -1615,9 +1743,7 @@ class ChatService {
       body: jsonEncode({'protect_content': enabled}),
     );
     _ensureOk(response, 'Не удалось обновить защиту контента');
-    return ChatConversation.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return parseConversation(jsonDecode(response.body));
   }
 
   static Future<ChatConversation> setGroupIsForum({
@@ -1630,9 +1756,7 @@ class ChatService {
       body: jsonEncode({'is_forum': enabled}),
     );
     _ensureOk(response, 'Не удалось обновить режим тем');
-    return ChatConversation.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return parseConversation(jsonDecode(response.body));
   }
 
   static Future<List<ChatForumTopic>> listForumTopics({
@@ -1711,9 +1835,7 @@ class ChatService {
       body: jsonEncode({'auto_delete_seconds': seconds}),
     );
     _ensureOk(response, 'Не удалось обновить автоудаление');
-    return ChatConversation.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return parseConversation(jsonDecode(response.body));
   }
 
   static Future<ChatConversation> setGroupSlowModeSeconds({
@@ -1726,9 +1848,7 @@ class ChatService {
       body: jsonEncode({'slow_mode_seconds': seconds}),
     );
     _ensureOk(response, 'Не удалось обновить медленный режим');
-    return ChatConversation.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return parseConversation(jsonDecode(response.body));
   }
 
   static Future<ChatConversation> setGroupAntiFloodLimit({
@@ -1743,9 +1863,7 @@ class ChatService {
       }),
     );
     _ensureOk(response, 'Не удалось обновить антифлуд лимит');
-    return ChatConversation.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return parseConversation(jsonDecode(response.body));
   }
 
   static Future<int> addGroupMembers({
@@ -1758,8 +1876,7 @@ class ChatService {
       body: jsonEncode({'user_ids': userIds}),
     );
     _ensureOk(response, 'Не удалось добавить участников');
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    return data['added'] as int? ?? 0;
+    return parseAddedCount(jsonDecode(response.body));
   }
 
   static Future<void> removeGroupMember({
@@ -1871,15 +1988,7 @@ class ChatService {
     );
     final response = await _get(uri);
     _ensureOk(response, 'Не удалось загрузить бан-лист');
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final items = data['items'] as List<dynamic>? ?? [];
-    final out = <ChatGroupBanEntry>[];
-    for (final raw in items) {
-      if (raw is Map<String, dynamic>) {
-        out.add(ChatGroupBanEntry.fromJson(raw));
-      }
-    }
-    return out;
+    return parseGroupBanList(jsonDecode(response.body));
   }
 
   static Future<ChatGroupInviteLink> getGroupInviteLink(
@@ -1888,9 +1997,7 @@ class ChatService {
     final uri = Uri.parse('$_base/chats/$conversationId/invite-link');
     final response = await _get(uri);
     _ensureOk(response, 'Не удалось загрузить ссылку-приглашение');
-    return ChatGroupInviteLink.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return parseInviteLink(jsonDecode(response.body));
   }
 
   static Future<ChatGroupInviteLink> rotateGroupInviteLink(
@@ -1899,9 +2006,7 @@ class ChatService {
     final uri = Uri.parse('$_base/chats/$conversationId/invite-link/rotate');
     final response = await _post(uri);
     _ensureOk(response, 'Не удалось обновить ссылку-приглашение');
-    return ChatGroupInviteLink.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return parseInviteLink(jsonDecode(response.body));
   }
 
   static Future<ChatJoinByInviteResult> joinGroupByInviteToken(
@@ -1911,9 +2016,7 @@ class ChatService {
     final uri = Uri.parse('$_base/chats/join/$clean');
     final response = await _post(uri);
     _ensureOk(response, 'Не удалось вступить в группу');
-    return ChatJoinByInviteResult.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return parseJoinByInvite(jsonDecode(response.body));
   }
 
   static Future<List<ChatGroupInviteLink>> listGroupInviteLinks(
@@ -1929,15 +2032,7 @@ class ChatService {
     );
     final response = await _get(uri);
     _ensureOk(response, 'Не удалось загрузить ссылки-приглашения');
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final items = data['items'] as List<dynamic>? ?? [];
-    final out = <ChatGroupInviteLink>[];
-    for (final raw in items) {
-      if (raw is Map<String, dynamic>) {
-        out.add(ChatGroupInviteLink.fromJson(raw));
-      }
-    }
-    return out;
+    return parseInviteLinkList(jsonDecode(response.body));
   }
 
   static Future<ChatGroupInviteLink> createGroupInviteLink(
@@ -1954,9 +2049,7 @@ class ChatService {
       }),
     );
     _ensureOk(response, 'Не удалось создать ссылку-приглашение');
-    return ChatGroupInviteLink.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return parseInviteLink(jsonDecode(response.body));
   }
 
   static Future<void> revokeGroupInviteLink({
@@ -1982,15 +2075,7 @@ class ChatService {
     );
     final response = await _get(uri);
     _ensureOk(response, 'Не удалось загрузить заявки');
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final items = data['items'] as List<dynamic>? ?? [];
-    final out = <ChatGroupJoinRequest>[];
-    for (final raw in items) {
-      if (raw is Map<String, dynamic>) {
-        out.add(ChatGroupJoinRequest.fromJson(raw));
-      }
-    }
-    return out;
+    return parseJoinRequestList(jsonDecode(response.body));
   }
 
   static Future<void> reviewGroupJoinRequest({
@@ -2015,15 +2100,7 @@ class ChatService {
     );
     final response = await _get(uri);
     _ensureOk(response, 'Не удалось загрузить инбокс заявок');
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final items = data['items'] as List<dynamic>? ?? [];
-    final out = <ChatJoinRequestsInboxItem>[];
-    for (final raw in items) {
-      if (raw is Map<String, dynamic>) {
-        out.add(ChatJoinRequestsInboxItem.fromJson(raw));
-      }
-    }
-    return out;
+    return parseJoinRequestInbox(jsonDecode(response.body));
   }
 
   static Future<List<ChatGroupModerationLogItem>> listGroupModerationLog(
@@ -2040,15 +2117,7 @@ class ChatService {
     );
     final response = await _get(uri);
     _ensureOk(response, 'Не удалось загрузить историю модерации');
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final items = data['items'] as List<dynamic>? ?? [];
-    final out = <ChatGroupModerationLogItem>[];
-    for (final raw in items) {
-      if (raw is Map<String, dynamic>) {
-        out.add(ChatGroupModerationLogItem.fromJson(raw));
-      }
-    }
-    return out;
+    return parseModerationLog(jsonDecode(response.body));
   }
 
   static Future<void> leaveGroup({required int conversationId}) async {

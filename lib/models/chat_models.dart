@@ -20,6 +20,12 @@ int _parseInt(dynamic v) {
   return 0;
 }
 
+Map<String, dynamic>? _jsonMap(Object? raw) {
+  if (raw is Map<String, dynamic>) return raw;
+  if (raw is Map) return Map<String, dynamic>.from(raw);
+  return null;
+}
+
 DateTime _parseDate(dynamic v) {
   if (v is String && v.isNotEmpty) {
     return DateTime.tryParse(v)?.toLocal() ?? DateTime.now();
@@ -84,35 +90,36 @@ class ChatUserBrief {
     return 'Пользователь';
   }
 
-  factory ChatUserBrief.fromJson(Map<String, dynamic> json) {
+  factory ChatUserBrief.fromJson(Map json) {
+    final data = Map<String, dynamic>.from(json);
     DateTime? lastSeen;
-    final raw = json['last_seen_at'];
+    final raw = data['last_seen_at'];
     if (raw is String && raw.isNotEmpty) {
       lastSeen = DateTime.tryParse(raw);
     }
     return ChatUserBrief(
-      id: _parseInt(json['id']),
-      name: json['name'] as String?,
-      username: json['username'] as String?,
-      avatarUrl: json['avatar_url'] as String?,
+      id: _parseInt(data['id']),
+      name: data['name'] as String?,
+      username: data['username'] as String?,
+      avatarUrl: data['avatar_url'] as String?,
       lastSeenAt: lastSeen,
-      isBot: json['is_bot'] as bool? ?? false,
-      isGroupAdmin: json['is_group_admin'] as bool? ?? false,
-      isGroupCreator: json['is_group_creator'] as bool? ?? false,
-      canManageMembers: json['can_manage_members'] as bool? ?? false,
+      isBot: data['is_bot'] as bool? ?? false,
+      isGroupAdmin: data['is_group_admin'] as bool? ?? false,
+      isGroupCreator: data['is_group_creator'] as bool? ?? false,
+      canManageMembers: data['can_manage_members'] as bool? ?? false,
       canManagePostingPermissions:
-          json['can_manage_posting_permissions'] as bool? ?? false,
-      canChangeInfo: json['can_change_info'] as bool? ?? false,
-      canDeleteMessages: json['can_delete_messages'] as bool? ?? false,
-      canPinMessages: json['can_pin_messages'] as bool? ?? false,
-      canInviteUsers: json['can_invite_users'] as bool? ?? false,
-      canManageVideoChats: json['can_manage_video_chats'] as bool? ?? false,
-      sendRestricted: json['send_restricted'] as bool? ?? false,
-      sendRestrictedUntil: json['send_restricted_until'] is String
-          ? DateTime.tryParse(json['send_restricted_until'] as String)
+          data['can_manage_posting_permissions'] as bool? ?? false,
+      canChangeInfo: data['can_change_info'] as bool? ?? false,
+      canDeleteMessages: data['can_delete_messages'] as bool? ?? false,
+      canPinMessages: data['can_pin_messages'] as bool? ?? false,
+      canInviteUsers: data['can_invite_users'] as bool? ?? false,
+      canManageVideoChats: data['can_manage_video_chats'] as bool? ?? false,
+      sendRestricted: data['send_restricted'] as bool? ?? false,
+      sendRestrictedUntil: data['send_restricted_until'] is String
+          ? DateTime.tryParse(data['send_restricted_until'] as String)
           : null,
-      sendRestrictionReason: json['send_restriction_reason'] as String?,
-      paidMessageStars: _parseInt(json['paid_message_stars']),
+      sendRestrictionReason: data['send_restriction_reason'] as String?,
+      paidMessageStars: _parseInt(data['paid_message_stars']),
     );
   }
 
@@ -681,95 +688,96 @@ class ChatConversation {
     return peer?.displayName ?? 'Чат';
   }
 
-  factory ChatConversation.fromJson(Map<String, dynamic> json) {
-    final convType = json['type'] as String? ?? 'direct';
+  factory ChatConversation.fromJson(Map json) {
+    final data = Map<String, dynamic>.from(json);
+    final convType = data['type'] as String? ?? 'direct';
     ChatUserBrief? peer;
-    final peerJson = json['peer'];
-    if (peerJson is Map<String, dynamic>) {
+    final peerJson = _jsonMap(data['peer']);
+    if (peerJson != null) {
       peer = ChatUserBrief.fromJson(peerJson);
     }
     if (peer == null && convType == 'direct') {
       throw FormatException('ChatConversation: missing peer');
     }
-    final previewRaw = json['members_preview'] as List<dynamic>? ?? [];
+    final previewRaw = data['members_preview'] as List<dynamic>? ?? [];
     final preview = <ChatUserBrief>[];
     for (final raw in previewRaw) {
-      if (raw is Map<String, dynamic>) {
-        try {
-          preview.add(ChatUserBrief.fromJson(raw));
-        } catch (_) {}
-      }
+      final member = _jsonMap(raw);
+      if (member == null) continue;
+      try {
+        preview.add(ChatUserBrief.fromJson(member));
+      } catch (_) {}
     }
     ChatMessage? lastMessage;
-    final lastRaw = json['last_message'];
-    if (lastRaw is Map<String, dynamic>) {
+    final lastRaw = _jsonMap(data['last_message']);
+    if (lastRaw != null) {
       try {
         lastMessage = ChatMessage.fromJson(lastRaw);
       } catch (_) {}
     }
     return ChatConversation(
-      id: _parseInt(json['id']),
+      id: _parseInt(data['id']),
       type: convType,
       peer: peer,
-      title: json['title'] as String?,
-      avatarUrl: json['avatar_url'] as String?,
-      memberCount: _parseInt(json['member_count']),
-      pendingJoinRequestsCount: _parseInt(json['pending_join_requests_count']),
+      title: data['title'] as String?,
+      avatarUrl: data['avatar_url'] as String?,
+      memberCount: _parseInt(data['member_count']),
+      pendingJoinRequestsCount: _parseInt(data['pending_join_requests_count']),
       membersPreview: preview,
       lastMessage: lastMessage,
-      unreadCount: _parseInt(json['unread_count']),
-      unreadMentionsCount: _parseInt(json['unread_mentions_count']),
-      unreadReactionsCount: _parseInt(json['unread_reactions_count']),
-      updatedAt: _parseDate(json['updated_at']),
-      pinned: json['pinned'] as bool? ?? false,
-      archived: json['archived'] as bool? ?? false,
-      muted: json['muted'] as bool? ?? false,
-      mutedUntil: json['muted_until'] is String
-          ? DateTime.tryParse(json['muted_until'] as String)
+      unreadCount: _parseInt(data['unread_count']),
+      unreadMentionsCount: _parseInt(data['unread_mentions_count']),
+      unreadReactionsCount: _parseInt(data['unread_reactions_count']),
+      updatedAt: _parseDate(data['updated_at']),
+      pinned: data['pinned'] as bool? ?? false,
+      archived: data['archived'] as bool? ?? false,
+      muted: data['muted'] as bool? ?? false,
+      mutedUntil: data['muted_until'] is String
+          ? DateTime.tryParse(data['muted_until'] as String)
           : null,
       notifyMode: () {
-        final raw = (json['notify_mode'] as String?)?.trim().toLowerCase();
+        final raw = (data['notify_mode'] as String?)?.trim().toLowerCase();
         if (raw == 'mentions' || raw == 'none' || raw == 'all') return raw!;
-        return (json['muted'] as bool? ?? false) ? 'mentions' : 'all';
+        return (data['muted'] as bool? ?? false) ? 'mentions' : 'all';
       }(),
-      wallpaperStyle: (json['wallpaper_style'] as String?)?.trim(),
+      wallpaperStyle: (data['wallpaper_style'] as String?)?.trim(),
       wallpaperUrl: () {
-        final raw = json['wallpaper_url'];
+        final raw = data['wallpaper_url'];
         if (raw is String) {
           final t = raw.trim();
           return t.isEmpty ? null : t;
         }
         return null;
       }(),
-      bubbleAccent: (json['bubble_accent'] as String?)?.trim(),
-      createdByUserId: json['created_by_user_id'] != null
-          ? _parseInt(json['created_by_user_id'])
+      bubbleAccent: (data['bubble_accent'] as String?)?.trim(),
+      createdByUserId: data['created_by_user_id'] != null
+          ? _parseInt(data['created_by_user_id'])
           : null,
-      onlyAdminsCanPost: json['only_admins_can_post'] as bool? ?? false,
-      joinByRequestEnabled: json['join_by_request_enabled'] as bool? ?? false,
-      slowModeSeconds: _parseInt(json['slow_mode_seconds']),
+      onlyAdminsCanPost: data['only_admins_can_post'] as bool? ?? false,
+      joinByRequestEnabled: data['join_by_request_enabled'] as bool? ?? false,
+      slowModeSeconds: _parseInt(data['slow_mode_seconds']),
       antiFloodMaxMessagesPerMinute:
-          _parseInt(json['anti_flood_max_messages_per_minute']),
-      protectContent: json['protect_content'] as bool? ?? false,
-      autoDeleteSeconds: _parseInt(json['auto_delete_seconds']),
-      isForum: json['is_forum'] as bool? ?? false,
-      amIGroupAdmin: json['am_i_group_admin'] as bool? ?? false,
-      amICanManageMembers: json['am_i_can_manage_members'] as bool? ?? false,
+          _parseInt(data['anti_flood_max_messages_per_minute']),
+      protectContent: data['protect_content'] as bool? ?? false,
+      autoDeleteSeconds: _parseInt(data['auto_delete_seconds']),
+      isForum: data['is_forum'] as bool? ?? false,
+      amIGroupAdmin: data['am_i_group_admin'] as bool? ?? false,
+      amICanManageMembers: data['am_i_can_manage_members'] as bool? ?? false,
       amICanManagePostingPermissions:
-          json['am_i_can_manage_posting_permissions'] as bool? ?? false,
-      amICanChangeInfo: json['am_i_can_change_info'] as bool? ?? false,
-      amICanDeleteMessages: json['am_i_can_delete_messages'] as bool? ?? false,
-      amICanPinMessages: json['am_i_can_pin_messages'] as bool? ?? false,
-      amICanInviteUsers: json['am_i_can_invite_users'] as bool? ?? false,
+          data['am_i_can_manage_posting_permissions'] as bool? ?? false,
+      amICanChangeInfo: data['am_i_can_change_info'] as bool? ?? false,
+      amICanDeleteMessages: data['am_i_can_delete_messages'] as bool? ?? false,
+      amICanPinMessages: data['am_i_can_pin_messages'] as bool? ?? false,
+      amICanInviteUsers: data['am_i_can_invite_users'] as bool? ?? false,
       amICanManageVideoChats:
-          json['am_i_can_manage_video_chats'] as bool? ?? false,
-      amISendRestricted: json['am_i_send_restricted'] as bool? ?? false,
-      amISendRestrictedUntil: json['am_i_send_restricted_until'] is String
-          ? DateTime.tryParse(json['am_i_send_restricted_until'] as String)
+          data['am_i_can_manage_video_chats'] as bool? ?? false,
+      amISendRestricted: data['am_i_send_restricted'] as bool? ?? false,
+      amISendRestrictedUntil: data['am_i_send_restricted_until'] is String
+          ? DateTime.tryParse(data['am_i_send_restricted_until'] as String)
           : null,
-      amISendRestrictionReason: json['am_i_send_restriction_reason'] as String?,
-      peerBlockedByMe: json['peer_blocked_by_me'] as bool? ?? false,
-      replyKeyboard: ChatReplyKeyboard.tryParse(json),
+      amISendRestrictionReason: data['am_i_send_restriction_reason'] as String?,
+      peerBlockedByMe: data['peer_blocked_by_me'] as bool? ?? false,
+      replyKeyboard: ChatReplyKeyboard.tryParse(data),
     );
   }
 
@@ -896,9 +904,10 @@ class ChatContact {
   final ChatUserBrief user;
   final DateTime createdAt;
 
-  factory ChatContact.fromJson(Map<String, dynamic> json) {
-    final userJson = json['user'];
-    if (userJson is! Map<String, dynamic>) {
+  factory ChatContact.fromJson(Map json) {
+    json = Map<String, dynamic>.from(json);
+    final userJson = _jsonMap(json['user']);
+    if (userJson == null) {
       throw FormatException('ChatContact: missing user');
     }
     return ChatContact(
@@ -922,9 +931,10 @@ class ChatGroupBanEntry {
   final String? reason;
   final DateTime? bannedUntil;
 
-  factory ChatGroupBanEntry.fromJson(Map<String, dynamic> json) {
-    final userJson = json['user'];
-    if (userJson is! Map<String, dynamic>) {
+  factory ChatGroupBanEntry.fromJson(Map json) {
+    json = Map<String, dynamic>.from(json);
+    final userJson = _jsonMap(json['user']);
+    if (userJson == null) {
       throw FormatException('ChatGroupBanEntry: missing user');
     }
     return ChatGroupBanEntry(
@@ -963,7 +973,8 @@ class ChatGroupInviteLink {
 
   bool get isExhausted => maxUses != null && usesCount >= (maxUses ?? 0);
 
-  factory ChatGroupInviteLink.fromJson(Map<String, dynamic> json) {
+  factory ChatGroupInviteLink.fromJson(Map json) {
+    json = Map<String, dynamic>.from(json);
     return ChatGroupInviteLink(
       id: _parseInt(json['id']),
       token: json['token'] as String? ?? '',
@@ -990,15 +1001,12 @@ class ChatJoinByInviteResult {
   final String status; // joined | requested
   final ChatConversation? conversation;
 
-  factory ChatJoinByInviteResult.fromJson(Map<String, dynamic> json) {
-    final convRaw = json['conversation'];
-    ChatConversation? conv;
-    if (convRaw is Map<String, dynamic>) {
-      conv = ChatConversation.fromJson(convRaw);
-    }
+  factory ChatJoinByInviteResult.fromJson(Map json) {
+    json = Map<String, dynamic>.from(json);
+    final convRaw = _jsonMap(json['conversation']);
     return ChatJoinByInviteResult(
       status: json['status'] as String? ?? 'joined',
-      conversation: conv,
+      conversation: convRaw == null ? null : ChatConversation.fromJson(convRaw),
     );
   }
 }
@@ -1016,9 +1024,10 @@ class ChatGroupJoinRequest {
   final String status;
   final DateTime requestedAt;
 
-  factory ChatGroupJoinRequest.fromJson(Map<String, dynamic> json) {
-    final userRaw = json['user'];
-    if (userRaw is! Map<String, dynamic>) {
+  factory ChatGroupJoinRequest.fromJson(Map json) {
+    json = Map<String, dynamic>.from(json);
+    final userRaw = _jsonMap(json['user']);
+    if (userRaw == null) {
       throw FormatException('ChatGroupJoinRequest: missing user');
     }
     return ChatGroupJoinRequest(
@@ -1045,13 +1054,14 @@ class ChatJoinRequestsInboxItem {
   final String status;
   final DateTime requestedAt;
 
-  factory ChatJoinRequestsInboxItem.fromJson(Map<String, dynamic> json) {
-    final convRaw = json['conversation'];
-    final userRaw = json['user'];
-    if (convRaw is! Map<String, dynamic>) {
+  factory ChatJoinRequestsInboxItem.fromJson(Map json) {
+    json = Map<String, dynamic>.from(json);
+    final convRaw = _jsonMap(json['conversation']);
+    final userRaw = _jsonMap(json['user']);
+    if (convRaw == null) {
       throw FormatException('ChatJoinRequestsInboxItem: missing conversation');
     }
-    if (userRaw is! Map<String, dynamic>) {
+    if (userRaw == null) {
       throw FormatException('ChatJoinRequestsInboxItem: missing user');
     }
     return ChatJoinRequestsInboxItem(
@@ -1079,16 +1089,15 @@ class ChatGroupModerationLogItem {
   final DateTime createdAt;
   final ChatUserBrief? actor;
 
-  factory ChatGroupModerationLogItem.fromJson(Map<String, dynamic> json) {
-    final actorRaw = json['actor'];
+  factory ChatGroupModerationLogItem.fromJson(Map json) {
+    json = Map<String, dynamic>.from(json);
+    final actorRaw = _jsonMap(json['actor']);
     return ChatGroupModerationLogItem(
       id: _parseInt(json['id']),
       action: json['action'] as String? ?? 'other',
       text: json['text'] as String? ?? '',
       createdAt: _parseDate(json['created_at']),
-      actor: actorRaw is Map<String, dynamic>
-          ? ChatUserBrief.fromJson(actorRaw)
-          : null,
+      actor: actorRaw == null ? null : ChatUserBrief.fromJson(actorRaw),
     );
   }
 }
