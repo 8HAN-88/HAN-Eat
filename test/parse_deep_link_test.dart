@@ -2545,4 +2545,33 @@ void main() {
     expect(shortcutPathAlias('/new-ad'), AdsCampaignEditorRoute.path);
     expect(shortcutPathAlias('/reels'), isNull);
   });
+
+  test('leftover group hashes open create group or chats', () {
+    expect(shortcutPathAlias('/add-members'), ChatCreateGroupRoute.path);
+    expect(shortcutPathAlias('/invite-group'), ChatCreateGroupRoute.path);
+    expect(shortcutPathAlias('/new-supergroup'), ChatCreateGroupRoute.path);
+    expect(shortcutPathAlias('/create-supergroup'), ChatCreateGroupRoute.path);
+    expect(shortcutPathAlias('/add-to-group'), ChatCreateGroupRoute.path);
+    expect(shortcutPathAlias('/assemble-group'), ChatCreateGroupRoute.path);
+    expect(shortcutPathAlias('/make-group'), ChatCreateGroupRoute.path);
+    expect(shortcutPathAlias('/start-group'), ChatCreateGroupRoute.path);
+    expect(shortcutPathAlias('/group-settings'), ChatsRoute.path);
+    expect(shortcutPathAlias('/group-members'), ChatsRoute.path);
+    expect(shortcutPathAlias('/addmembers'), ChatCreateGroupRoute.path);
+    expect(shortcutPathAlias('/assemblegroup'), ChatCreateGroupRoute.path);
+    expect(shortcutPathAlias('/groupmembers'), ChatsRoute.path);
+    expect(leftoverPathAlias('/go/assemble-group'), ChatCreateGroupRoute.path);
+    expect(leftoverPathAlias('/go/add-members'), ChatCreateGroupRoute.path);
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/assemble-group'),
+      ChatCreateGroupRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/new-supergroup'),
+      ChatCreateGroupRoute.path,
+    );
+    expect(shortcutPathAlias('/new-group'), ChatCreateGroupRoute.path);
+    expect(shortcutPathAlias('/create-group'), ChatCreateGroupRoute.path);
+    expect(shortcutPathAlias('/reels'), isNull);
+  });
 }

@@ -20,6 +20,12 @@ int _parseInt(dynamic v) {
   return 0;
 }
 
+Map<String, dynamic>? _jsonMap(Object? raw) {
+  if (raw is Map<String, dynamic>) return raw;
+  if (raw is Map) return Map<String, dynamic>.from(raw);
+  return null;
+}
+
 DateTime _parseDate(dynamic v) {
   if (v is String && v.isNotEmpty) {
     return DateTime.tryParse(v)?.toLocal() ?? DateTime.now();
@@ -84,7 +90,8 @@ class ChatUserBrief {
     return 'Пользователь';
   }
 
-  factory ChatUserBrief.fromJson(Map<String, dynamic> json) {
+  factory ChatUserBrief.fromJson(Map json) {
+    json = Map<String, dynamic>.from(json);
     DateTime? lastSeen;
     final raw = json['last_seen_at'];
     if (raw is String && raw.isNotEmpty) {
@@ -681,11 +688,12 @@ class ChatConversation {
     return peer?.displayName ?? 'Чат';
   }
 
-  factory ChatConversation.fromJson(Map<String, dynamic> json) {
+  factory ChatConversation.fromJson(Map json) {
+    json = Map<String, dynamic>.from(json);
     final convType = json['type'] as String? ?? 'direct';
     ChatUserBrief? peer;
-    final peerJson = json['peer'];
-    if (peerJson is Map<String, dynamic>) {
+    final peerJson = _jsonMap(json['peer']);
+    if (peerJson != null) {
       peer = ChatUserBrief.fromJson(peerJson);
     }
     if (peer == null && convType == 'direct') {
@@ -694,15 +702,15 @@ class ChatConversation {
     final previewRaw = json['members_preview'] as List<dynamic>? ?? [];
     final preview = <ChatUserBrief>[];
     for (final raw in previewRaw) {
-      if (raw is Map<String, dynamic>) {
-        try {
-          preview.add(ChatUserBrief.fromJson(raw));
-        } catch (_) {}
-      }
+      final member = _jsonMap(raw);
+      if (member == null) continue;
+      try {
+        preview.add(ChatUserBrief.fromJson(member));
+      } catch (_) {}
     }
     ChatMessage? lastMessage;
-    final lastRaw = json['last_message'];
-    if (lastRaw is Map<String, dynamic>) {
+    final lastRaw = _jsonMap(json['last_message']);
+    if (lastRaw != null) {
       try {
         lastMessage = ChatMessage.fromJson(lastRaw);
       } catch (_) {}
@@ -896,9 +904,10 @@ class ChatContact {
   final ChatUserBrief user;
   final DateTime createdAt;
 
-  factory ChatContact.fromJson(Map<String, dynamic> json) {
-    final userJson = json['user'];
-    if (userJson is! Map<String, dynamic>) {
+  factory ChatContact.fromJson(Map json) {
+    json = Map<String, dynamic>.from(json);
+    final userJson = _jsonMap(json['user']);
+    if (userJson == null) {
       throw FormatException('ChatContact: missing user');
     }
     return ChatContact(
@@ -922,9 +931,10 @@ class ChatGroupBanEntry {
   final String? reason;
   final DateTime? bannedUntil;
 
-  factory ChatGroupBanEntry.fromJson(Map<String, dynamic> json) {
-    final userJson = json['user'];
-    if (userJson is! Map<String, dynamic>) {
+  factory ChatGroupBanEntry.fromJson(Map json) {
+    json = Map<String, dynamic>.from(json);
+    final userJson = _jsonMap(json['user']);
+    if (userJson == null) {
       throw FormatException('ChatGroupBanEntry: missing user');
     }
     return ChatGroupBanEntry(
@@ -963,7 +973,8 @@ class ChatGroupInviteLink {
 
   bool get isExhausted => maxUses != null && usesCount >= (maxUses ?? 0);
 
-  factory ChatGroupInviteLink.fromJson(Map<String, dynamic> json) {
+  factory ChatGroupInviteLink.fromJson(Map json) {
+    json = Map<String, dynamic>.from(json);
     return ChatGroupInviteLink(
       id: _parseInt(json['id']),
       token: json['token'] as String? ?? '',
@@ -990,15 +1001,12 @@ class ChatJoinByInviteResult {
   final String status; // joined | requested
   final ChatConversation? conversation;
 
-  factory ChatJoinByInviteResult.fromJson(Map<String, dynamic> json) {
-    final convRaw = json['conversation'];
-    ChatConversation? conv;
-    if (convRaw is Map<String, dynamic>) {
-      conv = ChatConversation.fromJson(convRaw);
-    }
+  factory ChatJoinByInviteResult.fromJson(Map json) {
+    json = Map<String, dynamic>.from(json);
+    final convRaw = _jsonMap(json['conversation']);
     return ChatJoinByInviteResult(
       status: json['status'] as String? ?? 'joined',
-      conversation: conv,
+      conversation: convRaw == null ? null : ChatConversation.fromJson(convRaw),
     );
   }
 }
@@ -1016,9 +1024,10 @@ class ChatGroupJoinRequest {
   final String status;
   final DateTime requestedAt;
 
-  factory ChatGroupJoinRequest.fromJson(Map<String, dynamic> json) {
-    final userRaw = json['user'];
-    if (userRaw is! Map<String, dynamic>) {
+  factory ChatGroupJoinRequest.fromJson(Map json) {
+    json = Map<String, dynamic>.from(json);
+    final userRaw = _jsonMap(json['user']);
+    if (userRaw == null) {
       throw FormatException('ChatGroupJoinRequest: missing user');
     }
     return ChatGroupJoinRequest(
@@ -1045,13 +1054,14 @@ class ChatJoinRequestsInboxItem {
   final String status;
   final DateTime requestedAt;
 
-  factory ChatJoinRequestsInboxItem.fromJson(Map<String, dynamic> json) {
-    final convRaw = json['conversation'];
-    final userRaw = json['user'];
-    if (convRaw is! Map<String, dynamic>) {
+  factory ChatJoinRequestsInboxItem.fromJson(Map json) {
+    json = Map<String, dynamic>.from(json);
+    final convRaw = _jsonMap(json['conversation']);
+    final userRaw = _jsonMap(json['user']);
+    if (convRaw == null) {
       throw FormatException('ChatJoinRequestsInboxItem: missing conversation');
     }
-    if (userRaw is! Map<String, dynamic>) {
+    if (userRaw == null) {
       throw FormatException('ChatJoinRequestsInboxItem: missing user');
     }
     return ChatJoinRequestsInboxItem(
@@ -1079,16 +1089,15 @@ class ChatGroupModerationLogItem {
   final DateTime createdAt;
   final ChatUserBrief? actor;
 
-  factory ChatGroupModerationLogItem.fromJson(Map<String, dynamic> json) {
-    final actorRaw = json['actor'];
+  factory ChatGroupModerationLogItem.fromJson(Map json) {
+    json = Map<String, dynamic>.from(json);
+    final actorRaw = _jsonMap(json['actor']);
     return ChatGroupModerationLogItem(
       id: _parseInt(json['id']),
       action: json['action'] as String? ?? 'other',
       text: json['text'] as String? ?? '',
       createdAt: _parseDate(json['created_at']),
-      actor: actorRaw is Map<String, dynamic>
-          ? ChatUserBrief.fromJson(actorRaw)
-          : null,
+      actor: actorRaw == null ? null : ChatUserBrief.fromJson(actorRaw),
     );
   }
 }
