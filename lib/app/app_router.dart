@@ -5379,6 +5379,26 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/groupsettings':
     case '/groupmembers':
       return '${ChatsRoute.path}$q';
+    case '/send-message':
+    case '/send-text':
+    case '/send-to-group':
+    case '/group-send':
+    case '/deliver-message':
+    case '/mark-delivered':
+    case '/read-receipt':
+    case '/message-sent':
+    case '/ack-message':
+      return '${ChatsRoute.path}$q';
+    case '/sendmessage':
+    case '/sendtext':
+    case '/sendtogroup':
+    case '/groupsend':
+    case '/delivermessage':
+    case '/markdelivered':
+    case '/readreceipt':
+    case '/messagesent':
+    case '/ackmessage':
+      return '${ChatsRoute.path}$q';
     default:
       return null;
   }

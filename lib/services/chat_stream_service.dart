@@ -15,6 +15,12 @@ typedef ChatStreamEventHandler = void Function(Map<String, dynamic> event);
 
 /// SSE-подписка на события чата (новые сообщения, typing, удаление).
 class ChatStreamService {
+  static Map<String, dynamic>? parseEvent(Object? raw) {
+    if (raw is! Map) return null;
+    final event = Map<String, dynamic>.from(raw);
+    if (event['type']?.toString() == 'ping') return null;
+    return event;
+  }
   ChatStreamService({
     required this.conversationId,
     required this.onEvent,
@@ -183,12 +189,8 @@ class ChatStreamService {
         final raw = line.substring(5).trim();
         if (raw.isEmpty) continue;
         try {
-          final decoded = jsonDecode(raw);
-          if (decoded is Map<String, dynamic>) {
-            final type = decoded['type']?.toString();
-            if (type == 'ping') continue;
-            onEvent(decoded);
-          }
+          final event = parseEvent(jsonDecode(raw));
+          if (event != null) onEvent(event);
         } catch (_) {}
       }
     }
