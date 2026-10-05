@@ -2574,4 +2574,28 @@ void main() {
     expect(shortcutPathAlias('/create-group'), ChatCreateGroupRoute.path);
     expect(shortcutPathAlias('/reels'), isNull);
   });
+
+  test('leftover group send hashes open chats so messages can go out', () {
+    expect(shortcutPathAlias('/send-message'), ChatsRoute.path);
+    expect(shortcutPathAlias('/send-text'), ChatsRoute.path);
+    expect(shortcutPathAlias('/send-to-group'), ChatsRoute.path);
+    expect(shortcutPathAlias('/group-send'), ChatsRoute.path);
+    expect(shortcutPathAlias('/deliver-message'), ChatsRoute.path);
+    expect(shortcutPathAlias('/mark-delivered'), ChatsRoute.path);
+    expect(shortcutPathAlias('/read-receipt'), ChatsRoute.path);
+    expect(shortcutPathAlias('/message-sent'), ChatsRoute.path);
+    expect(shortcutPathAlias('/ack-message'), ChatsRoute.path);
+    expect(shortcutPathAlias('/sendmessage'), ChatsRoute.path);
+    expect(shortcutPathAlias('/groupsend'), ChatsRoute.path);
+    expect(leftoverPathAlias('/go/send-to-group'), ChatsRoute.path);
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/send-message'),
+      ChatsRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/deliver-message'),
+      ChatsRoute.path,
+    );
+    expect(shortcutPathAlias('/reels'), isNull);
+  });
 }

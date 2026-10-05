@@ -373,84 +373,85 @@ class ChatMessage {
     return int.tryParse(content.trim());
   }
 
-  factory ChatMessage.fromJson(Map<String, dynamic> json) {
+  factory ChatMessage.fromJson(Map json) {
+    final data = Map<String, dynamic>.from(json);
     DateTime? editedAt;
-    final editedRaw = json['edited_at'];
+    final editedRaw = data['edited_at'];
     if (editedRaw is String && editedRaw.isNotEmpty) {
       editedAt = DateTime.tryParse(editedRaw);
     }
-    final reactionsRaw = json['reactions'] as List<dynamic>? ?? [];
+    final reactionsRaw = data['reactions'] as List<dynamic>? ?? [];
     final reactions = <ChatReactionSummary>[];
     for (final raw in reactionsRaw) {
-      if (raw is Map<String, dynamic>) {
-        try {
-          reactions.add(ChatReactionSummary.fromJson(raw));
-        } catch (_) {}
-      }
+      final item = _jsonMap(raw);
+      if (item == null) continue;
+      try {
+        reactions.add(ChatReactionSummary.fromJson(item));
+      } catch (_) {}
     }
-    final keyboardRaw = json['inline_keyboard'] as List<dynamic>? ?? const [];
+    final keyboardRaw = data['inline_keyboard'] as List<dynamic>? ?? const [];
     final keyboard = <List<ChatInlineKeyboardButton>>[];
     for (final rowRaw in keyboardRaw) {
       if (rowRaw is! List) continue;
       final row = <ChatInlineKeyboardButton>[];
       for (final item in rowRaw) {
-        if (item is Map<String, dynamic>) {
-          row.add(ChatInlineKeyboardButton.fromJson(item));
-        }
+        final button = _jsonMap(item);
+        if (button == null) continue;
+        row.add(ChatInlineKeyboardButton.fromJson(button));
       }
       if (row.isNotEmpty) keyboard.add(row);
     }
     return ChatMessage(
-      id: _parseInt(json['id']),
-      conversationId: _parseInt(json['conversation_id']),
-      senderId: _parseInt(json['sender_id']),
-      senderName: json['sender_name'] as String?,
-      type: json['type'] as String? ?? 'text',
-      content: json['content'] as String? ?? '',
-      mediaUrl: json['media_url'] as String?,
-      replyToMessageId: json['reply_to_message_id'] != null
-          ? _parseInt(json['reply_to_message_id'])
+      id: _parseInt(data['id']),
+      conversationId: _parseInt(data['conversation_id']),
+      senderId: _parseInt(data['sender_id']),
+      senderName: data['sender_name'] as String?,
+      type: data['type'] as String? ?? 'text',
+      content: data['content'] as String? ?? '',
+      mediaUrl: data['media_url'] as String?,
+      replyToMessageId: data['reply_to_message_id'] != null
+          ? _parseInt(data['reply_to_message_id'])
           : null,
-      forwardFromUserId: json['forward_from_user_id'] != null
-          ? _parseInt(json['forward_from_user_id'])
+      forwardFromUserId: data['forward_from_user_id'] != null
+          ? _parseInt(data['forward_from_user_id'])
           : null,
-      forwardFromName: json['forward_from_name'] as String?,
-      forwardedFromMessageId: json['forwarded_from_message_id'] != null
-          ? _parseInt(json['forwarded_from_message_id'])
+      forwardFromName: data['forward_from_name'] as String?,
+      forwardedFromMessageId: data['forwarded_from_message_id'] != null
+          ? _parseInt(data['forwarded_from_message_id'])
           : null,
       forwardedFromConversationId:
-          json['forwarded_from_conversation_id'] != null
-              ? _parseInt(json['forwarded_from_conversation_id'])
+          data['forwarded_from_conversation_id'] != null
+              ? _parseInt(data['forwarded_from_conversation_id'])
               : null,
-      createdAt: _parseDate(json['created_at']),
+      createdAt: _parseDate(data['created_at']),
       editedAt: editedAt,
-      isMine: json['is_mine'] as bool? ?? false,
-      isDelivered: json['is_delivered'] as bool? ??
-          (json['is_read'] as bool? ?? false),
-      isRead: json['is_read'] as bool? ?? false,
-      readCount: _parseInt(json['read_count']),
+      isMine: data['is_mine'] as bool? ?? false,
+      isDelivered: data['is_delivered'] as bool? ??
+          (data['is_read'] as bool? ?? false),
+      isRead: data['is_read'] as bool? ?? false,
+      readCount: _parseInt(data['read_count']),
       disableWebpagePreview:
-          json['disable_webpage_preview'] as bool? ?? false,
-      mediaGroupId: (json['media_group_id'] as String?)?.trim().isEmpty == true
+          data['disable_webpage_preview'] as bool? ?? false,
+      mediaGroupId: (data['media_group_id'] as String?)?.trim().isEmpty == true
           ? null
-          : (json['media_group_id'] as String?)?.trim(),
-      hasSpoiler: json['has_spoiler'] as bool? ?? false,
-      isPaid: json['is_paid'] as bool? ?? false,
-      priceStars: _parseInt(json['price_stars']),
-      purchased: json['purchased'] as bool? ??
-          !(json['is_paid'] as bool? ?? false),
+          : (data['media_group_id'] as String?)?.trim(),
+      hasSpoiler: data['has_spoiler'] as bool? ?? false,
+      isPaid: data['is_paid'] as bool? ?? false,
+      priceStars: _parseInt(data['price_stars']),
+      purchased: data['purchased'] as bool? ??
+          !(data['is_paid'] as bool? ?? false),
       reactions: reactions,
       inlineKeyboard: keyboard,
-      replyKeyboard: ChatReplyKeyboard.tryParse(json),
-      effectId: (json['effect_id'] as String?)?.trim().isEmpty == true
+      replyKeyboard: ChatReplyKeyboard.tryParse(data),
+      effectId: (data['effect_id'] as String?)?.trim().isEmpty == true
           ? null
-          : (json['effect_id'] as String?)?.trim(),
-      topicId: json['topic_id'] != null ? _parseInt(json['topic_id']) : null,
-      isAnonymous: json['is_anonymous'] as bool? ?? false,
-      clientMessageId: (json['client_message_id'] as String?)?.trim().isEmpty ==
+          : (data['effect_id'] as String?)?.trim(),
+      topicId: data['topic_id'] != null ? _parseInt(data['topic_id']) : null,
+      isAnonymous: data['is_anonymous'] as bool? ?? false,
+      clientMessageId: (data['client_message_id'] as String?)?.trim().isEmpty ==
               true
           ? null
-          : (json['client_message_id'] as String?)?.trim(),
+          : (data['client_message_id'] as String?)?.trim(),
     );
   }
 

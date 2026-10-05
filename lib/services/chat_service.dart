@@ -27,6 +27,14 @@ int _chatJsonInt(Object? raw, [int fallback = 0]) {
   return fallback;
 }
 
+int? _chatJsonIntOrNull(Object? raw) {
+  if (raw == null) return null;
+  if (raw is int) return raw;
+  if (raw is num) return raw.toInt();
+  if (raw is String) return int.tryParse(raw.trim());
+  return null;
+}
+
 class ChatService {
   static String get _base => ServerConfig.apiBaseUrl;
   static const _requestTimeout = Duration(seconds: 12);
@@ -340,6 +348,79 @@ class ChatService {
     return _chatJsonInt(raw);
   }
 
+  static int? parseEventInt(Object? raw) => _chatJsonIntOrNull(raw);
+
+  static ChatMessage parseMessage(Object? raw) {
+    final map = _chatJsonMap(raw);
+    if (map == null) {
+      throw const FormatException('ChatMessage: invalid payload');
+    }
+    return ChatMessage.fromJson(map);
+  }
+
+  static List<ChatMessage> parseMessageList(Object? raw) {
+    Object? items = raw;
+    if (raw is Map) {
+      items = raw['items'] ?? raw['messages'];
+    }
+    if (items is! List) return const [];
+    final out = <ChatMessage>[];
+    for (final item in items) {
+      if (item is! Map) continue;
+      try {
+        final msg = ChatMessage.fromJson(Map<String, dynamic>.from(item));
+        if (msg.id > 0) out.add(msg);
+      } catch (_) {}
+    }
+    return out;
+  }
+
+  static ({
+    List<ChatMessage> items,
+    bool hasMore,
+    int? nextCursor,
+    ChatMessage? pinnedMessage,
+    List<ChatMessage> pinnedMessages,
+  }) parseMessagePage(Object? raw) {
+    final data = _chatJsonMap(raw) ?? const <String, dynamic>{};
+    final items = parseMessageList(data);
+    final pinnedMessages = <ChatMessage>[];
+    final pinnedListRaw = data['pinned_messages'];
+    if (pinnedListRaw is List) {
+      for (final rawItem in pinnedListRaw) {
+        if (rawItem is! Map) continue;
+        try {
+          final msg = ChatMessage.fromJson(Map<String, dynamic>.from(rawItem));
+          if (msg.id > 0) pinnedMessages.add(msg);
+        } catch (_) {}
+      }
+    }
+    ChatMessage? pinnedMessage =
+        pinnedMessages.isNotEmpty ? pinnedMessages.first : null;
+    if (pinnedMessage == null) {
+      final pinnedRaw = _chatJsonMap(data['pinned_message']);
+      if (pinnedRaw != null) {
+        try {
+          pinnedMessage = ChatMessage.fromJson(pinnedRaw);
+          if (pinnedMessage.id > 0) {
+            pinnedMessages.add(pinnedMessage);
+          } else {
+            pinnedMessage = null;
+          }
+        } catch (_) {
+          pinnedMessage = null;
+        }
+      }
+    }
+    return (
+      items: items,
+      hasMore: data['has_more'] == true,
+      nextCursor: _chatJsonIntOrNull(data['next_cursor']),
+      pinnedMessage: pinnedMessage,
+      pinnedMessages: pinnedMessages,
+    );
+  }
+
   static ChatGroupInviteLink parseInviteLink(Object? raw) {
     final map = _chatJsonMap(raw);
     if (map == null) {
@@ -475,40 +556,7 @@ class ChatService {
     );
     final response = await _get(uri);
     _ensureOk(response, 'Не удалось загрузить сообщения');
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final items = (data['items'] as List<dynamic>? ?? [])
-        .map((e) => ChatMessage.fromJson(e as Map<String, dynamic>))
-        .toList();
-    final pinnedMessages = <ChatMessage>[];
-    final pinnedListRaw = data['pinned_messages'];
-    if (pinnedListRaw is List) {
-      for (final raw in pinnedListRaw) {
-        if (raw is Map<String, dynamic>) {
-          try {
-            pinnedMessages.add(ChatMessage.fromJson(raw));
-          } catch (_) {}
-        }
-      }
-    }
-    ChatMessage? pinnedMessage;
-    if (pinnedMessages.isNotEmpty) {
-      pinnedMessage = pinnedMessages.first;
-    } else {
-      final pinnedRaw = data['pinned_message'];
-      if (pinnedRaw is Map<String, dynamic>) {
-        try {
-          pinnedMessage = ChatMessage.fromJson(pinnedRaw);
-          pinnedMessages.add(pinnedMessage);
-        } catch (_) {}
-      }
-    }
-    return (
-      items: items,
-      hasMore: data['has_more'] as bool? ?? false,
-      nextCursor: data['next_cursor'] as int?,
-      pinnedMessage: pinnedMessage,
-      pinnedMessages: pinnedMessages,
-    );
+    return parseMessagePage(jsonDecode(response.body));
   }
 
   /// Returns conversationId → draft from cloud.
@@ -581,10 +629,7 @@ class ChatService {
     );
     final response = await _get(uri);
     _ensureOk(response, 'Не удалось обновить сообщения');
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    return (data['items'] as List<dynamic>? ?? [])
-        .map((e) => ChatMessage.fromJson(e as Map<String, dynamic>))
-        .toList();
+    return parseMessageList(jsonDecode(response.body));
   }
 
   static Future<bool> checkServerReachable() async {
@@ -688,9 +733,7 @@ class ChatService {
       body: jsonEncode({'content': content}),
     );
     _ensureOk(response, 'Не удалось изменить сообщение');
-    return ChatMessage.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return parseMessage(jsonDecode(response.body));
   }
 
   static Future<ChatMessageEditHistory> listMessageEdits({
@@ -814,14 +857,14 @@ class ChatService {
       _parseReactions(raw);
 
   static List<ChatReactionSummary> _parseReactions(dynamic raw) {
-    if (raw is! List<dynamic>) return const [];
+    if (raw is! List) return const [];
     final out = <ChatReactionSummary>[];
     for (final item in raw) {
-      if (item is Map<String, dynamic>) {
-        try {
-          out.add(ChatReactionSummary.fromJson(item));
-        } catch (_) {}
-      }
+      final map = _chatJsonMap(item);
+      if (map == null) continue;
+      try {
+        out.add(ChatReactionSummary.fromJson(map));
+      } catch (_) {}
     }
     return out;
   }
@@ -897,9 +940,7 @@ class ChatService {
       }),
     );
     _ensureOk(response, 'Не удалось начать трансляцию геопозиции');
-    return ChatMessage.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return parseMessage(jsonDecode(response.body));
   }
 
   static Future<ChatMessage> updateLiveLocation({
@@ -919,9 +960,7 @@ class ChatService {
       }),
     );
     _ensureOk(response, 'Не удалось обновить геопозицию');
-    return ChatMessage.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return parseMessage(jsonDecode(response.body));
   }
 
   static Future<ChatMessage> stopLiveLocation({
@@ -933,9 +972,7 @@ class ChatService {
     );
     final response = await _post(uri, body: '{}');
     _ensureOk(response, 'Не удалось остановить трансляцию');
-    return ChatMessage.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return parseMessage(jsonDecode(response.body));
   }
 
   static Future<ChatMessage> forwardMessage({
@@ -958,9 +995,7 @@ class ChatService {
       }),
     );
     _ensureOk(response, 'Не удалось переслать сообщение');
-    return ChatMessage.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return parseMessage(jsonDecode(response.body));
   }
 
   static Future<List<ChatBotCommand>> listConversationBotCommands({
@@ -1258,9 +1293,7 @@ class ChatService {
       }),
     );
     _ensureOk(response, 'Не удалось отправить опрос');
-    return ChatMessage.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return parseMessage(jsonDecode(response.body));
   }
 
   static Future<ChatMessage> votePoll({
@@ -1276,9 +1309,7 @@ class ChatService {
       body: jsonEncode({'option_index': optionIndex}),
     );
     _ensureOk(response, 'Не удалось проголосовать');
-    return ChatMessage.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return parseMessage(jsonDecode(response.body));
   }
 
   static Future<ChatMessage> closePoll({
@@ -1290,9 +1321,7 @@ class ChatService {
     );
     final response = await _post(uri, body: jsonEncode({}));
     _ensureOk(response, 'Не удалось закрыть опрос');
-    return ChatMessage.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return parseMessage(jsonDecode(response.body));
   }
 
   static Future<ChatPollVotersResult> listPollVoters({
@@ -1321,9 +1350,7 @@ class ChatService {
       body: jsonEncode({'text': text.trim()}),
     );
     _ensureOk(response, 'Не удалось добавить вариант');
-    return ChatMessage.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return parseMessage(jsonDecode(response.body));
   }
 
   static Future<ChatMessage> sendInlineCallback({
@@ -1336,9 +1363,7 @@ class ChatService {
     );
     final response = await _post(uri, body: jsonEncode({'data': data}));
     _ensureOk(response, 'Не удалось выполнить действие кнопки');
-    return ChatMessage.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return parseMessage(jsonDecode(response.body));
   }
 
   static Future<ChatMessage> _send({
@@ -1384,9 +1409,7 @@ class ChatService {
       }),
     );
     _ensureOk(response, 'Не удалось отправить сообщение');
-    return ChatMessage.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return parseMessage(jsonDecode(response.body));
   }
 
   static Future<ScheduledChatMessage> _scheduleMessage({
@@ -2166,9 +2189,9 @@ class ChatService {
     } catch (_) {}
   }
 
-  static ChatMessage messageFromStreamPayload(Map<String, dynamic> json) {
+  static ChatMessage messageFromStreamPayload(Map json) {
     final uid = AuthService.instance.currentUser?.id;
-    final msg = ChatMessage.fromJson(json);
+    final msg = parseMessage(json);
     if (uid == null) return msg;
     final mine = msg.senderId == uid;
     return ChatMessage(
@@ -2276,14 +2299,11 @@ class ChatService {
     );
     final response = await _get(uri);
     _ensureOk(response, 'Не удалось загрузить медиа чата');
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final items = (data['items'] as List<dynamic>? ?? [])
-        .map((e) => ChatMessage.fromJson(e as Map<String, dynamic>))
-        .toList();
+    final page = parseMessagePage(jsonDecode(response.body));
     return (
-      items: items,
-      hasMore: data['has_more'] as bool? ?? false,
-      nextCursor: data['next_cursor'] as int?,
+      items: page.items,
+      hasMore: page.hasMore,
+      nextCursor: page.nextCursor,
     );
   }
 

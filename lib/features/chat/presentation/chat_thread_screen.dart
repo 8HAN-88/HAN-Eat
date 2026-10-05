@@ -3131,7 +3131,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final type = event['type']?.toString();
     if (type == 'message.new') {
       final raw = event['message'];
-      if (raw is! Map<String, dynamic>) return;
+      if (raw is! Map) return;
       try {
         final msg = ChatService.messageFromStreamPayload(raw);
         setState(() {
@@ -3166,8 +3166,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return;
     }
     if (type == 'message.deleted') {
-      final id = event['message_id'];
-      final messageId = id is int ? id : int.tryParse('$id');
+      final messageId = ChatService.parseEventInt(event['message_id']);
       if (messageId == null) return;
       setState(() {
         _messages.removeWhere((m) => m.id == messageId);
@@ -3176,16 +3175,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return;
     }
     if (type == 'conversation.auto_delete') {
-      final raw = event['auto_delete_seconds'];
-      final seconds = raw is int ? raw : int.tryParse('$raw');
+      final seconds = ChatService.parseEventInt(event['auto_delete_seconds']);
       if (seconds == null) return;
       _applyAutoDeleteSeconds(seconds);
       return;
     }
     if (type == 'conversation.history_cleared') {
       final alsoForPeer = event['also_for_peer'] == true;
-      final rawUid = event['user_id'];
-      final uid = rawUid is int ? rawUid : int.tryParse('$rawUid');
+      final uid = ChatService.parseEventInt(event['user_id']);
       final myId = AuthService.instance.currentUser?.id;
       if (alsoForPeer || (uid != null && uid == myId)) {
         _applyHistoryClearedLocally();
@@ -3193,29 +3190,25 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return;
     }
     if (type == 'typing') {
-      final rawUid = event['user_id'];
-      final uid = rawUid is int ? rawUid : int.tryParse('$rawUid');
+      final uid = ChatService.parseEventInt(event['user_id']);
       final activity = event['activity'] == 'recording' ? 'recording' : 'typing';
       _onPeerTyping(uid, activity: activity);
       return;
     }
     if (type == 'message.delivered') {
-      final delivererId = event['user_id'];
+      final delivererId = ChatService.parseEventInt(event['user_id']);
       final myId = AuthService.instance.currentUser?.id;
       if (delivererId == myId) return;
-      final raw = event['last_delivered_message_id'];
-      final deliveredId = raw is int ? raw : int.tryParse('$raw');
+      final deliveredId =
+          ChatService.parseEventInt(event['last_delivered_message_id']);
       if (deliveredId != null) _applyDeliveredReceipt(deliveredId);
       return;
     }
     if (type == 'message.read') {
-      final rawReader = event['user_id'];
-      final readerId =
-          rawReader is int ? rawReader : int.tryParse('$rawReader');
+      final readerId = ChatService.parseEventInt(event['user_id']);
       final myId = AuthService.instance.currentUser?.id;
       if (readerId != null && readerId == myId) return;
-      final raw = event['last_read_message_id'];
-      final readId = raw is int ? raw : int.tryParse('$raw');
+      final readId = ChatService.parseEventInt(event['last_read_message_id']);
       if (readId != null) {
         _applyReadReceipt(readId, readerId: readerId);
       }
@@ -3223,7 +3216,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
     if (type == 'message.edited') {
       final raw = event['message'];
-      if (raw is! Map<String, dynamic>) return;
+      if (raw is! Map) return;
       try {
         _replaceMessage(ChatService.messageFromStreamPayload(raw));
       } catch (e) {
@@ -3232,8 +3225,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return;
     }
     if (type == 'message.reaction') {
-      final id = event['message_id'];
-      final messageId = id is int ? id : int.tryParse('$id');
+      final messageId = ChatService.parseEventInt(event['message_id']);
       if (messageId == null) return;
       _applyReactions(
           messageId, ChatService.parseReactions(event['reactions']));
@@ -3244,7 +3236,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (listRaw is List) {
         final parsed = <ChatMessage>[];
         for (final raw in listRaw) {
-          if (raw is! Map<String, dynamic>) continue;
+          if (raw is! Map) continue;
           try {
             parsed.add(ChatService.messageFromStreamPayload(raw));
           } catch (_) {}
@@ -3254,15 +3246,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       }
       if (type == 'message.pinned') {
         final raw = event['message'];
-        if (raw is Map<String, dynamic>) {
+        if (raw is Map) {
           try {
             final msg = ChatService.messageFromStreamPayload(raw);
             setState(() => _upsertPinnedMessage(msg));
           } catch (_) {}
         }
       } else {
-        final id = event['message_id'];
-        final messageId = id is int ? id : int.tryParse('$id');
+        final messageId = ChatService.parseEventInt(event['message_id']);
         setState(() {
           if (messageId != null) {
             _removePinnedMessageId(messageId);
