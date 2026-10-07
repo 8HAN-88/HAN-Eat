@@ -18,7 +18,7 @@ void main() {
     expect(html, contains('Запрещается'));
     expect(html, contains('несовершеннолетних'));
     expect(html, contains('support@haneat.app'));
-    expect(html, contains('обязательные права потребителя'));
+    expect(html, contains('Обязательные права потребителя'));
     expect(html, contains('виртуальные объекты'));
     expect(html, contains('Рекламодатель'));
     expect(html, contains('Претензионный порядок'));
