@@ -1487,6 +1487,11 @@ class _PostsListWidgetState extends State<_PostsListWidget> {
             return NewPostCard(
               post: post,
               hideFeedHeader: true,
+              onPostUpdated: (updated) {
+                final i = _posts.indexWhere((p) => p.id == updated.id);
+                if (i == -1) return;
+                setState(() => _posts[i] = updated);
+              },
               onPostDeleted: () {
                 setState(() {
                   _posts.removeWhere((p) => p.id == post.id);
