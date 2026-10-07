@@ -3220,6 +3220,10 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/mtproto':
     case '/terms-of-service':
     case '/user-agreement':
+    case '/oferta':
+    case '/publichnaya-oferta':
+    case '/soglashenie':
+    case '/polzovatelskoe-soglashenie':
     case '/refund-policy':
     case '/cookie-policy':
     case '/community-guidelines':
@@ -5447,6 +5451,9 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/lastseenprivacy':
     case '/hidelastseen':
       return '${SettingsRoute.path}$q';
+    case '/publichnayaoferta':
+    case '/polzovatelskoesoglashenie':
+      return '${SupportSecurityRoute.path}$q';
     default:
       return null;
   }
