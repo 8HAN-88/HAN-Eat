@@ -57,3 +57,20 @@ def test_legal_status_names_hanwe_not_old_brand():
     text = legal_status_payload()["consent_text"]
     assert "HanWe" in text
     assert "HAN Eat" not in text
+
+
+def test_current_legal_version_matches_published_terms():
+    assert current_legal_version() == "2026-10-07"
+    terms = (
+        __import__("pathlib")
+        .Path(__file__)
+        .resolve()
+        .parents[2]
+        / "static"
+        / "legal"
+        / "terms.html"
+    )
+    html = terms.read_text(encoding="utf-8")
+    assert "2026-10-07" in html
+    assert "информационный посредник" in html
+    assert "тарифы AI, Creator, Pro" not in html

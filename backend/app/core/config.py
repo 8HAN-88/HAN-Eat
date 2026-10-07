@@ -129,7 +129,7 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:8080"  # URL фронтенда для redirect после оплаты
 
     # Версия юридических документов (privacy + terms); при смене — повторное согласие
-    LEGAL_DOCUMENT_VERSION: str = "2026-06-03"
+    LEGAL_DOCUMENT_VERSION: str = "2026-10-07"
 
     # Email-only auth: подтверждение почты, сброс/смена пароля, смена email
     REQUIRE_EMAIL_VERIFICATION: bool = True

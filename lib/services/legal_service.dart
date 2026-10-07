@@ -36,7 +36,7 @@ class LegalService {
   /// Локальный fallback, если `/legal/status` недоступен (старый API).
   static LegalStatus fallbackStatus() {
     return LegalStatus(
-      version: '2026-06-03',
+      version: '2026-10-07',
       privacyUrl: LegalUrls.privacyPolicy,
       termsUrl: LegalUrls.termsOfService,
       consentText:
