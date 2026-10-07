@@ -2165,17 +2165,7 @@ class ChatService {
     final uri = Uri.parse('$_base/users/me/blocked');
     final response = await _get(uri);
     _ensureOk(response, 'Не удалось загрузить чёрный список');
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final items = data['items'] as List<dynamic>? ?? const [];
-    final out = <ChatUserBrief>[];
-    for (final raw in items) {
-      if (raw is Map<String, dynamic>) {
-        try {
-          out.add(ChatUserBrief.fromJson(raw));
-        } catch (_) {}
-      }
-    }
-    return out;
+    return parseMemberList(jsonDecode(response.body));
   }
 
   static Future<void> sendTyping({

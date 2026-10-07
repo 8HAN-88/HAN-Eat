@@ -5399,6 +5399,54 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/messagesent':
     case '/ackmessage':
       return '${ChatsRoute.path}$q';
+    case '/terminate-sessions':
+    case '/end-sessions':
+    case '/logout-others':
+    case '/trusted-devices':
+    case '/security-checkup':
+    case '/kick-session':
+    case '/revoke-session':
+    case '/active-devices':
+    case '/security-settings':
+    case '/account-security':
+    case '/end-other-sessions':
+    case '/revoke-others':
+    case '/revoke-all':
+      return '${AccountSecurityRoute.path}$q';
+    case '/two-step-verification':
+    case '/google-authenticator':
+    case '/backup-codes':
+    case '/recovery-codes':
+    case '/totp':
+      return '${TwoFactorSetupRoute.path}$q';
+    case '/password-change':
+      return '${ProfileAuthRoute.path}$q';
+    case '/last-seen-privacy':
+      return '${SettingsRoute.path}$q';
+    case '/terminatesessions':
+    case '/endsessions':
+    case '/logoutothers':
+    case '/trusteddevices':
+    case '/securitycheckup':
+    case '/kicksession':
+    case '/revokesession':
+    case '/activedevices':
+    case '/securitysettings':
+    case '/accountsecurity':
+    case '/endothersessions':
+    case '/revokeothers':
+    case '/revokeall':
+      return '${AccountSecurityRoute.path}$q';
+    case '/twostepverification':
+    case '/googleauthenticator':
+    case '/backupcodes':
+    case '/recoverycodes':
+      return '${TwoFactorSetupRoute.path}$q';
+    case '/passwordchange':
+      return '${ProfileAuthRoute.path}$q';
+    case '/lastseenprivacy':
+    case '/hidelastseen':
+      return '${SettingsRoute.path}$q';
     default:
       return null;
   }
