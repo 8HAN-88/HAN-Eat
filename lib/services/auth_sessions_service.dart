@@ -25,17 +25,18 @@ class AuthSessionInfo {
   final String? devicePlatform;
   final String? ipAddress;
 
-  factory AuthSessionInfo.fromJson(Map<String, dynamic> json) {
+  factory AuthSessionInfo.fromJson(Map json) {
+    final data = Map<String, dynamic>.from(json);
     return AuthSessionInfo(
-      id: json['id'] as int,
-      isCurrent: json['is_current'] as bool? ?? false,
-      createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ??
+      id: _sessionJsonInt(data['id']),
+      isCurrent: data['is_current'] == true,
+      createdAt: DateTime.tryParse(data['created_at'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
-      lastSeenAt: DateTime.tryParse(json['last_seen_at'] as String? ?? '') ??
+      lastSeenAt: DateTime.tryParse(data['last_seen_at'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
-      deviceName: json['device_name'] as String?,
-      devicePlatform: json['device_platform'] as String?,
-      ipAddress: json['ip_address'] as String?,
+      deviceName: data['device_name'] as String?,
+      devicePlatform: data['device_platform'] as String?,
+      ipAddress: data['ip_address'] as String?,
     );
   }
 
@@ -61,8 +62,30 @@ class AuthSessionInfo {
   }
 }
 
+int _sessionJsonInt(Object? raw) {
+  if (raw is int) return raw;
+  if (raw is num) return raw.toInt();
+  if (raw is String) return int.tryParse(raw.trim()) ?? 0;
+  return 0;
+}
+
 class AuthSessionsService {
   static String get _base => ServerConfig.apiBaseUrl;
+
+  static List<AuthSessionInfo> parseSessionList(Object? raw) {
+    Object? items = raw;
+    if (raw is Map) items = raw['items'] ?? raw['sessions'];
+    if (items is! List) return const [];
+    final out = <AuthSessionInfo>[];
+    for (final item in items) {
+      if (item is! Map) continue;
+      try {
+        final session = AuthSessionInfo.fromJson(item);
+        if (session.id > 0) out.add(session);
+      } catch (_) {}
+    }
+    return out;
+  }
 
   static Future<List<AuthSessionInfo>> listSessions() async {
     final uri = Uri.parse('$_base/auth/sessions');
@@ -76,12 +99,7 @@ class AuthSessionsService {
         fallback: 'Не удалось загрузить сеансы',
       );
     }
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final items = data['items'] as List<dynamic>? ?? const [];
-    return items
-        .whereType<Map<String, dynamic>>()
-        .map(AuthSessionInfo.fromJson)
-        .toList();
+    return parseSessionList(jsonDecode(response.body));
   }
 
   static Future<void> revokeSession(int sessionId) async {

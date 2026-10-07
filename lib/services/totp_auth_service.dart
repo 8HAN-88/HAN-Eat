@@ -17,13 +17,20 @@ class TotpSetupInfo {
   final String otpauthUri;
   final String issuer;
 
-  factory TotpSetupInfo.fromJson(Map<String, dynamic> json) {
+  factory TotpSetupInfo.fromJson(Map json) {
+    final data = Map<String, dynamic>.from(json);
     return TotpSetupInfo(
-      secret: json['secret'] as String? ?? '',
-      otpauthUri: json['otpauth_uri'] as String? ?? '',
-      issuer: json['issuer'] as String? ?? 'HanWe',
+      secret: data['secret'] as String? ?? '',
+      otpauthUri: data['otpauth_uri'] as String? ?? '',
+      issuer: data['issuer'] as String? ?? 'HanWe',
     );
   }
+}
+
+Map<String, dynamic>? _totpJsonMap(Object? raw) {
+  if (raw is Map<String, dynamic>) return raw;
+  if (raw is Map) return Map<String, dynamic>.from(raw);
+  return null;
 }
 
 /// Client for /auth/2fa/* enrollment endpoints (authenticated).
@@ -48,8 +55,28 @@ class TotpAuthService {
         fallback: 'Не удалось проверить 2FA',
       );
     }
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    return data['enabled'] as bool? ?? false;
+    return parseStatus(jsonDecode(response.body));
+  }
+
+  static bool parseStatus(Object? raw) {
+    final data = _totpJsonMap(raw);
+    if (data == null) return false;
+    final enabled = data['enabled'];
+    if (enabled is bool) return enabled;
+    if (enabled is num) return enabled != 0;
+    if (enabled is String) {
+      final t = enabled.trim().toLowerCase();
+      return t == 'true' || t == '1' || t == 'yes';
+    }
+    return false;
+  }
+
+  static TotpSetupInfo parseSetup(Object? raw) {
+    final data = _totpJsonMap(raw);
+    if (data == null) {
+      throw const FormatException('TotpSetupInfo: invalid payload');
+    }
+    return TotpSetupInfo.fromJson(data);
   }
 
   static Future<TotpSetupInfo> setup() async {
@@ -65,9 +92,7 @@ class TotpAuthService {
         fallback: 'Не удалось начать настройку 2FA',
       );
     }
-    return TotpSetupInfo.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    return parseSetup(jsonDecode(response.body));
   }
 
   static Future<void> enable({required String code}) async {

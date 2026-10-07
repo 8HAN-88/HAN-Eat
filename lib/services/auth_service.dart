@@ -29,6 +29,13 @@ bool _apiUnreachable(Object e) {
       s.contains('Connection reset');
 }
 
+int _userJsonInt(Object? raw) {
+  if (raw is int) return raw;
+  if (raw is num) return raw.toInt();
+  if (raw is String) return int.tryParse(raw.trim()) ?? 0;
+  return 0;
+}
+
 bool _isDefinitiveSessionLoss(AuthException e) {
   final m = e.message;
   return m.contains('Сессия истекла') ||
@@ -1379,7 +1386,7 @@ class User {
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
-      id: json['id'] as int,
+      id: _userJsonInt(json['id']),
       email: json['email'] as String,
       name: json['name'] as String,
       username: json['username'] as String?,
