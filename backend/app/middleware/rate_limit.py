@@ -33,24 +33,41 @@ def _is_realtime_stream(path: str) -> bool:
     return path.endswith("/stream") and path.startswith("/api/v1/")
 
 
+def _is_proxy_peer(host: str) -> bool:
+    """Only trust forwarded headers when the TCP peer looks like our edge proxy."""
+    h = (host or "").strip().lower()
+    if h in {"127.0.0.1", "::1", "localhost", "unknown", ""}:
+        return True
+    if h.startswith("10.") or h.startswith("192.168.") or h.startswith("fd"):
+        return True
+    if h.startswith("172."):
+        try:
+            second = int(h.split(".")[1])
+        except (IndexError, ValueError):
+            return False
+        return 16 <= second <= 31
+    return False
+
+
 def _client_ip(request: Request) -> str:
     """Client IP for rate limits.
 
     Prefer X-Real-IP (set by the edge to the connecting address). X-Forwarded-For
-    is only used when TRUST_X_FORWARDED_FOR is on, and we take the last hop —
-    the address the proxy appended — not a client-supplied first value.
+    is only used when TRUST_X_FORWARDED_FOR is on, the TCP peer looks like a
+    proxy, and we take the last hop — not a client-supplied first value.
     """
-    real_ip = (request.headers.get("x-real-ip") or "").strip()
-    if real_ip:
-        return real_ip.split(",")[0].strip() or real_ip
-    if getattr(settings, "TRUST_X_FORWARDED_FOR", True):
+    peer = request.client.host if request.client and request.client.host else ""
+    if getattr(settings, "TRUST_X_FORWARDED_FOR", True) and _is_proxy_peer(peer):
+        real_ip = (request.headers.get("x-real-ip") or "").strip()
+        if real_ip:
+            return real_ip.split(",")[0].strip() or real_ip
         forwarded = request.headers.get("x-forwarded-for")
         if forwarded:
             hops = [part.strip() for part in forwarded.split(",") if part.strip()]
             if hops:
                 return hops[-1]
-    if request.client and request.client.host:
-        return request.client.host
+    if peer:
+        return peer
     return "unknown"
 
 
