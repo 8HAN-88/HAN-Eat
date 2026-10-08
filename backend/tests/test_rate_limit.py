@@ -47,3 +47,17 @@ def test_client_ip_prefers_real_ip():
         }
 
     assert _client_ip(FakeRequest()) == "198.51.100.9"
+
+
+def test_client_ip_ignores_forwarded_from_public_peer():
+    class FakeClient:
+        host = "203.0.113.9"
+
+    class FakeRequest:
+        client = FakeClient()
+        headers = {
+            "x-real-ip": "198.51.100.9",
+            "x-forwarded-for": "203.0.113.5",
+        }
+
+    assert _client_ip(FakeRequest()) == "203.0.113.9"
