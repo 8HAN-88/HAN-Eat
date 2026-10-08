@@ -1,12 +1,14 @@
 """
 Pydantic схемы для аутентификации
 """
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
+
+from app.core.security import validate_new_password
 
 
 class RegisterRequest(BaseModel):
     email: EmailStr
-    password: str = Field(..., min_length=8)
+    password: str = Field(..., min_length=8, max_length=128)
     name: str = Field(..., min_length=1, max_length=255)
     username: str | None = Field(None, max_length=100)
     accept_legal: bool = Field(
@@ -14,6 +16,11 @@ class RegisterRequest(BaseModel):
         description="Согласие с политикой конфиденциальности и пользовательским соглашением",
     )
     referral_code: str | None = Field(None, max_length=500)
+
+    @field_validator("password")
+    @classmethod
+    def _new_password(cls, value: str) -> str:
+        return validate_new_password(value)
 
 
 class LoginRequest(BaseModel):
@@ -45,13 +52,23 @@ class ForgotPasswordRequest(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     token: str = Field(..., min_length=6, max_length=128)
-    new_password: str = Field(..., min_length=8)
+    new_password: str = Field(..., min_length=8, max_length=128)
     email: EmailStr | None = None
+
+    @field_validator("new_password")
+    @classmethod
+    def _new_password(cls, value: str) -> str:
+        return validate_new_password(value)
 
 
 class ChangePasswordRequest(BaseModel):
     current_password: str
-    new_password: str = Field(..., min_length=8)
+    new_password: str = Field(..., min_length=8, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def _new_password(cls, value: str) -> str:
+        return validate_new_password(value)
 
 
 class ChangeEmailRequest(BaseModel):

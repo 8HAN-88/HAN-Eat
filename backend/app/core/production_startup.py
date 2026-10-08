@@ -7,6 +7,14 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# These must stop the process. A default SECRET_KEY lets anyone mint JWTs.
+_FATAL_MARKERS = (
+    "DEBUG=true в production",
+    "SECRET_KEY слишком короткий или пустой",
+    "SECRET_KEY похож на dev-значение",
+    "SKIP_GOOGLE_ID_TOKEN_VERIFICATION=true запрещён в production",
+)
+
 
 def collect_production_issues() -> list[str]:
     if settings.APP_ENV != "production":
@@ -41,6 +49,10 @@ def collect_production_issues() -> list[str]:
     return issues
 
 
+def collect_fatal_production_issues() -> list[str]:
+    return [msg for msg in collect_production_issues() if msg in _FATAL_MARKERS]
+
+
 def log_production_readiness() -> None:
     issues = collect_production_issues()
     if not issues:
@@ -49,3 +61,15 @@ def log_production_readiness() -> None:
         return
     for msg in issues:
         logger.error("Production config: %s", msg)
+
+
+def enforce_production_readiness() -> None:
+    """Refuse to serve if JWT/debug/OAuth verification is unsafe."""
+    fatal = collect_fatal_production_issues()
+    if not fatal:
+        return
+    for msg in fatal:
+        logger.critical("Production refuse: %s", msg)
+    raise RuntimeError(
+        "Production start refused: " + "; ".join(fatal)
+    )

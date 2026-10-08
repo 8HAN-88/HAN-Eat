@@ -43,7 +43,7 @@ def db_session():
 def _user(db, email="otp@test.local"):
     u = User(
         email=email,
-        password_hash=get_password_hash("password123"),
+        password_hash=get_password_hash("correct-horse-1"),
         name="Otp",
     )
     db.add(u)

@@ -20,6 +20,11 @@ def _new_jti() -> str:
     return secrets.token_hex(16)
 
 
+def _access_claims(user: User, session: AuthSession, jti: str) -> dict:
+    """Access JWT is bound to the session so revoke kills live API, not only refresh."""
+    return {"sub": str(user.id), "sid": session.id, "jti": jti}
+
+
 def create_session(
     db: Session,
     *,
@@ -56,7 +61,7 @@ def create_session(
     )
     db.add(session)
     db.flush()
-    access = create_access_token(data={"sub": str(user.id)})
+    access = create_access_token(data=_access_claims(user, session, jti))
     refresh = create_refresh_token(
         data={"sub": str(user.id), "sid": session.id, "jti": jti}
     )
@@ -73,11 +78,36 @@ def rotate_session_tokens(
     session.jti = jti
     session.last_seen_at = _now()
     db.flush()
-    access = create_access_token(data={"sub": str(user.id)})
+    access = create_access_token(data=_access_claims(user, session, jti))
     refresh = create_refresh_token(
         data={"sub": str(user.id), "sid": session.id, "jti": jti}
     )
     return access, refresh
+
+
+def access_session_id(payload: dict) -> Optional[int]:
+    raw = payload.get("sid")
+    if raw is None or raw == "":
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def get_active_access_session(db: Session, *, payload: dict, user_id: int) -> Optional[AuthSession]:
+    """Access tokens carry sid so a revoked device cannot keep calling the API.
+
+    jti is not required here: refresh rotation must not kill the current access
+    token mid-request. Revoke sets revoked_at and that is enough.
+    """
+    sid = access_session_id(payload)
+    if sid is None:
+        return None
+    row = get_active_session(db, session_id=sid, jti=None)
+    if row is None or row.user_id != user_id:
+        return None
+    return row
 
 
 def get_active_session(

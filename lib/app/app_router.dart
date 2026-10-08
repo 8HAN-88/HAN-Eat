@@ -5416,6 +5416,12 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/end-other-sessions':
     case '/revoke-others':
     case '/revoke-all':
+    case '/signed-in-devices':
+    case '/login-devices':
+    case '/auth-devices':
+    case '/session-list':
+    case '/kick-all-sessions':
+    case '/security-and-login':
       return '${AccountSecurityRoute.path}$q';
     case '/two-step-verification':
     case '/google-authenticator':
@@ -5440,6 +5446,12 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/endothersessions':
     case '/revokeothers':
     case '/revokeall':
+    case '/signedindevices':
+    case '/logindevices':
+    case '/authdevices':
+    case '/sessionlist':
+    case '/kickallsessions':
+    case '/securityandlogin':
       return '${AccountSecurityRoute.path}$q';
     case '/twostepverification':
     case '/googleauthenticator':

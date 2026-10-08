@@ -288,6 +288,10 @@ class Settings(BaseSettings):
     RATE_LIMIT_PER_MINUTE: int = 300  # Web+PWA: polling + чаты + лента
     RATE_LIMIT_PER_HOUR: int = 5000
     RATE_LIMIT_BURST: int = 20  # Кратковременные всплески
+    # Trust X-Forwarded-For from the edge proxy; we use the last hop, not the first.
+    TRUST_X_FORWARDED_FOR: bool = True
+    AUTH_LOGIN_PER_MINUTE: int = 20
+    AUTH_LOGIN_PER_EMAIL_PER_MINUTE: int = 8
     
     # WebRTC ICE (1:1 calls). TURN optional — without it strict NAT may fail.
     # Comma-separated URLs, e.g. "stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302"

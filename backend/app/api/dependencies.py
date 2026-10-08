@@ -8,9 +8,33 @@ from typing import Optional
 from app.core.database import get_db
 from app.core.security import decode_token
 from app.models.user import User
+from app.services.auth_session_service import (
+    access_session_id,
+    get_active_access_session,
+)
 from app.services.subscription_service import SubscriptionService
 
 security = HTTPBearer(auto_error=False)
+
+
+def _user_id_from_access(payload: Optional[dict]) -> Optional[int]:
+    if not payload or payload.get("type") != "access":
+        return None
+    raw = payload.get("sub")
+    if raw is None or raw == "":
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _access_session_allowed(db: Session, payload: dict, user_id: int) -> bool:
+    """New access tokens must belong to a live session. Legacy tokens without sid
+    still work until they expire (ACCESS_TOKEN_EXPIRE_MINUTES)."""
+    if access_session_id(payload) is None:
+        return True
+    return get_active_access_session(db, payload=payload, user_id=user_id) is not None
 
 
 async def get_current_user(
@@ -23,16 +47,14 @@ async def get_current_user(
     
     token = credentials.credentials
     payload = decode_token(token)
-    
-    if not payload or payload.get("type") != "access":
+    user_id = _user_id_from_access(payload)
+    if user_id is None:
         return None
     
-    user_id = payload.get("sub")
-    if not user_id:
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user or user.deleted_at or user.banned_at is not None:
         return None
-    
-    user = db.query(User).filter(User.id == int(user_id)).first()
-    if not user or user.deleted_at:
+    if payload is None or not _access_session_allowed(db, payload, user.id):
         return None
     
     return user
@@ -52,22 +74,16 @@ async def get_current_user_required(
     
     token = credentials.credentials
     payload = decode_token(token)
+    user_id = _user_id_from_access(payload)
     
-    if not payload or payload.get("type") != "access":
+    if user_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Неверные данные входа",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    user_id = payload.get("sub")
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Неверные данные токена"
-        )
-    
-    user = db.query(User).filter(User.id == int(user_id)).first()
+    user = db.query(User).filter(User.id == user_id).first()
     if not user or user.deleted_at:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -77,6 +93,12 @@ async def get_current_user_required(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Аккаунт заблокирован",
+        )
+    if payload is None or not _access_session_allowed(db, payload, user.id):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Сессия отозвана",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     return user
