@@ -9,6 +9,41 @@ from app.core.config import settings
 
 # Используем bcrypt напрямую (passlib несовместим с bcrypt 5.0.0)
 
+# bcrypt silently truncates after 72 bytes. Reject those passwords instead.
+_BCRYPT_MAX_BYTES = 72
+_PASSWORD_MIN_CHARS = 8
+_WEAK_PASSWORDS = frozenset(
+    {
+        "password",
+        "password1",
+        "password123",
+        "12345678",
+        "123456789",
+        "qwerty123",
+        "qwertyui",
+        "11111111",
+        "00000000",
+        "haneat12",
+        "hanwe123",
+    }
+)
+
+
+def validate_new_password(password: str) -> str:
+    """Reject empty, too-short, bcrypt-overflow, and a few trivial passwords."""
+    if not isinstance(password, str):
+        raise ValueError("Пароль слишком простой")
+    if len(password) < _PASSWORD_MIN_CHARS:
+        raise ValueError("Пароль должен быть не короче 8 символов")
+    if len(password.encode("utf-8")) > _BCRYPT_MAX_BYTES:
+        raise ValueError("Пароль слишком длинный")
+    if password != password.strip():
+        raise ValueError("Уберите пробелы в начале и конце пароля")
+    folded = password.lower()
+    if folded in _WEAK_PASSWORDS:
+        raise ValueError("Пароль слишком простой")
+    return password
+
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Проверка пароля"""
@@ -20,6 +55,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def get_password_hash(password: str) -> str:
     """Хеширование пароля"""
+    password = validate_new_password(password)
     salt = bcrypt.gensalt()
     hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
     return hashed.decode('utf-8')

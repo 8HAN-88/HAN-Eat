@@ -2607,6 +2607,12 @@ void main() {
     expect(shortcutPathAlias('/revoke-session'), AccountSecurityRoute.path);
     expect(shortcutPathAlias('/account-security'), AccountSecurityRoute.path);
     expect(shortcutPathAlias('/revoke-all'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/signed-in-devices'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/login-devices'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/auth-devices'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/session-list'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/kick-all-sessions'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/security-and-login'), AccountSecurityRoute.path);
     expect(shortcutPathAlias('/two-step-verification'), TwoFactorSetupRoute.path);
     expect(shortcutPathAlias('/google-authenticator'), TwoFactorSetupRoute.path);
     expect(shortcutPathAlias('/backup-codes'), TwoFactorSetupRoute.path);
@@ -2615,6 +2621,8 @@ void main() {
     expect(shortcutPathAlias('/last-seen-privacy'), SettingsRoute.path);
     expect(shortcutPathAlias('/accountsecurity'), AccountSecurityRoute.path);
     expect(leftoverPathAlias('/go/terminate-sessions'), AccountSecurityRoute.path);
+    expect(leftoverPathAlias('/go/signed-in-devices'), AccountSecurityRoute.path);
+    expect(leftoverPathAlias('/open/security-and-login'), AccountSecurityRoute.path);
     expect(
       parseDeepLinkToGoPath('https://haneat.app/app/#/totp'),
       TwoFactorSetupRoute.path,

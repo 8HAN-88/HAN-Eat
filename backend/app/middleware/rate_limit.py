@@ -34,19 +34,33 @@ def _is_realtime_stream(path: str) -> bool:
 
 
 def _client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    """Client IP for rate limits.
+
+    Prefer X-Real-IP (set by the edge to the connecting address). X-Forwarded-For
+    is only used when TRUST_X_FORWARDED_FOR is on, and we take the last hop —
+    the address the proxy appended — not a client-supplied first value.
+    """
+    real_ip = (request.headers.get("x-real-ip") or "").strip()
+    if real_ip:
+        return real_ip.split(",")[0].strip() or real_ip
+    if getattr(settings, "TRUST_X_FORWARDED_FOR", True):
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            hops = [part.strip() for part in forwarded.split(",") if part.strip()]
+            if hops:
+                return hops[-1]
     if request.client and request.client.host:
         return request.client.host
     return "unknown"
 
 
-def _is_exempt(path: str) -> bool:
+def _is_exempt(path: str, method: str = "GET") -> bool:
     if path == "/":
         return True
+    # Public media GETs are hot; upload writes have their own per-user caps
+    # and must still count toward the IP limit.
     if path.startswith("/api/v1/uploads/"):
-        return True
+        return method.upper() == "GET"
     return any(path.startswith(prefix) for prefix in _EXEMPT_PREFIXES)
 
 
@@ -62,13 +76,48 @@ def _is_read_heavy_get(method: str, path: str) -> bool:
     )
 
 
+def enforce_auth_attempt_limit(request: Request, email: str | None = None) -> None:
+    """Cap login/register/reset attempts per IP and per email when Redis is up."""
+    if not getattr(settings, "RATE_LIMIT_ENABLED", True):
+        return
+    from app.core.redis_client import REDIS_IS_STUB, get_redis
+    from fastapi import HTTPException
+
+    if REDIS_IS_STUB:
+        return
+    redis = get_redis()
+    ip = _client_ip(request)
+    keys = [f"rl:auth:ip:{ip}:minute"]
+    folded = (email or "").strip().lower()
+    if folded:
+        keys.append(f"rl:auth:email:{folded}:minute")
+    ip_limit = int(getattr(settings, "AUTH_LOGIN_PER_MINUTE", 20) or 20)
+    email_limit = int(getattr(settings, "AUTH_LOGIN_PER_EMAIL_PER_MINUTE", 8) or 8)
+    try:
+        for key in keys:
+            count = redis.incr(key)
+            if count == 1:
+                redis.expire(key, 60)
+            limit = email_limit if key.startswith("rl:auth:email:") else ip_limit
+            if count > limit:
+                raise HTTPException(
+                    status_code=429,
+                    detail="Слишком много попыток входа. Подождите минуту.",
+                    headers={"Retry-After": "60"},
+                )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning("Auth attempt limit failed (request allowed): %s", e)
+
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         if not getattr(settings, "RATE_LIMIT_ENABLED", True):
             return await call_next(request)
         if request.method == "OPTIONS":
             return await call_next(request)
-        if _is_exempt(request.url.path):
+        if _is_exempt(request.url.path, request.method):
             return await call_next(request)
         if _is_realtime_stream(request.url.path):
             return await call_next(request)

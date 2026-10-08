@@ -550,25 +550,24 @@ async def get_uploaded_file(file_path: str, request: Request):
         ranged_s3_object_response,
     )
 
-    if ".." in file_path:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Неверный путь к файлу",
-        )
-
-    if not file_path.startswith("uploads/"):
+    uploads_root = os.path.realpath(os.path.join(os.getcwd(), "uploads"))
+    if ".." in file_path or not file_path.startswith("uploads/"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Неверный путь к файлу",
         )
 
     content_type = content_type_for_upload_path(file_path)
-    file_path_full = os.path.join(os.getcwd(), file_path)
-    cwd = os.getcwd()
-    if (
-        os.path.exists(file_path_full)
-        and os.path.abspath(file_path_full).startswith(os.path.abspath(cwd))
+    file_path_full = os.path.realpath(os.path.join(os.getcwd(), file_path))
+    if not (
+        file_path_full == uploads_root
+        or file_path_full.startswith(uploads_root + os.sep)
     ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Неверный путь к файлу",
+        )
+    if os.path.exists(file_path_full):
         return ranged_file_response(
             file_path_full,
             request,

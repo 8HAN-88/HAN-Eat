@@ -283,6 +283,9 @@ async def register(
     db: Session = Depends(get_db),
 ):
     """Регистрация нового пользователя"""
+    from app.middleware.rate_limit import enforce_auth_attempt_limit
+
+    enforce_auth_attempt_limit(http_request, request.email)
     # Проверяем, существует ли пользователь
     existing_user = db.query(User).filter(User.email == request.email).first()
     if existing_user:
@@ -385,7 +388,10 @@ async def login(
 ):
     """Вход пользователя"""
     import logging
+    from app.middleware.rate_limit import enforce_auth_attempt_limit
+
     logger = logging.getLogger(__name__)
+    enforce_auth_attempt_limit(http_request, request.email)
     
     try:
         logger.info(f"Login attempt for email: {request.email}")
@@ -577,6 +583,9 @@ async def google_auth_readiness():
 @router.post("/google", response_model=AuthResponse)
 async def google_auth(request: GoogleAuthRequest, http_request: Request, db: Session = Depends(get_db)):
     """Вход/регистрация через Google (проверка id_token через Google tokeninfo, если не отключено)."""
+    from app.middleware.rate_limit import enforce_auth_attempt_limit
+
+    enforce_auth_attempt_limit(http_request)
     try:
         claims = await _resolve_google_claims(request.id_token)
 
@@ -683,7 +692,9 @@ async def yandex_authorize_url(redirect_uri: str):
 async def yandex_auth(request: YandexAuthRequest, http_request: Request, db: Session = Depends(get_db)):
     """Вход/регистрация через Яндекс ID (authorization code)."""
     import secrets
+    from app.middleware.rate_limit import enforce_auth_attempt_limit
 
+    enforce_auth_attempt_limit(http_request)
     try:
         profile = await exchange_code_and_fetch_profile(
             request.code.strip(),
@@ -803,9 +814,15 @@ async def verify_email(body: TokenBody, db: Session = Depends(get_db)):
 
 
 @router.post("/forgot-password", response_model=MessageResponse)
-async def forgot_password(body: ForgotPasswordRequest, db: Session = Depends(get_db)):
+async def forgot_password(
+    body: ForgotPasswordRequest,
+    http_request: Request,
+    db: Session = Depends(get_db),
+):
     from sqlalchemy import func
+    from app.middleware.rate_limit import enforce_auth_attempt_limit
 
+    enforce_auth_attempt_limit(http_request, body.email)
     email_norm = str(body.email).strip().lower()
     user = db.query(User).filter(func.lower(User.email) == email_norm).first()
     if user and not user.deleted_at and not user.banned_at:
@@ -827,7 +844,14 @@ async def forgot_password(body: ForgotPasswordRequest, db: Session = Depends(get
 
 
 @router.post("/reset-password", response_model=MessageResponse)
-async def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_db)):
+async def reset_password(
+    body: ResetPasswordRequest,
+    http_request: Request,
+    db: Session = Depends(get_db),
+):
+    from app.middleware.rate_limit import enforce_auth_attempt_limit
+
+    enforce_auth_attempt_limit(http_request, body.email)
     row = _consume_or_400(
         db,
         body.token,
@@ -1134,6 +1158,9 @@ async def totp_verify_login(
     db: Session = Depends(get_db),
 ):
     """Complete login after password/OAuth when 2FA is required."""
+    from app.middleware.rate_limit import enforce_auth_attempt_limit
+
+    enforce_auth_attempt_limit(http_request)
     user_id = decode_pending_token(body.pending_token)
     if user_id is None:
         raise HTTPException(

@@ -9,6 +9,9 @@ def test_exempt_paths():
     assert _is_exempt("/privacy") is True
     assert _is_exempt("/api/v1/feed") is False
     assert _is_exempt("/api/v1/auth/login") is False
+    assert _is_exempt("/api/v1/uploads/file/uploads/x.jpg") is True
+    assert _is_exempt("/api/v1/uploads/init", "POST") is False
+    assert _is_exempt("/api/v1/uploads/complete", "POST") is False
 
 
 def test_inbox_gets_are_not_ip_capped():
@@ -28,4 +31,19 @@ def test_client_ip_from_forwarded():
         client = FakeClient()
         headers = {"x-forwarded-for": "203.0.113.5, 10.0.0.1"}
 
-    assert _client_ip(FakeRequest()) == "203.0.113.5"
+    # Last hop is the address the proxy appended, not a client-supplied first value.
+    assert _client_ip(FakeRequest()) == "10.0.0.1"
+
+
+def test_client_ip_prefers_real_ip():
+    class FakeClient:
+        host = "10.0.0.1"
+
+    class FakeRequest:
+        client = FakeClient()
+        headers = {
+            "x-real-ip": "198.51.100.9",
+            "x-forwarded-for": "203.0.113.5, 10.0.0.1",
+        }
+
+    assert _client_ip(FakeRequest()) == "198.51.100.9"

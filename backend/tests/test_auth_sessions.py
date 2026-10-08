@@ -63,6 +63,14 @@ def test_create_session_puts_sid_in_refresh(db_session):
     assert payload["type"] == "refresh"
     assert int(payload["sid"]) == session.id
     assert payload["jti"] == session.jti
+    access_payload = decode_token(access)
+    assert access_payload is not None
+    assert access_payload["type"] == "access"
+    assert int(access_payload["sid"]) == session.id
+    assert access_payload["jti"] == session.jti
+    assert svc.get_active_access_session(
+        db_session, payload=access_payload, user_id=user.id
+    ) is not None
 
 
 def test_revoke_other_keeps_current(db_session):
@@ -142,3 +150,32 @@ def test_rotate_updates_jti(db_session):
     assert svc.get_active_session(
         db_session, session_id=session.id, jti=old_jti
     ) is None
+
+
+def test_revoked_session_rejects_access_payload(db_session):
+    user = _user(db_session)
+    access, _, session = svc.create_session(db_session, user=user)
+    db_session.commit()
+    payload = decode_token(access)
+    assert svc.get_active_access_session(
+        db_session, payload=payload, user_id=user.id
+    ) is not None
+    assert svc.revoke_session(db_session, user_id=user.id, session_id=session.id)
+    db_session.commit()
+    assert svc.get_active_access_session(
+        db_session, payload=payload, user_id=user.id
+    ) is None
+    from app.api.dependencies import _access_session_allowed
+
+    assert _access_session_allowed(db_session, payload, user.id) is False
+
+
+def test_legacy_access_without_sid_still_allowed(db_session):
+    from app.api.dependencies import _access_session_allowed
+    from app.core.security import create_access_token
+
+    user = _user(db_session)
+    payload = decode_token(create_access_token({"sub": str(user.id)}))
+    assert payload is not None
+    assert "sid" not in payload
+    assert _access_session_allowed(db_session, payload, user.id) is True

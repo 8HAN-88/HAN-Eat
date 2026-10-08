@@ -204,12 +204,16 @@ async def startup_event():
 
     from app.core.media_startup import log_media_readiness
     from app.core.payments_startup import log_payments_readiness
-    from app.core.production_startup import log_production_readiness
+    from app.core.production_startup import (
+        enforce_production_readiness,
+        log_production_readiness,
+    )
     from app.services.bot_webhook_queue_service import run_webhook_queue_worker
 
     log_payments_readiness()
     log_media_readiness()
     log_production_readiness()
+    enforce_production_readiness()
     asyncio.create_task(_background_maintenance_loop())
     asyncio.create_task(run_webhook_queue_worker())
 
