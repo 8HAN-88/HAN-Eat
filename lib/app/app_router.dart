@@ -2547,6 +2547,13 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return '${ChatsRoute.path}$q';
     case '/theme':
     case '/appearance':
+    case '/day-theme':
+    case '/light-theme':
+    case '/day-mode':
+    case '/midnight':
+    case '/midnight-theme':
+    case '/oled-theme':
+    case '/true-black':
       return '${SettingsRoute.path}$q';
     case '/compose':
     case '/write':
@@ -3177,6 +3184,12 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/nightmode':
     case '/darkmode':
     case '/lightmode':
+    case '/daytheme':
+    case '/lighttheme':
+    case '/daymode':
+    case '/midnighttheme':
+    case '/oledtheme':
+    case '/trueblack':
       return '${SettingsRoute.path}$q';
     case '/chatlist':
     case '/chat-list':
@@ -5611,9 +5624,9 @@ Widget _safeShellIndexedStack(
   // Empty children during a GoRouter shell remount must NOT be SizedBox.shrink:
   // on Flutter web/CanvasKit that paints as a blank white frame.
   if (children.isEmpty) {
-    return const ColoredBox(
-      color: Color(0xFF0F1319),
-      child: SizedBox.expand(),
+    return ColoredBox(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: const SizedBox.expand(),
     );
   }
   final last = children.length - 1;
@@ -7863,9 +7876,9 @@ class _SilentShellRedirectState extends State<_SilentShellRedirect> {
 
   @override
   Widget build(BuildContext context) {
-    return const ColoredBox(
-      color: Color(0xFF0F1319),
-      child: SizedBox.expand(),
+    return ColoredBox(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: const SizedBox.expand(),
     );
   }
 }
@@ -7915,7 +7928,7 @@ class _RouterRecoveryScreenState extends State<_RouterRecoveryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F1319),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('Восстановление'),
         backgroundColor: Colors.transparent,

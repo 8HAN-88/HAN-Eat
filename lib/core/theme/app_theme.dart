@@ -495,4 +495,33 @@ class AppTheme {
       ),
     );
   }
+
+  static ThemeData midnight() {
+    final scheme = buildMidnightColorScheme();
+    final themed = dark();
+    final textTheme = AppTypography.textTheme(scheme, Brightness.dark);
+    return themed.copyWith(
+      colorScheme: scheme,
+      textTheme: textTheme,
+      scaffoldBackgroundColor: const Color(0xFF000000),
+      appBarTheme: themed.appBarTheme.copyWith(
+        backgroundColor: scheme.surface,
+        foregroundColor: scheme.onSurface,
+        titleTextStyle: textTheme.titleLarge?.copyWith(
+          fontWeight: FontWeight.w700,
+          color: scheme.onSurface,
+          letterSpacing: -0.5,
+        ),
+      ),
+      navigationBarTheme: themed.navigationBarTheme.copyWith(
+        backgroundColor: const Color(0xFF000000),
+      ),
+      cardTheme: themed.cardTheme.copyWith(color: scheme.surface),
+      dialogTheme: themed.dialogTheme.copyWith(backgroundColor: scheme.surface),
+      bottomSheetTheme: themed.bottomSheetTheme.copyWith(
+        backgroundColor: scheme.surface,
+        modalBackgroundColor: scheme.surface,
+      ),
+    );
+  }
 }

@@ -130,9 +130,9 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
   @override
   Widget build(BuildContext context) {
     if (AuthService.instance.currentUser == null) {
-      return const Scaffold(
-        backgroundColor: Color(0xFF0F1319),
-        body: Center(
+      return Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        body: const Center(
           child: CircularProgressIndicator(color: AppColors.primary),
         ),
       );

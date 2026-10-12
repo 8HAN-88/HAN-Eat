@@ -24,14 +24,16 @@ class WebAuthApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final themeMode = ref.watch(themeModeProvider);
+    final themeChoice = ref.watch(themeModeProvider);
     final router = _authRouter;
     return MaterialApp.router(
       title: 'HanWe',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
-      themeMode: themeMode,
+      darkTheme: themeChoice == AppThemeChoice.midnight
+          ? AppTheme.midnight()
+          : AppTheme.dark(),
+      themeMode: themeChoice.materialMode,
       routerConfig: router,
     );
   }

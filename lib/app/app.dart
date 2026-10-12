@@ -100,14 +100,16 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
   Widget build(BuildContext context) {
     try {
       final router = ref.watch(appRouterProvider);
-      final themeMode = ref.watch(themeModeProvider);
+      final themeChoice = ref.watch(themeModeProvider);
 
       return MaterialApp.router(
         key: ValueKey<int>(_bootAttempt),
         title: AppVariant.current.appTitle,
         theme: AppTheme.light(),
-        darkTheme: AppTheme.dark(),
-        themeMode: themeMode,
+        darkTheme: themeChoice == AppThemeChoice.midnight
+            ? AppTheme.midnight()
+            : AppTheme.dark(),
+        themeMode: themeChoice.materialMode,
         color: kIsWeb ? Colors.transparent : null,
         routerConfig: router,
         debugShowCheckedModeBanner: false,
@@ -124,7 +126,20 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
         builder: (context, child) {
           final theme = Theme.of(context);
           final isDark = theme.brightness == Brightness.dark;
-          syncWebDocumentTheme(isDark: isDark);
+          syncWebDocumentTheme(
+            isDark: isDark,
+            midnight: themeChoice == AppThemeChoice.midnight,
+          );
+          final overlay = isDark
+              ? SystemUiOverlayStyle.light.copyWith(
+                  statusBarColor: Colors.transparent,
+                  systemNavigationBarColor: theme.scaffoldBackgroundColor,
+                )
+              : SystemUiOverlayStyle.dark.copyWith(
+                  statusBarColor: Colors.transparent,
+                  systemNavigationBarColor: theme.scaffoldBackgroundColor,
+                );
+          SystemChrome.setSystemUIOverlayStyle(overlay);
           final canvas = kIsWeb
               ? Colors.transparent
               : theme.scaffoldBackgroundColor;
@@ -165,14 +180,17 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
                 maxScaleFactor: 1.35,
               ),
             ),
-            child: ColoredBox(
-              color: canvas,
-              child: DefaultTextStyle(
-                style: defaultBody.copyWith(color: onSurface),
-                child: Listener(
-                  onPointerDown: (_) =>
-                      DomVideoTouchPolicy.markUserInteracted(),
-                  child: kIsWeb ? ClipRect(child: content) : content,
+            child: AnnotatedRegion<SystemUiOverlayStyle>(
+              value: overlay,
+              child: ColoredBox(
+                color: canvas,
+                child: DefaultTextStyle(
+                  style: defaultBody.copyWith(color: onSurface),
+                  child: Listener(
+                    onPointerDown: (_) =>
+                        DomVideoTouchPolicy.markUserInteracted(),
+                    child: kIsWeb ? ClipRect(child: content) : content,
+                  ),
                 ),
               ),
             ),

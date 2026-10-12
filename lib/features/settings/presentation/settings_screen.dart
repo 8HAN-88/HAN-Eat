@@ -508,10 +508,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 12),
-                    _ThemeModeRow(
+                    _ThemeChoiceGrid(
                       selected: ref.watch(themeModeProvider),
-                      onSelected: (mode) {
-                        ref.read(themeModeProvider.notifier).setThemeMode(mode);
+                      onSelected: (choice) {
+                        ref.read(themeModeProvider.notifier).setChoice(choice);
                       },
                     ),
                   ],
@@ -620,105 +620,134 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 }
 
-/// Переключатель темы: три варианта в одну строку, подпись без переноса.
-class _ThemeModeRow extends StatelessWidget {
-  const _ThemeModeRow({
+/// Four large theme tiles so light actually applies and midnight is reachable.
+class _ThemeChoiceGrid extends StatelessWidget {
+  const _ThemeChoiceGrid({
     required this.selected,
     required this.onSelected,
   });
 
-  final ThemeMode selected;
-  final ValueChanged<ThemeMode> onSelected;
+  final AppThemeChoice selected;
+  final ValueChanged<AppThemeChoice> onSelected;
 
   static const _options = [
-    _ThemeModeChoice(ThemeMode.system, Icons.brightness_auto, 'Системная'),
-    _ThemeModeChoice(ThemeMode.light, Icons.light_mode, 'Светлая'),
-    _ThemeModeChoice(ThemeMode.dark, Icons.dark_mode, 'Тёмная'),
+    _ThemeChoice(
+      AppThemeChoice.system,
+      Icons.brightness_auto,
+      'Системная',
+      Color(0xFF8A94A6),
+    ),
+    _ThemeChoice(
+      AppThemeChoice.light,
+      Icons.light_mode,
+      'Светлая',
+      Color(0xFFF4F4F5),
+    ),
+    _ThemeChoice(
+      AppThemeChoice.dark,
+      Icons.dark_mode,
+      'Тёмная',
+      Color(0xFF0F1319),
+    ),
+    _ThemeChoice(
+      AppThemeChoice.midnight,
+      Icons.contrast,
+      'Полночь',
+      Color(0xFF000000),
+    ),
   ];
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
-    return Row(
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 10,
+      crossAxisSpacing: 10,
+      childAspectRatio: 1.7,
       children: [
-        for (var i = 0; i < _options.length; i++) ...[
-          if (i > 0) const SizedBox(width: 8),
-          Expanded(
-            child: _ThemeModeOption(
-              icon: _options[i].icon,
-              label: _options[i].label,
-              isSelected: selected == _options[i].mode,
-              onTap: () => onSelected(_options[i].mode),
-              scheme: scheme,
-            ),
+        for (final option in _options)
+          _ThemeChoiceTile(
+            option: option,
+            isSelected: selected == option.choice,
+            onTap: () => onSelected(option.choice),
           ),
-        ],
       ],
     );
   }
 }
 
-class _ThemeModeChoice {
-  const _ThemeModeChoice(this.mode, this.icon, this.label);
+class _ThemeChoice {
+  const _ThemeChoice(this.choice, this.icon, this.label, this.swatch);
 
-  final ThemeMode mode;
+  final AppThemeChoice choice;
   final IconData icon;
   final String label;
+  final Color swatch;
 }
 
-class _ThemeModeOption extends StatelessWidget {
-  const _ThemeModeOption({
-    required this.icon,
-    required this.label,
+class _ThemeChoiceTile extends StatelessWidget {
+  const _ThemeChoiceTile({
+    required this.option,
     required this.isSelected,
     required this.onTap,
-    required this.scheme,
   });
 
-  final IconData icon;
-  final String label;
+  final _ThemeChoice option;
   final bool isSelected;
   final VoidCallback onTap;
-  final ColorScheme scheme;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Material(
       color: isSelected
-          ? scheme.primaryContainer.withValues(alpha: 0.65)
+          ? scheme.primaryContainer.withValues(alpha: 0.7)
           : scheme.surfaceContainerHighest,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(14),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: isSelected ? scheme.primary : Colors.transparent,
-              width: isSelected ? 1.5 : 0,
+              color: isSelected ? scheme.primary : scheme.outlineVariant,
+              width: isSelected ? 2 : 1,
             ),
           ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                icon,
-                size: 18,
-                color: isSelected ? scheme.primary : scheme.onSurfaceVariant,
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: option.swatch,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: scheme.outline,
+                    width: 1,
+                  ),
+                ),
+                child: Icon(
+                  option.icon,
+                  size: 16,
+                  color: option.choice == AppThemeChoice.light
+                      ? const Color(0xFF111111)
+                      : Colors.white,
+                ),
               ),
-              const SizedBox(width: 4),
-              Flexible(
+              const SizedBox(width: 10),
+              Expanded(
                 child: Text(
-                  label,
+                  option.label,
                   maxLines: 1,
-                  softWrap: false,
-                  overflow: TextOverflow.fade,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
                         fontWeight:
-                            isSelected ? FontWeight.w700 : FontWeight.w500,
+                            isSelected ? FontWeight.w800 : FontWeight.w600,
                         color: isSelected
                             ? scheme.onPrimaryContainer
                             : scheme.onSurface,

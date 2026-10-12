@@ -125,3 +125,17 @@ ColorScheme buildDarkColorScheme() {
     scrim: Colors.black.withValues(alpha: 0.6),
   );
 }
+
+ColorScheme buildMidnightColorScheme() {
+  final base = buildDarkColorScheme();
+  return base.copyWith(
+    surface: const Color(0xFF0A0A0A),
+    surfaceContainerLowest: const Color(0xFF000000),
+    surfaceContainerLow: const Color(0xFF050505),
+    surfaceContainer: const Color(0xFF111111),
+    surfaceContainerHigh: const Color(0xFF171717),
+    surfaceContainerHighest: const Color(0xFF222222),
+    outline: const Color(0xFF2A2A2A),
+    outlineVariant: const Color(0xFF1A1A1A),
+  );
+}
