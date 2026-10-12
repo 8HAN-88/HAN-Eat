@@ -191,10 +191,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light.copyWith(
+      value: (isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
+          .copyWith(
         statusBarColor: Colors.transparent,
-        systemNavigationBarColor: const Color(0xFF0F1319),
+        systemNavigationBarColor: Theme.of(context).scaffoldBackgroundColor,
       ),
       child: Scaffold(
         extendBodyBehindAppBar: true,

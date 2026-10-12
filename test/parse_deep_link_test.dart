@@ -160,6 +160,14 @@ void main() {
     expect(shortcutPathAlias('/dm'), ChatsRoute.path);
     expect(shortcutPathAlias('/theme'), SettingsRoute.path);
     expect(shortcutPathAlias('/appearance'), SettingsRoute.path);
+    expect(shortcutPathAlias('/day-theme'), SettingsRoute.path);
+    expect(shortcutPathAlias('/light-theme'), SettingsRoute.path);
+    expect(shortcutPathAlias('/midnight'), SettingsRoute.path);
+    expect(shortcutPathAlias('/oled-theme'), SettingsRoute.path);
+    expect(shortcutPathAlias('/true-black'), SettingsRoute.path);
+    expect(leftoverPathAlias('/go/day-theme'), SettingsRoute.path);
+    expect(leftoverPathAlias('/open/midnight-theme'), SettingsRoute.path);
+    expect(shortcutPathAlias('/reels'), isNull);
     expect(shortcutPathAlias('/compose'), CreatePostRoute.path);
     expect(shortcutPathAlias('/write'), CreatePostRoute.path);
     expect(shortcutPathAlias('/camera'), StoryCreateRoute.path);
