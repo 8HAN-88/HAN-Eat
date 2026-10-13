@@ -5445,6 +5445,10 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/password-change':
       return '${ProfileAuthRoute.path}$q';
     case '/last-seen-privacy':
+    case '/hide-email':
+    case '/email-privacy':
+    case '/public-profile':
+    case '/profile-privacy':
       return '${SettingsRoute.path}$q';
     case '/terminatesessions':
     case '/endsessions':
@@ -5475,6 +5479,10 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return '${ProfileAuthRoute.path}$q';
     case '/lastseenprivacy':
     case '/hidelastseen':
+    case '/hideemail':
+    case '/emailprivacy':
+    case '/publicprofile':
+    case '/profileprivacy':
       return '${SettingsRoute.path}$q';
     case '/publichnayaoferta':
     case '/polzovatelskoesoglashenie':

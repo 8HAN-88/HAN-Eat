@@ -1,7 +1,6 @@
 """API платформы мини-приложений HanWe."""
 from __future__ import annotations
 
-import ipaddress
 import hashlib
 import hmac
 import json
@@ -36,27 +35,9 @@ MINIAPP_CATEGORIES = (
 
 
 def _is_private_or_local_host(host: str) -> bool:
-    normalized = (host or "").strip().lower()
-    if not normalized:
-        return True
-    if normalized in {"localhost", "127.0.0.1", "::1"}:
-        return True
-    if normalized.endswith(".local") or normalized.endswith(".internal"):
-        return True
-    try:
-        ip = ipaddress.ip_address(normalized)
-        return any(
-            [
-                ip.is_private,
-                ip.is_loopback,
-                ip.is_link_local,
-                ip.is_multicast,
-                ip.is_reserved,
-                ip.is_unspecified,
-            ]
-        )
-    except ValueError:
-        return False
+    from app.core.url_safety import is_private_or_local_host
+
+    return is_private_or_local_host(host)
 
 
 def _host_allowed(host: str, allowed_hosts: set[str]) -> bool:

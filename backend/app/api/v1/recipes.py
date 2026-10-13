@@ -87,10 +87,13 @@ def _fetch_proxied_image(url: str) -> Response:
         image_url,
         timeout=10,
         stream=True,
+        allow_redirects=False,
         headers={
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         },
     )
+    if 300 <= resp.status_code < 400:
+        raise HTTPException(status_code=400, detail="Неверная ссылка на изображение")
     if resp.status_code != 200:
         logger.warning(
             "Image proxy error: %s for %s...",
@@ -99,9 +102,18 @@ def _fetch_proxied_image(url: str) -> Response:
         )
         raise HTTPException(status_code=resp.status_code, detail="Не удалось загрузить изображение")
 
-    content_type = resp.headers.get("Content-Type", "image/jpeg")
+    content_type = (resp.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+    if content_type not in {
+        "image/jpeg",
+        "image/jpg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+    }:
+        raise HTTPException(status_code=400, detail="Неверная ссылка на изображение")
+    raw = resp.content[: 5 * 1024 * 1024]
     return Response(
-        content=resp.content,
+        content=raw,
         media_type=content_type,
         headers={
             "Access-Control-Allow-Origin": "*",

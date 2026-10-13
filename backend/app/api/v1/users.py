@@ -366,8 +366,11 @@ async def get_user_profile(
     from app.services.subscription_service import SubscriptionService
 
     sub = SubscriptionService(db)
+    profile = UserResponse.model_validate(user)
+    if not current_user or current_user.id != user_id:
+        profile = profile.public_view()
     return UserProfileResponse(
-        **UserResponse.model_validate(user).model_dump(),
+        **profile.model_dump(),
         stats=stats,
         is_following=is_following,
         is_followed_by=is_followed_by,

@@ -24,11 +24,33 @@ def yandex_oauth_configured() -> bool:
     )
 
 
+def redirect_uri_allowed(redirect_uri: str) -> bool:
+    from urllib.parse import urlparse
+
+    parsed = urlparse((redirect_uri or "").strip())
+    host = (parsed.hostname or "").lower()
+    if not host or parsed.scheme not in ("http", "https"):
+        return False
+    if host in {"localhost", "127.0.0.1", "::1"}:
+        return True
+    if host in {"haneat.app", "www.haneat.app"}:
+        return parsed.scheme == "https"
+    frontend = urlparse(settings.FRONTEND_URL or "")
+    allowed = (frontend.hostname or "").lower()
+    return bool(allowed) and host == allowed
+
+
 def build_authorize_url(*, redirect_uri: str) -> str:
+    clean = redirect_uri.strip()
+    if not redirect_uri_allowed(clean):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Неверный адрес возврата",
+        )
     params = {
         "response_type": "code",
         "client_id": settings.YANDEX_OAUTH_CLIENT_ID.strip(),
-        "redirect_uri": redirect_uri.strip(),
+        "redirect_uri": clean,
     }
     return f"{YANDEX_AUTHORIZE_URL}?{urlencode(params)}"
 
@@ -41,6 +63,12 @@ async def exchange_code_and_fetch_profile(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Вход через Яндекс не настроен",
+        )
+
+    if not redirect_uri_allowed(redirect_uri):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Неверный адрес возврата",
         )
 
     async with httpx.AsyncClient() as client:

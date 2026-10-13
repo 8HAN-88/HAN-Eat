@@ -30,10 +30,9 @@ def _user_id_from_access(payload: Optional[dict]) -> Optional[int]:
 
 
 def _access_session_allowed(db: Session, payload: dict, user_id: int) -> bool:
-    """New access tokens must belong to a live session. Legacy tokens without sid
-    still work until they expire (ACCESS_TOKEN_EXPIRE_MINUTES)."""
+    """Access tokens must belong to a live session. Tokens without sid are rejected."""
     if access_session_id(payload) is None:
-        return True
+        return False
     return get_active_access_session(db, payload=payload, user_id=user_id) is not None
 
 

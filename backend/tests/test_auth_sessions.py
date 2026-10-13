@@ -170,7 +170,7 @@ def test_revoked_session_rejects_access_payload(db_session):
     assert _access_session_allowed(db_session, payload, user.id) is False
 
 
-def test_legacy_access_without_sid_still_allowed(db_session):
+def test_legacy_access_without_sid_is_rejected(db_session):
     from app.api.dependencies import _access_session_allowed
     from app.core.security import create_access_token
 
@@ -178,4 +178,4 @@ def test_legacy_access_without_sid_still_allowed(db_session):
     payload = decode_token(create_access_token({"sub": str(user.id)}))
     assert payload is not None
     assert "sid" not in payload
-    assert _access_session_allowed(db_session, payload, user.id) is True
+    assert _access_session_allowed(db_session, payload, user.id) is False
