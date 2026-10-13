@@ -7,6 +7,7 @@ from fastapi import APIRouter, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.core.config import settings
+from app.core.public_surface import cors_origins_for_env, docs_routes_for_env
 from app.core.retired import KITCHEN_GONE_DETAIL
 from app.api.v1 import auth, users, posts, feed, channels, communities, media, moderation, likes, comments, saved_posts, reposts, reports, analytics, notifications, subscriptions, support, search, payments, recipes, community_upload, creator, system, legal, chats, link_preview, realtime, paid_features, bots, bot_chats, donations, stories, miniapps, stickers, calls, gifs, flex_subscription, ai_assist, ads, revenue_share
 import app.services.user_realtime_hooks  # noqa: F401 — регистрация after_commit hooks
@@ -17,14 +18,14 @@ import app.models
 
 logger = logging.getLogger(__name__)
 
-_docs = "/docs" if settings.APP_ENV == "development" else None
-_redoc = "/redoc" if settings.APP_ENV == "development" else None
+_docs_routes = docs_routes_for_env(settings.APP_ENV)
 
 app = FastAPI(
     title=settings.APP_NAME,
     version="1.0.0",
-    docs_url=_docs,
-    redoc_url=_redoc,
+    docs_url=_docs_routes["docs_url"],
+    redoc_url=_docs_routes["redoc_url"],
+    openapi_url=_docs_routes["openapi_url"],
 )
 
 # Мониторинг производительности (добавляем первым, чтобы отслеживать все запросы)
@@ -34,16 +35,10 @@ app.add_middleware(RateLimitMiddleware)
 # CORS
 # Production web (haneat.app) must always work — even if APP_ENV was left as
 # "development" on the server by mistake. Localhost regex stays for Flutter web
-# debugging on random ports.
-_PRODUCTION_WEB_ORIGINS = (
-    "https://haneat.app",
-    "https://www.haneat.app",
-    "https://kitchen.haneat.app",
-)
-_cors_origins = list(
-    dict.fromkeys(
-        [*settings.ALLOWED_ORIGINS, *_PRODUCTION_WEB_ORIGINS],
-    )
+# debugging on random ports, and only in development.
+_cors_origins = cors_origins_for_env(
+    list(settings.ALLOWED_ORIGINS or []),
+    settings.APP_ENV,
 )
 _cors_kwargs = {
     "allow_origins": _cors_origins,
@@ -147,11 +142,13 @@ app.include_router(legal.api_router, prefix="/api/v1/legal", tags=["Legal"])
 
 @app.get("/")
 async def root():
-    return {
+    payload = {
         "message": "HanWe API",
         "version": "1.0.0",
-        "docs": "/docs"
     }
+    if settings.APP_ENV == "development":
+        payload["docs"] = "/docs"
+    return payload
 
 
 @app.get("/health")
@@ -165,13 +162,16 @@ async def health():
     redis_ok = True if not redis_cfg["enabled"] else redis_cfg["ok"]
     ok = db_ok and redis_ok
     provider = (settings.EMAIL_PROVIDER or "smtp").strip().lower()
+    redis_public = {
+        "enabled": bool(redis_cfg.get("enabled")),
+        "ok": redis_ok,
+    }
     return {
         "status": "ok" if ok else "degraded",
         "database": db_ok,
-        "redis": redis_cfg,
+        "redis": redis_public,
         "email_smtp_configured": email_delivery_configured(),
         "email_provider": provider,
-        "email_from": settings.EMAIL_FROM or None,
     }
 
 

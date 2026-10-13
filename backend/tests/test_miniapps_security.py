@@ -6,6 +6,19 @@ from fastapi import HTTPException
 from app.api.v1 import miniapps as m
 
 
+def test_ensure_url_rejects_hostname_that_resolves_private(monkeypatch):
+    monkeypatch.setattr(m.settings, "MINIAPP_BLOCK_PRIVATE_HOSTS", True)
+    monkeypatch.setattr(m.settings, "MINIAPP_ALLOWED_HOSTS", [])
+    monkeypatch.setattr(m.settings, "APP_ENV", "production")
+    monkeypatch.setattr(
+        "app.core.url_safety.host_resolves_to_blocked_ip",
+        lambda host: host == "evil.internal",
+    )
+    with pytest.raises(HTTPException) as exc:
+        m._ensure_url("https://evil.internal/app")
+    assert exc.value.status_code == 400
+
+
 def test_ensure_url_rejects_private_local_hosts(monkeypatch):
     monkeypatch.setattr(m.settings, "MINIAPP_BLOCK_PRIVATE_HOSTS", True)
     monkeypatch.setattr(m.settings, "MINIAPP_ALLOWED_HOSTS", [])

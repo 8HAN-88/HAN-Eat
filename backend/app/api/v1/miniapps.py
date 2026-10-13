@@ -97,7 +97,12 @@ def _ensure_url(url: str) -> str:
         allowed = set(settings.MINIAPP_ALLOWED_HOSTS)
         if not _host_allowed(host, allowed):
             raise HTTPException(status_code=400, detail="Этот хост не разрешён")
-    elif settings.APP_ENV != "development" and parsed.scheme != "https":
+    elif bool(getattr(settings, "MINIAPP_BLOCK_PRIVATE_HOSTS", True)):
+        from app.core.url_safety import host_resolves_to_blocked_ip
+
+        if host_resolves_to_blocked_ip(host):
+            raise HTTPException(status_code=400, detail="Локальные и закрытые адреса запрещены")
+    if settings.APP_ENV != "development" and parsed.scheme != "https":
         raise HTTPException(status_code=400, detail="В продакшене разрешён только https")
     return clean
 

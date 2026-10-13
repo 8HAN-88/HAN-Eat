@@ -1113,7 +1113,7 @@ async def stripe_webhook(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process webhook: {str(e)}"
+            detail="Failed to process webhook",
         )
 
 
@@ -1276,13 +1276,10 @@ async def payments_readiness():
     Публичная проверка готовности платежей (без секретов).
     """
     issues = collect_payments_issues()
-    base = settings.API_PUBLIC_BASE_URL.rstrip("/")
     payload = {
         "tbank_enabled": settings.TBANK_ENABLED,
         "yookassa_enabled": settings.YOOKASSA_ENABLED,
         "app_env": settings.APP_ENV,
-        "frontend_url": settings.FRONTEND_URL,
-        "return_url_hint": f"{settings.FRONTEND_URL.rstrip('/')}/subscription/success",
         "tiers_rub": {
             "ai": settings.AI_MONTHLY_PRICE_RUB,
             "creator": settings.CREATOR_MONTHLY_PRICE_RUB,
@@ -1298,14 +1295,12 @@ async def payments_readiness():
         tb = get_tbank_service()
         payload["tbank_ready"] = tb.enabled
         payload["sbp_recurring"] = settings.TBANK_SBP_RECURRING_ENABLED
-        payload["webhook_url"] = f"{base}/api/v1/payments/webhook/tbank"
     else:
         from app.services.yookassa_service import get_yookassa_service
 
         yk = get_yookassa_service()
         payload["yookassa_ready"] = yk.enabled
         payload["sbp_recurring"] = settings.YOOKASSA_SBP_RECURRING_ENABLED
-        payload["webhook_url"] = f"{base}/api/v1/payments/webhook/yookassa"
     return payload
 
 

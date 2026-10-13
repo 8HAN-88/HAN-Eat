@@ -19,7 +19,8 @@ def check_database() -> tuple[bool, str | None]:
             conn.execute(text("SELECT 1"))
         return True, None
     except Exception as e:
-        return False, f"Database unreachable: {e}"
+        logger.warning("Database check failed: %s", e)
+        return False, "Database unreachable"
 
 
 def check_redis() -> tuple[bool, str | None]:
@@ -34,7 +35,8 @@ def check_redis() -> tuple[bool, str | None]:
         client.ping()
         return True, None
     except Exception as e:
-        return False, f"Redis unreachable: {e}"
+        logger.warning("Redis check failed: %s", e)
+        return False, "Redis unreachable"
 
 
 def collect_firebase_issues() -> list[str]:
@@ -59,7 +61,8 @@ def collect_firebase_issues() -> list[str]:
         if not push.enabled:
             issues.append("Firebase Admin SDK не инициализирован — push не работает")
     except Exception as e:
-        issues.append(f"Firebase init error: {e}")
+        logger.warning("Firebase check failed: %s", e)
+        issues.append("Firebase init error")
 
     return issues
 

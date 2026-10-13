@@ -5435,6 +5435,14 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/session-list':
     case '/kick-all-sessions':
     case '/security-and-login':
+    case '/login-activity':
+    case '/login-history':
+    case '/connected-devices':
+    case '/authorized-devices':
+    case '/active-web-sessions':
+    case '/security-keys':
+    case '/passkey':
+    case '/revoke-all-sessions':
       return '${AccountSecurityRoute.path}$q';
     case '/two-step-verification':
     case '/google-authenticator':
@@ -5449,6 +5457,10 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/email-privacy':
     case '/public-profile':
     case '/profile-privacy':
+    case '/hide-phone':
+    case '/phone-privacy':
+    case '/email-code':
+    case '/sms-code':
       return '${SettingsRoute.path}$q';
     case '/terminatesessions':
     case '/endsessions':
@@ -5469,6 +5481,13 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/sessionlist':
     case '/kickallsessions':
     case '/securityandlogin':
+    case '/loginactivity':
+    case '/loginhistory':
+    case '/connecteddevices':
+    case '/authorizeddevices':
+    case '/activewebsessions':
+    case '/securitykeys':
+    case '/revokeallsessions':
       return '${AccountSecurityRoute.path}$q';
     case '/twostepverification':
     case '/googleauthenticator':
@@ -5483,6 +5502,10 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/emailprivacy':
     case '/publicprofile':
     case '/profileprivacy':
+    case '/hidephone':
+    case '/phoneprivacy':
+    case '/emailcode':
+    case '/smscode':
       return '${SettingsRoute.path}$q';
     case '/publichnayaoferta':
     case '/polzovatelskoesoglashenie':
