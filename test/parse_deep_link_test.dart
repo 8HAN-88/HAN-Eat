@@ -2627,6 +2627,12 @@ void main() {
     expect(shortcutPathAlias('/totp'), TwoFactorSetupRoute.path);
     expect(shortcutPathAlias('/password-change'), ProfileAuthRoute.path);
     expect(shortcutPathAlias('/last-seen-privacy'), SettingsRoute.path);
+    expect(shortcutPathAlias('/hide-email'), SettingsRoute.path);
+    expect(shortcutPathAlias('/email-privacy'), SettingsRoute.path);
+    expect(shortcutPathAlias('/public-profile'), SettingsRoute.path);
+    expect(shortcutPathAlias('/profile-privacy'), SettingsRoute.path);
+    expect(leftoverPathAlias('/go/hide-email'), SettingsRoute.path);
+    expect(shortcutPathAlias('/reels'), isNull);
     expect(shortcutPathAlias('/accountsecurity'), AccountSecurityRoute.path);
     expect(leftoverPathAlias('/go/terminate-sessions'), AccountSecurityRoute.path);
     expect(leftoverPathAlias('/go/signed-in-devices'), AccountSecurityRoute.path);

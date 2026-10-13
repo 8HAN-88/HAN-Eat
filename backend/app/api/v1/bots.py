@@ -6,7 +6,6 @@ import re
 import secrets
 from datetime import datetime
 from typing import List, Optional
-from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -198,13 +197,16 @@ def _bot_or_404(db: Session, bot_id: int, owner_id: int) -> User:
 
 
 def _validate_webhook_url(url: str) -> str:
-    clean = (url or "").strip()
-    parsed = urlparse(clean)
-    if parsed.scheme not in ("http", "https"):
-        raise HTTPException(status_code=400, detail="Адрес вебхука должен начинаться с http/https")
-    if not parsed.netloc:
-        raise HTTPException(status_code=400, detail="Укажите хост вебхука")
-    return clean
+    from app.core.config import settings
+    from app.core.url_safety import require_public_http_url
+
+    try:
+        return require_public_http_url(
+            url,
+            https_only=settings.APP_ENV != "development",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 # === Endpoints ===

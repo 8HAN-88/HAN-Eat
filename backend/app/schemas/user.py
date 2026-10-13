@@ -79,6 +79,25 @@ class UserResponse(BaseModel):
             return result.model_copy(update=updates)
         return result
 
+    def public_view(self) -> "UserResponse":
+        """Strip mailbox, 2FA, admin and legal fields from another user's profile."""
+        return self.model_copy(
+            update={
+                "email": "",
+                "phone": None,
+                "phone_linked": False,
+                "is_admin": False,
+                "is_moderator": False,
+                "trust_score": None,
+                "totp_enabled": False,
+                "email_verified": False,
+                "legal_consent_required": False,
+                "legal_consent_version": None,
+                "legal_consent_at": None,
+                "scan_credits": None,
+            }
+        )
+
     class Config:
         from_attributes = True
 

@@ -67,6 +67,7 @@ from app.services.email_delivery_service import EmailDeliveryError
 from app.services.yandex_oauth_service import (
     build_authorize_url,
     exchange_code_and_fetch_profile,
+    redirect_uri_allowed,
     yandex_oauth_configured,
 )
 from app.schemas.user import UserResponse
@@ -696,6 +697,11 @@ async def yandex_auth(request: YandexAuthRequest, http_request: Request, db: Ses
 
     enforce_auth_attempt_limit(http_request)
     try:
+        if not redirect_uri_allowed(request.redirect_uri.strip()):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Неверный адрес возврата",
+            )
         profile = await exchange_code_and_fetch_profile(
             request.code.strip(),
             request.redirect_uri.strip(),

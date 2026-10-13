@@ -253,10 +253,23 @@ def fetch_link_preview(url: str) -> dict:
     }
     with httpx.Client(
         timeout=_TIMEOUT,
-        follow_redirects=True,
-        max_redirects=3,
+        follow_redirects=False,
     ) as client:
-        response = client.get(safe_url, headers=headers)
+        current = safe_url
+        response = None
+        for _ in range(4):
+            response = client.get(current, headers=headers)
+            if response.is_redirect:
+                location = response.headers.get("location")
+                if not location:
+                    raise ValueError("Неверная ссылка")
+                from urllib.parse import urljoin
+
+                current = _validate_public_url(urljoin(current, location))
+                continue
+            break
+        if response is None or response.is_redirect:
+            raise ValueError("Слишком много переадресаций")
         response.raise_for_status()
         content_type = (response.headers.get("content-type") or "").lower()
         if "text/html" not in content_type and "application/xhtml" not in content_type:
