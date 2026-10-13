@@ -568,17 +568,19 @@ async def refresh_token(
 @router.get("/google/readiness")
 async def google_auth_readiness():
     """Проверка конфигурации Google Sign-In (без секретов)."""
+    from app.core.public_surface import google_readiness_public
+
     ids = [
         x.strip()
         for x in (settings.GOOGLE_OAUTH_CLIENT_IDS or "").split(",")
         if x.strip()
     ]
-    return {
-        "configured": bool(ids),
-        "client_ids_count": len(ids),
-        "skip_verification": settings.SKIP_GOOGLE_ID_TOKEN_VERIFICATION,
-        "production_safe": bool(ids) and not settings.SKIP_GOOGLE_ID_TOKEN_VERIFICATION,
-    }
+    return google_readiness_public(
+        configured=bool(ids),
+        skip_verification=settings.SKIP_GOOGLE_ID_TOKEN_VERIFICATION,
+        client_ids_count=len(ids),
+        app_env=settings.APP_ENV,
+    )
 
 
 @router.post("/google", response_model=AuthResponse)

@@ -10,12 +10,9 @@ from app.core.media_startup import (
     collect_media_issues,
     ffmpeg_available,
     media_upload_mode,
-    video_queue_depth,
-    video_worker_heartbeat_age_seconds,
 )
 from app.core.payments_startup import collect_payments_issues
 from app.core.production_startup import collect_production_issues
-from app.services.bot_webhook_queue_service import webhook_queue_stats
 
 router = APIRouter()
 
@@ -39,27 +36,31 @@ async def system_readiness():
     production = collect_production_issues()
     infrastructure = collect_infrastructure_issues()
     all_issues = payments + media + production + infrastructure
-    base = settings.API_PUBLIC_BASE_URL.rstrip("/")
+    infra = infrastructure_status()
     return {
         "app_env": settings.APP_ENV,
         "ready": len(all_issues) == 0,
         "issues": all_issues,
         "payments": {
-            "webhook_url": f"{base}/api/v1/payments/webhook/yookassa",
+            "ready": len(payments) == 0,
             "issues": payments,
         },
         "media": {
             "s3_configured": _s3_fully_configured(),
             "upload_mode": media_upload_mode(),
-            "cdn_url": settings.CDN_URL,
-            "bucket": settings.S3_BUCKET,
             "ffmpeg_available": ffmpeg_available(),
-            "video_queue_depth": video_queue_depth(),
-            "video_worker_heartbeat_age_seconds": video_worker_heartbeat_age_seconds(),
-            "max_video_size_mb": settings.MAX_VIDEO_SIZE_MB,
             "issues": media,
         },
-        "infrastructure": infrastructure_status(),
+        "infrastructure": {
+            "database": {"ok": bool((infra.get("database") or {}).get("ok"))},
+            "redis": {
+                "enabled": bool((infra.get("redis") or {}).get("enabled")),
+                "ok": bool((infra.get("redis") or {}).get("ok")),
+            },
+            "firebase": {
+                "enabled": bool((infra.get("firebase") or {}).get("enabled")),
+                "push_ready": bool((infra.get("firebase") or {}).get("push_ready")),
+            },
+        },
         "production_issues": production,
-        "bot_webhooks": webhook_queue_stats(),
     }

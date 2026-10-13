@@ -2637,6 +2637,11 @@ void main() {
     expect(leftoverPathAlias('/go/terminate-sessions'), AccountSecurityRoute.path);
     expect(leftoverPathAlias('/go/signed-in-devices'), AccountSecurityRoute.path);
     expect(leftoverPathAlias('/open/security-and-login'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/login-activity'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/connected-devices'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/hide-phone'), SettingsRoute.path);
+    expect(leftoverPathAlias('/go/login-history'), AccountSecurityRoute.path);
+    expect(leftoverPathAlias('/go/phone-privacy'), SettingsRoute.path);
     expect(
       parseDeepLinkToGoPath('https://haneat.app/app/#/totp'),
       TwoFactorSetupRoute.path,
