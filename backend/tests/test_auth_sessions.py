@@ -179,3 +179,33 @@ def test_legacy_access_without_sid_is_rejected(db_session):
     assert payload is not None
     assert "sid" not in payload
     assert _access_session_allowed(db_session, payload, user.id) is False
+
+
+def test_kill_sessions_after_reset_drops_all(db_session):
+    user = _user(db_session)
+    _, _, a = svc.create_session(db_session, user=user, device_name="A")
+    _, _, b = svc.create_session(db_session, user=user, device_name="B")
+    db_session.commit()
+    n = svc.kill_sessions_after_secret_change(db_session, user_id=user.id)
+    db_session.commit()
+    assert n == 2
+    db_session.refresh(a)
+    db_session.refresh(b)
+    assert a.revoked_at is not None
+    assert b.revoked_at is not None
+
+
+def test_kill_sessions_after_change_keeps_current(db_session):
+    user = _user(db_session)
+    _, _, a = svc.create_session(db_session, user=user, device_name="A")
+    _, _, b = svc.create_session(db_session, user=user, device_name="B")
+    db_session.commit()
+    n = svc.kill_sessions_after_secret_change(
+        db_session, user_id=user.id, keep_session_id=a.id
+    )
+    db_session.commit()
+    assert n == 1
+    db_session.refresh(a)
+    db_session.refresh(b)
+    assert a.revoked_at is None
+    assert b.revoked_at is not None

@@ -177,6 +177,17 @@ def revoke_other_sessions(
     return count
 
 
+def kill_sessions_after_secret_change(
+    db: Session, *, user_id: int, keep_session_id: Optional[int] = None
+) -> int:
+    """Password reset / 2FA off: drop live sessions. Keep the current one if known."""
+    if keep_session_id is None:
+        return revoke_all_sessions(db, user_id=user_id)
+    return revoke_other_sessions(
+        db, user_id=user_id, keep_session_id=keep_session_id
+    )
+
+
 def revoke_all_sessions(db: Session, *, user_id: int) -> int:
     now = _now()
     count = 0

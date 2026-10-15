@@ -2653,6 +2653,10 @@ void main() {
     expect(shortcutPathAlias('/2fa'), TwoFactorSetupRoute.path);
     expect(shortcutPathAlias('/sessions'), AccountSecurityRoute.path);
     expect(shortcutPathAlias('/blocked'), BlockedUsersRoute.path);
+    expect(shortcutPathAlias('/forgot-password'), ForgotPasswordRoute.path);
+    expect(shortcutPathAlias('/reset-password'), ForgotPasswordRoute.path);
+    expect(shortcutPathAlias('/sign-out-all'), AccountSecurityRoute.path);
+    expect(leftoverPathAlias('/go/new-password'), ForgotPasswordRoute.path);
     expect(shortcutPathAlias('/reels'), isNull);
     expect(shortcutPathAlias('/logout'), isNull);
     expect(shortcutPathAlias('/delete-account'), isNull);

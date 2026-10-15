@@ -411,7 +411,19 @@ async def update_user_profile(
     if request.paid_message_stars is not None:
         current_user.paid_message_stars = max(0, int(request.paid_message_stars))
     if request.avatar_url is not None:
-        current_user.avatar_url = request.avatar_url
+        from app.core.config import settings
+        from app.core.url_safety import profile_media_url_allowed
+
+        try:
+            current_user.avatar_url = profile_media_url_allowed(
+                request.avatar_url,
+                https_only=settings.APP_ENV != "development",
+            ) or None
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Неверная ссылка на фото",
+            )
     if request.fcm_token is not None:
         current_user.fcm_token = request.fcm_token
     if request.voip_token is not None:
