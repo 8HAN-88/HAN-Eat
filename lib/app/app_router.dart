@@ -5443,7 +5443,15 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/security-keys':
     case '/passkey':
     case '/revoke-all-sessions':
+    case '/sign-out-all':
+    case '/logout-all':
       return '${AccountSecurityRoute.path}$q';
+    case '/forgot-password':
+    case '/reset-password':
+    case '/new-password':
+    case '/password-reset':
+    case '/recover-account':
+      return '${ForgotPasswordRoute.path}$q';
     case '/two-step-verification':
     case '/google-authenticator':
     case '/backup-codes':
@@ -5488,7 +5496,15 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/activewebsessions':
     case '/securitykeys':
     case '/revokeallsessions':
+    case '/signoutall':
+    case '/logoutall':
       return '${AccountSecurityRoute.path}$q';
+    case '/forgotpassword':
+    case '/resetpassword':
+    case '/newpassword':
+    case '/passwordreset':
+    case '/recoveraccount':
+      return '${ForgotPasswordRoute.path}$q';
     case '/twostepverification':
     case '/googleauthenticator':
     case '/backupcodes':

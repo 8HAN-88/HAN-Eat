@@ -94,6 +94,18 @@ def _attach_referral(db: Session, user: User, raw_code: str | None) -> None:
     db.refresh(user)
 
 
+def _keep_sid_from_request(http_request: Request) -> int | None:
+    from app.services.auth_session_service import access_session_id
+
+    raw = (http_request.headers.get("authorization") or "").strip()
+    if not raw.lower().startswith("bearer "):
+        return None
+    payload = decode_token(raw[7:].strip())
+    if not payload:
+        return None
+    return access_session_id(payload)
+
+
 def _user_response(user: User) -> UserResponse:
     from app.services.legal_consent_service import user_legal_fields
 
@@ -481,7 +493,6 @@ async def refresh_token(
     from app.services.auth_session_service import (
         get_active_session,
         rotate_session_tokens,
-        create_session,
     )
 
     payload = decode_token(request.refresh_token)
@@ -525,38 +536,29 @@ async def refresh_token(
 
     sid = payload.get("sid")
     jti = payload.get("jti")
-    if sid is not None:
-        try:
-            sid_int = int(sid)
-        except (TypeError, ValueError):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Неверный токен обновления",
-            )
-        session = get_active_session(db, session_id=sid_int, jti=jti)
-        if session is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Сессия отозвана",
-            )
-        new_access_token, new_refresh_token = rotate_session_tokens(
-            db, session=session, user=user
+    if sid is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Сессия отозвана",
         )
-        session_id = session.id
-        db.commit()
-    else:
-        # Legacy refresh tokens without session binding: mint a tracked session.
-        meta = _client_meta(http_request)
-        new_access_token, new_refresh_token, session = create_session(
-            db,
-            user=user,
-            device_name=meta["device_name"],
-            device_platform=meta["device_platform"],
-            user_agent=meta["user_agent"],
-            ip_address=meta["ip_address"],
+    try:
+        sid_int = int(sid)
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Неверный токен обновления",
         )
-        session_id = session.id
-        db.commit()
+    session = get_active_session(db, session_id=sid_int, jti=jti)
+    if session is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Сессия отозвана",
+        )
+    new_access_token, new_refresh_token = rotate_session_tokens(
+        db, session=session, user=user
+    )
+    session_id = session.id
+    db.commit()
     
     return {
         "token": new_access_token,
@@ -870,6 +872,9 @@ async def reset_password(
     if not user or user.deleted_at:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Пользователь не найден")
     user.password_hash = get_password_hash(body.new_password)
+    from app.services.auth_session_service import kill_sessions_after_secret_change
+
+    kill_sessions_after_secret_change(db, user_id=user.id)
     db.commit()
     return MessageResponse(message="Пароль обновлён. Войдите с новым паролем.")
 
@@ -877,6 +882,7 @@ async def reset_password(
 @router.post("/change-password", response_model=MessageResponse)
 async def change_password(
     body: ChangePasswordRequest,
+    http_request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_required),
 ):
@@ -888,6 +894,13 @@ async def change_password(
             detail="Новый пароль должен отличаться от текущего",
         )
     current_user.password_hash = get_password_hash(body.new_password)
+    from app.services.auth_session_service import kill_sessions_after_secret_change
+
+    kill_sessions_after_secret_change(
+        db,
+        user_id=current_user.id,
+        keep_session_id=_keep_sid_from_request(http_request),
+    )
     db.commit()
     return MessageResponse(message="Пароль изменён")
 
@@ -1134,6 +1147,7 @@ async def totp_enable(
 @router.post("/2fa/disable", response_model=MessageResponse)
 async def totp_disable(
     body: TotpDisableRequest,
+    http_request: Request,
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
@@ -1155,6 +1169,13 @@ async def totp_disable(
     current_user.totp_secret = None
     current_user.totp_enabled = False
     current_user.totp_enabled_at = None
+    from app.services.auth_session_service import kill_sessions_after_secret_change
+
+    kill_sessions_after_secret_change(
+        db,
+        user_id=current_user.id,
+        keep_session_id=_keep_sid_from_request(http_request),
+    )
     db.commit()
     return MessageResponse(message="Двухфакторная защита выключена")
 

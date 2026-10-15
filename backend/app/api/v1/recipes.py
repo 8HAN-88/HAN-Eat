@@ -137,13 +137,13 @@ async def proxy_recipe_image_v2(
         return _fetch_proxied_image(url)
     except HTTPException:
         raise
-    except requests.RequestException as e:
+    except requests.RequestException:
         raise HTTPException(
-            status_code=500, detail=f"Не удалось загрузить изображение: {str(e)}"
+            status_code=500, detail="Не удалось загрузить изображение"
         )
-    except Exception as e:
+    except Exception:
         raise HTTPException(
-            status_code=500, detail=f"Неожиданная ошибка: {str(e)}"
+            status_code=500, detail="Не удалось загрузить изображение"
         )
 
 

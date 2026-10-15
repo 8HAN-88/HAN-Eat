@@ -68,6 +68,26 @@ def parse_http_url(url: str) -> tuple[str, str]:
     return parsed.geturl(), host
 
 
+def profile_media_url_allowed(url: str, *, https_only: bool = True) -> str:
+    """Avatar / cover URLs: empty, our upload path, or public http(s)."""
+    clean = (url or "").strip()
+    if not clean:
+        return ""
+    if ".." in clean:
+        raise ValueError("Неверная ссылка на фото")
+    if clean.startswith("/uploads/"):
+        return clean
+    if clean.startswith("uploads/"):
+        return clean
+    parsed_url, host = parse_http_url(clean)
+    parsed = urlparse(parsed_url)
+    if https_only and parsed.scheme != "https":
+        raise ValueError("Разрешён только https")
+    if is_private_or_local_host(host):
+        raise ValueError("Этот адрес недоступен")
+    return parsed_url
+
+
 def require_public_http_url(url: str, *, https_only: bool = False) -> str:
     clean, host = parse_http_url(url)
     parsed = urlparse(clean)
