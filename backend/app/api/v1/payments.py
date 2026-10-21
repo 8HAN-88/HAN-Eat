@@ -165,6 +165,20 @@ class CreateStarsCheckoutRequest(BaseModel):
     cancel_url: Optional[str] = None
 
 
+def _checked_return_url(url: Optional[str], fallback: str) -> str:
+    from app.core.public_surface import frontend_return_url_allowed
+
+    if not url or not str(url).strip():
+        return fallback
+    clean = str(url).strip()
+    if not frontend_return_url_allowed(clean, settings.FRONTEND_URL):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Неверный адрес возврата",
+        )
+    return clean
+
+
 class RefundRequestBody(BaseModel):
     subscription_id: int
     reason: Optional[str] = None
@@ -242,8 +256,12 @@ async def create_stars_checkout(
         "package_id": request.package_id,
         "stars": str(stars),
     }
-    success_url = request.success_url or f"{settings.FRONTEND_URL}/paid/success"
-    fail_url = request.cancel_url or f"{settings.FRONTEND_URL}/paid/cancel"
+    success_url = _checked_return_url(
+        request.success_url, f"{settings.FRONTEND_URL}/paid/success"
+    )
+    fail_url = _checked_return_url(
+        request.cancel_url, f"{settings.FRONTEND_URL}/paid/cancel"
+    )
 
     try:
         if provider == "tbank":
@@ -432,10 +450,12 @@ async def create_checkout_session(
                     "full_price_rub": f"{estimate.get('full_price', amount):.2f}",
                 }
 
-            success_url = (
-                request.success_url or f"{settings.FRONTEND_URL}/subscription/success"
+            success_url = _checked_return_url(
+                request.success_url, f"{settings.FRONTEND_URL}/subscription/success"
             )
-            fail_url = request.cancel_url or f"{settings.FRONTEND_URL}/subscription/cancel"
+            fail_url = _checked_return_url(
+                request.cancel_url, f"{settings.FRONTEND_URL}/subscription/cancel"
+            )
 
             result = tbank_service.create_payment(
                 user_id=current_user.id,
@@ -516,7 +536,10 @@ async def create_checkout_session(
                 amount=amount,
                 plan=request.plan,
                 description=description,
-                return_url=request.success_url or f"{settings.FRONTEND_URL}/subscription/success",
+                return_url=_checked_return_url(
+                    request.success_url,
+                    f"{settings.FRONTEND_URL}/subscription/success",
+                ),
                 product=product,
                 receipt_description=receipt_line[:128],
                 metadata_extra=metadata_extra,
@@ -574,8 +597,14 @@ async def create_checkout_session(
                 user_id=current_user.id,
                 user_email=current_user.email,
                 plan=request.plan,
-                success_url=request.success_url,
-                cancel_url=request.cancel_url
+                success_url=_checked_return_url(
+                    request.success_url,
+                    f"{settings.FRONTEND_URL}/subscription/success",
+                ),
+                cancel_url=_checked_return_url(
+                    request.cancel_url,
+                    f"{settings.FRONTEND_URL}/subscription/cancel",
+                ),
             )
             
             return CheckoutSessionResponse(
@@ -646,7 +675,7 @@ async def yookassa_webhook(
         or request.headers.get("X-Webhook-Signature")
         or ""
     )
-    if settings.APP_ENV == "production" or settings.YOOKASSA_WEBHOOK_SIGNATURE_REQUIRED:
+    if settings.APP_ENV != "development" or settings.YOOKASSA_WEBHOOK_SIGNATURE_REQUIRED:
         if not yookassa_service.verify_webhook_event(event, signature):
             logger.warning("YooKassa webhook: invalid or missing signature")
             raise HTTPException(

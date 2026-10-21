@@ -33,6 +33,9 @@ async def like_post(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Пост не найден"
         )
+    from app.services.post_visibility import require_can_view_post
+
+    require_can_view_post(db, post, current_user)
     
     # Проверяем, не лайкнул ли уже
     existing_like = db.query(Like).filter(

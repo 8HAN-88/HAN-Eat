@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import Optional
 from app.core.database import get_db
-from app.api.dependencies import get_current_user_required
+from app.api.dependencies import get_current_user, get_current_user_required
 from app.models.user import User
 from app.models.post import Post
 from app.models.comment import Comment
@@ -41,6 +41,9 @@ async def create_comment(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Пост не найден"
         )
+    from app.services.post_visibility import require_can_view_post
+
+    require_can_view_post(db, post, current_user)
     from app.services.anti_spam_service import AntiSpamService
 
     ok, spam_msg = AntiSpamService(db).check_can_create_comment(current_user)
@@ -129,9 +132,12 @@ async def get_comments(
     post_id: int,
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
 ):
     """Получить комментарии к посту"""
+    from app.services.post_visibility import require_can_view_post
+
     # Проверяем, что пост существует
     post = db.query(Post).filter(
         Post.id == post_id,
@@ -143,6 +149,7 @@ async def get_comments(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Пост не найден"
         )
+    require_can_view_post(db, post, current_user)
     
     # Получаем комментарии с eager loading авторов (оптимизация для 100k пользователей)
     from sqlalchemy.orm import joinedload

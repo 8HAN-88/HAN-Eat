@@ -1387,8 +1387,8 @@ class User {
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
       id: _userJsonInt(json['id']),
-      email: json['email'] as String,
-      name: json['name'] as String,
+      email: json['email'] as String? ?? '',
+      name: json['name'] as String? ?? '',
       username: json['username'] as String?,
       avatarUrl: json['avatar_url'] as String?,
       bio: json['bio'] as String?,

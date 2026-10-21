@@ -286,7 +286,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       if (mounted) {
         _syncTabController(profileUserId: _profile?.user.id);
         setState(() => _isLoading = false);
-        unawaited(_loadProfileGifts());
+        if (!_profileLocked) {
+          unawaited(_loadProfileGifts());
+        } else {
+          _profileGifts = const [];
+        }
         _maybeStartLeftoverCall();
       }
     }
@@ -1001,7 +1005,44 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   ),
                 ),
               ],
-              if (_profileGifts.isNotEmpty) ...[
+              if (_profileLocked) ...[
+                const SizedBox(height: AppSpacing.md),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                  decoration: BoxDecoration(
+                    color: scheme.surfaceContainerHighest.withValues(alpha: 0.7),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.lock_outline_rounded,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Профиль закрытый',
+                        style: textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Подпишитесь, чтобы видеть записи',
+                        textAlign: TextAlign.center,
+                        style: textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              if (!_profileLocked && _profileGifts.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.md),
                 Container(
                   width: double.infinity,
@@ -1214,6 +1255,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     await _loadProfile();
   }
 
+  bool get _profileLocked {
+    final user = _profile?.user;
+    if (user == null) return false;
+    if (_isOwnProfileView(profileUserId: user.id)) return false;
+    return user.isPrivate && !_isFollowing;
+  }
+
   Widget _postsList({required String? postType}) {
     return _PostsListWidget(
       key: ValueKey(
@@ -1221,6 +1269,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       ),
       userId: _effectiveUserId,
       postType: postType,
+      locked: _profileLocked,
       onCreate: _isOwnProfileView(profileUserId: _effectiveUserId)
           ? () => unawaited(_openCreateContent())
           : null,
@@ -1248,12 +1297,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
 class _PostsListWidget extends StatefulWidget {
   final int userId;
   final String? postType;
+  final bool locked;
   final VoidCallback? onCreate;
 
   const _PostsListWidget({
     super.key,
     required this.userId,
     this.postType,
+    this.locked = false,
     this.onCreate,
   });
 
@@ -1277,6 +1328,7 @@ class _PostsListWidgetState extends State<_PostsListWidget> {
   @override
   void initState() {
     super.initState();
+    if (widget.locked) return;
     final cached = UserPostsCacheService.peek(
       widget.userId,
       postType: widget.postType,
@@ -1291,16 +1343,19 @@ class _PostsListWidgetState extends State<_PostsListWidget> {
   void didUpdateWidget(covariant _PostsListWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.userId != widget.userId ||
-        oldWidget.postType != widget.postType) {
+        oldWidget.postType != widget.postType ||
+        oldWidget.locked != widget.locked) {
       _posts = [];
       _offset = 0;
       _hasMore = true;
-      _loadPosts(refresh: true);
+      if (!widget.locked) {
+        _loadPosts(refresh: true);
+      }
     }
   }
 
   Future<void> _loadPosts({bool refresh = false}) async {
-    if (_isLoading) return;
+    if (widget.locked || _isLoading) return;
     final requestId = ++_loadGeneration;
 
     if (refresh) {
@@ -1391,6 +1446,22 @@ class _PostsListWidgetState extends State<_PostsListWidget> {
             child: const Center(child: CircularProgressIndicator()),
           ),
         ),
+      );
+    }
+
+    if (_posts.isEmpty && widget.locked) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          SizedBox(
+            height: MediaQuery.sizeOf(context).height * 0.35,
+            child: const AppEmptyState(
+              icon: Icons.lock_outline_rounded,
+              title: 'Профиль закрытый',
+              subtitle: 'Подпишитесь, чтобы видеть записи',
+            ),
+          ),
+        ],
       );
     }
 

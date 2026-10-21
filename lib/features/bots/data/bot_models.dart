@@ -186,7 +186,7 @@ class BotResponse {
         id: json['id'] as int,
         name: json['name'] as String,
         username: json['username'] as String,
-        botToken: json['bot_token'] as String,
+        botToken: json['bot_token'] as String? ?? '',
         description: json['description'] as String?,
         shortDescription: json['short_description'] as String?,
         avatarUrl: json['avatar_url'] as String?,

@@ -700,10 +700,17 @@ async def get_post(
         if cached_post:
             post_data = json.loads(cached_post)
             # Проверяем видимость
-            if post_data.get("visibility") == "private" and (not current_user or current_user.id != post_data.get("user_id")):
+            from app.services.post_visibility import can_view_post_fields
+
+            if not can_view_post_fields(
+                db,
+                visibility=post_data.get("visibility"),
+                author_id=post_data.get("user_id"),
+                viewer=current_user,
+            ):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Пост закрытый"
+                    detail="Пост закрытый",
                 )
             # Логируем просмотр (асинхронно, не блокируем ответ)
             if current_user:
@@ -741,12 +748,9 @@ async def get_post(
             detail="Пост не найден"
         )
     
-    # Проверяем видимость
-    if post.visibility == "private" and (not current_user or current_user.id != post.user_id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Пост закрытый"
-        )
+    from app.services.post_visibility import require_can_view_post
+
+    require_can_view_post(db, post, current_user)
     
     # Логируем просмотр поста
     if current_user:
@@ -799,6 +803,16 @@ async def set_post_reaction_endpoint(
     db: Session = Depends(get_db),
 ):
     from app.services.post_reaction_service import set_post_reaction
+    from app.services.post_visibility import require_can_view_post
+
+    post = (
+        db.query(Post)
+        .filter(Post.id == post_id, Post.deleted_at.is_(None))
+        .first()
+    )
+    if not post:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пост не найден")
+    require_can_view_post(db, post, current_user)
 
     reactions = set_post_reaction(
         db, post_id=post_id, user_id=current_user.id, emoji=body.emoji

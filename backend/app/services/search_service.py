@@ -12,6 +12,7 @@ from app.services.search_normalization import (
     stable_search_key,
 )
 from app.models.user import User
+from app.services.post_visibility import search_visibility_clause
 
 
 class SearchService:
@@ -72,7 +73,7 @@ class SearchService:
         base_query = self.db.query(Post).filter(
             Post.status == "published",
             Post.deleted_at.is_(None),
-            Post.visibility.in_(["public", "followers"]),
+            search_visibility_clause(user_id),
             *FeedService._recommendation_post_filters(),
         )
         

@@ -4,8 +4,21 @@ import asyncio
 from app.core.public_surface import (
     cors_origins_for_env,
     docs_routes_for_env,
+    frontend_return_url_allowed,
     google_readiness_public,
 )
+
+
+def test_payment_return_url_only_our_hosts():
+    assert frontend_return_url_allowed(
+        "https://haneat.app/subscription/success", "https://haneat.app"
+    )
+    assert frontend_return_url_allowed(
+        "http://localhost:8080/paid/success", "https://haneat.app"
+    )
+    assert not frontend_return_url_allowed(
+        "https://evil.example/steal", "https://haneat.app"
+    )
 
 
 def test_google_readiness_hides_skip_flag_in_production():

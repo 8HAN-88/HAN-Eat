@@ -105,6 +105,7 @@ import '../features/chat/presentation/chat_invite_join_screen.dart';
 import '../features/settings/presentation/paid_message_exceptions_screen.dart';
 import '../features/chat/application/chat_private_reply.dart';
 import '../features/chat/presentation/chat_thread_screen.dart';
+import '../features/chat/presentation/saved_chat_open_screen.dart';
 import '../features/chat/presentation/username_deep_link_screen.dart';
 import '../features/bots/data/bot_models.dart';
 import '../features/bots/presentation/bot_detail_screen.dart';
@@ -2307,7 +2308,7 @@ String? resourcePathAlias(String path, [String query = '']) {
         'voice-id' ||
         'doc-id' ||
         'sticker-id' =>
-          '/post/$id$q',
+          '/stickers/$id$q',
         'edit-bot' || 'bot-settings' => '/bots/$id$q',
         'launch-app' || 'start-webapp' => '/webapp/$id$q',
         'mediaid' ||
@@ -2317,7 +2318,7 @@ String? resourcePathAlias(String path, [String query = '']) {
         'voiceid' ||
         'docid' ||
         'stickerid' =>
-          '/post/$id$q',
+          '/stickers/$id$q',
         'cid' => '/chats/thread/$id$q',
         'pid' => '/post/$id$q',
         'bid' => '/bots/$id$q',
@@ -2485,7 +2486,8 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/blocked':
       return '${BlockedUsersRoute.path}$q';
     case '/saved':
-      return '${ProfileTabRoute.path}$q';
+    case '/saved-messages':
+      return '${SavedChatRoute.path}$q';
     case '/extra-ads':
       return '${ExtraAdsRoute.path}$q';
     case '/creator':
@@ -2574,8 +2576,8 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/night':
     case '/proxy':
       return '${SettingsRoute.path}$q';
-    case '/saved-messages':
-      return '${ProfileTabRoute.path}$q';
+    case '/starred-messages':
+      return '${SavedChatRoute.path}$q';
     case '/calls':
     case '/stickers':
       return '${ChatsRoute.path}$q';
@@ -3103,7 +3105,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/addcontact':
       return '${ChatNewMessageRoute.path}$q';
     case '/savedmessages':
-      return '${ProfileTabRoute.path}$q';
+      return '${SavedChatRoute.path}$q';
     case '/addstickers':
       return '${ChatsRoute.path}$q';
     case '/username-auction':
@@ -3115,7 +3117,6 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/newchat':
       return '${ChatNewMessageRoute.path}$q';
     case '/newpost':
-    case '/create-recipe':
       return '${CreatePostRoute.path}$q';
     case '/newstory':
       return '${StoryCreateRoute.path}$q';
@@ -3271,7 +3272,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/broadcasts':
     case '/imbox':
     case '/savedmsg':
-      return '${ChatsRoute.path}$q';
+      return '${SavedChatRoute.path}$q';
     case '/verify-account':
     case '/business-verify':
       return '${ProfileAuthRoute.path}$q';
@@ -3279,6 +3280,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/recent-calls':
     case '/secret-chats':
     case '/saved-msg':
+      return '${SavedChatRoute.path}$q';
     case '/im-box':
     case '/msgbox':
     case '/voice-messages':
@@ -3498,7 +3500,6 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/recent-stickers':
     case '/stickerstore':
       return '${ChatsRoute.path}$q';
-    case '/starred-messages':
     case '/userinfo':
     case '/selfchat':
     case '/my-qr':
@@ -5747,7 +5748,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return ChatsRoute.path;
         }
         // Legacy kitchen deep links → feed (+ one-shot notice)
-        if (_isRetiredKitchenPath(loc)) {
+        if (_isRetiredKitchenPath(loc) ||
+            _isRetiredKitchenPath(unwrapGoOpenPath(incoming))) {
           KitchenRemovedNotice.markPending();
           return FeedRoute.path;
         }
@@ -5978,7 +5980,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final id = parseRoutePositiveId(state.pathParameters['miniAppId']);
           if (id == null) {
             return const MaterialPage(
-              child: InvalidLinkScreen(title: 'Mini App'),
+              child: InvalidLinkScreen(title: 'Мини-приложение'),
             );
           }
           return MaterialPage(
@@ -6472,7 +6474,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/saved-messages',
         redirect: (context, state) =>
             shortcutPathAlias(state.uri.path, state.uri.query) ??
-            ProfileTabRoute.path,
+            SavedChatRoute.path,
       ),
       GoRoute(
         path: '/calls',
@@ -7748,6 +7750,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
+        path: SavedChatRoute.path,
+        name: SavedChatRoute.name,
+        parentNavigatorKey: hanEatRootNavigatorKey,
+        pageBuilder: (context, state) => const MaterialPage(
+          child: SavedChatOpenScreen(),
+        ),
+      ),
+      GoRoute(
         path: '${ChatThreadRoute.path}/:conversationId',
         name: ChatThreadRoute.name,
         parentNavigatorKey: hanEatRootNavigatorKey,
@@ -8241,6 +8251,11 @@ class ChannelSearchRoute {
     if (q.isEmpty) return '/channel/$channelId/search';
     return '/channel/$channelId/search?q=${Uri.encodeQueryComponent(q)}';
   }
+}
+
+class SavedChatRoute {
+  static const path = '/chats/saved';
+  static const name = 'saved_chat';
 }
 
 class ChatThreadRoute {

@@ -606,7 +606,7 @@ class UserSearchResponse(BaseModel):
 
 
 class PhoneSyncRequest(BaseModel):
-    phone_hashes: List[str] = Field(..., max_length=500)
+    phone_hashes: List[str] = Field(..., max_length=80)
 
 
 class PhoneContactMatchItem(BaseModel):
