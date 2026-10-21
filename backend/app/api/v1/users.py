@@ -237,6 +237,19 @@ async def get_user_profile(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Пользователь не найден"
         )
+
+    from app.services.post_visibility import profile_locked_for_viewer
+
+    if profile_locked_for_viewer(db, user, current_user):
+        locked = UserResponse.model_validate(user).public_view()
+        return UserProfileResponse(
+            **locked.model_dump() | {"bio": None, "is_private": True},
+            stats=UserStats(),
+            is_following=False,
+            is_followed_by=None,
+            premium_badge=False,
+            profile_decoration=False,
+        )
     
     # Пытаемся получить статистику из кэша
     from app.core.redis_client import get_redis
@@ -461,20 +474,15 @@ async def get_user_posts(
             detail="Пользователь не найден"
         )
     
-    # Проверяем приватность
-    if user.is_private and (not current_user or current_user.id != user_id):
-        # Проверяем подписку (Follower импортирован в начале модуля)
-        is_following = db.query(Follower).filter(
-            Follower.follower_id == (current_user.id if current_user else 0),
-            Follower.followee_id == user_id
-        ).first() is not None
-        
-        if not is_following:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Профиль закрытый"
-            )
-    
+    from app.services.post_visibility import (
+        profile_locked_for_viewer,
+        search_visibility_clause,
+    )
+
+    # Закрытый профиль: пустая стена, чтобы экран профиля не падал с 403.
+    if profile_locked_for_viewer(db, user, current_user):
+        return {"posts": [], "total": 0}
+
     # Личные посты на стене (без каналов) + репосты пользователя (оригиналы из ленты/каналов)
     owned_filters = [
         Post.user_id == user_id,
@@ -482,6 +490,10 @@ async def get_user_posts(
         Post.deleted_at.is_(None),
         _profile_wall_owned_clause(),
     ]
+    if current_user is None or current_user.id != user_id:
+        owned_filters.append(
+            search_visibility_clause(current_user.id if current_user else None)
+        )
 
     # Оригиналы репостов: для чужого профиля учитываем видимость; на своей стене — все свои репосты
     repost_visibility = []
@@ -743,6 +755,10 @@ async def get_user_followers(
     user = db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
+    from app.services.post_visibility import profile_locked_for_viewer
+
+    if profile_locked_for_viewer(db, user, current_user):
+        return {"items": [], "total": 0}
     total = db.query(func.count(Follower.id)).filter(Follower.followee_id == user_id).scalar() or 0
     rows = (
         db.query(User)
@@ -783,6 +799,10 @@ async def get_user_following(
     user = db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
+    from app.services.post_visibility import profile_locked_for_viewer
+
+    if profile_locked_for_viewer(db, user, current_user):
+        return {"items": [], "total": 0}
     total = db.query(func.count(Follower.id)).filter(Follower.follower_id == user_id).scalar() or 0
     rows = (
         db.query(User)

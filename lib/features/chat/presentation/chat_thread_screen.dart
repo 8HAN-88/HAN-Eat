@@ -14582,7 +14582,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                userVisibleError(e, fallback: 'Не удалось открыть Mini App'),
+                userVisibleError(e, fallback: 'Не удалось открыть мини-приложение'),
               ),
               action: SnackBarAction(
                 label: 'Повторить',
@@ -17936,7 +17936,7 @@ class _Bubble extends StatelessWidget {
         final decoded = jsonDecode(message.content);
         if (decoded is Map<String, dynamic>) payload = decoded;
       } catch (_) {}
-      final buttonText = payload?['button_text'] as String? ?? 'Mini App';
+      final buttonText = payload?['button_text'] as String? ?? 'Мини-приложение';
       final dataPreview = (payload?['data'] as String? ?? message.content).trim();
       final shortData = dataPreview.length > 120
           ? '${dataPreview.substring(0, 120)}…'
@@ -17955,7 +17955,7 @@ class _Bubble extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Данные Mini App',
+                'Данные мини-приложения',
                 style: TextStyle(color: fg, fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 4),

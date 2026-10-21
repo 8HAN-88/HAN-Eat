@@ -700,6 +700,13 @@ async def list_user_displayed_gifts(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    from app.services.post_visibility import profile_locked_for_viewer
+
+    user = db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
+    if profile_locked_for_viewer(db, user, current_user):
+        return UserStarGiftsResponse(gifts=[])
     service = PaidFeaturesService(db)
     gifts = service.list_user_star_gifts(user_id, displayed_only=True, limit=40)
     # Always redact anonymous senders on the public profile wall.

@@ -117,7 +117,7 @@ void main() {
     expect(shortcutPathAlias('/settings/sessions'), AccountSecurityRoute.path);
     expect(shortcutPathAlias('/settings/privacy'), SettingsRoute.path);
     expect(shortcutPathAlias('/blocked'), BlockedUsersRoute.path);
-    expect(shortcutPathAlias('/saved'), ProfileTabRoute.path);
+    expect(shortcutPathAlias('/saved'), SavedChatRoute.path);
     expect(shortcutPathAlias('/extra-ads'), ExtraAdsRoute.path);
     expect(shortcutPathAlias('/creator'), CreatorToolsRoute.path);
     expect(shortcutPathAlias('/scheduled'), ScheduledPostsRoute.path);
@@ -189,7 +189,8 @@ void main() {
     expect(shortcutPathAlias('/themes'), SettingsRoute.path);
     expect(shortcutPathAlias('/night'), SettingsRoute.path);
     expect(shortcutPathAlias('/proxy'), SettingsRoute.path);
-    expect(shortcutPathAlias('/saved-messages'), ProfileTabRoute.path);
+    expect(shortcutPathAlias('/saved-messages'), SavedChatRoute.path);
+    expect(leftoverPathAlias('/go/saved-messages'), SavedChatRoute.path);
     expect(shortcutPathAlias('/calls'), ChatsRoute.path);
     expect(shortcutPathAlias('/stickers'), ChatsRoute.path);
     expect(shortcutPathAlias('/blocklist'), BlockedUsersRoute.path);
@@ -665,7 +666,8 @@ void main() {
     expect(shortcutPathAlias('/newchannel'), CreateChannelRoute.path);
     expect(shortcutPathAlias('/newchat'), ChatNewMessageRoute.path);
     expect(shortcutPathAlias('/newpost'), CreatePostRoute.path);
-    expect(shortcutPathAlias('/create-recipe'), CreatePostRoute.path);
+    expect(shortcutPathAlias('/create-recipe'), isNull);
+    expect(leftoverPathAlias('/go/create-recipe'), isNull);
     expect(shortcutPathAlias('/newstory'), StoryCreateRoute.path);
     expect(shortcutPathAlias('/newreel'), CreateReelRoute.path);
     expect(shortcutPathAlias('/confirm-email'), VerifyEmailRoute.path);
@@ -862,7 +864,7 @@ void main() {
     expect(resourcePathAlias('/dm/21/ttl'), '/chats/thread/21');
     expect(resourcePathAlias('/c/1/unmute'), '/channel/1');
     expect(shortcutPathAlias('/phone-calls'), ChatsRoute.path);
-    expect(shortcutPathAlias('/starred-messages'), ProfileTabRoute.path);
+    expect(shortcutPathAlias('/starred-messages'), SavedChatRoute.path);
     expect(shortcutPathAlias('/create-poll'), CreatePostRoute.path);
     expect(shortcutPathAlias('/help-center'), SupportContactRoute.path);
     expect(shortcutPathAlias('/block-user'), BlockedUsersRoute.path);
@@ -894,7 +896,7 @@ void main() {
     expect(resourcePathAlias('/jump-to/21/456'), '/chats/thread/21?msg=456');
     expect(resourcePathAlias('/open-message/21/456'), '/chats/thread/21?msg=456');
     expect(resourcePathAlias('/media-id/28'), '/post/28');
-    expect(resourcePathAlias('/sticker-id/4'), '/post/4');
+    expect(resourcePathAlias('/sticker-id/4'), '/stickers/4');
     expect(resourcePathAlias('/edit-bot/5'), '/bots/5');
     expect(resourcePathAlias('/launch-app/5'), '/webapp/5');
     expect(resourcePathAlias('/mini-app/5'), '/webapp/5');

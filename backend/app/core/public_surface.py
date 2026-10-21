@@ -45,6 +45,23 @@ def google_readiness_public(
     return payload
 
 
+def frontend_return_url_allowed(url: str, frontend_url: str = "") -> bool:
+    """Payment/OAuth return URLs stay on localhost or our frontend host."""
+    parsed = urlparse((url or "").strip())
+    host = (parsed.hostname or "").lower()
+    if not host or parsed.scheme not in ("http", "https"):
+        return False
+    if parsed.username or parsed.password:
+        return False
+    if host in {"localhost", "127.0.0.1", "::1"}:
+        return True
+    if host in {"haneat.app", "www.haneat.app"}:
+        return parsed.scheme == "https"
+    frontend = urlparse(frontend_url or "")
+    allowed = (frontend.hostname or "").lower()
+    return bool(allowed) and host == allowed
+
+
 def cors_origins_for_env(origins: list[str], app_env: str) -> list[str]:
     """Always allow the production web hosts. Drop loopback CORS in production."""
     merged = list(dict.fromkeys([*(origins or []), *_PRODUCTION_WEB_ORIGINS]))

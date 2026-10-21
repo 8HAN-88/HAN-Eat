@@ -76,7 +76,7 @@ class _MiniAppOpenLoaderScreenState extends State<MiniAppOpenLoaderScreen> {
       if (!mounted) return;
       setState(() {
         _ready = MiniAppWebViewScreen(
-          title: item?.name ?? 'Mini App',
+          title: item?.name ?? 'Мини-приложение',
           subtitle: item == null ? '' : '@${item.botUsername}',
           url: launch.url,
           initData: launch.initData,
@@ -102,7 +102,7 @@ class _MiniAppOpenLoaderScreenState extends State<MiniAppOpenLoaderScreen> {
     final err = _error;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Mini App'),
+        title: const Text('Мини-приложение'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           tooltip: 'Назад',

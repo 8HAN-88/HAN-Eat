@@ -4635,7 +4635,7 @@ class ChatService:
     ) -> List[dict]:
         if not phone_hashes:
             return []
-        unique = list({h.strip().lower() for h in phone_hashes if h and len(h) == 64})[:500]
+        unique = list({h.strip().lower() for h in phone_hashes if h and len(h) == 64})[:80]
         if not unique:
             return []
 

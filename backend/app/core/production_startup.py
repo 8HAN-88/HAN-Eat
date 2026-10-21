@@ -45,6 +45,10 @@ def collect_production_issues() -> list[str]:
                 issues.append("Redis работает в stub mode — realtime/cache/locks/video queue недоступны")
         except Exception as e:
             issues.append(f"Redis readiness check failed: {e}")
+    if (settings.PHONE_HASH_PEPPER or "").strip() == "haneat-phone-v1":
+        issues.append(
+            "PHONE_HASH_PEPPER дефолтный — задайте свой, чтобы контакты не считались по общему перцу"
+        )
     # Kitchen recipe translator is no longer a production requirement (messenger).
     return issues
 

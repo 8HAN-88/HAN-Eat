@@ -195,6 +195,12 @@ async def complete_upload(
     _enforce_upload_rate_limit(current_user.id, "complete", 45)
     try:
         media_service = MediaService()
+        owner_id = MediaService._user_id_from_file_key(request.file_key)
+        if owner_id is None or owner_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Нельзя завершить чужую загрузку",
+            )
         result = media_service.complete_upload(
             upload_id=request.upload_id,
             file_key=request.file_key,
@@ -379,7 +385,8 @@ async def get_upload_status(
     try:
         # Сначала проверяем видео
         video_processing = db.query(VideoProcessing).filter(
-            VideoProcessing.upload_id == upload_id
+            VideoProcessing.upload_id == upload_id,
+            VideoProcessing.user_id == current_user.id,
         ).first()
         
         if video_processing:
@@ -397,7 +404,8 @@ async def get_upload_status(
         
         # Проверяем изображение
         image_processing = db.query(ImageProcessing).filter(
-            ImageProcessing.upload_id == upload_id
+            ImageProcessing.upload_id == upload_id,
+            ImageProcessing.user_id == current_user.id,
         ).first()
         
         if image_processing:
@@ -454,6 +462,12 @@ async def mock_upload(
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Сессия загрузки не найдена. Начните загрузку заново.",
+            )
+        owner_id = MediaService._user_id_from_file_key(file_key)
+        if owner_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Нельзя загрузить файл в чужую сессию",
             )
         
         # Потоково читаем upload, чтобы не держать большие файлы в RAM.
