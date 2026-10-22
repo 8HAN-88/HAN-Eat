@@ -171,7 +171,10 @@ void main() {
     expect(shortcutPathAlias('/compose'), CreatePostRoute.path);
     expect(shortcutPathAlias('/write'), CreatePostRoute.path);
     expect(shortcutPathAlias('/camera'), StoryCreateRoute.path);
-    expect(shortcutPathAlias('/folders'), ChatFolderNewRoute.path);
+    expect(shortcutPathAlias('/folders'), ChatsRoute.path);
+    expect(shortcutPathAlias('/chat-folders'), ChatsRoute.path);
+    expect(shortcutPathAlias('/addlist'), ChatsRoute.path);
+    expect(leftoverPathAlias('/go/folders'), ChatsRoute.path);
     expect(shortcutPathAlias('/new-folder'), ChatFolderNewRoute.path);
     expect(ChatFolderNewRoute.path, '/chats/folders/new');
     expect(ChatFolderEditRoute.pathFor(7), '/chats/folders/7');
@@ -832,7 +835,7 @@ void main() {
     expect(shortcutPathAlias('/boost-channel'), AdsHubRoute.path);
     expect(shortcutPathAlias('/partner-payout'), PartnerProgramRoute.path);
     expect(shortcutPathAlias('/web-apps'), MiniAppsRoute.path);
-    expect(shortcutPathAlias('/filters'), ChatFolderNewRoute.path);
+    expect(shortcutPathAlias('/filters'), ChatsRoute.path);
     expect(shortcutPathAlias('/blocked-contacts'), BlockedUsersRoute.path);
     expect(
       leftoverPathAlias('/go/call-history'),
@@ -1035,9 +1038,9 @@ void main() {
     expect(resourcePathAlias('/chat/21/translate'), '/chats/thread/21');
     expect(resourcePathAlias('/c/1/sign'), '/channel/1');
     expect(resourcePathAlias('/p/28/tip'), '/post/28');
-    expect(shortcutPathAlias('/saved-messages-settings'), ChatsRoute.path);
+    expect(shortcutPathAlias('/saved-messages-settings'), SavedChatRoute.path);
     expect(shortcutPathAlias('/chat-wallpaper-url'), SettingsRoute.path);
-    expect(shortcutPathAlias('/folder-share'), ChatFolderNewRoute.path);
+    expect(shortcutPathAlias('/folder-share'), ChatsRoute.path);
     expect(shortcutPathAlias('/bots-folder'), MyBotsRoute.path);
     expect(shortcutPathAlias('/channels-folder'), ChannelsManagementRoute.path);
     expect(shortcutPathAlias('/push-settings'), NotificationSettingsRoute.path);
@@ -1162,7 +1165,7 @@ void main() {
     expect(shortcutPathAlias('/saved-tags'), SavedPostsRoute.path);
     expect(shortcutPathAlias('/star-react'), PaidMessageExceptionsRoute.path);
     expect(shortcutPathAlias('/my-notes'), ProfileTabRoute.path);
-    expect(shortcutPathAlias('/folder-tags'), ChatFolderNewRoute.path);
+    expect(shortcutPathAlias('/folder-tags'), ChatsRoute.path);
     expect(shortcutPathAlias('/calendar-search'), SearchRoute.path);
     expect(shortcutPathAlias('/view-once-media'), ChatsRoute.path);
     expect(shortcutPathAlias('/quick-react'), SettingsRoute.path);
@@ -1225,11 +1228,11 @@ void main() {
     expect(shortcutPathAlias('/schedule-send'), ChatsRoute.path);
     expect(shortcutPathAlias('/forward-as-copy'), ChatsRoute.path);
     expect(shortcutPathAlias('/pins-list'), ChatsRoute.path);
-    expect(shortcutPathAlias('/add-to-folder'), ChatFolderNewRoute.path);
-    expect(shortcutPathAlias('/join-folder'), ChatFolderNewRoute.path);
+    expect(shortcutPathAlias('/add-to-folder'), ChatsRoute.path);
+    expect(shortcutPathAlias('/join-folder'), ChatsRoute.path);
     expect(shortcutPathAlias('/mediasearch'), SearchRoute.path);
     expect(shortcutPathAlias('/newsecretchat'), ChatsRoute.path);
-    expect(shortcutPathAlias('/addtofolder'), ChatFolderNewRoute.path);
+    expect(shortcutPathAlias('/addtofolder'), ChatsRoute.path);
     expect(
       leftoverPathAlias('/go/media-search'),
       SearchRoute.path,
@@ -1252,7 +1255,7 @@ void main() {
     );
     expect(
       parseDeepLinkToGoPath('https://haneat.app/app/#/add-to-folder'),
-      ChatFolderNewRoute.path,
+      ChatsRoute.path,
     );
     expect(resourcePathAlias('/tg-msg/21/456'), '/chats/thread/21?msg=456');
     expect(resourcePathAlias('/han-msg/21/456'), '/chats/thread/21?msg=456');
@@ -1389,7 +1392,7 @@ void main() {
     expect(shortcutPathAlias('/terminate-all-others'), AccountSecurityRoute.path);
     expect(shortcutPathAlias('/enable-2fa'), TwoFactorSetupRoute.path);
     expect(shortcutPathAlias('/disable-2fa'), TwoFactorSetupRoute.path);
-    expect(shortcutPathAlias('/folder-color'), ChatFolderNewRoute.path);
+    expect(shortcutPathAlias('/folder-color'), ChatsRoute.path);
     expect(shortcutPathAlias('/reply-to-story'), StoriesRoute.path);
     expect(shortcutPathAlias('/story-stealth'), StoriesRoute.path);
     expect(shortcutPathAlias('/paid-reaction-privacy'), PaidMessageExceptionsRoute.path);

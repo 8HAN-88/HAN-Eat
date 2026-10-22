@@ -2563,6 +2563,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/camera':
       return '${StoryCreateRoute.path}$q';
     case '/folders':
+      return '${ChatsRoute.path}$q';
     case '/new-folder':
       return '${ChatFolderNewRoute.path}$q';
     case '/sessions':
@@ -2924,7 +2925,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return '${FlexConstructorRoute.path}$q';
     case '/chat-folders':
     case '/settings/folders':
-      return '${ChatFolderNewRoute.path}$q';
+      return '${ChatsRoute.path}$q';
     case '/archived-chats':
       return '${ChatArchivedRoute.path}$q';
     case '/paid-messages':
@@ -2965,6 +2966,8 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/join':
     case '/join-chat':
     case '/joinchat':
+    case '/addlist':
+    case '/add-list':
       return '${ChatsRoute.path}$q';
     case '/new-ad':
     case '/create-ad':
@@ -3468,7 +3471,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/folder-settings':
     case '/dialog-filters':
     case '/filters':
-      return '${ChatFolderNewRoute.path}$q';
+      return '${ChatsRoute.path}$q';
     case '/phone-calls':
     case '/video-calls':
     case '/callhistory':
@@ -3524,11 +3527,12 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/blockuser':
       return '${BlockedUsersRoute.path}$q';
     case '/create-folder':
+    case '/createfolder':
+      return '${ChatFolderNewRoute.path}$q';
     case '/edit-folder':
     case '/share-folder':
     case '/invite-folder':
-    case '/createfolder':
-      return '${ChatFolderNewRoute.path}$q';
+      return '${ChatsRoute.path}$q';
     case '/mute-all':
     case '/quiet-hours':
     case '/muteall':
@@ -3701,7 +3705,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/story-settings':
       return '${StoriesRoute.path}$q';
     case '/folder-order':
-      return '${ChatFolderNewRoute.path}$q';
+      return '${ChatsRoute.path}$q';
     case '/notification-sounds':
       return '${NotificationSettingsRoute.path}$q';
     case '/auto-delete':
@@ -3885,6 +3889,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/channel-color':
       return '${ChannelsManagementRoute.path}$q';
     case '/saved-messages-settings':
+      return '${SavedChatRoute.path}$q';
     case '/default-send-as':
     case '/linked-chat-settings':
     case '/discussion-link':
@@ -3925,7 +3930,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/folder-invite-link':
     case '/chat-folders-list':
     case '/folder-share':
-      return '${ChatFolderNewRoute.path}$q';
+      return '${ChatsRoute.path}$q';
     case '/bots-folder':
       return '${MyBotsRoute.path}$q';
     case '/channels-folder':
@@ -4115,7 +4120,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/my-notes':
       return '${ProfileTabRoute.path}$q';
     case '/folder-tags':
-      return '${ChatFolderNewRoute.path}$q';
+      return '${ChatsRoute.path}$q';
     case '/searchmessages':
     case '/searchmedia':
     case '/calendarsearch':
@@ -4149,7 +4154,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/mynotes':
       return '${ProfileTabRoute.path}$q';
     case '/foldertags':
-      return '${ChatFolderNewRoute.path}$q';
+      return '${ChatsRoute.path}$q';
     case '/saved-messages-search':
     case '/global-msg-search':
     case '/media-search':
@@ -4199,7 +4204,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/join-folder':
     case '/leave-folder':
     case '/hide-folder':
-      return '${ChatFolderNewRoute.path}$q';
+      return '${ChatsRoute.path}$q';
     case '/savedmessagessearch':
     case '/globalmsgsearch':
     case '/mediasearch':
@@ -4224,7 +4229,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/reorderfolders':
     case '/joinfolder':
     case '/sharefolderlink':
-      return '${ChatFolderNewRoute.path}$q';
+      return '${ChatsRoute.path}$q';
     case '/swipe-to-delete':
     case '/chat-list-tabs':
     case '/peer-colors':
@@ -4467,7 +4472,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/star-reaction-privacy':
       return '${PaidMessageExceptionsRoute.path}$q';
     case '/folder-color':
-      return '${ChatFolderNewRoute.path}$q';
+      return '${ChatsRoute.path}$q';
     case '/story-stealth':
     case '/story-hide-from':
     case '/story-allow':
@@ -6408,7 +6413,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/folders',
         redirect: (context, state) =>
             shortcutPathAlias(state.uri.path, state.uri.query) ??
-            ChatFolderNewRoute.path,
+            ChatsRoute.path,
       ),
       GoRoute(
         path: '/new-folder',

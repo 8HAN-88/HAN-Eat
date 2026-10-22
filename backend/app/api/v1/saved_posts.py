@@ -38,7 +38,10 @@ async def save_post(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Пост не найден"
         )
-    
+    from app.services.post_visibility import require_can_view_post
+
+    require_can_view_post(db, post, current_user)
+
     # Проверяем, не сохранен ли уже
     existing = db.query(SavedPost).filter(
         SavedPost.user_id == current_user.id,
