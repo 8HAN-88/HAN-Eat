@@ -103,7 +103,10 @@ async def create_repost(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Пост не найден"
         )
-    
+    from app.services.post_visibility import require_can_view_post
+
+    require_can_view_post(db, post, current_user)
+
     # Проверяем, не репостнул ли уже
     existing = db.query(Repost).filter(
         Repost.user_id == current_user.id,
@@ -189,6 +192,9 @@ async def repost_to_channel(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Пост не найден"
         )
+    from app.services.post_visibility import require_can_view_post
+
+    require_can_view_post(db, post, current_user)
 
     channel = db.query(Channel).filter(Channel.id == request.channel_id).first()
     if not channel:

@@ -118,6 +118,13 @@ async def purchase_paid_content(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    from app.models.post import Post
+    from app.services.post_visibility import require_can_view_post
+
+    post = db.query(Post).filter(Post.id == post_id, Post.deleted_at.is_(None)).first()
+    if not post:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пост не найден")
+    require_can_view_post(db, post, current_user)
     service = PaidFeaturesService(db)
     purchase = service.purchase_post(
         current_user.id,

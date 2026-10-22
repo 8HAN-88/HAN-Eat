@@ -141,7 +141,10 @@ async def mark_post_as_viewed(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Пост не найден"
         )
-    
+    from app.services.post_visibility import require_can_view_post
+
+    require_can_view_post(db, post, current_user)
+
     # Проверяем, не просмотрел ли уже пользователь этот пост
     existing_view = db.query(PostView).filter(
         PostView.post_id == post_id,

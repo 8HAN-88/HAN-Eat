@@ -612,7 +612,7 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
         actions: [
           IconButton(
             icon: const Icon(Icons.video_library),
-            onPressed: () => context.push(ReelsRoute.path),
+            onPressed: () => context.go(ReelsRoute.path),
             tooltip: 'Рилсы',
           ),
           IconButton(
