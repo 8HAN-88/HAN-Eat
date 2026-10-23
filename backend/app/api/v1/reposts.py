@@ -311,7 +311,10 @@ async def get_reposts(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Пост не найден"
         )
-    
+    from app.services.post_visibility import require_can_view_post
+
+    require_can_view_post(db, post, current_user)
+
     # Получаем репосты
     reposts = db.query(Repost).filter(
         Repost.post_id == post_id

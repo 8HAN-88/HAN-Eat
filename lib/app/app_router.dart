@@ -2650,7 +2650,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return '${AccountSecurityRoute.path}$q';
     case '/poll':
     case '/quiz':
-      return '${CreatePostRoute.path}$q';
+      return CreatePostRoute.pathWithType('poll');
     case '/nearby':
       return '${ChatsRoute.path}$q';
     case '/home':
@@ -3160,10 +3160,11 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/privacy/phone-number':
     case '/privacy/added-by-phone':
     case '/privacy/voice-messages':
-    case '/people-nearby':
     case '/emoji-status':
     case '/profile-color':
       return '${SettingsRoute.path}$q';
+    case '/people-nearby':
+      return '${ChatNewMessageRoute.path}$q';
     case '/success':
       return '${SubscriptionSuccessRoute.path}$q';
     case '/cancel':
@@ -3511,6 +3512,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/create-quiz':
     case '/createpoll':
     case '/createquiz':
+      return CreatePostRoute.pathWithType('poll');
     case '/editpost':
       return '${CreatePostRoute.path}$q';
     case '/help-center':

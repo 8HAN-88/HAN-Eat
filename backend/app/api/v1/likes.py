@@ -145,6 +145,12 @@ async def get_like_status(
     db: Session = Depends(get_db)
 ):
     """Проверить, лайкнул ли пользователь пост"""
+    post = db.query(Post).filter(Post.id == post_id, Post.deleted_at.is_(None)).first()
+    if not post:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пост не найден")
+    from app.services.post_visibility import require_can_view_post
+
+    require_can_view_post(db, post, current_user)
     like = db.query(Like).filter(
         Like.user_id == current_user.id,
         Like.post_id == post_id
@@ -171,12 +177,15 @@ async def list_post_likes(
 ):
     """Список пользователей, которым понравился пост."""
     post = (
-        db.query(Post.id)
+        db.query(Post)
         .filter(Post.id == post_id, Post.deleted_at.is_(None))
         .first()
     )
     if not post:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Пост не найден")
+    from app.services.post_visibility import require_can_view_post
+
+    require_can_view_post(db, post, current_user)
 
     total = (
         db.query(func.count(Like.id)).filter(Like.post_id == post_id).scalar()
