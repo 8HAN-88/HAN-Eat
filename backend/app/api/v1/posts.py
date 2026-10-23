@@ -386,6 +386,12 @@ async def vote_poll(
 ):
     """Проголосовать в опросе поста (можно изменить выбор)."""
     from app.services.post_poll_service import vote_on_poll
+    from app.services.post_visibility import require_can_view_post
+
+    post = db.query(Post).filter(Post.id == post_id, Post.deleted_at.is_(None)).first()
+    if not post:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пост не найден")
+    require_can_view_post(db, post, current_user)
 
     try:
         poll = vote_on_poll(db, post_id, current_user.id, request.option_index)
@@ -468,6 +474,9 @@ async def get_poll_voters(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Опрос не найден",
         )
+    from app.services.post_visibility import require_can_view_post
+
+    require_can_view_post(db, post, current_user)
 
     raw_poll = (post.body or {}).get("poll") if isinstance(post.body, dict) else None
     raw_options = raw_poll.get("options") if isinstance(raw_poll, dict) else None

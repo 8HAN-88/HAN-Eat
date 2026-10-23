@@ -194,6 +194,7 @@ async def get_comments(
 async def get_post_rating(
     post_id: int,
     db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
 ):
     """Средний пользовательский рейтинг поста-рецепта."""
     post = db.query(Post).filter(
@@ -205,6 +206,9 @@ async def get_post_rating(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Пост не найден",
         )
+    from app.services.post_visibility import require_can_view_post
+
+    require_can_view_post(db, post, current_user)
 
     rating_rows = db.query(Comment.rating).filter(
         Comment.post_id == post_id,

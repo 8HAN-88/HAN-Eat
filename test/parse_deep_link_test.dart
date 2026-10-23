@@ -251,8 +251,10 @@ void main() {
     expect(shortcutPathAlias('/secret'), AccountSecurityRoute.path);
     expect(shortcutPathAlias('/passcode'), AccountSecurityRoute.path);
     expect(shortcutPathAlias('/passport'), AccountSecurityRoute.path);
-    expect(shortcutPathAlias('/poll'), CreatePostRoute.path);
+    expect(shortcutPathAlias('/poll'), CreatePostRoute.pathWithType('poll'));
     expect(shortcutPathAlias('/nearby'), ChatsRoute.path);
+    expect(shortcutPathAlias('/people-nearby'), ChatNewMessageRoute.path);
+    expect(leftoverPathAlias('/go/poll'), CreatePostRoute.pathWithType('poll'));
     expect(shortcutPathAlias('/home'), FeedRoute.path);
     expect(shortcutPathAlias('/explore'), FeedRoute.path);
     expect(shortcutPathAlias('/signin'), LoginRoute.path);
@@ -631,7 +633,7 @@ void main() {
       StarGiftsInventoryRoute.path,
     );
     expect(resourcePathAlias('/theme/1'), SettingsRoute.path);
-    expect(shortcutPathAlias('/quiz'), CreatePostRoute.path);
+    expect(shortcutPathAlias('/quiz'), CreatePostRoute.pathWithType('poll'));
     expect(shortcutPathAlias('/settings/privacy/calls'), SettingsRoute.path);
     expect(shortcutPathAlias('/privacy/invites'), SettingsRoute.path);
     expect(shortcutPathAlias('/passkeys'), AccountSecurityRoute.path);
@@ -868,7 +870,7 @@ void main() {
     expect(resourcePathAlias('/c/1/unmute'), '/channel/1');
     expect(shortcutPathAlias('/phone-calls'), ChatsRoute.path);
     expect(shortcutPathAlias('/starred-messages'), SavedChatRoute.path);
-    expect(shortcutPathAlias('/create-poll'), CreatePostRoute.path);
+    expect(shortcutPathAlias('/create-poll'), CreatePostRoute.pathWithType('poll'));
     expect(shortcutPathAlias('/help-center'), SupportContactRoute.path);
     expect(shortcutPathAlias('/block-user'), BlockedUsersRoute.path);
     expect(shortcutPathAlias('/create-folder'), ChatFolderNewRoute.path);

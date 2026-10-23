@@ -178,6 +178,9 @@ async def like_community_video(
     ).first()
     if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Видео не найдено")
+    from app.services.post_visibility import require_can_view_post
+
+    require_can_view_post(db, post, current_user)
 
     existing = (
         db.query(Like)
