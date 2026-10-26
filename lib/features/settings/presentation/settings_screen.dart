@@ -30,6 +30,8 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  final GlobalKey _themeSectionKey = GlobalKey();
+  final GlobalKey _privacySectionKey = GlobalKey();
   int _unreadNotificationsCount = 0;
   bool _isAdminOrModerator = false;
   bool _isAdmin = false;
@@ -47,6 +49,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _checkAdminStatus();
     _loadChatUiPrefs();
     _loadPrivacyPrefs();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToSection());
+  }
+
+  void _jumpToSection() {
+    if (!mounted) return;
+    final section =
+        GoRouterState.of(context).uri.queryParameters['section']?.trim().toLowerCase();
+    final key = switch (section) {
+      'theme' || 'appearance' || 'night' || 'midnight' => _themeSectionKey,
+      'privacy' || 'last-seen' || 'lastseen' => _privacySectionKey,
+      _ => null,
+    };
+    final target = key?.currentContext;
+    if (target == null) return;
+    Scrollable.ensureVisible(
+      target,
+      alignment: 0.08,
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   Future<void> _loadUnreadCount() async {
@@ -496,7 +518,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             20 + floatingBottomPadding(context),
           ),
           children: [
-            _SettingsSectionHeader(title: 'Внешний вид'),
+            _SettingsSectionHeader(key: _themeSectionKey, title: 'Внешний вид'),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -545,7 +567,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            _SettingsSectionHeader(title: 'Приватность'),
+            _SettingsSectionHeader(key: _privacySectionKey, title: 'Приватность'),
             Card(
               clipBehavior: Clip.antiAlias,
               child: Column(
@@ -763,7 +785,7 @@ class _ThemeChoiceTile extends StatelessWidget {
 }
 
 class _SettingsSectionHeader extends StatelessWidget {
-  const _SettingsSectionHeader({required this.title});
+  const _SettingsSectionHeader({super.key, required this.title});
 
   final String title;
 
