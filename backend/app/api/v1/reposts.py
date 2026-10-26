@@ -358,6 +358,15 @@ async def is_post_reposted(
     db: Session = Depends(get_db)
 ):
     """Проверить, репостнул ли пользователь пост"""
+    post = db.query(Post).filter(Post.id == post_id, Post.deleted_at.is_(None)).first()
+    if not post:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Пост не найден",
+        )
+    from app.services.post_visibility import require_can_view_post
+
+    require_can_view_post(db, post, current_user)
     reposted = db.query(Repost).filter(
         Repost.user_id == current_user.id,
         Repost.post_id == post_id

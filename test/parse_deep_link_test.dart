@@ -115,7 +115,7 @@ void main() {
     expect(shortcutPathAlias('/security'), AccountSecurityRoute.path);
     expect(shortcutPathAlias('/settings/security'), AccountSecurityRoute.path);
     expect(shortcutPathAlias('/settings/sessions'), AccountSecurityRoute.path);
-    expect(shortcutPathAlias('/settings/privacy'), SettingsRoute.path);
+    expect(shortcutPathAlias('/settings/privacy'), SettingsRoute.pathWithSection('privacy'));
     expect(shortcutPathAlias('/blocked'), BlockedUsersRoute.path);
     expect(shortcutPathAlias('/saved'), SavedChatRoute.path);
     expect(shortcutPathAlias('/extra-ads'), ExtraAdsRoute.path);
@@ -128,7 +128,7 @@ void main() {
     expect(shortcutPathAlias('/edit-profile'), ProfileAuthRoute.path);
     expect(shortcutPathAlias('/profile/edit'), ProfileAuthRoute.path);
     expect(shortcutPathAlias('/me/edit'), ProfileAuthRoute.path);
-    expect(shortcutPathAlias('/privacy'), SettingsRoute.path);
+    expect(shortcutPathAlias('/privacy'), SettingsRoute.pathWithSection('privacy'));
     expect(shortcutPathAlias('/groups'), ChatsRoute.path);
     expect(shortcutPathAlias('/archive'), ChatArchivedRoute.path);
     expect(shortcutPathAlias('/archived'), ChatArchivedRoute.path);
@@ -158,15 +158,18 @@ void main() {
     expect(shortcutPathAlias('/inbox'), NotificationsRoute.path);
     expect(shortcutPathAlias('/messages'), ChatsRoute.path);
     expect(shortcutPathAlias('/dm'), ChatsRoute.path);
-    expect(shortcutPathAlias('/theme'), SettingsRoute.path);
-    expect(shortcutPathAlias('/appearance'), SettingsRoute.path);
-    expect(shortcutPathAlias('/day-theme'), SettingsRoute.path);
-    expect(shortcutPathAlias('/light-theme'), SettingsRoute.path);
-    expect(shortcutPathAlias('/midnight'), SettingsRoute.path);
-    expect(shortcutPathAlias('/oled-theme'), SettingsRoute.path);
-    expect(shortcutPathAlias('/true-black'), SettingsRoute.path);
-    expect(leftoverPathAlias('/go/day-theme'), SettingsRoute.path);
-    expect(leftoverPathAlias('/open/midnight-theme'), SettingsRoute.path);
+    expect(shortcutPathAlias('/theme'), SettingsRoute.pathWithSection('theme'));
+    expect(shortcutPathAlias('/last-seen'), SettingsRoute.pathWithSection('privacy'));
+    expect(leftoverPathAlias('/go/appearance'), SettingsRoute.pathWithSection('theme'));
+    expect(resourcePathAlias('/edit-post/28'), '/post/28');
+    expect(shortcutPathAlias('/appearance'), SettingsRoute.pathWithSection('theme'));
+    expect(shortcutPathAlias('/day-theme'), SettingsRoute.pathWithSection('theme'));
+    expect(shortcutPathAlias('/light-theme'), SettingsRoute.pathWithSection('theme'));
+    expect(shortcutPathAlias('/midnight'), SettingsRoute.pathWithSection('theme'));
+    expect(shortcutPathAlias('/oled-theme'), SettingsRoute.pathWithSection('theme'));
+    expect(shortcutPathAlias('/true-black'), SettingsRoute.pathWithSection('theme'));
+    expect(leftoverPathAlias('/go/day-theme'), SettingsRoute.pathWithSection('theme'));
+    expect(leftoverPathAlias('/open/midnight-theme'), SettingsRoute.pathWithSection('theme'));
     expect(shortcutPathAlias('/reels'), isNull);
     expect(shortcutPathAlias('/compose'), CreatePostRoute.path);
     expect(shortcutPathAlias('/write'), CreatePostRoute.path);
@@ -189,8 +192,8 @@ void main() {
     expect(shortcutPathAlias('/lang'), SettingsRoute.path);
     expect(shortcutPathAlias('/data'), SettingsRoute.path);
     expect(shortcutPathAlias('/storage'), SettingsRoute.path);
-    expect(shortcutPathAlias('/themes'), SettingsRoute.path);
-    expect(shortcutPathAlias('/night'), SettingsRoute.path);
+    expect(shortcutPathAlias('/themes'), SettingsRoute.pathWithSection('theme'));
+    expect(shortcutPathAlias('/night'), SettingsRoute.pathWithSection('theme'));
     expect(shortcutPathAlias('/proxy'), SettingsRoute.path);
     expect(shortcutPathAlias('/saved-messages'), SavedChatRoute.path);
     expect(leftoverPathAlias('/go/saved-messages'), SavedChatRoute.path);
@@ -210,8 +213,8 @@ void main() {
       '/donate?to=11&name=%D0%90%D0%B4%D0%BC%D0%B8%D0%BD',
     );
     expect(shortcutPathAlias('/marketplace'), StarGiftsMarketplaceRoute.path);
-    expect(shortcutPathAlias('/qr'), ProfileTabRoute.path);
-    expect(shortcutPathAlias('/scan'), ProfileTabRoute.path);
+    expect(shortcutPathAlias('/qr'), ProfileAuthRoute.path);
+    expect(shortcutPathAlias('/scan'), ProfileAuthRoute.path);
     expect(shortcutPathAlias('/gif'), ChatsRoute.path);
     expect(shortcutPathAlias('/emoji'), ChatsRoute.path);
     expect(shortcutPathAlias('/webapp'), MiniAppsRoute.path);
@@ -492,7 +495,7 @@ void main() {
     expect(shortcutPathAlias('/dialogs'), ChatsRoute.path);
     expect(shortcutPathAlias('/channel'), ChannelsManagementRoute.path);
     expect(shortcutPathAlias('/new-dm'), ChatNewMessageRoute.path);
-    expect(shortcutPathAlias('/privacy/last-seen'), SettingsRoute.path);
+    expect(shortcutPathAlias('/privacy/last-seen'), SettingsRoute.pathWithSection('privacy'));
     expect(
       shortcutPathAlias('/settings/notif'),
       NotificationSettingsRoute.path,
@@ -567,9 +570,9 @@ void main() {
     expect(resourcePathAlias('/share/invoice/9'), '/paid/invoices/9');
     expect(resourcePathAlias('/share/miniapp/5'), '/webapp/5');
     expect(resourcePathAlias('/share/folder/3'), '/chats/folders/3');
-    expect(shortcutPathAlias('/privacy/profile'), SettingsRoute.path);
-    expect(shortcutPathAlias('/privacy/birthday'), SettingsRoute.path);
-    expect(shortcutPathAlias('/settings/appearance'), SettingsRoute.path);
+    expect(shortcutPathAlias('/privacy/profile'), SettingsRoute.pathWithSection('privacy'));
+    expect(shortcutPathAlias('/privacy/birthday'), SettingsRoute.pathWithSection('privacy'));
+    expect(shortcutPathAlias('/settings/appearance'), SettingsRoute.pathWithSection('theme'));
     expect(shortcutPathAlias('/settings/privacy/blocked'), BlockedUsersRoute.path);
     expect(shortcutPathAlias('/extraads'), ExtraAdsRoute.path);
     expect(shortcutPathAlias('/voice-chats'), ChatsRoute.path);
@@ -632,10 +635,10 @@ void main() {
       resourcePathAlias('/collectible/9'),
       StarGiftsInventoryRoute.path,
     );
-    expect(resourcePathAlias('/theme/1'), SettingsRoute.path);
+    expect(resourcePathAlias('/theme/1'), SettingsRoute.pathWithSection('theme'));
     expect(shortcutPathAlias('/quiz'), CreatePostRoute.pathWithType('poll'));
-    expect(shortcutPathAlias('/settings/privacy/calls'), SettingsRoute.path);
-    expect(shortcutPathAlias('/privacy/invites'), SettingsRoute.path);
+    expect(shortcutPathAlias('/settings/privacy/calls'), SettingsRoute.pathWithSection('privacy'));
+    expect(shortcutPathAlias('/privacy/invites'), SettingsRoute.pathWithSection('privacy'));
     expect(shortcutPathAlias('/passkeys'), AccountSecurityRoute.path);
     expect(shortcutPathAlias('/ton'), StarsWalletRoute.path);
     expect(shortcutPathAlias('/fragment'), StarGiftsMarketplaceRoute.path);
@@ -825,7 +828,7 @@ void main() {
     expect(shortcutPathAlias('/call-history'), ChatsRoute.path);
     expect(shortcutPathAlias('/missed-calls'), ChatsRoute.path);
     expect(shortcutPathAlias('/chat-archive'), ChatArchivedRoute.path);
-    expect(shortcutPathAlias('/qr-code'), ProfileTabRoute.path);
+    expect(shortcutPathAlias('/qr-code'), ProfileAuthRoute.path);
     expect(shortcutPathAlias('/lite'), SettingsRoute.path);
     expect(shortcutPathAlias('/send-gift'), StarGiftsInventoryRoute.path);
     expect(shortcutPathAlias('/add-bot'), MyBotsRoute.path);
@@ -2633,12 +2636,12 @@ void main() {
     expect(shortcutPathAlias('/backup-codes'), TwoFactorSetupRoute.path);
     expect(shortcutPathAlias('/totp'), TwoFactorSetupRoute.path);
     expect(shortcutPathAlias('/password-change'), ProfileAuthRoute.path);
-    expect(shortcutPathAlias('/last-seen-privacy'), SettingsRoute.path);
-    expect(shortcutPathAlias('/hide-email'), SettingsRoute.path);
-    expect(shortcutPathAlias('/email-privacy'), SettingsRoute.path);
-    expect(shortcutPathAlias('/public-profile'), SettingsRoute.path);
-    expect(shortcutPathAlias('/profile-privacy'), SettingsRoute.path);
-    expect(leftoverPathAlias('/go/hide-email'), SettingsRoute.path);
+    expect(shortcutPathAlias('/last-seen-privacy'), SettingsRoute.pathWithSection('privacy'));
+    expect(shortcutPathAlias('/hide-email'), SettingsRoute.pathWithSection('privacy'));
+    expect(shortcutPathAlias('/email-privacy'), SettingsRoute.pathWithSection('privacy'));
+    expect(shortcutPathAlias('/public-profile'), SettingsRoute.pathWithSection('privacy'));
+    expect(shortcutPathAlias('/profile-privacy'), SettingsRoute.pathWithSection('privacy'));
+    expect(leftoverPathAlias('/go/hide-email'), SettingsRoute.pathWithSection('privacy'));
     expect(shortcutPathAlias('/reels'), isNull);
     expect(shortcutPathAlias('/accountsecurity'), AccountSecurityRoute.path);
     expect(leftoverPathAlias('/go/terminate-sessions'), AccountSecurityRoute.path);
@@ -2646,9 +2649,9 @@ void main() {
     expect(leftoverPathAlias('/open/security-and-login'), AccountSecurityRoute.path);
     expect(shortcutPathAlias('/login-activity'), AccountSecurityRoute.path);
     expect(shortcutPathAlias('/connected-devices'), AccountSecurityRoute.path);
-    expect(shortcutPathAlias('/hide-phone'), SettingsRoute.path);
+    expect(shortcutPathAlias('/hide-phone'), SettingsRoute.pathWithSection('privacy'));
     expect(leftoverPathAlias('/go/login-history'), AccountSecurityRoute.path);
-    expect(leftoverPathAlias('/go/phone-privacy'), SettingsRoute.path);
+    expect(leftoverPathAlias('/go/phone-privacy'), SettingsRoute.pathWithSection('privacy'));
     expect(
       parseDeepLinkToGoPath('https://haneat.app/app/#/totp'),
       TwoFactorSetupRoute.path,

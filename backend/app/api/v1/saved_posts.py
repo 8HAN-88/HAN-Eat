@@ -123,6 +123,15 @@ async def is_post_saved(
     db: Session = Depends(get_db)
 ):
     """Проверить, сохранен ли пост"""
+    post = db.query(Post).filter(Post.id == post_id, Post.deleted_at.is_(None)).first()
+    if not post:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Пост не найден",
+        )
+    from app.services.post_visibility import require_can_view_post
+
+    require_can_view_post(db, post, current_user)
     saved = db.query(SavedPost).filter(
         SavedPost.user_id == current_user.id,
         SavedPost.post_id == post_id

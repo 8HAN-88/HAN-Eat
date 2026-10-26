@@ -2068,7 +2068,11 @@ String? resourcePathAlias(String path, [String query = '']) {
   }
   if ((segs[0] == 'theme' || segs[0] == 'bg' || segs[0] == 'wallpaper') &&
       segs.length == 2) {
-    return '${SettingsRoute.path}$q';
+    return SettingsRoute.pathWithSection('theme');
+  }
+  if ((segs[0] == 'edit-post' || segs[0] == 'editpost') && segs.length == 2) {
+    final id = int.tryParse(segs[1]);
+    if (id != null && id > 0) return '/post/$id$q';
   }
   if ((segs[0] == 'views' ||
           segs[0] == 'forwards' ||
@@ -2482,7 +2486,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/settings/sessions':
       return '${AccountSecurityRoute.path}$q';
     case '/settings/privacy':
-      return '${SettingsRoute.path}$q';
+      return SettingsRoute.pathWithSection('privacy');
     case '/blocked':
       return '${BlockedUsersRoute.path}$q';
     case '/saved':
@@ -2506,7 +2510,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/me/edit':
       return '${ProfileAuthRoute.path}$q';
     case '/privacy':
-      return '${SettingsRoute.path}$q';
+      return SettingsRoute.pathWithSection('privacy');
     case '/groups':
       return '${ChatsRoute.path}$q';
     case '/archive':
@@ -2556,7 +2560,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/midnight-theme':
     case '/oled-theme':
     case '/true-black':
-      return '${SettingsRoute.path}$q';
+      return SettingsRoute.pathWithSection('theme');
     case '/compose':
     case '/write':
       return '${CreatePostRoute.path}$q';
@@ -2573,10 +2577,11 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/lang':
     case '/data':
     case '/storage':
-    case '/themes':
-    case '/night':
     case '/proxy':
       return '${SettingsRoute.path}$q';
+    case '/themes':
+    case '/night':
+      return SettingsRoute.pathWithSection('theme');
     case '/starred-messages':
       return '${SavedChatRoute.path}$q';
     case '/calls':
@@ -2593,7 +2598,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return '${StarGiftsMarketplaceRoute.path}$q';
     case '/qr':
     case '/scan':
-      return '${ProfileTabRoute.path}$q';
+      return '${ProfileAuthRoute.path}$q';
     case '/gif':
     case '/emoji':
       return '${ChatsRoute.path}$q';
@@ -2728,6 +2733,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/settings/about':
       return '${SupportSecurityRoute.path}$q';
     case '/last-seen':
+      return SettingsRoute.pathWithSection('privacy');
     case '/install':
     case '/pwa':
       return '${SettingsRoute.path}$q';
@@ -3011,7 +3017,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/privacy/phone':
     case '/privacy/bio':
     case '/privacy/messages':
-      return '${SettingsRoute.path}$q';
+      return SettingsRoute.pathWithSection('privacy');
     case '/settings/notif':
     case '/notif':
     case '/notification':
@@ -3039,9 +3045,11 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/privacy/gifts':
     case '/privacy/lastseen':
     case '/settings/privacy/last-seen':
+      return SettingsRoute.pathWithSection('privacy');
     case '/settings/appearance':
     case '/settings/theme':
     case '/settings/night':
+      return SettingsRoute.pathWithSection('theme');
     case '/settings/wallpaper':
     case '/settings/autodelete':
       return '${SettingsRoute.path}$q';
@@ -3091,7 +3099,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/typing':
     case '/typing-status':
     case '/hide-read':
-      return '${SettingsRoute.path}$q';
+      return SettingsRoute.pathWithSection('privacy');
     case '/autolock':
     case '/passkey':
     case '/passkeys':
@@ -3366,6 +3374,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return '${ChatArchivedRoute.path}$q';
     case '/qr-code':
     case '/scan-qr':
+      return '${ProfileAuthRoute.path}$q';
     case '/user-info':
     case '/notes':
     case '/self-chat':
@@ -3507,7 +3516,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/userinfo':
     case '/selfchat':
     case '/my-qr':
-      return '${ProfileTabRoute.path}$q';
+      return '${ProfileAuthRoute.path}$q';
     case '/create-poll':
     case '/create-quiz':
     case '/createpoll':
@@ -5475,6 +5484,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/profile-privacy':
     case '/hide-phone':
     case '/phone-privacy':
+      return SettingsRoute.pathWithSection('privacy');
     case '/email-code':
     case '/sms-code':
       return '${SettingsRoute.path}$q';
@@ -6264,7 +6274,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/privacy',
         redirect: (context, state) =>
             shortcutPathAlias(state.uri.path, state.uri.query) ??
-            SettingsRoute.path,
+            SettingsRoute.pathWithSection('privacy'),
       ),
       GoRoute(
         path: '/groups',
@@ -6385,13 +6395,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/theme',
         redirect: (context, state) =>
             shortcutPathAlias(state.uri.path, state.uri.query) ??
-            SettingsRoute.path,
+            SettingsRoute.pathWithSection('theme'),
       ),
       GoRoute(
         path: '/appearance',
         redirect: (context, state) =>
             shortcutPathAlias(state.uri.path, state.uri.query) ??
-            SettingsRoute.path,
+            SettingsRoute.pathWithSection('theme'),
       ),
       GoRoute(
         path: '/compose',
@@ -6529,13 +6539,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/qr',
         redirect: (context, state) =>
             shortcutPathAlias(state.uri.path, state.uri.query) ??
-            ProfileTabRoute.path,
+            ProfileAuthRoute.path,
       ),
       GoRoute(
         path: '/scan',
         redirect: (context, state) =>
             shortcutPathAlias(state.uri.path, state.uri.query) ??
-            ProfileTabRoute.path,
+            ProfileAuthRoute.path,
       ),
       GoRoute(
         path: '/gif',
@@ -8354,6 +8364,12 @@ class CreateRecipeRoute {
 class SettingsRoute {
   static const path = '/settings';
   static const name = 'settings';
+
+  static String pathWithSection(String section) {
+    final value = section.trim().toLowerCase();
+    if (value.isEmpty) return path;
+    return '$path?section=${Uri.encodeQueryComponent(value)}';
+  }
 }
 
 class BlockedUsersRoute {
