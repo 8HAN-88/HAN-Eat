@@ -2898,6 +2898,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return '${BlockedUsersRoute.path}$q';
     case '/night-mode':
     case '/dark':
+      return SettingsRoute.pathWithSection('theme');
     case '/auto-download':
     case '/data-saver':
     case '/settings/chats':
@@ -3162,15 +3163,16 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/socks':
     case '/mtproxy':
     case '/proxy-settings':
+    case '/emoji-status':
+    case '/profile-color':
+      return '${SettingsRoute.path}$q';
     case '/settings/privacy/online':
     case '/settings/privacy/voice':
     case '/settings/privacy/gifts':
     case '/privacy/phone-number':
     case '/privacy/added-by-phone':
     case '/privacy/voice-messages':
-    case '/emoji-status':
-    case '/profile-color':
-      return '${SettingsRoute.path}$q';
+      return SettingsRoute.pathWithSection('privacy');
     case '/people-nearby':
       return '${ChatNewMessageRoute.path}$q';
     case '/success':
@@ -3203,7 +3205,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/midnighttheme':
     case '/oledtheme':
     case '/trueblack':
-      return '${SettingsRoute.path}$q';
+      return SettingsRoute.pathWithSection('theme');
     case '/chatlist':
     case '/chat-list':
       return '${ChatsRoute.path}$q';
@@ -3383,7 +3385,6 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/clear-cache':
     case '/data-usage':
     case '/lite':
-    case '/auto-night':
     case '/self-destruct':
     case '/disappearing':
     case '/ttl':
@@ -3393,13 +3394,16 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/add-proxy':
     case '/socks-proxy':
     case '/connection':
-    case '/who-can-call':
-    case '/hide-phone':
-    case '/privacy-lastseen':
     case '/sync':
     case '/switch-account':
     case '/add-account':
       return '${SettingsRoute.path}$q';
+    case '/auto-night':
+      return SettingsRoute.pathWithSection('theme');
+    case '/who-can-call':
+    case '/hide-phone':
+    case '/privacy-lastseen':
+      return SettingsRoute.pathWithSection('privacy');
     case '/download-data':
     case '/export-contacts':
     case '/cloud-backup':
@@ -3573,6 +3577,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/chat-search':
       return '${SearchRoute.path}$q';
     case '/chat-theme':
+      return SettingsRoute.pathWithSection('theme');
     case '/name-color':
     case '/auto-lock':
     case '/data-saving':
@@ -3642,6 +3647,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/protect-content':
     case '/restrict-saving':
     case '/privacy-settings':
+      return SettingsRoute.pathWithSection('privacy');
     case '/chat-wallpaper':
     case '/chat-background':
     case '/bubble-style':
@@ -3735,15 +3741,18 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/reduce-motion':
     case '/power-saving-mode':
     case '/lite-settings':
-    case '/night-theme':
-    case '/day-theme':
-    case '/system-theme':
     case '/swipe-actions':
     case '/distance-units':
     case '/time-format':
+    case '/sensitive-content':
+    case '/age-restriction':
+      return '${SettingsRoute.path}$q';
+    case '/night-theme':
+    case '/system-theme':
     case '/chat-themes':
     case '/message-colors':
     case '/accent-color':
+      return SettingsRoute.pathWithSection('theme');
     case '/privacy-phone':
     case '/privacy-photo':
     case '/privacy-bio':
@@ -3755,9 +3764,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/privacy-gifts':
     case '/who-can-find':
     case '/peer-to-peer-calls':
-    case '/sensitive-content':
-    case '/age-restriction':
-      return '${SettingsRoute.path}$q';
+      return SettingsRoute.pathWithSection('privacy');
     case '/archive-folder':
       return '${ChatArchivedRoute.path}$q';
     case '/mute-settings':
@@ -3883,12 +3890,13 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/about-hanwe':
       return '${SupportSecurityRoute.path}$q';
     case '/nighttheme':
-    case '/daytheme':
     case '/systemtheme':
+      return SettingsRoute.pathWithSection('theme');
+    case '/whocanfind':
+      return SettingsRoute.pathWithSection('privacy');
     case '/storageusage':
     case '/cachesize':
     case '/languageapp':
-    case '/whocanfind':
     case '/sensitivecontent':
       return '${SettingsRoute.path}$q';
     case '/twosteppassword':
@@ -4109,13 +4117,14 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/avatar-size':
     case '/date-headers':
     case '/send-uncompressed':
-    case '/auto-night-schedule':
     case '/sticker-loop':
     case '/emoji-loop':
     case '/self-destruct-media':
     case '/quick-react':
     case '/color-tags':
       return '${SettingsRoute.path}$q';
+    case '/auto-night-schedule':
+      return SettingsRoute.pathWithSection('theme');
     case '/inline-bots':
     case '/recent-bots':
     case '/command-suggestions':
@@ -4272,6 +4281,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/celsius':
     case '/map-provider':
     case '/location-services':
+      return '${SettingsRoute.path}$q';
     case '/people-nearby-visibility':
     case '/who-can-add':
     case '/invite-privacy':
@@ -4282,7 +4292,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/bio-except':
     case '/messages-except':
     case '/calls-except':
-      return '${SettingsRoute.path}$q';
+      return SettingsRoute.pathWithSection('privacy');
     case '/archive-and-mute':
     case '/hide-archived':
     case '/unhide-archived':
@@ -4307,8 +4317,9 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/noisesuppression':
     case '/voipproxy':
     case '/previewlinks':
-    case '/lastseenexcept':
       return '${SettingsRoute.path}$q';
+    case '/lastseenexcept':
+      return SettingsRoute.pathWithSection('privacy');
     case '/archiveandmute':
     case '/hidearchived':
       return '${ChatArchivedRoute.path}$q';
@@ -4451,7 +4462,6 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/saved-emoji':
     case '/create-sticker-set':
       return '${ChatsRoute.path}$q';
-    case '/call-privacy':
     case '/data-for-calls':
     case '/use-less-data-calls':
     case '/auto-play-videos':
@@ -4466,6 +4476,8 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/tag-color':
     case '/chat-tag':
       return '${SettingsRoute.path}$q';
+    case '/call-privacy':
+      return SettingsRoute.pathWithSection('privacy');
     case '/passcode-change':
     case '/auto-lock-screen':
     case '/unlock-pattern':
@@ -4500,6 +4512,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/trendinggifs':
       return '${ChatsRoute.path}$q';
     case '/callprivacy':
+      return SettingsRoute.pathWithSection('privacy');
     case '/autoplayvideos':
     case '/externalbrowser':
     case '/resetcache':
@@ -4872,6 +4885,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return '${AccountSecurityRoute.path}$q';
     case '/hide-last-seen':
     case '/forwards-privacy':
+      return SettingsRoute.pathWithSection('privacy');
     case '/manage-storage':
     case '/download-manager':
       return '${SettingsRoute.path}$q';
@@ -4890,6 +4904,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return '${AccountSecurityRoute.path}$q';
     case '/hidelastseen':
     case '/forwardsprivacy':
+      return SettingsRoute.pathWithSection('privacy');
     case '/managestorage':
       return '${SettingsRoute.path}$q';
     case '/inappvibrate':
@@ -4957,8 +4972,6 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/airplay':
     case '/avatars-in-list':
     case '/show-avatars':
-    case '/night-accent':
-    case '/follow-system':
     case '/archive-swipe':
     case '/message-preview':
     case '/save-to-camera-roll':
@@ -4967,6 +4980,9 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/language-pack':
     case '/change-language':
       return '${SettingsRoute.path}$q';
+    case '/night-accent':
+    case '/follow-system':
+      return SettingsRoute.pathWithSection('theme');
     case '/saved-cards':
     case '/add-card':
     case '/topup-stars':
@@ -4980,14 +4996,15 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/playbackquality':
     case '/avatarsinlist':
     case '/showavatars':
-    case '/nightaccent':
-    case '/followsystem':
     case '/archiveswipe':
     case '/messagepreview':
     case '/languagepack':
     case '/changelanguage':
     case '/premiumemoji':
       return '${SettingsRoute.path}$q';
+    case '/nightaccent':
+    case '/followsystem':
+      return SettingsRoute.pathWithSection('theme');
     case '/savedcards':
     case '/addcard':
     case '/topupstars':
@@ -5006,6 +5023,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/hide-online':
     case '/hide-photo':
     case '/hide-calls':
+      return SettingsRoute.pathWithSection('privacy');
     case '/work-mode':
     case '/personal-mode':
     case '/import-data':
@@ -5031,6 +5049,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/hidetyping':
     case '/hideonline':
     case '/hidephoto':
+      return SettingsRoute.pathWithSection('privacy');
     case '/workmode':
     case '/personalmode':
     case '/backupnow':
@@ -5060,13 +5079,14 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/shake-to-report':
     case '/volume-to-scroll':
     case '/tap-to-record':
-    case '/incoming-privacy':
-    case '/calls-privacy':
-    case '/hide-profile-photo':
     case '/app-language':
     case '/chat-for-business':
     case '/work-hours':
       return '${SettingsRoute.path}$q';
+    case '/incoming-privacy':
+    case '/calls-privacy':
+    case '/hide-profile-photo':
+      return SettingsRoute.pathWithSection('privacy');
     case '/unreadfilter':
     case '/mutedfilter':
     case '/botsfilter':
@@ -5078,11 +5098,12 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return '${ChatsRoute.path}$q';
     case '/longpressreact':
     case '/taptorecord':
-    case '/incomingprivacy':
-    case '/callsprivacy':
     case '/applanguage':
     case '/workhours':
       return '${SettingsRoute.path}$q';
+    case '/incomingprivacy':
+    case '/callsprivacy':
+      return SettingsRoute.pathWithSection('privacy');
     case '/bot-inline':
     case '/switch-inline':
     case '/inline-query':
@@ -5449,7 +5470,6 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/signed-in-devices':
     case '/login-devices':
     case '/auth-devices':
-    case '/session-list':
     case '/kick-all-sessions':
     case '/security-and-login':
     case '/login-activity':
@@ -5458,7 +5478,6 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/authorized-devices':
     case '/active-web-sessions':
     case '/security-keys':
-    case '/passkey':
     case '/revoke-all-sessions':
     case '/sign-out-all':
     case '/logout-all':
@@ -5467,7 +5486,6 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/reset-password':
     case '/new-password':
     case '/password-reset':
-    case '/recover-account':
       return '${ForgotPasswordRoute.path}$q';
     case '/two-step-verification':
     case '/google-authenticator':
@@ -5482,7 +5500,6 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/email-privacy':
     case '/public-profile':
     case '/profile-privacy':
-    case '/hide-phone':
     case '/phone-privacy':
       return SettingsRoute.pathWithSection('privacy');
     case '/email-code':
@@ -5531,13 +5548,13 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/passwordchange':
       return '${ProfileAuthRoute.path}$q';
     case '/lastseenprivacy':
-    case '/hidelastseen':
     case '/hideemail':
     case '/emailprivacy':
     case '/publicprofile':
     case '/profileprivacy':
     case '/hidephone':
     case '/phoneprivacy':
+      return SettingsRoute.pathWithSection('privacy');
     case '/emailcode':
     case '/smscode':
       return '${SettingsRoute.path}$q';
