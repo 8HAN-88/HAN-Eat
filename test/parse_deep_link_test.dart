@@ -595,7 +595,7 @@ void main() {
     );
     expect(
       parseDeepLinkToGoPath('https://haneat.app/app/#/settings/appearance'),
-      SettingsRoute.path,
+      SettingsRoute.pathWithSection('theme'),
     );
     expect(
       parseDeepLinkToGoPath('https://haneat.app/share/miniapp/5'),
@@ -715,7 +715,7 @@ void main() {
     expect(shortcutPathAlias('/topup'), StarsWalletRoute.path);
     expect(shortcutPathAlias('/ref'), PartnerProgramRoute.path);
     expect(shortcutPathAlias('/helpdesk'), SupportContactRoute.path);
-    expect(shortcutPathAlias('/nightmode'), SettingsRoute.path);
+    expect(shortcutPathAlias('/nightmode'), SettingsRoute.pathWithSection('theme'));
     expect(shortcutPathAlias('/chatlist'), ChatsRoute.path);
     expect(shortcutPathAlias('/newfolder'), ChatFolderNewRoute.path);
     expect(shortcutPathAlias('/consent'), LegalConsentRoute.path);
@@ -912,7 +912,7 @@ void main() {
     expect(resourcePathAlias('/c/1/protect'), '/channel/1');
     expect(shortcutPathAlias('/slow-mode'), ChatsRoute.path);
     expect(shortcutPathAlias('/unread-chats'), ChatsRoute.path);
-    expect(shortcutPathAlias('/privacy-settings'), SettingsRoute.path);
+    expect(shortcutPathAlias('/privacy-settings'), SettingsRoute.pathWithSection('privacy'));
     expect(shortcutPathAlias('/edit-bot'), MyBotsRoute.path);
     expect(shortcutPathAlias('/web-app'), MiniAppsRoute.path);
     expect(shortcutPathAlias('/ton-wallet'), StarsWalletRoute.path);
@@ -953,7 +953,7 @@ void main() {
     expect(resourcePathAlias('/p/28/reactors'), '/post/28');
     expect(resourcePathAlias('/post/28/tips'), '/post/28');
     expect(shortcutPathAlias('/auto-delete'), SettingsRoute.path);
-    expect(shortcutPathAlias('/night-theme'), SettingsRoute.path);
+    expect(shortcutPathAlias('/night-theme'), SettingsRoute.pathWithSection('theme'));
     expect(shortcutPathAlias('/storage-usage'), SettingsRoute.path);
     expect(shortcutPathAlias('/set-bio'), ProfileAuthRoute.path);
     expect(shortcutPathAlias('/set-username'), ProfileAuthRoute.path);
@@ -1007,7 +1007,7 @@ void main() {
     expect(shortcutPathAlias('/2fa-setup'), TwoFactorSetupRoute.path);
     expect(shortcutPathAlias('/backup-export'), BackupRoute.path);
     expect(shortcutPathAlias('/legal-terms'), SupportSecurityRoute.path);
-    expect(shortcutPathAlias('/nighttheme'), SettingsRoute.path);
+    expect(shortcutPathAlias('/nighttheme'), SettingsRoute.pathWithSection('theme'));
     expect(shortcutPathAlias('/delete-message'), ChatsRoute.path);
     expect(shortcutPathAlias('/tg'), ChatsRoute.path);
     expect(
@@ -1285,7 +1285,7 @@ void main() {
     expect(shortcutPathAlias('/message-translation'), SettingsRoute.path);
     expect(shortcutPathAlias('/pip-player'), SettingsRoute.path);
     expect(shortcutPathAlias('/voip-proxy'), SettingsRoute.path);
-    expect(shortcutPathAlias('/last-seen-except'), SettingsRoute.path);
+    expect(shortcutPathAlias('/last-seen-except'), SettingsRoute.pathWithSection('privacy'));
     expect(shortcutPathAlias('/archive-and-mute'), ChatArchivedRoute.path);
     expect(shortcutPathAlias('/raise-to-speak'), ChatsRoute.path);
     expect(shortcutPathAlias('/archived-stickers'), ChatsRoute.path);
@@ -1824,12 +1824,12 @@ void main() {
     expect(shortcutPathAlias('/translate-to'), ChatsRoute.path);
     expect(shortcutPathAlias('/fingerprint'), AccountSecurityRoute.path);
     expect(shortcutPathAlias('/face-id'), AccountSecurityRoute.path);
-    expect(shortcutPathAlias('/hide-last-seen'), SettingsRoute.path);
-    expect(shortcutPathAlias('/forwards-privacy'), SettingsRoute.path);
+    expect(shortcutPathAlias('/hide-last-seen'), SettingsRoute.pathWithSection('privacy'));
+    expect(shortcutPathAlias('/forwards-privacy'), SettingsRoute.pathWithSection('privacy'));
     expect(shortcutPathAlias('/manage-storage'), SettingsRoute.path);
     expect(shortcutPathAlias('/in-app-vibrate'), NotificationSettingsRoute.path);
     expect(shortcutPathAlias('/voicemessage'), ChatsRoute.path);
-    expect(shortcutPathAlias('/hidelastseen'), SettingsRoute.path);
+    expect(shortcutPathAlias('/hidelastseen'), SettingsRoute.pathWithSection('privacy'));
     expect(resourcePathAlias('/voicejump/21/456'), '/chats/thread/21?msg=456');
     expect(resourcePathAlias('/notejump/21/456'), '/chats/thread/21?msg=456');
     expect(resourcePathAlias('/transjump/21/456'), '/chats/thread/21?msg=456');
@@ -1926,8 +1926,8 @@ void main() {
     expect(shortcutPathAlias('/cast'), SettingsRoute.path);
     expect(shortcutPathAlias('/airplay'), SettingsRoute.path);
     expect(shortcutPathAlias('/avatars-in-list'), SettingsRoute.path);
-    expect(shortcutPathAlias('/night-accent'), SettingsRoute.path);
-    expect(shortcutPathAlias('/follow-system'), SettingsRoute.path);
+    expect(shortcutPathAlias('/night-accent'), SettingsRoute.pathWithSection('theme'));
+    expect(shortcutPathAlias('/follow-system'), SettingsRoute.pathWithSection('theme'));
     expect(shortcutPathAlias('/archive-swipe'), SettingsRoute.path);
     expect(shortcutPathAlias('/message-preview'), SettingsRoute.path);
     expect(shortcutPathAlias('/language-pack'), SettingsRoute.path);
@@ -1937,7 +1937,7 @@ void main() {
     expect(shortcutPathAlias('/add-card'), StarsWalletRoute.path);
     expect(shortcutPathAlias('/topup-stars'), StarsWalletRoute.path);
     expect(shortcutPathAlias('/miniplayer'), ChatsRoute.path);
-    expect(shortcutPathAlias('/nightaccent'), SettingsRoute.path);
+    expect(shortcutPathAlias('/nightaccent'), SettingsRoute.pathWithSection('theme'));
     expect(shortcutPathAlias('/savedcards'), StarsWalletRoute.path);
     expect(resourcePathAlias('/pipjump/21/456'), '/chats/thread/21?msg=456');
     expect(resourcePathAlias('/qualityjump/21/456'), '/chats/thread/21?msg=456');
@@ -1959,7 +1959,7 @@ void main() {
     );
     expect(
       parseDeepLinkToGoPath('https://haneat.app/app/#/follow-system'),
-      SettingsRoute.path,
+      SettingsRoute.pathWithSection('theme'),
     );
     expect(
       parseDeepLinkToGoPath('https://haneat.app/qualityjump/21/456'),
@@ -1975,9 +1975,9 @@ void main() {
     expect(shortcutPathAlias('/hold-call'), ChatsRoute.path);
     expect(shortcutPathAlias('/add-to-call'), ChatsRoute.path);
     expect(shortcutPathAlias('/quote-text'), ChatsRoute.path);
-    expect(shortcutPathAlias('/hide-typing'), SettingsRoute.path);
-    expect(shortcutPathAlias('/hide-online'), SettingsRoute.path);
-    expect(shortcutPathAlias('/hide-photo'), SettingsRoute.path);
+    expect(shortcutPathAlias('/hide-typing'), SettingsRoute.pathWithSection('privacy'));
+    expect(shortcutPathAlias('/hide-online'), SettingsRoute.pathWithSection('privacy'));
+    expect(shortcutPathAlias('/hide-photo'), SettingsRoute.pathWithSection('privacy'));
     expect(shortcutPathAlias('/work-mode'), SettingsRoute.path);
     expect(shortcutPathAlias('/personal-mode'), SettingsRoute.path);
     expect(shortcutPathAlias('/backup-now'), SettingsRoute.path);
@@ -1988,7 +1988,7 @@ void main() {
     expect(shortcutPathAlias('/report-ad'), AdsHubRoute.path);
     expect(shortcutPathAlias('/ad-info'), AdsHubRoute.path);
     expect(shortcutPathAlias('/mutemic'), ChatsRoute.path);
-    expect(shortcutPathAlias('/hidetyping'), SettingsRoute.path);
+    expect(shortcutPathAlias('/hidetyping'), SettingsRoute.pathWithSection('privacy'));
     expect(shortcutPathAlias('/applock'), AccountSecurityRoute.path);
     expect(shortcutPathAlias('/reportad'), AdsHubRoute.path);
     expect(
@@ -2011,7 +2011,7 @@ void main() {
     expect(resourcePathAlias('/quoteid/28'), '/post/28');
     expect(
       leftoverPathAlias('/go/hide-typing'),
-      SettingsRoute.path,
+      SettingsRoute.pathWithSection('privacy'),
     );
     expect(
       leftoverPathAlias('/go/secretjump/21/456'),
@@ -2046,8 +2046,8 @@ void main() {
     expect(shortcutPathAlias('/long-press-react'), SettingsRoute.path);
     expect(shortcutPathAlias('/shake-to-report'), SettingsRoute.path);
     expect(shortcutPathAlias('/tap-to-record'), SettingsRoute.path);
-    expect(shortcutPathAlias('/incoming-privacy'), SettingsRoute.path);
-    expect(shortcutPathAlias('/calls-privacy'), SettingsRoute.path);
+    expect(shortcutPathAlias('/incoming-privacy'), SettingsRoute.pathWithSection('privacy'));
+    expect(shortcutPathAlias('/calls-privacy'), SettingsRoute.pathWithSection('privacy'));
     expect(shortcutPathAlias('/app-language'), SettingsRoute.path);
     expect(shortcutPathAlias('/work-hours'), SettingsRoute.path);
     expect(shortcutPathAlias('/unreadfilter'), ChatsRoute.path);
@@ -2667,6 +2667,42 @@ void main() {
     expect(shortcutPathAlias('/reset-password'), ForgotPasswordRoute.path);
     expect(shortcutPathAlias('/sign-out-all'), AccountSecurityRoute.path);
     expect(leftoverPathAlias('/go/new-password'), ForgotPasswordRoute.path);
+    expect(shortcutPathAlias('/reels'), isNull);
+    expect(shortcutPathAlias('/logout'), isNull);
+    expect(shortcutPathAlias('/delete-account'), isNull);
+  });
+
+  test('leftover theme and privacy hashes scroll to the matching settings block', () {
+    expect(shortcutPathAlias('/night-mode'), SettingsRoute.pathWithSection('theme'));
+    expect(shortcutPathAlias('/dark'), SettingsRoute.pathWithSection('theme'));
+    expect(shortcutPathAlias('/daytheme'), SettingsRoute.pathWithSection('theme'));
+    expect(shortcutPathAlias('/darkmode'), SettingsRoute.pathWithSection('theme'));
+    expect(shortcutPathAlias('/auto-night'), SettingsRoute.pathWithSection('theme'));
+    expect(shortcutPathAlias('/chat-theme'), SettingsRoute.pathWithSection('theme'));
+    expect(shortcutPathAlias('/system-theme'), SettingsRoute.pathWithSection('theme'));
+    expect(shortcutPathAlias('/followsystem'), SettingsRoute.pathWithSection('theme'));
+    expect(shortcutPathAlias('/who-can-call'), SettingsRoute.pathWithSection('privacy'));
+    expect(shortcutPathAlias('/privacy-lastseen'), SettingsRoute.pathWithSection('privacy'));
+    expect(shortcutPathAlias('/protect-content'), SettingsRoute.pathWithSection('privacy'));
+    expect(shortcutPathAlias('/privacy-phone'), SettingsRoute.pathWithSection('privacy'));
+    expect(shortcutPathAlias('/settings/privacy/online'), SettingsRoute.pathWithSection('privacy'));
+    expect(shortcutPathAlias('/invite-privacy'), SettingsRoute.pathWithSection('privacy'));
+    expect(shortcutPathAlias('/lastseenprivacy'), SettingsRoute.pathWithSection('privacy'));
+    expect(shortcutPathAlias('/hideemail'), SettingsRoute.pathWithSection('privacy'));
+    expect(shortcutPathAlias('/hidephone'), SettingsRoute.pathWithSection('privacy'));
+    expect(shortcutPathAlias('/incomingprivacy'), SettingsRoute.pathWithSection('privacy'));
+    expect(shortcutPathAlias('/callprivacy'), SettingsRoute.pathWithSection('privacy'));
+    expect(shortcutPathAlias('/call-privacy'), SettingsRoute.pathWithSection('privacy'));
+    expect(leftoverPathAlias('/go/night-mode'), SettingsRoute.pathWithSection('theme'));
+    expect(leftoverPathAlias('/open/hide-phone'), SettingsRoute.pathWithSection('privacy'));
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/nightmode'),
+      SettingsRoute.pathWithSection('theme'),
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/hide-phone'),
+      SettingsRoute.pathWithSection('privacy'),
+    );
     expect(shortcutPathAlias('/reels'), isNull);
     expect(shortcutPathAlias('/logout'), isNull);
     expect(shortcutPathAlias('/delete-account'), isNull);
