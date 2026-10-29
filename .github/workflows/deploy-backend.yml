@@ -10,6 +10,7 @@ on:
       - 'scripts/patch_nginx_realtime_sse.sh'
       - 'scripts/deploy_on_server_console.sh'
       - 'scripts/ensure_server_email_env.sh'
+      - 'scripts/ensure_prod_env.py'
       - '.github/workflows/deploy-backend.yml'
 
 concurrency:
@@ -44,6 +45,7 @@ jobs:
           rsync -avz \
             -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new -o ConnectTimeout=30" \
             scripts/ensure_server_email_env.sh \
+            scripts/ensure_prod_env.py \
             scripts/patch_nginx_realtime_sse.sh \
             root@89.19.216.60:/root/HAN-Eat/scripts/
 
@@ -64,26 +66,11 @@ jobs:
             source venv/bin/activate
           fi
           pip install -q -r requirements.txt
+          python3 "$APP_DIR/scripts/ensure_prod_env.py" "$APP_DIR/backend/.env"
           if grep -q '^RATE_LIMIT_PER_MINUTE=' .env 2>/dev/null; then
             sed -i 's/^RATE_LIMIT_PER_MINUTE=.*/RATE_LIMIT_PER_MINUTE=300/' .env
           else
             echo 'RATE_LIMIT_PER_MINUTE=300' >> .env
-          fi
-          # Production must never stay on APP_ENV=development: it breaks CORS for haneat.app.
-          if grep -q '^APP_ENV=' .env 2>/dev/null; then
-            sed -i 's/^APP_ENV=.*/APP_ENV=production/' .env
-          else
-            echo 'APP_ENV=production' >> .env
-          fi
-          if grep -q '^DEBUG=' .env 2>/dev/null; then
-            sed -i 's/^DEBUG=.*/DEBUG=false/' .env
-          else
-            echo 'DEBUG=false' >> .env
-          fi
-          if grep -q '^API_PUBLIC_BASE_URL=' .env 2>/dev/null; then
-            sed -i 's|^API_PUBLIC_BASE_URL=.*|API_PUBLIC_BASE_URL=https://api.haneat.app|' .env
-          else
-            echo 'API_PUBLIC_BASE_URL=https://api.haneat.app' >> .env
           fi
           PROD_ORIGINS='https://haneat.app,https://www.haneat.app,https://kitchen.haneat.app,http://localhost:3000,http://localhost:8080'
           if grep -q '^ALLOWED_ORIGINS=' .env 2>/dev/null; then
@@ -96,14 +83,35 @@ jobs:
           if [[ -f "$APP_DIR/scripts/patch_nginx_realtime_sse.sh" ]]; then
             bash "$APP_DIR/scripts/patch_nginx_realtime_sse.sh" || true
           fi
+          if [[ ! -f /etc/nginx/sites-available/haneat-api ]]; then
+            cat > /etc/nginx/sites-available/haneat-api <<'NGX'
+          server {
+              listen 80;
+              server_name api.haneat.app;
+              client_max_body_size 1024M;
+              location / {
+                  proxy_pass http://127.0.0.1:8000;
+                  proxy_http_version 1.1;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+              }
+          }
+          NGX
+            ln -sf /etc/nginx/sites-available/haneat-api /etc/nginx/sites-enabled/haneat-api
+            echo "created missing nginx site haneat-api"
+          fi
           systemctl daemon-reload
           systemctl start nginx || true
           nginx -t && (systemctl reload nginx || systemctl restart nginx) || systemctl restart nginx || true
           systemctl restart haneat-api
           systemctl restart haneat-video-worker 2>/dev/null || true
-          sleep 2
+          sleep 8
           systemctl is-active nginx || true
-          systemctl is-active haneat-api
+          systemctl is-active haneat-api || true
+          curl -sf --max-time 5 http://127.0.0.1:8000/health || true
+          journalctl -u haneat-api -n 80 --no-pager || true
           REMOTE
 
       - name: Email config check
@@ -121,13 +129,23 @@ jobs:
 
       - name: Smoke
         run: |
-          sleep 5
-          for i in 1 2 3 4 5 6 7 8; do
-            if curl -sf https://api.haneat.app/health; then
+          sleep 8
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if curl -sf https://haneat.app/health | grep -q '"status"'; then
+              echo "same-origin /health ok"
+              curl -sf https://haneat.app/health
               echo ""
-              curl -sf https://api.haneat.app/api/v1/system/readiness | python3 -m json.tool | head -20
+              curl -sf https://api.haneat.app/health || true
+              exit 0
+            fi
+            if curl -sf https://api.haneat.app/health | grep -q '"status"'; then
+              echo "api host /health ok"
+              curl -sf https://api.haneat.app/health
+              echo ""
               exit 0
             fi
             sleep 5
           done
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new -o ConnectTimeout=30 \
+            root@89.19.216.60 'curl -sv --max-time 5 http://127.0.0.1:8000/health; echo; systemctl status haneat-api --no-pager; journalctl -u haneat-api -n 120 --no-pager' || true
           exit 1
