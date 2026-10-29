@@ -50,7 +50,7 @@ def req(method: str, path: str, headers: dict | None = None, body: dict | None =
 
 def login_or_register() -> tuple[dict[str, str], str]:
     email = os.environ.get("SMOKE_EMAIL", f"smoke{__import__('time').time_ns()}@example.com")
-    password = os.environ.get("SMOKE_PASSWORD", "password123")
+    password = os.environ.get("SMOKE_PASSWORD", "HANtest2026!")
     code, data = req("POST", "/auth/login", body={"email": email, "password": password})
     if code == 200 and data.get("token"):
         return {"Authorization": f"Bearer {data['token']}"}, email
@@ -63,6 +63,7 @@ def login_or_register() -> tuple[dict[str, str], str]:
                 "password": password,
                 "name": "TZ Smoke",
                 "username": email.split("@")[0][:28],
+                "accept_legal": True,
             },
         )
         if code in (200, 201) and reg.get("token"):
@@ -81,7 +82,7 @@ def run_existing_scripts(email: str) -> None:
         "BASE_URL": BASE,
         "SMOKE_AUTO_REGISTER": "1",
         "SMOKE_EMAIL": email,
-        "SMOKE_PASSWORD": os.environ.get("SMOKE_PASSWORD", "password123"),
+        "SMOKE_PASSWORD": os.environ.get("SMOKE_PASSWORD", "HANtest2026!"),
     }
     scripts = [
         ("smoke_public_api.sh", ["bash", f"{root}/smoke_public_api.sh", BASE]),
@@ -198,9 +199,10 @@ def test_admin_refund_acl() -> None:
         "/auth/register",
         body={
             "email": user_email,
-            "password": "password123",
+            "password": "HANtest2026!",
             "name": "ACL",
             "username": f"acl{__import__('time').time_ns() % 100000}"[:28],
+            "accept_legal": True,
         },
     )
     token = reg.get("token") if code in (200, 201) else None

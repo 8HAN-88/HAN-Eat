@@ -68,7 +68,7 @@ def _warn_slow_auth(label: str, elapsed: float, threshold: float = 8.0) -> None:
 def login_or_register() -> dict[str, str]:
     global _last_refresh_token
     email = os.environ.get("SMOKE_EMAIL", f"launch{time.time_ns()}@example.com")
-    password = os.environ.get("SMOKE_PASSWORD", "password123")
+    password = os.environ.get("SMOKE_PASSWORD", "HANtest2026!")
     t0 = time.perf_counter()
     code, data = req("POST", "/auth/login", body={"email": email, "password": password})
     _warn_slow_auth("POST /auth/login", time.perf_counter() - t0)

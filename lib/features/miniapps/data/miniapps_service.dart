@@ -6,7 +6,7 @@ import '../../../services/api_service.dart';
 import 'miniapp_models.dart';
 
 class MiniAppsService {
-  /// Каталог/мои приложения: web JSON часто приходит как Map, не Map<String, dynamic>.
+  /// Каталог/мои приложения: web JSON часто приходит как Map, не типизированный Map.
   static List<MiniAppItem> parseItemList(Object? raw) {
     Object? items = raw;
     if (raw is Map) {
