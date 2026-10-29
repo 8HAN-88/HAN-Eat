@@ -913,6 +913,7 @@ String? resourcePathAlias(String path, [String query = '']) {
     if (id != null && id > 0) {
       if (segs[2] == 'followers') return ProfileFollowersRoute.withUserId(id);
       if (segs[2] == 'following') return ProfileFollowingRoute.withUserId(id);
+      if (segs[2] == 'edit') return '${ProfileAuthRoute.path}$q';
       if (segs[2] == 'posts' ||
           segs[2] == 'feed' ||
           segs[2] == 'stories' ||
@@ -2591,6 +2592,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return '${BlockedUsersRoute.path}$q';
     case '/notification-settings':
     case '/notif-settings':
+    case '/settings/notifications':
       return '${NotificationSettingsRoute.path}$q';
     case '/export':
       return '${BackupRoute.path}$q';
@@ -2669,6 +2671,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/subs':
     case '/subscriptions':
       return '${FeedRoute.path}$q';
+    case '/login':
     case '/signin':
     case '/sign-in':
       return '${LoginRoute.path}$q';
@@ -2820,12 +2823,13 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/story-privacy':
     case '/close-friend':
       return '${CloseFriendsRoute.path}$q';
-    case '/change-password':
     case '/password':
     case '/settings/password':
     case '/privacy-and-security':
     case '/secret-chat':
       return '${AccountSecurityRoute.path}$q';
+    case '/change-password':
+      return '${ProfileAuthRoute.path}$q';
     case '/forgot':
       return '${ForgotPasswordRoute.path}$q';
     case '/subscribe':
@@ -3102,6 +3106,8 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/hide-read':
       return SettingsRoute.pathWithSection('privacy');
     case '/autolock':
+    case '/settings/autolock':
+    case '/settings/passcode':
     case '/passkey':
     case '/passkeys':
     case '/biometric':
@@ -3135,7 +3141,10 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/newreel':
       return '${CreateReelRoute.path}$q';
     case '/confirm-email':
+    case '/verify-email':
       return '${VerifyEmailRoute.path}$q';
+    case '/confirm-email-change':
+      return '${ConfirmEmailChangeRoute.path}$q';
     case '/login-code':
       return '${LoginRoute.path}$q';
     case '/reset-pass':
@@ -3144,6 +3153,9 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return '${ForgotPasswordRoute.path}$q';
     case '/twofa':
     case '/2step':
+      return '${TwoFactorSetupRoute.path}$q';
+    case '/2fa-verify':
+      return '${TwoFactorVerifyRoute.path}$q';
     case '/activesessions':
       return '${AccountSecurityRoute.path}$q';
     case '/setusername':
@@ -3395,9 +3407,10 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/socks-proxy':
     case '/connection':
     case '/sync':
+      return '${SettingsRoute.path}$q';
     case '/switch-account':
     case '/add-account':
-      return '${SettingsRoute.path}$q';
+      return '${AccountSecurityRoute.path}$q';
     case '/auto-night':
       return SettingsRoute.pathWithSection('theme');
     case '/who-can-call':
@@ -3579,7 +3592,9 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/chat-theme':
       return SettingsRoute.pathWithSection('theme');
     case '/name-color':
+      return SettingsRoute.pathWithSection('theme');
     case '/auto-lock':
+      return '${AccountSecurityRoute.path}$q';
     case '/data-saving':
     case '/use-proxy':
     case '/clearcache':
@@ -4035,11 +4050,12 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/disable-animations':
     case '/in-app-browser':
     case '/open-links-in-app':
-    case '/secret-chat-settings':
     case '/self-destruct-timer':
     case '/screenshot-notify':
     case '/secret-ttl':
       return '${SettingsRoute.path}$q';
+    case '/secret-chat-settings':
+      return '${AccountSecurityRoute.path}$q';
     case '/via-bot':
       return '${MyBotsRoute.path}$q';
     case '/post-stats':
@@ -5026,12 +5042,13 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return SettingsRoute.pathWithSection('privacy');
     case '/work-mode':
     case '/personal-mode':
+      return '${SettingsRoute.path}$q';
     case '/import-data':
     case '/chat-export':
     case '/download-history':
     case '/backup-now':
     case '/restore-backup':
-      return '${SettingsRoute.path}$q';
+      return '${BackupRoute.path}$q';
     case '/local-passcode':
     case '/app-lock':
       return '${AccountSecurityRoute.path}$q';
@@ -5052,9 +5069,10 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return SettingsRoute.pathWithSection('privacy');
     case '/workmode':
     case '/personalmode':
+      return '${SettingsRoute.path}$q';
     case '/backupnow':
     case '/restorebackup':
-      return '${SettingsRoute.path}$q';
+      return '${BackupRoute.path}$q';
     case '/applock':
       return '${AccountSecurityRoute.path}$q';
     case '/reportad':
@@ -5483,7 +5501,6 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/logout-all':
       return '${AccountSecurityRoute.path}$q';
     case '/forgot-password':
-    case '/reset-password':
     case '/new-password':
     case '/password-reset':
       return '${ForgotPasswordRoute.path}$q';
@@ -5503,8 +5520,9 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/phone-privacy':
       return SettingsRoute.pathWithSection('privacy');
     case '/email-code':
+      return '${VerifyEmailRoute.path}$q';
     case '/sms-code':
-      return '${SettingsRoute.path}$q';
+      return '${LoginRoute.path}$q';
     case '/terminatesessions':
     case '/endsessions':
     case '/logoutothers':
@@ -5556,8 +5574,9 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/phoneprivacy':
       return SettingsRoute.pathWithSection('privacy');
     case '/emailcode':
+      return '${VerifyEmailRoute.path}$q';
     case '/smscode':
-      return '${SettingsRoute.path}$q';
+      return '${LoginRoute.path}$q';
     case '/publichnayaoferta':
     case '/polzovatelskoesoglashenie':
       return '${SupportSecurityRoute.path}$q';
