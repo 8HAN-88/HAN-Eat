@@ -680,7 +680,7 @@ void main() {
     expect(shortcutPathAlias('/newreel'), CreateReelRoute.path);
     expect(shortcutPathAlias('/confirm-email'), VerifyEmailRoute.path);
     expect(shortcutPathAlias('/forgot-pass'), ForgotPasswordRoute.path);
-    expect(shortcutPathAlias('/twofa'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/twofa'), TwoFactorSetupRoute.path);
     expect(shortcutPathAlias('/setusername'), ProfileAuthRoute.path);
     expect(shortcutPathAlias('/lite-mode'), SettingsRoute.path);
     expect(shortcutPathAlias('/success'), SubscriptionSuccessRoute.path);
@@ -1980,9 +1980,9 @@ void main() {
     expect(shortcutPathAlias('/hide-photo'), SettingsRoute.pathWithSection('privacy'));
     expect(shortcutPathAlias('/work-mode'), SettingsRoute.path);
     expect(shortcutPathAlias('/personal-mode'), SettingsRoute.path);
-    expect(shortcutPathAlias('/backup-now'), SettingsRoute.path);
-    expect(shortcutPathAlias('/restore-backup'), SettingsRoute.path);
-    expect(shortcutPathAlias('/chat-export'), SettingsRoute.path);
+    expect(shortcutPathAlias('/backup-now'), BackupRoute.path);
+    expect(shortcutPathAlias('/restore-backup'), BackupRoute.path);
+    expect(shortcutPathAlias('/chat-export'), BackupRoute.path);
     expect(shortcutPathAlias('/app-lock'), AccountSecurityRoute.path);
     expect(shortcutPathAlias('/local-passcode'), AccountSecurityRoute.path);
     expect(shortcutPathAlias('/report-ad'), AdsHubRoute.path);
@@ -2664,7 +2664,7 @@ void main() {
     expect(shortcutPathAlias('/sessions'), AccountSecurityRoute.path);
     expect(shortcutPathAlias('/blocked'), BlockedUsersRoute.path);
     expect(shortcutPathAlias('/forgot-password'), ForgotPasswordRoute.path);
-    expect(shortcutPathAlias('/reset-password'), ForgotPasswordRoute.path);
+    expect(shortcutPathAlias('/reset-password'), isNull);
     expect(shortcutPathAlias('/sign-out-all'), AccountSecurityRoute.path);
     expect(leftoverPathAlias('/go/new-password'), ForgotPasswordRoute.path);
     expect(shortcutPathAlias('/reels'), isNull);
@@ -2702,6 +2702,45 @@ void main() {
     expect(
       parseDeepLinkToGoPath('https://haneat.app/app/#/hide-phone'),
       SettingsRoute.pathWithSection('privacy'),
+    );
+    expect(shortcutPathAlias('/reels'), isNull);
+    expect(shortcutPathAlias('/logout'), isNull);
+    expect(shortcutPathAlias('/delete-account'), isNull);
+  });
+
+  test('leftover backup, lock, and auth hashes open the live screens', () {
+    expect(shortcutPathAlias('/auto-lock'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/settings/autolock'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/settings/passcode'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/switch-account'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/add-account'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/secret-chat-settings'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/import-data'), BackupRoute.path);
+    expect(shortcutPathAlias('/download-history'), BackupRoute.path);
+    expect(shortcutPathAlias('/backupnow'), BackupRoute.path);
+    expect(shortcutPathAlias('/restorebackup'), BackupRoute.path);
+    expect(shortcutPathAlias('/2step'), TwoFactorSetupRoute.path);
+    expect(shortcutPathAlias('/2fa-verify'), TwoFactorVerifyRoute.path);
+    expect(shortcutPathAlias('/change-password'), ProfileAuthRoute.path);
+    expect(shortcutPathAlias('/login'), LoginRoute.path);
+    expect(shortcutPathAlias('/verify-email'), VerifyEmailRoute.path);
+    expect(shortcutPathAlias('/confirm-email-change'), ConfirmEmailChangeRoute.path);
+    expect(shortcutPathAlias('/email-code'), VerifyEmailRoute.path);
+    expect(shortcutPathAlias('/sms-code'), LoginRoute.path);
+    expect(shortcutPathAlias('/settings/notifications'), NotificationSettingsRoute.path);
+    expect(shortcutPathAlias('/name-color'), SettingsRoute.pathWithSection('theme'));
+    expect(resourcePathAlias('/profile/9/edit'), ProfileAuthRoute.path);
+    expect(leftoverPathAlias('/go/backup-now'), BackupRoute.path);
+    expect(leftoverPathAlias('/open/auto-lock'), AccountSecurityRoute.path);
+    expect(
+      parseDeepLinkToGoPath(
+        'https://haneat.app/app/#/reset-password?token=654321&email=user@test.local',
+      ),
+      '/reset-password?token=654321&email=user%40test.local',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/backup-now'),
+      BackupRoute.path,
     );
     expect(shortcutPathAlias('/reels'), isNull);
     expect(shortcutPathAlias('/logout'), isNull);
