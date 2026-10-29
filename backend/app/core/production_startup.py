@@ -15,6 +15,34 @@ _FATAL_MARKERS = (
     "SKIP_GOOGLE_ID_TOKEN_VERIFICATION=true запрещён в production",
 )
 
+_WEAK_SECRETS = frozenset(
+    {
+        "dev-only-change-with-SECRET_KEY-env-in-production",
+        "dev-only-change-with-secret_key-env-in-production",
+        "changeme",
+        "change-me",
+        "changethis",
+        "secret",
+        "password",
+        "your-secret-key",
+    }
+)
+
+
+def secret_looks_like_dev_default(secret: str) -> bool:
+    """True only for known leftover defaults — not a random key that contains 'dev'."""
+    value = (secret or "").strip()
+    if not value:
+        return True
+    lowered = value.lower()
+    if lowered in _WEAK_SECRETS:
+        return True
+    if lowered.startswith("dev-only"):
+        return True
+    if lowered.startswith("changeme") or lowered.startswith("change-me"):
+        return True
+    return False
+
 
 def collect_production_issues() -> list[str]:
     if settings.APP_ENV != "production":
@@ -25,7 +53,7 @@ def collect_production_issues() -> list[str]:
         issues.append("DEBUG=true в production")
     if not settings.SECRET_KEY or len(settings.SECRET_KEY) < 32:
         issues.append("SECRET_KEY слишком короткий или пустой")
-    if "change" in settings.SECRET_KEY.lower() or "dev" in settings.SECRET_KEY.lower():
+    elif secret_looks_like_dev_default(settings.SECRET_KEY):
         issues.append("SECRET_KEY похож на dev-значение")
     if settings.SKIP_GOOGLE_ID_TOKEN_VERIFICATION:
         issues.append("SKIP_GOOGLE_ID_TOKEN_VERIFICATION=true запрещён в production")

@@ -153,26 +153,36 @@ async def root():
 
 @app.get("/health")
 async def health():
-    from app.core.infrastructure_startup import infrastructure_status
-    from app.services.email_delivery_service import email_delivery_configured
+    try:
+        from app.core.infrastructure_startup import infrastructure_status
+        from app.services.email_delivery_service import email_delivery_configured
 
-    infra = infrastructure_status()
-    db_ok = infra["database"]["ok"]
-    redis_cfg = infra["redis"]
-    redis_ok = True if not redis_cfg["enabled"] else redis_cfg["ok"]
-    ok = db_ok and redis_ok
-    provider = (settings.EMAIL_PROVIDER or "smtp").strip().lower()
-    redis_public = {
-        "enabled": bool(redis_cfg.get("enabled")),
-        "ok": redis_ok,
-    }
-    return {
-        "status": "ok" if ok else "degraded",
-        "database": db_ok,
-        "redis": redis_public,
-        "email_smtp_configured": email_delivery_configured(),
-        "email_provider": provider,
-    }
+        infra = infrastructure_status()
+        db_ok = infra["database"]["ok"]
+        redis_cfg = infra["redis"]
+        redis_ok = True if not redis_cfg["enabled"] else redis_cfg["ok"]
+        ok = db_ok and redis_ok
+        provider = (settings.EMAIL_PROVIDER or "smtp").strip().lower()
+        redis_public = {
+            "enabled": bool(redis_cfg.get("enabled")),
+            "ok": redis_ok,
+        }
+        return {
+            "status": "ok" if ok else "degraded",
+            "database": db_ok,
+            "redis": redis_public,
+            "email_smtp_configured": email_delivery_configured(),
+            "email_provider": provider,
+        }
+    except Exception as exc:
+        logger.exception("health check degraded: %s", exc)
+        return {
+            "status": "degraded",
+            "database": False,
+            "redis": {"enabled": False, "ok": False},
+            "email_smtp_configured": False,
+            "email_provider": "unknown",
+        }
 
 
 @app.on_event("startup")

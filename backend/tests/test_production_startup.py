@@ -35,3 +35,20 @@ def test_debug_and_skip_google_are_fatal(monkeypatch):
     fatal = prod.collect_fatal_production_issues()
     assert any("DEBUG" in msg for msg in fatal)
     assert any("SKIP_GOOGLE" in msg for msg in fatal)
+
+
+def test_real_secret_with_device_substring_is_not_fatal(monkeypatch):
+    monkeypatch.setattr(prod.settings, "APP_ENV", "production")
+    monkeypatch.setattr(prod.settings, "DEBUG", False)
+    monkeypatch.setattr(
+        prod.settings,
+        "SECRET_KEY",
+        "prod-device-token-" + ("k" * 24),
+    )
+    monkeypatch.setattr(prod.settings, "SKIP_GOOGLE_ID_TOKEN_VERIFICATION", False)
+    assert prod.collect_fatal_production_issues() == []
+    prod.enforce_production_readiness()
+    assert prod.secret_looks_like_dev_default("prod-device-token-" + ("k" * 24)) is False
+    assert prod.secret_looks_like_dev_default(
+        "dev-only-change-with-SECRET_KEY-env-in-production"
+    )
