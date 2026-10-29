@@ -255,7 +255,7 @@ void main() {
     expect(shortcutPathAlias('/passcode'), AccountSecurityRoute.path);
     expect(shortcutPathAlias('/passport'), AccountSecurityRoute.path);
     expect(shortcutPathAlias('/poll'), CreatePostRoute.pathWithType('poll'));
-    expect(shortcutPathAlias('/nearby'), ChatsRoute.path);
+    expect(shortcutPathAlias('/nearby'), ChatNewMessageRoute.path);
     expect(shortcutPathAlias('/people-nearby'), ChatNewMessageRoute.path);
     expect(leftoverPathAlias('/go/poll'), CreatePostRoute.pathWithType('poll'));
     expect(shortcutPathAlias('/home'), FeedRoute.path);
@@ -643,7 +643,7 @@ void main() {
     expect(shortcutPathAlias('/ton'), StarsWalletRoute.path);
     expect(shortcutPathAlias('/fragment'), StarGiftsMarketplaceRoute.path);
     expect(shortcutPathAlias('/newmessage'), ChatNewMessageRoute.path);
-    expect(shortcutPathAlias('/savedmessages'), ProfileTabRoute.path);
+    expect(shortcutPathAlias('/savedmessages'), SavedChatRoute.path);
     expect(shortcutPathAlias('/addstickers'), ChatsRoute.path);
     expect(
       leftoverPathAlias('/go/c/1/boost'),
@@ -787,7 +787,7 @@ void main() {
     expect(shortcutPathAlias('/call-log'), ChatsRoute.path);
     expect(shortcutPathAlias('/recent-calls'), ChatsRoute.path);
     expect(shortcutPathAlias('/secret-chats'), ChatsRoute.path);
-    expect(shortcutPathAlias('/saved-msg'), ChatsRoute.path);
+    expect(shortcutPathAlias('/saved-msg'), SavedChatRoute.path);
     expect(shortcutPathAlias('/im-box'), ChatsRoute.path);
     expect(shortcutPathAlias('/terms-of-use'), SupportSecurityRoute.path);
     expect(shortcutPathAlias('/refunds-policy'), SupportSecurityRoute.path);
@@ -2741,6 +2741,83 @@ void main() {
     expect(
       parseDeepLinkToGoPath('https://haneat.app/app/#/backup-now'),
       BackupRoute.path,
+    );
+    expect(shortcutPathAlias('/reels'), isNull);
+    expect(shortcutPathAlias('/logout'), isNull);
+    expect(shortcutPathAlias('/delete-account'), isNull);
+  });
+
+  test('leftover call-log and saved-msg hashes open the live screens', () {
+    expect(shortcutPathAlias('/calllog'), ChatsRoute.path);
+    expect(shortcutPathAlias('/recentcalls'), ChatsRoute.path);
+    expect(shortcutPathAlias('/voicemessages'), ChatsRoute.path);
+    expect(shortcutPathAlias('/secretchats'), ChatsRoute.path);
+    expect(shortcutPathAlias('/imbox'), ChatsRoute.path);
+    expect(shortcutPathAlias('/call-log'), ChatsRoute.path);
+    expect(shortcutPathAlias('/recent-calls'), ChatsRoute.path);
+    expect(shortcutPathAlias('/secret-chats'), ChatsRoute.path);
+    expect(shortcutPathAlias('/broadcasts'), ChannelsManagementRoute.path);
+    expect(shortcutPathAlias('/savedmsg'), SavedChatRoute.path);
+    expect(shortcutPathAlias('/saved-msg'), SavedChatRoute.path);
+    expect(shortcutPathAlias('/savedmessages'), SavedChatRoute.path);
+    expect(shortcutPathAlias('/nearby'), ChatNewMessageRoute.path);
+    expect(shortcutPathAlias('/account-settings'), ProfileAuthRoute.path);
+    expect(shortcutPathAlias('/accountsettings'), ProfileAuthRoute.path);
+    expect(
+      shortcutPathAlias('/profile-color'),
+      SettingsRoute.pathWithSection('theme'),
+    );
+    expect(
+      shortcutPathAlias('/peer-color'),
+      SettingsRoute.pathWithSection('theme'),
+    );
+    expect(
+      shortcutPathAlias('/peer-colors'),
+      SettingsRoute.pathWithSection('theme'),
+    );
+    expect(
+      shortcutPathAlias('/name-colors'),
+      SettingsRoute.pathWithSection('theme'),
+    );
+    expect(
+      shortcutPathAlias('/profile-colors'),
+      SettingsRoute.pathWithSection('theme'),
+    );
+    expect(
+      shortcutPathAlias('/peercolors'),
+      SettingsRoute.pathWithSection('theme'),
+    );
+    expect(
+      leftoverPathAlias('/go/call-log'),
+      ChatsRoute.path,
+    );
+    expect(
+      leftoverPathAlias('/open/broadcasts'),
+      ChannelsManagementRoute.path,
+    );
+    expect(
+      leftoverPathAlias('/go/savedmsg'),
+      SavedChatRoute.path,
+    );
+    expect(
+      leftoverPathAlias('/open/nearby'),
+      ChatNewMessageRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/calllog'),
+      ChatsRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/broadcasts'),
+      ChannelsManagementRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/saved-msg'),
+      SavedChatRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/peer-color'),
+      SettingsRoute.pathWithSection('theme'),
     );
     expect(shortcutPathAlias('/reels'), isNull);
     expect(shortcutPathAlias('/logout'), isNull);
