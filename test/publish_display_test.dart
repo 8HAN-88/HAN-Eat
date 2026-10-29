@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:han_eat/features/miniapps/data/miniapp_models.dart';
 import 'package:han_eat/features/miniapps/data/miniapps_service.dart';
-import 'package:han_eat/models/post.dart';
 import 'package:han_eat/models/post_model.dart';
 import 'package:han_eat/services/feed_service.dart';
 import 'package:han_eat/utils/post_display_title.dart';

@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:han_eat/models/chat_models.dart';
 import 'package:han_eat/services/chat_service.dart';
 import 'package:han_eat/services/chat_stream_service.dart';
 

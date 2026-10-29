@@ -10,7 +10,7 @@ echo "=== Public API ==="
 if [[ -n "${SMOKE_PASSWORD:-}" ]]; then
   export SMOKE_EMAIL="${SMOKE_EMAIL:-smoke$(date +%s)@example.com}"
   export SMOKE_AUTO_REGISTER="${SMOKE_AUTO_REGISTER:-1}"
-  export SMOKE_PASSWORD="${SMOKE_PASSWORD:-password123}"
+  export SMOKE_PASSWORD="${SMOKE_PASSWORD:-HANtest2026!}"
   echo ""
   echo "=== Subscriptions (auth) $SMOKE_EMAIL ==="
   python3.11 "$ROOT/scripts/smoke_subscriptions.py" || python3 "$ROOT/scripts/smoke_subscriptions.py"
