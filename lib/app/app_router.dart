@@ -2659,7 +2659,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/quiz':
       return CreatePostRoute.pathWithType('poll');
     case '/nearby':
-      return '${ChatsRoute.path}$q';
+      return '${ChatNewMessageRoute.path}$q';
     case '/home':
     case '/explore':
     case '/discover':
@@ -2816,6 +2816,8 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/username':
     case '/bio':
     case '/avatar':
+    case '/account-settings':
+    case '/accountsettings':
       return '${ProfileAuthRoute.path}$q';
     case '/settings/close-friends':
     case '/best-friends':
@@ -3176,8 +3178,10 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/mtproxy':
     case '/proxy-settings':
     case '/emoji-status':
-    case '/profile-color':
       return '${SettingsRoute.path}$q';
+    case '/profile-color':
+    case '/profilecolor':
+      return SettingsRoute.pathWithSection('theme');
     case '/settings/privacy/online':
     case '/settings/privacy/voice':
     case '/settings/privacy/gifts':
@@ -3295,8 +3299,10 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/recentcalls':
     case '/voicemessages':
     case '/secretchats':
-    case '/broadcasts':
     case '/imbox':
+      return '${ChatsRoute.path}$q';
+    case '/broadcasts':
+      return '${ChannelsManagementRoute.path}$q';
     case '/savedmsg':
       return '${SavedChatRoute.path}$q';
     case '/verify-account':
@@ -3305,6 +3311,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/call-log':
     case '/recent-calls':
     case '/secret-chats':
+      return '${ChatsRoute.path}$q';
     case '/saved-msg':
       return '${SavedChatRoute.path}$q';
     case '/im-box':
@@ -3667,9 +3674,10 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/chat-background':
     case '/bubble-style':
     case '/message-style':
-    case '/peer-color':
     case '/proxy-list':
       return '${SettingsRoute.path}$q';
+    case '/peer-color':
+      return SettingsRoute.pathWithSection('theme');
     case '/online-contacts':
       return '${ChatNewMessageRoute.path}$q';
     case '/inline-bot':
@@ -4268,9 +4276,6 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return '${ChatsRoute.path}$q';
     case '/swipe-to-delete':
     case '/chat-list-tabs':
-    case '/peer-colors':
-    case '/name-colors':
-    case '/profile-colors':
     case '/message-translation':
     case '/show-translate':
     case '/do-not-translate':
@@ -4298,6 +4303,13 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/map-provider':
     case '/location-services':
       return '${SettingsRoute.path}$q';
+    case '/peer-colors':
+    case '/name-colors':
+    case '/profile-colors':
+    case '/peercolors':
+    case '/namecolors':
+    case '/profilecolors':
+      return SettingsRoute.pathWithSection('theme');
     case '/people-nearby-visibility':
     case '/who-can-add':
     case '/invite-privacy':
@@ -4325,7 +4337,6 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return '${ChatsRoute.path}$q';
     case '/swipetodelete':
     case '/chatlisttabs':
-    case '/peercolors':
     case '/messagetranslation':
     case '/donottranslate':
     case '/pipplayer':
