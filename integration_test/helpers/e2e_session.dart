@@ -27,7 +27,7 @@ class E2eSession {
     String baseUrl = 'http://127.0.0.1:5001',
   }) async {
     final email = 'e2e${DateTime.now().millisecondsSinceEpoch}@example.com';
-    const password = 'password123';
+    const password = 'HANtest2026!';
     final api = '$baseUrl/api/v1';
     final client = HttpClient();
     try {
@@ -39,6 +39,7 @@ class E2eSession {
           'password': password,
           'name': 'E2E Test',
           'username': 'e2e${DateTime.now().millisecondsSinceEpoch % 100000}',
+          'accept_legal': true,
         }),
       );
       final res = await req.close();
