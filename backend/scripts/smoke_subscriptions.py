@@ -38,6 +38,11 @@ def _request(method: str, url: str, headers: dict | None = None, body: dict | No
 
 
 def _login(api: str) -> dict[str, str] | None:
+    token = os.environ.get("SMOKE_TOKEN", "").strip()
+    if token:
+        print("== session (SMOKE_TOKEN) ==")
+        return {"Authorization": f"Bearer {token}"}
+
     email = os.environ.get("SMOKE_EMAIL", "").strip()
     password = os.environ.get("SMOKE_PASSWORD", "").strip()
     if not email or not password:
@@ -52,6 +57,7 @@ def _login(api: str) -> dict[str, str] | None:
     )
     if code == 200 and data.get("token"):
         return {"Authorization": f"Bearer {data['token']}"}
+    print(f"  login HTTP {code}: {data}")
 
     if os.environ.get("SMOKE_AUTO_REGISTER", "").lower() not in ("1", "true", "yes"):
         print(f"FAIL login HTTP {code}: {data}")
@@ -66,12 +72,13 @@ def _login(api: str) -> dict[str, str] | None:
             "password": password,
             "name": "Smoke Test",
             "username": email.split("@")[0][:32],
+            "accept_legal": True,
         },
     )
-    if code not in (200, 201) or not reg.get("token"):
-        print(f"FAIL register HTTP {code}: {reg}")
-        return None
-    return {"Authorization": f"Bearer {reg['token']}"}
+    if code in (200, 201) and reg.get("token"):
+        return {"Authorization": f"Bearer {reg['token']}"}
+    print(f"FAIL register HTTP {code}: {reg}")
+    return None
 
 
 def _check_upgrade_options(status: dict) -> bool:

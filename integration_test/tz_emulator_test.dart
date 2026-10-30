@@ -29,7 +29,7 @@ void main() {
   group('TZ emulator E2E', () {
     setUpAll(() async {
       email = 'e2e${DateTime.now().millisecondsSinceEpoch}@example.com';
-      password = 'password123';
+      password = 'HANtest2026!';
       final api = '$baseUrl/api/v1';
       final client = HttpClient();
       try {
@@ -41,6 +41,7 @@ void main() {
             'password': password,
             'name': 'E2E Test',
             'username': 'e2e${DateTime.now().millisecondsSinceEpoch % 100000}',
+            'accept_legal': true,
           }),
         );
         final res = await req.close();
