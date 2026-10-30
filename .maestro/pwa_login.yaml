@@ -1,0 +1,12 @@
+url: https://haneat.app/app/#/login
+tags:
+  - smoke
+  - pwa
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Почта"
+    timeout: 45000
+- assertVisible: "Пароль"
+- assertVisible: "Войти"

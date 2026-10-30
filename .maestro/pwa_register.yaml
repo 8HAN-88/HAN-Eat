@@ -1,0 +1,17 @@
+url: https://haneat.app/app/#/signup
+tags:
+  - smoke
+  - pwa
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Почта"
+    timeout: 45000
+- tapOn:
+    text: "Зарегистрироваться"
+    optional: true
+- extendedWaitUntil:
+    visible: "Создать аккаунт"
+    timeout: 20000
+- assertVisible: "Имя"

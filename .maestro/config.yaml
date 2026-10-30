@@ -1,0 +1,4 @@
+# Maestro web smoke against production PWA.
+# Run: ./scripts/maestro_web.sh
+flows:
+  - "*"

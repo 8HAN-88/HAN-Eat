@@ -1,0 +1,10 @@
+url: https://haneat.app/privacy
+tags:
+  - smoke
+  - legal
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Политика конфиденциальности HAN Eat"
+    timeout: 20000
+- assertVisible: "1. Оператор персональных данных"
