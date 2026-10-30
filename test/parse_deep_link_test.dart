@@ -2823,4 +2823,86 @@ void main() {
     expect(shortcutPathAlias('/logout'), isNull);
     expect(shortcutPathAlias('/delete-account'), isNull);
   });
+
+  test('leftover notify, profile, and privacy hashes open the live screens', () {
+    expect(shortcutPathAlias('/notifs'), NotificationsRoute.path);
+    expect(shortcutPathAlias('/notify'), NotificationsRoute.path);
+    expect(
+      shortcutPathAlias('/alerts-settings'),
+      NotificationSettingsRoute.path,
+    );
+    expect(
+      shortcutPathAlias('/notification-sound'),
+      NotificationSettingsRoute.path,
+    );
+    expect(shortcutPathAlias('/phone-number'), ProfileAuthRoute.path);
+    expect(shortcutPathAlias('/edit-username'), ProfileAuthRoute.path);
+    expect(shortcutPathAlias('/my-account'), ProfileAuthRoute.path);
+    expect(shortcutPathAlias('/edit-account'), ProfileAuthRoute.path);
+    expect(shortcutPathAlias('/lastseen'), SettingsRoute.pathWithSection('privacy'));
+    expect(
+      shortcutPathAlias('/who-can-add-me'),
+      SettingsRoute.pathWithSection('privacy'),
+    );
+    expect(
+      shortcutPathAlias('/hide-forwards'),
+      SettingsRoute.pathWithSection('privacy'),
+    );
+    expect(
+      shortcutPathAlias('/peercolor'),
+      SettingsRoute.pathWithSection('theme'),
+    );
+    expect(shortcutPathAlias('/set-passcode'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/verify-code'), LoginRoute.path);
+    expect(shortcutPathAlias('/email-confirm'), VerifyEmailRoute.path);
+    expect(shortcutPathAlias('/compose-message'), ChatNewMessageRoute.path);
+    expect(shortcutPathAlias('/manage-folders'), ChatsRoute.path);
+    expect(shortcutPathAlias('/chatlists'), ChatsRoute.path);
+    expect(shortcutPathAlias('/voice-chat'), ChatsRoute.path);
+    expect(shortcutPathAlias('/live-stream'), ChannelsManagementRoute.path);
+    expect(shortcutPathAlias('/auto-archive'), ChatArchivedRoute.path);
+    expect(shortcutPathAlias('/share-link'), PartnerProgramRoute.path);
+    expect(shortcutPathAlias('/boosts'), AdsHubRoute.path);
+    expect(shortcutPathAlias('/top-up'), StarsWalletRoute.path);
+    expect(shortcutPathAlias('/cash-out'), CreatorRevenueRoute.path);
+    expect(shortcutPathAlias('/cancel-subscription'), FlexSubscriptionRoute.path);
+    expect(shortcutPathAlias('/unique-gifts'), StarGiftsMarketplaceRoute.path);
+    expect(shortcutPathAlias('/app-info'), SupportSecurityRoute.path);
+    expect(shortcutPathAlias('/contact-us'), SupportContactRoute.path);
+    expect(shortcutPathAlias('/bookmarks-tab'), SavedPostsRoute.path);
+    expect(shortcutPathAlias('/open-settings'), SettingsRoute.path);
+    expect(shortcutPathAlias('/storage-and-data'), SettingsRoute.path);
+    expect(shortcutPathAlias('/invite'), isNull);
+    expect(
+      leftoverPathAlias('/go/notifs'),
+      NotificationsRoute.path,
+    );
+    expect(
+      leftoverPathAlias('/open/lastseen'),
+      SettingsRoute.pathWithSection('privacy'),
+    );
+    expect(
+      leftoverPathAlias('/go/phone-number'),
+      ProfileAuthRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/notifs'),
+      NotificationsRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/lastseen'),
+      SettingsRoute.pathWithSection('privacy'),
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/my-account'),
+      ProfileAuthRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/invite?ref=ABC12XYZ'),
+      '/invite?ref=ABC12XYZ',
+    );
+    expect(shortcutPathAlias('/reels'), isNull);
+    expect(shortcutPathAlias('/logout'), isNull);
+    expect(shortcutPathAlias('/delete-account'), isNull);
+  });
 }
