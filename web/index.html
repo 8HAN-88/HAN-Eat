@@ -660,6 +660,32 @@
         return code;
       }
 
+      function leftoverAuthMode() {
+        var raw = '';
+        try {
+          var hash = (location.hash || '').replace(/^#/, '');
+          raw = (hash.split('?')[0] || location.pathname || '');
+        } catch (e) {
+          raw = location.pathname || '';
+        }
+        raw = String(raw).toLowerCase();
+        if (raw.indexOf('/app/') === 0) raw = raw.slice(4);
+        else if (raw === '/app') raw = '/';
+        if (raw.charAt(0) !== '/') raw = '/' + raw;
+        raw = raw.replace(/\/+$/, '') || '/';
+        if (
+          raw === '/signup' ||
+          raw === '/sign-up' ||
+          raw === '/register' ||
+          raw === '/registration' ||
+          raw === '/create-account' ||
+          raw === '/createaccount'
+        ) {
+          return 'register';
+        }
+        return 'login';
+      }
+
       function setMode(next) {
         mode = next;
         var isReg = mode === 'register';
@@ -1141,9 +1167,15 @@
       });
 
       var pendingRef = capturePendingReferral();
-      if (pendingRef && !hasSession()) {
+      if (leftoverAuthMode() === 'register' && !hasSession()) {
+        setMode('register');
+      } else if (pendingRef && !hasSession()) {
         setMode('register');
       }
+      window.addEventListener('hashchange', function () {
+        if (hasSession()) return;
+        setMode(leftoverAuthMode());
+      });
       if (pendingRef && hasSession()) {
         applyPendingAfterAuth(prefGet('access_token'));
       }

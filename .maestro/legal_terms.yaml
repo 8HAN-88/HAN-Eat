@@ -1,0 +1,10 @@
+url: https://haneat.app/terms
+tags:
+  - smoke
+  - legal
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Пользовательское соглашение HAN Eat"
+    timeout: 20000
+- assertVisible: "1. Сервис"

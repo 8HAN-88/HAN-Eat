@@ -1,0 +1,10 @@
+url: https://haneat.app/app/#/forgot
+tags:
+  - smoke
+  - pwa
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Забыли пароль?"
+    timeout: 45000

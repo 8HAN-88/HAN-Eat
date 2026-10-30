@@ -1,0 +1,10 @@
+url: https://haneat.app/app/#/lastseen
+tags:
+  - smoke
+  - leftover
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Войти"
+    timeout: 45000
