@@ -47,16 +47,26 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
     }
   }
 
+  Future<bool> _checkoutAvailable() async {
+    try {
+      return (await PaymentService.getPrices()).checkoutAvailable;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<_WalletData> _load() async {
     final results = await Future.wait([
       PaidFeaturesService.getBalance(),
       PaidFeaturesService.getStarPackages(),
       PaidFeaturesService.getTransactions(limit: 120),
+      _checkoutAvailable(),
     ]);
     return _WalletData(
       balance: results[0] as StarsBalance,
       packages: results[1] as List<StarPackage>,
       transactions: results[2] as List<StarTransaction>,
+      checkoutAvailable: results[3] as bool,
     );
   }
 
@@ -80,8 +90,8 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
     );
   }
 
-  Future<void> _buyPackage(StarPackage package) async {
-    if (_checkoutLoading) return;
+  Future<void> _buyPackage(StarPackage package, {required bool checkoutAvailable}) async {
+    if (_checkoutLoading || !checkoutAvailable) return;
     setState(() => _checkoutLoading = true);
     try {
       final checkout = await PaidFeaturesService.createStarsCheckout(
@@ -101,7 +111,10 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
           ),
           action: SnackBarAction(
             label: 'Повторить',
-            onPressed: () => _buyPackage(package),
+            onPressed: () => _buyPackage(
+              package,
+              checkoutAvailable: checkoutAvailable,
+            ),
           ),
         ),
       );
@@ -239,6 +252,16 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
                     title: 'Купить звёзды',
                     padding: const EdgeInsets.fromLTRB(2, 6, 2, 8),
                   ),
+                  if (!data.checkoutAvailable)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Text(
+                        'Оплата недоступна — касса ещё не подключена',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                      ),
+                    ),
                   for (final package in data.packages)
                     TelegramGroupedSurface(
                       margin: const EdgeInsets.only(bottom: 8),
@@ -248,10 +271,17 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
                         subtitle: '${package.stars} ★ за ${package.priceRub} ₽',
                         iconColor: scheme.secondary,
                         trailing: FilledButton(
-                          onPressed: _checkoutLoading
+                          onPressed: !data.checkoutAvailable || _checkoutLoading
                               ? null
-                              : () => _buyPackage(package),
-                          child: const Text('Купить'),
+                              : () => _buyPackage(
+                                    package,
+                                    checkoutAvailable: data.checkoutAvailable,
+                                  ),
+                          child: Text(
+                            data.checkoutAvailable
+                                ? 'Купить'
+                                : 'Оплата недоступна',
+                          ),
                         ),
                       ),
                     ),
@@ -435,9 +465,11 @@ class _WalletData {
     required this.balance,
     required this.packages,
     required this.transactions,
+    required this.checkoutAvailable,
   });
 
   final StarsBalance balance;
   final List<StarPackage> packages;
   final List<StarTransaction> transactions;
+  final bool checkoutAvailable;
 }
