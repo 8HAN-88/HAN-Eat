@@ -38,14 +38,36 @@ String webAuthInitialLocation([Uri? uri]) {
 
   if (base.endsWith('/invite') ||
       base.contains('/invite/') ||
-      base.endsWith('/register')) {
+      base.endsWith('/register') ||
+      base.endsWith('/signup') ||
+      base.endsWith('/sign-up') ||
+      base.endsWith('/registration') ||
+      base.endsWith('/create-account') ||
+      base.endsWith('/createaccount')) {
     return AuthPaths.register;
   }
-  if (base.endsWith('/forgot-password')) {
+  if (base.endsWith('/forgot-password') ||
+      base.endsWith('/forgot') ||
+      base.endsWith('/forgotpassword') ||
+      base.endsWith('/forgot-pass') ||
+      base.endsWith('/recoveraccount') ||
+      base.endsWith('/recover-password')) {
     return _keepAuthQuery(AuthPaths.forgotPassword, target, hashUri);
   }
-  if (base.endsWith('/reset-password')) {
-    return _keepAuthQuery(AuthPaths.resetPassword, target, hashUri);
+  if (base.endsWith('/reset-password') ||
+      base.endsWith('/resetpassword') ||
+      base.endsWith('/reset-pass') ||
+      base.endsWith('/new-password') ||
+      base.endsWith('/newpassword') ||
+      base.endsWith('/password-reset') ||
+      base.endsWith('/passwordreset')) {
+    final token =
+        target.queryParameters['token'] ?? hashUri?.queryParameters['token'];
+    if ((token != null && token.isNotEmpty) ||
+        base.endsWith('/reset-password')) {
+      return _keepAuthQuery(AuthPaths.resetPassword, target, hashUri);
+    }
+    return _keepAuthQuery(AuthPaths.forgotPassword, target, hashUri);
   }
   if (base.endsWith('/verify-email')) {
     return _keepAuthQuery(AuthPaths.verifyEmail, target, hashUri);
@@ -53,8 +75,16 @@ String webAuthInitialLocation([Uri? uri]) {
   if (base.endsWith('/confirm-email-change')) {
     return _keepAuthQuery(AuthPaths.confirmEmailChange, target, hashUri);
   }
-  if (base.endsWith('/2fa-verify')) {
+  if (base.endsWith('/2fa-verify') ||
+      base.endsWith('/2fa') ||
+      base.endsWith('/twofa') ||
+      base.endsWith('/2step')) {
     return AuthPaths.twoFactorVerify;
+  }
+  if (base.endsWith('/otp') ||
+      base.endsWith('/login-code') ||
+      base.endsWith('/sms-code')) {
+    return AuthPaths.login;
   }
   return AuthPaths.login;
 }

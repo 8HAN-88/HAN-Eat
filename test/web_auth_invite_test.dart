@@ -55,5 +55,46 @@ void main() {
       ),
       AuthPaths.confirmEmailChangeWith(email: 'new@test.local'),
     );
+    expect(
+      webAuthInitialLocation(
+        Uri.parse('https://haneat.app/app/#/registration'),
+      ),
+      AuthPaths.register,
+    );
+    expect(
+      webAuthInitialLocation(
+        Uri.parse('https://haneat.app/app/#/create-account'),
+      ),
+      AuthPaths.register,
+    );
+    expect(
+      webAuthInitialLocation(
+        Uri.parse('https://haneat.app/#/forgot'),
+      ),
+      AuthPaths.forgotPassword,
+    );
+    expect(
+      webAuthInitialLocation(
+        Uri.parse(
+          'https://haneat.app/app/#/resetpassword?token=654321&email=user@test.local',
+        ),
+      ),
+      AuthPaths.resetPasswordWith(
+        token: '654321',
+        email: 'user@test.local',
+      ),
+    );
+    expect(
+      webAuthInitialLocation(
+        Uri.parse('https://haneat.app/app/#/2fa'),
+      ),
+      AuthPaths.twoFactorVerify,
+    );
+    expect(
+      webAuthInitialLocation(
+        Uri.parse('https://haneat.app/app/#/otp'),
+      ),
+      AuthPaths.login,
+    );
   });
 }

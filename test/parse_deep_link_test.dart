@@ -2905,4 +2905,94 @@ void main() {
     expect(shortcutPathAlias('/logout'), isNull);
     expect(shortcutPathAlias('/delete-account'), isNull);
   });
+
+  test('leftover hashes open the live screens instead of the nearest leftover', () {
+    expect(shortcutPathAlias('/subscriptions'), SubscriptionRoute.path);
+    expect(shortcutPathAlias('/subs'), FeedRoute.path);
+    expect(shortcutPathAlias('/subscription'), isNull);
+    expect(shortcutPathAlias('/registration'), RegisterRoute.path);
+    expect(shortcutPathAlias('/create-account'), RegisterRoute.path);
+    expect(shortcutPathAlias('/createaccount'), RegisterRoute.path);
+    expect(shortcutPathAlias('/notification'), NotificationsRoute.path);
+    expect(shortcutPathAlias('/notif'), NotificationSettingsRoute.path);
+    expect(shortcutPathAlias('/notifications'), isNull);
+    expect(shortcutPathAlias('/resetpassword'), ForgotPasswordRoute.path);
+    expect(
+      shortcutPathAlias('/resetpassword', 'token=abc123'),
+      '${ResetPasswordRoute.path}?token=abc123',
+    );
+    expect(
+      shortcutPathAlias('/new-password', 'token=abc123'),
+      '${ResetPasswordRoute.path}?token=abc123',
+    );
+    expect(
+      shortcutPathAlias('/password-reset', 'token=abc123'),
+      '${ResetPasswordRoute.path}?token=abc123',
+    );
+    expect(shortcutPathAlias('/new-password'), ForgotPasswordRoute.path);
+    expect(leftoverPathAlias('/reset-password'), isNull);
+    expect(
+      leftoverPathAlias('/reset-password', 'token=654321'),
+      isNull,
+    );
+    expect(resourcePathAlias('/chat/21/backup-now'), BackupRoute.path);
+    expect(resourcePathAlias('/chat/21/app-lock'), AccountSecurityRoute.path);
+    expect(resourcePathAlias('/chat/21/report-ad'), AdsHubRoute.path);
+    expect(
+      leftoverPathAlias('/go/subscriptions'),
+      SubscriptionRoute.path,
+    );
+    expect(
+      leftoverPathAlias('/open/notification'),
+      NotificationsRoute.path,
+    );
+    expect(
+      leftoverPathAlias('/go/chat/21/backup-now'),
+      BackupRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/subscriptions'),
+      SubscriptionRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/notification'),
+      NotificationsRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/registration'),
+      RegisterRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/create-account'),
+      RegisterRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath(
+        'https://haneat.app/app/#/resetpassword?token=654321&email=user@test.local',
+      ),
+      '/reset-password?token=654321&email=user%40test.local',
+    );
+    expect(
+      parseDeepLinkToGoPath(
+        'https://haneat.app/app/#/reset-password?token=654321&email=user@test.local',
+      ),
+      '/reset-password?token=654321&email=user%40test.local',
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/chat/21/backup-now'),
+      BackupRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/chat/21/app-lock'),
+      AccountSecurityRoute.path,
+    );
+    expect(
+      parseDeepLinkToGoPath('https://haneat.app/app/#/chat/21/report-ad'),
+      AdsHubRoute.path,
+    );
+    expect(shortcutPathAlias('/invite'), isNull);
+    expect(shortcutPathAlias('/reels'), isNull);
+    expect(shortcutPathAlias('/logout'), isNull);
+    expect(shortcutPathAlias('/delete-account'), isNull);
+  });
 }

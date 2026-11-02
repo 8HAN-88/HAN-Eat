@@ -284,7 +284,34 @@ String leftoverProfileOpenPath(int id, String rest, [String query = '']) {
   return ProfileRoute.withUserId(id);
 }
 
+String leftoverResetOrForgotPath([String query = '']) {
+  final q = query.isEmpty ? '' : '?$query';
+  final hasToken = query.split('&').any((part) {
+    final eq = part.indexOf('=');
+    if (eq <= 0) return false;
+    return part.substring(0, eq) == 'token' && part.substring(eq + 1).isNotEmpty;
+  });
+  if (hasToken) return '${ResetPasswordRoute.path}$q';
+  return '${ForgotPasswordRoute.path}$q';
+}
+
+String? leftoverActionScreenPath(String rest, [String query = '']) {
+  final q = query.isEmpty ? '' : '?$query';
+  switch (rest) {
+    case 'backup-now':
+      return '${BackupRoute.path}$q';
+    case 'app-lock':
+      return '${AccountSecurityRoute.path}$q';
+    case 'report-ad':
+      return '${AdsHubRoute.path}$q';
+    default:
+      return null;
+  }
+}
+
 String leftoverChatOpenPath(int id, String rest, [String query = '']) {
+  final action = leftoverActionScreenPath(rest, query);
+  if (action != null) return action;
   final media = leftoverThreadCallMedia(rest);
   if (media != null) {
     return pathWithCallQuery('/chats/thread/$id', media, query);
@@ -2669,14 +2696,18 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/foryou':
     case '/following':
     case '/subs':
-    case '/subscriptions':
       return '${FeedRoute.path}$q';
+    case '/subscriptions':
+      return '${SubscriptionRoute.path}$q';
     case '/login':
     case '/signin':
     case '/sign-in':
       return '${LoginRoute.path}$q';
     case '/signup':
     case '/sign-up':
+    case '/registration':
+    case '/create-account':
+    case '/createaccount':
       return '${RegisterRoute.path}$q';
     case '/contact':
     case '/feedback':
@@ -3027,8 +3058,9 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return SettingsRoute.pathWithSection('privacy');
     case '/settings/notif':
     case '/notif':
-    case '/notification':
       return '${NotificationSettingsRoute.path}$q';
+    case '/notification':
+      return '${NotificationsRoute.path}$q';
     case '/go':
     case '/open':
     case '/call':
@@ -3149,10 +3181,11 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return '${ConfirmEmailChangeRoute.path}$q';
     case '/login-code':
       return '${LoginRoute.path}$q';
-    case '/reset-pass':
     case '/forgot-pass':
     case '/recover-password':
       return '${ForgotPasswordRoute.path}$q';
+    case '/reset-pass':
+      return leftoverResetOrForgotPath(query);
     case '/twofa':
     case '/2step':
       return '${TwoFactorSetupRoute.path}$q';
@@ -5512,9 +5545,10 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/logout-all':
       return '${AccountSecurityRoute.path}$q';
     case '/forgot-password':
+      return '${ForgotPasswordRoute.path}$q';
     case '/new-password':
     case '/password-reset':
-      return '${ForgotPasswordRoute.path}$q';
+      return leftoverResetOrForgotPath(query);
     case '/two-step-verification':
     case '/google-authenticator':
     case '/backup-codes':
@@ -5564,11 +5598,12 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/logoutall':
       return '${AccountSecurityRoute.path}$q';
     case '/forgotpassword':
+    case '/recoveraccount':
+      return '${ForgotPasswordRoute.path}$q';
     case '/resetpassword':
     case '/newpassword':
     case '/passwordreset':
-    case '/recoveraccount':
-      return '${ForgotPasswordRoute.path}$q';
+      return leftoverResetOrForgotPath(query);
     case '/twostepverification':
     case '/googleauthenticator':
     case '/backupcodes':

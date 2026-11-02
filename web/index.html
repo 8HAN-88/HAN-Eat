@@ -660,7 +660,7 @@
         return code;
       }
 
-      function leftoverAuthMode() {
+      function leftoverAuthRawPath() {
         var raw = '';
         try {
           var hash = (location.hash || '').replace(/^#/, '');
@@ -672,7 +672,11 @@
         if (raw.indexOf('/app/') === 0) raw = raw.slice(4);
         else if (raw === '/app') raw = '/';
         if (raw.charAt(0) !== '/') raw = '/' + raw;
-        raw = raw.replace(/\/+$/, '') || '/';
+        return raw.replace(/\/+$/, '') || '/';
+      }
+
+      function leftoverAuthMode() {
+        var raw = leftoverAuthRawPath();
         if (
           raw === '/signup' ||
           raw === '/sign-up' ||
@@ -683,7 +687,63 @@
         ) {
           return 'register';
         }
+        if (
+          raw === '/forgot' ||
+          raw === '/forgot-password' ||
+          raw === '/forgotpassword' ||
+          raw === '/forgot-pass' ||
+          raw === '/recoveraccount' ||
+          raw === '/recover-password'
+        ) {
+          return 'forgot';
+        }
+        if (raw === '/otp' || raw === '/login-code' || raw === '/sms-code') {
+          return 'otp';
+        }
+        if (
+          raw === '/2fa' ||
+          raw === '/2fa-verify' ||
+          raw === '/twofa' ||
+          raw === '/2step' ||
+          raw === '/two-step-verification' ||
+          raw === '/twostepverification'
+        ) {
+          return '2fa';
+        }
+        if (
+          raw === '/reset-password' ||
+          raw === '/resetpassword' ||
+          raw === '/reset-pass' ||
+          raw === '/new-password' ||
+          raw === '/newpassword' ||
+          raw === '/password-reset' ||
+          raw === '/passwordreset'
+        ) {
+          return 'reset';
+        }
         return 'login';
+      }
+
+      function leftoverAuthNeedsFlutter(next) {
+        return next === 'forgot' || next === 'otp' || next === '2fa' || next === 'reset';
+      }
+
+      function leftoverAuthHash(next) {
+        return next === 'register' ? '#/register' : '#/login';
+      }
+
+      function applyLeftoverAuthHash(next) {
+        try {
+          var hash = leftoverAuthHash(next);
+          if ((location.hash || '') === hash) return;
+          history.replaceState(null, '', location.pathname + location.search + hash);
+        } catch (e) {}
+      }
+
+      function bootLeftoverAuthFlutter() {
+        forceFlutter = true;
+        markGoQueryInPlace();
+        startFlutter();
       }
 
       function setMode(next) {
@@ -1058,7 +1118,9 @@
 
       document.getElementById('switch-mode').addEventListener('click', function (e) {
         e.preventDefault();
-        setMode(mode === 'login' ? 'register' : 'login');
+        var next = mode === 'login' ? 'register' : 'login';
+        setMode(next);
+        applyLeftoverAuthHash(next);
       });
 
       function forgotPasswordHref(email) {
@@ -1167,14 +1229,24 @@
       });
 
       var pendingRef = capturePendingReferral();
-      if (leftoverAuthMode() === 'register' && !hasSession()) {
+      var leftoverMode = leftoverAuthMode();
+      if (leftoverAuthNeedsFlutter(leftoverMode) && !hasSession()) {
+        forceFlutter = true;
+      } else if (leftoverMode === 'register' && !hasSession()) {
         setMode('register');
       } else if (pendingRef && !hasSession()) {
         setMode('register');
       }
       window.addEventListener('hashchange', function () {
         if (hasSession()) return;
-        setMode(leftoverAuthMode());
+        leftoverMode = leftoverAuthMode();
+        if (leftoverAuthNeedsFlutter(leftoverMode)) {
+          bootLeftoverAuthFlutter();
+          return;
+        }
+        if (leftoverMode === 'login' || leftoverMode === 'register') {
+          setMode(leftoverMode);
+        }
       });
       if (pendingRef && hasSession()) {
         applyPendingAfterAuth(prefGet('access_token'));
@@ -1212,6 +1284,9 @@
             openContinueOrAuto();
             ping('root=1');
           }
+        } else if (forceFlutter) {
+          // Leftover forgot / OTP / 2FA / reset hashes must keep the fragment.
+          bootAppShell();
         } else {
           showOnly('auth-gate');
           ping('auth=1&root=1');
