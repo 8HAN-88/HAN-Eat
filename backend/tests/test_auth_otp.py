@@ -248,4 +248,6 @@ def test_open_page_shows_six_digit_code():
     )
     assert "123 456" in html
     assert "haneat://auth/verify-email?token=123456" in html
+    assert "/app/#/verify-email?token=123456" in html
     assert "user%40test.local" in html
+    assert "location.replace(web)" in html

@@ -2995,4 +2995,41 @@ void main() {
     expect(shortcutPathAlias('/logout'), isNull);
     expect(shortcutPathAlias('/delete-account'), isNull);
   });
+
+  test('email and compacted hashes open the live screen with the token', () {
+    expect(shortcutPathAlias('/chat'), ChatsRoute.path);
+    expect(shortcutPathAlias('/saved-post'), SavedPostsRoute.path);
+    expect(shortcutPathAlias('/savedposts'), SavedPostsRoute.path);
+    expect(
+      shortcutPathAlias('/settings/notification'),
+      NotificationSettingsRoute.path,
+    );
+    expect(
+      shortcutPathAlias('/verifyemail', 'token=123456&email=user@test.local'),
+      '${VerifyEmailRoute.path}?token=123456&email=user@test.local',
+    );
+    expect(
+      shortcutPathAlias(
+        '/confirmemailchange',
+        'token=123456&email=new@test.local',
+      ),
+      '${ConfirmEmailChangeRoute.path}?token=123456&email=new@test.local',
+    );
+    expect(
+      parseDeepLinkToGoPath(
+        'https://haneat.app/app/#/verify-email?token=123456&email=user@test.local',
+      ),
+      '/verify-email?token=123456&email=user%40test.local',
+    );
+    expect(
+      parseDeepLinkToGoPath(
+        'https://haneat.app/app/#/confirm-email-change?token=654321&email=new@test.local',
+      ),
+      '/confirm-email-change?token=654321&email=new%40test.local',
+    );
+    expect(shortcutPathAlias('/reels'), isNull);
+    expect(shortcutPathAlias('/logout'), isNull);
+    expect(shortcutPathAlias('/delete-account'), isNull);
+    expect(shortcutPathAlias('/invite'), isNull);
+  });
 }
