@@ -134,5 +134,42 @@ void main() {
         email: 'new@test.local',
       ),
     );
+    expect(
+      webAuthInitialLocation(
+        Uri.parse(
+          'https://haneat.app/app/#/verify_email?token=123456&email=user@test.local',
+        ),
+      ),
+      AuthPaths.verifyEmailWith(token: '123456', email: 'user@test.local'),
+    );
+    expect(
+      webAuthInitialLocation(
+        Uri.parse(
+          'https://haneat.app/app/#/confirm_email_change?token=654321&email=new@test.local',
+        ),
+      ),
+      AuthPaths.confirmEmailChangeWith(
+        token: '654321',
+        email: 'new@test.local',
+      ),
+    );
+    expect(
+      webAuthInitialLocation(
+        Uri.parse('https://haneat.app/app/#/reset_password?token=abc123'),
+      ),
+      AuthPaths.resetPasswordWith(token: 'abc123'),
+    );
+    expect(
+      webAuthInitialLocation(
+        Uri.parse('https://haneat.app/app/#/sign_up'),
+      ),
+      AuthPaths.register,
+    );
+    expect(
+      webAuthInitialLocation(
+        Uri.parse('https://haneat.app/app/#/2faverify'),
+      ),
+      AuthPaths.twoFactorVerify,
+    );
   });
 }
