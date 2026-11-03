@@ -43,12 +43,15 @@ String webAuthInitialLocation([Uri? uri]) {
       base.endsWith('/sign-up') ||
       base.endsWith('/registration') ||
       base.endsWith('/create-account') ||
-      base.endsWith('/createaccount')) {
+      base.endsWith('/createaccount') ||
+      base.endsWith('/sign_up') ||
+      base.endsWith('/create_account')) {
     return AuthPaths.register;
   }
   if (base.endsWith('/forgot-password') ||
       base.endsWith('/forgot') ||
       base.endsWith('/forgotpassword') ||
+      base.endsWith('/forgot_password') ||
       base.endsWith('/forgot-pass') ||
       base.endsWith('/recoveraccount') ||
       base.endsWith('/recover-password')) {
@@ -56,11 +59,13 @@ String webAuthInitialLocation([Uri? uri]) {
   }
   if (base.endsWith('/reset-password') ||
       base.endsWith('/resetpassword') ||
+      base.endsWith('/reset_password') ||
       base.endsWith('/reset-pass') ||
       base.endsWith('/new-password') ||
       base.endsWith('/newpassword') ||
       base.endsWith('/password-reset') ||
-      base.endsWith('/passwordreset')) {
+      base.endsWith('/passwordreset') ||
+      base.endsWith('/password_reset')) {
     final token =
         target.queryParameters['token'] ?? hashUri?.queryParameters['token'];
     if ((token != null && token.isNotEmpty) ||
@@ -70,18 +75,24 @@ String webAuthInitialLocation([Uri? uri]) {
     return _keepAuthQuery(AuthPaths.forgotPassword, target, hashUri);
   }
   if (base.endsWith('/confirm-email-change') ||
-      base.endsWith('/confirmemailchange')) {
+      base.endsWith('/confirmemailchange') ||
+      base.endsWith('/confirm_email_change')) {
     return _keepAuthQuery(AuthPaths.confirmEmailChange, target, hashUri);
   }
   if (base.endsWith('/verify-email') ||
       base.endsWith('/verifyemail') ||
+      base.endsWith('/verify_email') ||
       base.endsWith('/email-code') ||
       base.endsWith('/emailcode') ||
+      base.endsWith('/email_code') ||
       base.endsWith('/email-confirm') ||
-      base.endsWith('/confirm-email')) {
+      base.endsWith('/confirm-email') ||
+      base.endsWith('/confirm_email')) {
     return _keepAuthQuery(AuthPaths.verifyEmail, target, hashUri);
   }
   if (base.endsWith('/2fa-verify') ||
+      base.endsWith('/2faverify') ||
+      base.endsWith('/twofactorverify') ||
       base.endsWith('/2fa') ||
       base.endsWith('/twofa') ||
       base.endsWith('/2step')) {

@@ -680,10 +680,12 @@
         if (
           raw === '/signup' ||
           raw === '/sign-up' ||
+          raw === '/sign_up' ||
           raw === '/register' ||
           raw === '/registration' ||
           raw === '/create-account' ||
-          raw === '/createaccount'
+          raw === '/createaccount' ||
+          raw === '/create_account'
         ) {
           return 'register';
         }
@@ -692,6 +694,7 @@
           raw === '/forgot-password' ||
           raw === '/forgotpassword' ||
           raw === '/forgot-pass' ||
+          raw === '/forgot_password' ||
           raw === '/recoveraccount' ||
           raw === '/recover-password'
         ) {
@@ -703,19 +706,28 @@
         if (
           raw === '/verify-email' ||
           raw === '/verifyemail' ||
+          raw === '/verify_email' ||
           raw === '/email-code' ||
           raw === '/emailcode' ||
+          raw === '/email_code' ||
           raw === '/email-confirm' ||
-          raw === '/confirm-email'
+          raw === '/confirm-email' ||
+          raw === '/confirm_email'
         ) {
           return 'verify';
         }
-        if (raw === '/confirm-email-change' || raw === '/confirmemailchange') {
+        if (
+          raw === '/confirm-email-change' ||
+          raw === '/confirmemailchange' ||
+          raw === '/confirm_email_change'
+        ) {
           return 'confirm-email';
         }
         if (
           raw === '/2fa' ||
           raw === '/2fa-verify' ||
+          raw === '/2faverify' ||
+          raw === '/twofactorverify' ||
           raw === '/twofa' ||
           raw === '/2step' ||
           raw === '/two-step-verification' ||
@@ -726,11 +738,13 @@
         if (
           raw === '/reset-password' ||
           raw === '/resetpassword' ||
+          raw === '/reset_password' ||
           raw === '/reset-pass' ||
           raw === '/new-password' ||
           raw === '/newpassword' ||
           raw === '/password-reset' ||
-          raw === '/passwordreset'
+          raw === '/passwordreset' ||
+          raw === '/password_reset'
         ) {
           return 'reset';
         }

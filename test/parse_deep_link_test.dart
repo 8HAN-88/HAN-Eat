@@ -3032,4 +3032,64 @@ void main() {
     expect(shortcutPathAlias('/delete-account'), isNull);
     expect(shortcutPathAlias('/invite'), isNull);
   });
+
+  test('compacted leftover hashes open the same live screen', () {
+    expect(shortcutPathAlias('/2faverify'), TwoFactorVerifyRoute.path);
+    expect(shortcutPathAlias('/twofactorsetup'), TwoFactorSetupRoute.path);
+    expect(shortcutPathAlias('/profileauth'), ProfileAuthRoute.path);
+    expect(shortcutPathAlias('/backups'), BackupRoute.path);
+    expect(shortcutPathAlias('/setting'), SettingsRoute.path);
+    expect(shortcutPathAlias('/settings'), isNull);
+    expect(
+      shortcutPathAlias('/dark-mode'),
+      SettingsRoute.pathWithSection('theme'),
+    );
+    expect(
+      shortcutPathAlias('/privacysettings'),
+      SettingsRoute.pathWithSection('privacy'),
+    );
+    expect(shortcutPathAlias('/paid/gift'), StarGiftsInventoryRoute.path);
+    expect(shortcutPathAlias('/starswallet'), StarsWalletRoute.path);
+    expect(shortcutPathAlias('/createpost'), CreatePostRoute.path);
+    expect(shortcutPathAlias('/createchannel'), CreateChannelRoute.path);
+    expect(shortcutPathAlias('/mychannel'), ChannelsManagementRoute.path);
+    expect(shortcutPathAlias('/createreel'), CreateReelRoute.path);
+    expect(shortcutPathAlias('/createstory'), StoryCreateRoute.path);
+    expect(shortcutPathAlias('/archivedchats'), ChatArchivedRoute.path);
+    expect(shortcutPathAlias('/mini_apps'), MiniAppsRoute.path);
+    expect(shortcutPathAlias('/flex'), FlexSubscriptionRoute.path);
+    expect(shortcutPathAlias('/saved_posts'), SavedPostsRoute.path);
+    expect(shortcutPathAlias('/savedchat'), SavedChatRoute.path);
+    expect(shortcutPathAlias('/account_security'), AccountSecurityRoute.path);
+    expect(shortcutPathAlias('/alert'), NotificationsRoute.path);
+    expect(
+      shortcutPathAlias('/notificationsettings'),
+      NotificationSettingsRoute.path,
+    );
+    expect(shortcutPathAlias('/newad'), AdsCampaignEditorRoute.path);
+    expect(shortcutPathAlias('/creategroup'), ChatCreateGroupRoute.path);
+    expect(shortcutPathAlias('/legalconsent'), LegalConsentRoute.path);
+    expect(
+      shortcutPathAlias('/reset_password', 'token=abc123'),
+      '${ResetPasswordRoute.path}?token=abc123',
+    );
+    expect(
+      shortcutPathAlias('/verify_email', 'token=abc123'),
+      '${VerifyEmailRoute.path}?token=abc123',
+    );
+    expect(
+      shortcutPathAlias('/confirm_email_change', 'token=abc123'),
+      '${ConfirmEmailChangeRoute.path}?token=abc123',
+    );
+    expect(shortcutPathAlias('/sign_up'), RegisterRoute.path);
+    expect(shortcutPathAlias('/reels'), isNull);
+    expect(shortcutPathAlias('/shorts'), isNull);
+    expect(shortcutPathAlias('/clips'), isNull);
+    expect(shortcutPathAlias('/watch'), isNull);
+    expect(shortcutPathAlias('/favorites'), isNull);
+    expect(shortcutPathAlias('/logout'), isNull);
+    expect(shortcutPathAlias('/delete-account'), isNull);
+    expect(shortcutPathAlias('/users'), isNull);
+    expect(shortcutPathAlias('/invite'), isNull);
+  });
 }
