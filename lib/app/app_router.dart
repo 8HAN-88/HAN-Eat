@@ -2620,6 +2620,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/notification-settings':
     case '/notif-settings':
     case '/settings/notifications':
+    case '/settings/notification':
       return '${NotificationSettingsRoute.path}$q';
     case '/export':
       return '${BackupRoute.path}$q';
@@ -2648,6 +2649,8 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/bookmarks':
     case '/likes':
     case '/saved-posts':
+    case '/saved-post':
+    case '/savedposts':
       return '${SavedPostsRoute.path}$q';
     case '/mentions':
     case '/activity':
@@ -3020,6 +3023,7 @@ String? shortcutPathAlias(String path, [String query = '']) {
     case '/add-sticker':
     case '/new-sticker':
       return '${ChatsRoute.path}$q';
+    case '/chat':
     case '/direct':
     case '/direct/inbox':
     case '/im':
@@ -3176,8 +3180,10 @@ String? shortcutPathAlias(String path, [String query = '']) {
       return '${CreateReelRoute.path}$q';
     case '/confirm-email':
     case '/verify-email':
+    case '/verifyemail':
       return '${VerifyEmailRoute.path}$q';
     case '/confirm-email-change':
+    case '/confirmemailchange':
       return '${ConfirmEmailChangeRoute.path}$q';
     case '/login-code':
       return '${LoginRoute.path}$q';

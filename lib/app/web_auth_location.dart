@@ -69,11 +69,17 @@ String webAuthInitialLocation([Uri? uri]) {
     }
     return _keepAuthQuery(AuthPaths.forgotPassword, target, hashUri);
   }
-  if (base.endsWith('/verify-email')) {
-    return _keepAuthQuery(AuthPaths.verifyEmail, target, hashUri);
-  }
-  if (base.endsWith('/confirm-email-change')) {
+  if (base.endsWith('/confirm-email-change') ||
+      base.endsWith('/confirmemailchange')) {
     return _keepAuthQuery(AuthPaths.confirmEmailChange, target, hashUri);
+  }
+  if (base.endsWith('/verify-email') ||
+      base.endsWith('/verifyemail') ||
+      base.endsWith('/email-code') ||
+      base.endsWith('/emailcode') ||
+      base.endsWith('/email-confirm') ||
+      base.endsWith('/confirm-email')) {
+    return _keepAuthQuery(AuthPaths.verifyEmail, target, hashUri);
   }
   if (base.endsWith('/2fa-verify') ||
       base.endsWith('/2fa') ||

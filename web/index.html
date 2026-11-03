@@ -701,6 +701,19 @@
           return 'otp';
         }
         if (
+          raw === '/verify-email' ||
+          raw === '/verifyemail' ||
+          raw === '/email-code' ||
+          raw === '/emailcode' ||
+          raw === '/email-confirm' ||
+          raw === '/confirm-email'
+        ) {
+          return 'verify';
+        }
+        if (raw === '/confirm-email-change' || raw === '/confirmemailchange') {
+          return 'confirm-email';
+        }
+        if (
           raw === '/2fa' ||
           raw === '/2fa-verify' ||
           raw === '/twofa' ||
@@ -725,7 +738,7 @@
       }
 
       function leftoverAuthNeedsFlutter(next) {
-        return next === 'forgot' || next === 'otp' || next === '2fa' || next === 'reset';
+        return next === 'forgot' || next === 'otp' || next === '2fa' || next === 'reset' || next === 'verify' || next === 'confirm-email';
       }
 
       function leftoverAuthHash(next) {

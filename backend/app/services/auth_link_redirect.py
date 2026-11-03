@@ -27,6 +27,17 @@ def email_web_link(purpose: str, raw_token: str, email: str | None = None) -> st
     return _with_email(url, email)
 
 
+def email_pwa_link(purpose: str, raw_token: str, email: str | None = None) -> str:
+    """Ссылка в веб-приложение: `#/verify-email?token=` открывает экран, а не схему haneat://."""
+    base = (settings.FRONTEND_URL or "https://haneat.app").strip().rstrip("/")
+    if base.endswith("/app"):
+        shell = f"{base}/"
+    else:
+        shell = f"{base}/app/"
+    url = f"{shell}#/{purpose}?token={quote(raw_token, safe='')}"
+    return _with_email(url, email)
+
+
 def deep_link(purpose: str, raw_token: str, email: str | None = None) -> str:
     base = settings.AUTH_LINK_BASE_URL.rstrip("/")
     url = f"{base}/{purpose}?token={quote(raw_token, safe='')}"
@@ -37,7 +48,9 @@ def render_open_link_page(
     purpose: str, raw_token: str, email: str | None = None
 ) -> str:
     deep = deep_link(purpose, raw_token, email=email)
+    web = email_pwa_link(purpose, raw_token, email=email)
     safe_deep = html.escape(deep, quote=True)
+    safe_web = html.escape(web, quote=True)
     digits = "".join(ch for ch in (raw_token or "") if ch.isdigit())
     is_otp = len(digits) == 6 and digits == "".join(
         ch for ch in (raw_token or "").strip() if not ch.isspace() and ch != "-"
@@ -58,6 +71,7 @@ def render_open_link_page(
     title = titles.get(purpose, "HanWe")
     button = cta.get(purpose, "Открыть приложение")
     deep_js = json.dumps(deep)
+    web_js = json.dumps(web)
     code_style = (
         "display:block;text-align:center;font-size:32px;font-weight:700;"
         "letter-spacing:8px;background:#f3f5f8;padding:16px 12px;"
@@ -106,17 +120,21 @@ def render_open_link_page(
   <div class="card">
     <div class="logo">HanWe</div>
     <h1>{html.escape(title)}</h1>
-    <p>Нажмите кнопку ниже — откроется приложение HanWe на этом телефоне.</p>
-    <a class="btn" href="{safe_deep}" id="open-app">{html.escape(button)}</a>
+    <p>Нажмите кнопку — откроется HanWe в браузере, код уже будет в ссылке.</p>
+    <a class="btn" href="{safe_web}" id="open-web">{html.escape(button)}</a>
+    <a class="btn" href="{safe_deep}" id="open-app" style="background:#1a1d24;">Открыть установленное приложение</a>
     <p style="font-size:13px;">{html.escape(hint)}</p>
     <code id="token">{safe_code}</code>
   </div>
   <script>
     (function() {{
+      var web = {web_js};
       var deep = {deep_js};
       try {{
-        window.location.replace(deep);
-      }} catch (e) {{}}
+        window.location.replace(web);
+      }} catch (e) {{
+        try {{ window.location.replace(deep); }} catch (err) {{}}
+      }}
     }})();
   </script>
 </body>
