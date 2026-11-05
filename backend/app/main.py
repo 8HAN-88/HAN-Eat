@@ -13,6 +13,7 @@ from app.api.v1 import auth, users, posts, feed, channels, communities, media, m
 import app.services.user_realtime_hooks  # noqa: F401 — регистрация after_commit hooks
 from app.middleware.monitoring import PerformanceMonitoringMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
+from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.core.database import Base, engine
 import app.models
 
@@ -23,6 +24,7 @@ _docs_routes = docs_routes_for_env(settings.APP_ENV)
 app = FastAPI(
     title=settings.APP_NAME,
     version="1.0.0",
+    debug=False,
     docs_url=_docs_routes["docs_url"],
     redoc_url=_docs_routes["redoc_url"],
     openapi_url=_docs_routes["openapi_url"],
@@ -51,6 +53,8 @@ if settings.APP_ENV == "development":
         r"https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?"
     )
 app.add_middleware(CORSMiddleware, **_cors_kwargs)
+# Outermost: headers stay on CORS and error responses too.
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Подключение роутеров
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])

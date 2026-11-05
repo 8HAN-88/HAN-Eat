@@ -27,6 +27,21 @@ _CLIENT_UPLOAD_PREFIX = "upload:client:"
 _CLIENT_UPLOAD_TTL_SEC = 3600
 
 
+def _max_upload_bytes() -> int:
+    """Hard ceiling for the byte stream, including the larger-upload plan."""
+    from app.core.entitlements import LARGER_UPLOAD_MULTIPLIER
+    from app.core.upload_policy import video_cap_megabytes
+
+    video_mb = video_cap_megabytes(settings.MAX_VIDEO_SIZE_MB)
+    largest = max(
+        settings.MAX_IMAGE_SIZE_MB,
+        video_mb,
+        settings.MAX_AUDIO_SIZE_MB,
+        settings.MAX_DOCUMENT_SIZE_MB,
+    )
+    return int(largest * LARGER_UPLOAD_MULTIPLIER * 1024 * 1024)
+
+
 def _enforce_upload_rate_limit(user_id: int, action: str, limit: int) -> None:
     if not getattr(settings, "RATE_LIMIT_ENABLED", True):
         return
@@ -111,6 +126,7 @@ class InitUploadRequest(BaseModel):
     file_size: int  # размер в байтах
     prefer_api: bool = False  # загрузка через API (надёжнее с мобильных)
     client_upload_id: Optional[str] = None  # идемпотентность при повторе клиента
+    filename: Optional[str] = None  # чтобы отсечь virus.exe при MIME octet-stream
 
 
 class CompleteUploadRequest(BaseModel):
@@ -155,6 +171,7 @@ async def init_upload(
             user_id=current_user.id,
             prefer_api=request.prefer_api,
             size_multiplier=LARGER_UPLOAD_MULTIPLIER if larger else 1.0,
+            filename=request.filename,
         )
         # API-загрузка: запоминаем upload_id → file_key
         if result.get("upload_via") == "api":
@@ -480,6 +497,11 @@ async def mock_upload(
                     if not chunk:
                         continue
                     written += len(chunk)
+                    if written > _max_upload_bytes():
+                        raise HTTPException(
+                            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                            detail="Файл больше допустимого размера",
+                        )
                     tmp_file.write(chunk)
             if written <= 0:
                 raise HTTPException(
@@ -488,9 +510,10 @@ async def mock_upload(
                 )
 
             media_service = MediaService()
-            content_type = (
-                request.headers.get("content-type") or "application/octet-stream"
-            )
+            from app.core.ranged_file import content_type_for_upload_path
+
+            # The stored type follows the key we issued, not the client header.
+            content_type = content_type_for_upload_path(file_key)
 
             if media_service.s3_client:
                 try:

@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 
 from app.core.config import settings
+from app.core.http_security import database_url_is_open_default
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +74,10 @@ def collect_production_issues() -> list[str]:
                 issues.append("Redis работает в stub mode — realtime/cache/locks/video queue недоступны")
         except Exception as e:
             issues.append(f"Redis readiness check failed: {e}")
+    if database_url_is_open_default(settings.DATABASE_URL):
+        issues.append(
+            "DATABASE_URL пустой, sqlite или учебный user:password — базу так оставлять нельзя"
+        )
     if (settings.PHONE_HASH_PEPPER or "").strip() == "haneat-phone-v1":
         issues.append(
             "PHONE_HASH_PEPPER дефолтный — задайте свой, чтобы контакты не считались по общему перцу"

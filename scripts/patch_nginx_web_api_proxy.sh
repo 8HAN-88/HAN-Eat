@@ -18,6 +18,17 @@ from pathlib import Path
 conf = Path("/etc/nginx/sites-available/haneat-web")
 text = conf.read_text()
 
+# HTML documents only. Static JS locations keep their own cache headers.
+# Nginx drops parent add_header inside a location, so these lines are repeated.
+_SEC = """
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "camera=(self), microphone=(self), geolocation=(self), payment=()" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: https: mediastream:; font-src 'self' data:; connect-src 'self' https: wss:; worker-src 'self' blob:; frame-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'" always;
+        add_header Strict-Transport-Security "max-age=15552000" always;
+"""
+
 managed = """
     # BEGIN HAN-EAT MANAGED CACHE/API
     location = /health {
@@ -65,7 +76,7 @@ managed = """
     # Tiny JS beacon used by app shell to prove the device reached the new build.
     location = /boot-ping {
         add_header Cache-Control "no-store" always;
-        add_header Access-Control-Allow-Origin "*" always;
+        add_header X-Content-Type-Options "nosniff" always;
         return 204;
     }
 
@@ -78,6 +89,7 @@ managed = """
         default_type text/html;
         add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
         add_header Pragma "no-cache" always;
+        # SEC_HEADERS
     }
 
     location = /index.html {
@@ -85,6 +97,7 @@ managed = """
         default_type text/html;
         add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
         add_header Pragma "no-cache" always;
+        # SEC_HEADERS
     }
 
     location = /login.html {
@@ -92,6 +105,7 @@ managed = """
         default_type text/html;
         add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
         add_header Pragma "no-cache" always;
+        # SEC_HEADERS
     }
 
     location = /login {
@@ -115,6 +129,7 @@ managed = """
         add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
         add_header Pragma "no-cache";
         add_header Expires "0";
+        # SEC_HEADERS
         try_files /app/index.html =404;
     }
 
@@ -122,6 +137,7 @@ managed = """
         add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
         add_header Pragma "no-cache";
         add_header Expires "0";
+        # SEC_HEADERS
         try_files $uri =404;
     }
 
@@ -168,6 +184,7 @@ managed = """
     # SPA routes under /app/feed, /app/login, ...
     location ^~ /app/ {
         add_header Cache-Control "no-cache";
+        # SEC_HEADERS
         try_files $uri $uri/ /app/index.html;
     }
 
@@ -184,6 +201,9 @@ managed = """
     location = /favicon.png { return 302 /app/favicon.png; }
     # END HAN-EAT MANAGED CACHE/API
 """
+managed = managed.replace("        # SEC_HEADERS\n", _SEC.lstrip("\n"))
+if "# SEC_HEADERS" in managed or "Content-Security-Policy" not in managed:
+    raise SystemExit("security headers were not applied to the nginx snippet")
 
 legacy_patterns = [
     r"\n\s*location\s*=\s*/health\s*\{.*?\n\s*\}\n",
