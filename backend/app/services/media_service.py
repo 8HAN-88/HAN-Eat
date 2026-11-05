@@ -11,6 +11,11 @@ from typing import Dict, Optional
 from botocore.config import Config
 from botocore.exceptions import ClientError
 from app.core.config import settings
+from app.core.upload_policy import (
+    document_octet_stream_allowed,
+    upload_block_reason,
+    video_cap_megabytes,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +104,7 @@ class MediaService:
         user_id: int,
         prefer_api: bool = False,
         size_multiplier: float = 1.0,
+        filename: Optional[str] = None,
     ) -> Dict[str, str]:
         """
         Генерация presigned URL для загрузки файла
@@ -116,6 +122,9 @@ class MediaService:
                 "expires_in": 3600
             }
         """
+        blocked = upload_block_reason(content_type, filename)
+        if blocked:
+            raise ValueError("Этот тип файла загружать нельзя")
         # Валидация типа файла
         max_size: Optional[int] = None
         if file_type == "image":
@@ -125,8 +134,7 @@ class MediaService:
         elif file_type == "video":
             if not _is_allowed_video_content_type(content_type):
                 raise ValueError(f"Unsupported video type: {content_type}")
-            if settings.MAX_VIDEO_SIZE_MB > 0:
-                max_size = settings.MAX_VIDEO_SIZE_MB * 1024 * 1024
+            max_size = video_cap_megabytes(settings.MAX_VIDEO_SIZE_MB) * 1024 * 1024
         elif file_type == "audio":
             if not any(content_type.lower().endswith(f"/{ext}") for ext in settings.ALLOWED_AUDIO_TYPES):
                 raise ValueError(f"Unsupported audio type: {content_type}")
@@ -136,6 +144,8 @@ class MediaService:
             allowed = settings.ALLOWED_DOCUMENT_TYPES
             if not any(ext in ct for ext in allowed):
                 raise ValueError(f"Unsupported document type: {content_type}")
+            if not document_octet_stream_allowed(content_type, filename):
+                raise ValueError("Этот тип файла загружать нельзя")
             max_size = settings.MAX_DOCUMENT_SIZE_MB * 1024 * 1024
         else:
             raise ValueError(

@@ -106,8 +106,10 @@ class MediaUploadService {
     required int fileSize,
     bool preferApiUpload = false,
     String? clientUploadId,
+    String? filename,
   }) async {
     final uri = Uri.parse('$baseUrl/uploads/init');
+    final safeName = filename?.trim();
     final response = await _apiPost(
       uri,
       body: {
@@ -116,6 +118,7 @@ class MediaUploadService {
         'file_size': fileSize,
         'prefer_api': preferApiUpload,
         if (clientUploadId != null) 'client_upload_id': clientUploadId,
+        if (safeName != null && safeName.isNotEmpty) 'filename': safeName,
       },
     );
 
@@ -371,6 +374,7 @@ class MediaUploadService {
       fileSize: fileSize,
       preferApiUpload: preferApiUpload,
       clientUploadId: clientUploadId,
+      filename: file.name,
     );
 
     onProgress?.call(0.02);

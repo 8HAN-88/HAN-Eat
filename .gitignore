@@ -25,6 +25,8 @@ bin/
 ### Secrets ###
 .env
 backend/.env
+backend/.env.bak
+*.env.bak
 backend/firebase-credentials.json
 firebase-credentials.json
 *firebase*adminsdk*.json

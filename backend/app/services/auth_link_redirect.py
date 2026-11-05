@@ -38,6 +38,16 @@ def email_pwa_link(purpose: str, raw_token: str, email: str | None = None) -> st
     return _with_email(url, email)
 
 
+def _js_string(value: str) -> str:
+    """JSON string safe to embed in a <script> block."""
+    return (
+        json.dumps(value)
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+    )
+
+
 def deep_link(purpose: str, raw_token: str, email: str | None = None) -> str:
     base = settings.AUTH_LINK_BASE_URL.rstrip("/")
     url = f"{base}/{purpose}?token={quote(raw_token, safe='')}"
@@ -70,8 +80,8 @@ def render_open_link_page(
     }
     title = titles.get(purpose, "HanWe")
     button = cta.get(purpose, "Открыть приложение")
-    deep_js = json.dumps(deep)
-    web_js = json.dumps(web)
+    deep_js = _js_string(deep)
+    web_js = _js_string(web)
     code_style = (
         "display:block;text-align:center;font-size:32px;font-weight:700;"
         "letter-spacing:8px;background:#f3f5f8;padding:16px 12px;"

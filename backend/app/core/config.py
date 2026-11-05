@@ -319,7 +319,7 @@ class Settings(BaseSettings):
 
     # Media
     MAX_IMAGE_SIZE_MB: int = 10
-    # 0 = без лимита (чаты/каналы); nginx client_max_body_size — фактический потолок
+    # 0 = потолок nginx (64 МБ), не «без лимита». Плюс-множитель считается сверху.
     MAX_VIDEO_SIZE_MB: int = 0
     MAX_AUDIO_SIZE_MB: int = 5
     MAX_DOCUMENT_SIZE_MB: int = 25
