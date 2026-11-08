@@ -2,6 +2,7 @@
 import 'package:json_annotation/json_annotation.dart';
 
 import '../services/server_config.dart';
+import '../utils/api_datetime.dart';
 
 part 'post.g.dart';
 
@@ -63,7 +64,16 @@ class Post {
     this.author,
   });
   
-  factory Post.fromJson(Map<String, dynamic> json) => _$PostFromJson(json);
+  factory Post.fromJson(Map<String, dynamic> json) {
+    final copy = Map<String, dynamic>.from(json);
+    for (final key in const ['created_at', 'published_at']) {
+      final parsed = parseApiDateTime(copy[key]);
+      if (parsed != null) {
+        copy[key] = parsed.toUtc().toIso8601String();
+      }
+    }
+    return _$PostFromJson(copy);
+  }
   Map<String, dynamic> toJson() => _$PostToJson(this);
   
   // Геттеры для доступа к данным из body

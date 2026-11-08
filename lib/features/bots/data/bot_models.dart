@@ -1,4 +1,5 @@
 // Модели для BotFather API
+import '../../../utils/api_datetime.dart';
 
 class BotCreateRequest {
   final String name;
@@ -194,7 +195,7 @@ class BotResponse {
         webhookEnabled: json['webhook_enabled'] as bool? ?? false,
         webhookLastError: json['webhook_last_error'] as String?,
         webhookLastOkAt: json['webhook_last_ok_at'] is String
-            ? DateTime.tryParse(json['webhook_last_ok_at'] as String)
+            ? parseApiDateTime(json['webhook_last_ok_at'] as String)
             : null,
       );
 }
@@ -232,7 +233,7 @@ class BotAnalyticsDay {
   const BotAnalyticsDay({required this.date, required this.count});
 
   factory BotAnalyticsDay.fromJson(Map<String, dynamic> json) => BotAnalyticsDay(
-        date: DateTime.tryParse(json['date'] as String? ?? '') ?? DateTime.now(),
+        date: parseApiDateTime(json['date'] as String? ?? '') ?? DateTime.now(),
         count: (json['count'] as num?)?.toInt() ?? 0,
       );
 }
@@ -276,7 +277,7 @@ class BotWebhookDeliveryHealth {
       successRatePercent:
           (json['success_rate_percent'] as num?)?.toDouble() ?? 0.0,
       lastOkAt: json['last_ok_at'] is String
-          ? DateTime.tryParse(json['last_ok_at'] as String)
+          ? parseApiDateTime(json['last_ok_at'] as String)
           : null,
       lastError: json['last_error'] as String?,
       topErrors: ((json['top_errors'] as List?) ?? const [])
@@ -324,7 +325,7 @@ class BotWebhookAttempt {
       attemptsUsed: (json['attempts_used'] as num?)?.toInt() ?? 0,
       error: (json['error'] as String?)?.trim(),
       createdAt: json['created_at'] is String
-          ? DateTime.tryParse(json['created_at'] as String)
+          ? parseApiDateTime(json['created_at'] as String)
           : null,
     );
   }

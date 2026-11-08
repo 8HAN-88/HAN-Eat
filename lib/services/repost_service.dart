@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../core/network/haneat_http_client.dart';
+import '../utils/api_datetime.dart';
 import '../utils/api_error_parser.dart';
 import 'auth_service.dart';
 import 'server_config.dart';
@@ -320,7 +321,8 @@ class RepostItem {
       id: json['id'] as int,
       user: RepostUser.fromJson(json['user'] as Map<String, dynamic>),
       comment: json['comment'] as String?,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      createdAt: parseApiDateTime(json['created_at']) ??
+          DateTime.parse(json['created_at'] as String),
     );
   }
 }

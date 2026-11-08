@@ -4,10 +4,10 @@ import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import '../../../models/post_model.dart';
+import '../../../utils/chat_time_format.dart';
 import '../../../models/post.dart' show PollData;
 import '../../../services/like_service.dart';
 import '../../../services/saved_posts_service.dart';
@@ -491,30 +491,7 @@ class _ChannelPostCardState extends State<ChannelPostCard>
   }
 
   /// Как в ленте: «только что», «N мин назад», «d MMM» и т.д.
-  String _formatFeedDate(DateTime date) {
-    final now = DateTime.now();
-    final difference = now.difference(date);
-
-    if (difference.inDays == 0) {
-      if (difference.inHours == 0) {
-        if (difference.inMinutes == 0) {
-          return 'только что';
-        }
-        return '${difference.inMinutes} мин назад';
-      }
-      return '${difference.inHours} ч назад';
-    } else if (difference.inDays == 1) {
-      return 'вчера';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays} дн назад';
-    } else {
-      try {
-        return DateFormat('d MMM', 'ru').format(date);
-      } catch (e) {
-        return DateFormat('d MMM').format(date);
-      }
-    }
-  }
+  String _formatFeedDate(DateTime date) => formatRelativeTime(date);
 
   // Используем утилиту для форматирования чисел
   String _formatCount(int count) => NumberFormatter.formatCount(count);

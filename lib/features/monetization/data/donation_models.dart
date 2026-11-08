@@ -1,4 +1,5 @@
 // Модели для системы донатов
+import '../../../utils/api_datetime.dart';
 
 class DonationCreateRequest {
   final int recipientId;
@@ -56,6 +57,7 @@ class Donation {
         amountStars: json['amount_stars'] as int,
         message: json['message'] as String?,
         status: json['status'] as String,
-        createdAt: DateTime.parse(json['created_at'] as String),
+        createdAt: parseApiDateTime(json['created_at']) ??
+            DateTime.parse(json['created_at'] as String),
       );
 }

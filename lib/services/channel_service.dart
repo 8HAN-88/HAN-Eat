@@ -1507,8 +1507,7 @@ class PromotedPostSummary {
   });
 
   factory PromotedPostSummary.fromJson(Map<String, dynamic> json) {
-    DateTime? parse(String? s) =>
-        s != null ? DateTime.parse(s).toLocal() : null;
+    DateTime? parse(String? s) => parseApiDateTime(s);
     return PromotedPostSummary(
       id: json['id'] as int,
       title: json['title'] as String?,
@@ -1541,7 +1540,7 @@ class ScheduledPostSummary {
       title: json['title'] as String?,
       type: json['type'] as String? ?? 'text',
       channelId: json['channel_id'] as int?,
-      scheduledPublishAt: raw != null ? DateTime.parse(raw).toLocal() : null,
+      scheduledPublishAt: parseApiDateTime(raw),
     );
   }
 }
@@ -1589,7 +1588,8 @@ class ChannelJoinRequest {
       id: json['id'] as int,
       userId: json['user_id'] as int,
       channelId: json['channel_id'] as int,
-      joinedAt: DateTime.parse(json['joined_at'] as String),
+      joinedAt: parseApiDateTime(json['joined_at']) ??
+          DateTime.parse(json['joined_at'] as String),
       user: json['user'] as Map<String, dynamic>?,
     );
   }

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../features/referral/pending_referral.dart';
+import '../utils/api_datetime.dart';
 import '../utils/api_error_parser.dart';
 import 'api_service.dart';
 import 'app_invite_service.dart';
@@ -86,7 +87,7 @@ class PartnerPayout {
 
   static DateTime? _parseTime(Object? raw) {
     if (raw is! String || raw.isEmpty) return null;
-    return DateTime.tryParse(raw);
+    return parseApiDateTime(raw);
   }
 }
 

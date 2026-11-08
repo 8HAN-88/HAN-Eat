@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../utils/api_datetime.dart';
 import '../utils/api_error_parser.dart';
 import 'api_service.dart';
 
@@ -125,10 +126,7 @@ class CallSessionInfo {
       status == 'cancelled';
 
   factory CallSessionInfo.fromJson(Map<String, dynamic> json) {
-    DateTime? asDate(dynamic v) {
-      if (v is String && v.isNotEmpty) return DateTime.tryParse(v);
-      return null;
-    }
+    DateTime? asDate(dynamic v) => parseApiDateTime(v);
 
     int asInt(dynamic v, [int fallback = 0]) {
       if (v is int) return v;

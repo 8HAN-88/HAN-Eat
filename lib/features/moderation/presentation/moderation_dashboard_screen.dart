@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/app_router.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/moderation_service.dart';
+import '../../../utils/api_datetime.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_empty_state.dart';
 
@@ -15,7 +16,7 @@ String _two(int value) => value.toString().padLeft(2, '0');
 String _formatIsoToLocalShort(String? value) {
   final raw = (value ?? '').trim();
   if (raw.isEmpty) return '-';
-  final parsed = DateTime.tryParse(raw);
+  final parsed = parseApiDateTime(raw);
   if (parsed == null) return raw;
   final local = parsed.toLocal();
   return '${_two(local.day)}.${_two(local.month)} ${_two(local.hour)}:${_two(local.minute)}';

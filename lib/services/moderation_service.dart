@@ -1,6 +1,7 @@
 // Сервис для работы с модерацией (очередь, approve/reject)
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../utils/api_datetime.dart';
 import 'auth_service.dart';
 import 'server_config.dart';
 
@@ -655,7 +656,8 @@ class ModerationItem {
             )
           : null,
       reportComment: ModerationService._readReportComment(json),
-      createdAt: DateTime.parse(json['created_at'] as String),
+      createdAt: parseApiDateTime(json['created_at']) ??
+          DateTime.parse(json['created_at'] as String),
       contentPreview: content,
       author: author,
       toxicityScore: (json['toxicity_score'] as num?)?.toDouble(),
@@ -714,7 +716,7 @@ class ModerationReport {
           'other',
       comment: comment,
       createdAt: json['created_at'] != null
-          ? DateTime.tryParse(json['created_at'] as String)
+          ? parseApiDateTime(json['created_at'])
           : null,
       reporter:
           reporterJson != null ? ModerationAuthor.fromJson(reporterJson) : null,

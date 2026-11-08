@@ -3,9 +3,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../utils/chat_time_format.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import '../../../app/app_router.dart';
 import '../../../../services/moderation_service.dart';
 import '../../../widgets/app_empty_state.dart';
@@ -342,30 +342,8 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
     );
   }
 
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final difference = now.difference(date);
-
-    if (difference.inDays == 0) {
-      if (difference.inHours == 0) {
-        if (difference.inMinutes == 0) {
-          return 'только что';
-        }
-        return '${difference.inMinutes} мин назад';
-      }
-      return '${difference.inHours} ч назад';
-    } else if (difference.inDays == 1) {
-      return 'вчера';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays} дн назад';
-    } else {
-      try {
-        return DateFormat('d MMM yyyy', 'ru').format(date);
-      } catch (e) {
-        return DateFormat('d MMM yyyy').format(date);
-      }
-    }
-  }
+  String _formatDate(DateTime date) =>
+      formatRelativeTime(date, withYear: true);
 
   String _getContentTypeLabel(String type) {
     switch (type) {

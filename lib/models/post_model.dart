@@ -1,5 +1,6 @@
 // Модель поста для нового API (без code generation пока)
 import '../models/video_quality_preference.dart';
+import '../utils/api_datetime.dart';
 import '../services/reel_video_sources.dart';
 import '../services/server_config.dart';
 import 'post.dart';
@@ -303,10 +304,8 @@ class PostModel {
       parsedId = _jsonCount(rawId);
     }
     
-    final createdAtRaw = json['created_at'];
-    final createdAt = createdAtRaw != null && createdAtRaw is String
-        ? DateTime.parse(createdAtRaw)
-        : DateTime.fromMillisecondsSinceEpoch(0);
+    final createdAt = parseApiDateTime(json['created_at']) ??
+        DateTime.fromMillisecondsSinceEpoch(0);
 
     final previewComments = (json['preview_comments'] as List<dynamic>? ??
             const [])
@@ -326,9 +325,7 @@ class PostModel {
       description: json['description'] as String?,
       status: json['status'] as String? ?? 'published',
       createdAt: createdAt,
-      publishedAt: json['published_at'] != null && json['published_at'] is String
-          ? DateTime.parse(json['published_at'] as String)
-          : null,
+      publishedAt: parseApiDateTime(json['published_at']),
       userId: _jsonCount(json['user_id']),
       communityId: json['community_id'] != null
           ? _jsonCount(json['community_id'])

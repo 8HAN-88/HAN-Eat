@@ -11,6 +11,7 @@ import '../core/network/haneat_http_client.dart';
 import '../core/network/api_endpoint_resolver.dart';
 import '../core/network/cold_start_policy.dart';
 import '../features/referral/pending_referral.dart';
+import '../utils/api_datetime.dart';
 import '../utils/api_error_parser.dart';
 import 'account_session_service.dart';
 import 'pending_referral_store.dart';
@@ -1406,7 +1407,8 @@ class User {
       paidMessageStars: (json['paid_message_stars'] as num?)?.toInt() ?? 0,
       isAdmin: json['is_admin'] as bool? ?? false,
       isModerator: json['is_moderator'] as bool? ?? false,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      createdAt: parseApiDateTime(json['created_at']) ??
+          DateTime.parse(json['created_at'] as String),
       scanCredits: (json['scan_credits'] as num?)?.toInt(),
       subscriptionType: json['subscription_type'] as String?,
       emailVerified: json['email_verified'] as bool? ?? true,

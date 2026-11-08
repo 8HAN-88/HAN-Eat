@@ -4,6 +4,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../utils/api_datetime.dart';
+
 /// Structured location payload in chat content (or type=location).
 class ChatLocationPayload {
   const ChatLocationPayload({
@@ -52,11 +54,7 @@ class ChatLocationPayload {
     return v == '1' || v == 'true' || v == 'yes' || v == 'on';
   }
 
-  static DateTime? _parseIso(String raw) {
-    final text = raw.trim();
-    if (text.isEmpty) return null;
-    return DateTime.tryParse(text)?.toUtc();
-  }
+  static DateTime? _parseIso(String raw) => parseApiDateTime(raw);
 
   static String _fmtIso(DateTime dt) =>
       dt.toUtc().toIso8601String().replaceFirst(RegExp(r'\.\d+'), '');

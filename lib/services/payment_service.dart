@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'auth_service.dart';
 import 'api_service.dart';
+import '../utils/api_datetime.dart';
 import '../utils/api_error_parser.dart';
 
 /// Платежи: YooKassa (RU) / Stripe.
@@ -438,7 +439,7 @@ class AdminRefundQueueItem {
 
   factory AdminRefundQueueItem.fromJson(Map<String, dynamic> json) {
     DateTime? parse(String? s) =>
-        s != null ? DateTime.parse(s).toLocal() : null;
+        s != null ? parseApiDateTime(s) : null;
     final user = json['user'] as Map<String, dynamic>?;
     return AdminRefundQueueItem(
       id: json['id'] as int,
@@ -491,7 +492,7 @@ class PaymentHistoryItem {
 
   factory PaymentHistoryItem.fromJson(Map<String, dynamic> json) {
     DateTime? parse(String? s) =>
-        s != null ? DateTime.parse(s).toLocal() : null;
+        s != null ? parseApiDateTime(s) : null;
     return PaymentHistoryItem(
       id: json['id'] as int,
       product: json['product'] as String? ?? 'pro',
