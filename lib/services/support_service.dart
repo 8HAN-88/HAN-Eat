@@ -1,6 +1,7 @@
 // Сервис для работы с поддержкой
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../utils/api_datetime.dart';
 import '../utils/api_error_parser.dart';
 import 'auth_service.dart';
 import 'server_config.dart';
@@ -202,7 +203,7 @@ class CreateTicketResponse {
       type: json['type'] as String,
       status: json['status'] as String,
       createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String)
+          ? parseApiDateTime(json['created_at'] as String)
           : null,
       message: json['message'] as String,
     );
@@ -265,10 +266,10 @@ class SupportTicket {
       status: json['status'] as String,
       resolutionComment: json['resolution_comment'] as String?,
       createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String)
+          ? parseApiDateTime(json['created_at'] as String)
           : null,
       resolvedAt: json['resolved_at'] != null
-          ? DateTime.parse(json['resolved_at'] as String)
+          ? parseApiDateTime(json['resolved_at'] as String)
           : null,
       userName: user?['name'] as String?,
       userEmail: user?['email'] as String?,

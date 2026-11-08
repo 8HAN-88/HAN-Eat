@@ -22,6 +22,22 @@ void main() {
     expect(day, DateTime(2026, 11, 8));
   });
 
+  test('a fresh post is not hours ago and yesterday stays yesterday', () {
+    final now = DateTime(2026, 11, 9, 15);
+    expect(
+      formatRelativeTime(DateTime(2026, 11, 9, 14, 50), now: now),
+      '10 мин назад',
+    );
+    expect(
+      formatRelativeTime(DateTime(2026, 11, 8, 23, 30), now: now),
+      'вчера',
+    );
+    expect(
+      formatRelativeTime(DateTime(2026, 11, 9, 18), now: now),
+      '18:00',
+    );
+  });
+
   test('yesterday evening is not shown as a today clock after midnight', () {
     final now = DateTime(2026, 11, 9, 0, 20);
     expect(

@@ -1,6 +1,7 @@
 // Сервис для работы с подписками HanWe (уровни 9 / 16 / 18)
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../utils/api_datetime.dart';
 import 'auth_service.dart';
 import 'api_service.dart';
 
@@ -274,7 +275,7 @@ class SubscriptionStatusResponse {
           ? SubscriptionData.fromJson(_subJsonMap(json['subscription'])!)
           : null,
       subscriptionType: json['subscription_type'] as String? ?? 'free',
-      expiresAt: DateTime.tryParse('$expireRaw'),
+      expiresAt: parseApiDateTime(expireRaw),
       platform: json['platform'] as String?,
       autoRenew: json['auto_renew'] as bool? ?? false,
       entitlements: ent,
@@ -380,9 +381,9 @@ class SubscriptionData {
       paymentProvider: json['payment_provider'] as String?,
       amount: _subJsonDouble(json['amount']),
       currency: json['currency'] as String? ?? 'RUB',
-      startedAt: DateTime.tryParse('${json['started_at'] ?? ''}') ??
+      startedAt: parseApiDateTime(json['started_at']) ??
           DateTime.fromMillisecondsSinceEpoch(0),
-      expiresAt: DateTime.tryParse('${json['expires_at'] ?? ''}'),
+      expiresAt: parseApiDateTime(json['expires_at']),
       autoRenew: json['auto_renew'] as bool? ?? true,
     );
   }

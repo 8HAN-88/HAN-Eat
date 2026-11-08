@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import '../utils/api_datetime.dart';
 import 'auth_service.dart';
 import 'media_upload_service.dart';
 import 'profile_cache_service.dart';
@@ -605,7 +606,7 @@ class UserFollowItem {
         avatarUrl: json['avatar_url'] as String?,
         bio: json['bio'] as String?,
         isPrivate: json['is_private'] as bool? ?? false,
-        createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ??
+        createdAt: parseApiDateTime(json['created_at']) ??
             DateTime.fromMillisecondsSinceEpoch(0),
       ),
       isFollowing: json['is_following'] as bool? ?? false,

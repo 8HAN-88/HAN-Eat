@@ -1,3 +1,5 @@
+import '../../../utils/api_datetime.dart';
+
 int _miniJsonInt(Object? raw, [int fallback = 0]) {
   if (raw is int) return raw;
   if (raw is num) return raw.toInt();
@@ -116,9 +118,7 @@ class MiniAppItem {
           .toList(growable: false),
       isInstalled: json['is_installed'] as bool? ?? false,
       isOwner: json['is_owner'] as bool? ?? false,
-      lastLaunchedAt: json['last_launched_at'] is String
-          ? DateTime.tryParse(json['last_launched_at'] as String)
-          : null,
+      lastLaunchedAt: parseApiDateTime(json['last_launched_at']),
     );
   }
 }

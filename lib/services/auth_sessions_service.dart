@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../utils/api_datetime.dart';
 import '../utils/api_error_parser.dart';
 import 'auth_service.dart';
 import 'server_config.dart';
@@ -30,9 +31,9 @@ class AuthSessionInfo {
     return AuthSessionInfo(
       id: _sessionJsonInt(data['id']),
       isCurrent: data['is_current'] == true,
-      createdAt: DateTime.tryParse(data['created_at'] as String? ?? '') ??
+      createdAt: parseApiDateTime(data['created_at']) ??
           DateTime.fromMillisecondsSinceEpoch(0),
-      lastSeenAt: DateTime.tryParse(data['last_seen_at'] as String? ?? '') ??
+      lastSeenAt: parseApiDateTime(data['last_seen_at']) ??
           DateTime.fromMillisecondsSinceEpoch(0),
       deviceName: data['device_name'] as String?,
       devicePlatform: data['device_platform'] as String?,

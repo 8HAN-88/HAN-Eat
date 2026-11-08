@@ -9,6 +9,7 @@ import '../../../services/comment_service.dart';
 import '../../../services/auth_service.dart';
 import '../../../models/post_model.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../utils/chat_time_format.dart';
 import '../../../utils/session_snackbar.dart';
 import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_empty_state.dart';
@@ -678,30 +679,8 @@ class _CommentItem extends StatefulWidget {
 class _CommentItemState extends State<_CommentItem> {
   bool _expanded = false;
 
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final difference = now.difference(date);
-
-    if (difference.inDays == 0) {
-      if (difference.inHours == 0) {
-        if (difference.inMinutes == 0) {
-          return 'только что';
-        }
-        return '${difference.inMinutes} мин назад';
-      }
-      return '${difference.inHours} ч назад';
-    } else if (difference.inDays == 1) {
-      return 'вчера';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays} дн назад';
-    } else {
-      try {
-        return DateFormat('d MMM yyyy', 'ru').format(date);
-      } catch (e) {
-        return DateFormat('d MMM yyyy').format(date);
-      }
-    }
-  }
+  String _formatDate(DateTime date) =>
+      formatRelativeTime(date, withYear: true);
 
   @override
   Widget build(BuildContext context) {

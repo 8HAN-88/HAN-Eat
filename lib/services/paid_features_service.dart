@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../utils/api_datetime.dart';
 import '../utils/api_error_parser.dart';
 import 'api_service.dart';
 import 'auth_service.dart';
@@ -1089,7 +1090,7 @@ class StarTransaction {
         amount: _paidJsonInt(json['amount'], 0),
         type: json['type'] as String? ?? '',
         status: json['status'] as String? ?? '',
-        createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ??
+        createdAt: parseApiDateTime(json['created_at'] as String? ?? '') ??
             DateTime.fromMillisecondsSinceEpoch(0),
         counterpartyUserId: _paidJsonIntOrNull(json['counterparty_user_id']),
         referenceType: json['reference_type'] as String?,
@@ -1142,7 +1143,7 @@ class CreatorPayoutRequest {
         recipientName: json['recipient_name'] as String?,
         userName: json['user_name'] as String?,
         userEmail: json['user_email'] as String?,
-        createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
+        createdAt: parseApiDateTime(json['created_at'] as String? ?? ''),
       );
 }
 
@@ -1169,7 +1170,7 @@ class GroupPaidSettings {
         isPaid: json['is_paid'] as bool? ?? false,
         monthlyPriceStars: _paidJsonInt(json['monthly_price_stars'], 0),
         subscribed: json['subscribed'] as bool? ?? false,
-        expiresAt: DateTime.tryParse(json['expires_at'] as String? ?? ''),
+        expiresAt: parseApiDateTime(json['expires_at'] as String? ?? ''),
         autoRenew: json['auto_renew'] as bool? ?? false,
       );
 }
@@ -1410,7 +1411,7 @@ class UserStarGift {
         serial: _paidJsonIntOrNull(json['serial']),
         transferredFromUserId: _paidJsonIntOrNull(json['transferred_from_user_id']),
         listedStars: _paidJsonIntOrNull(json['listed_stars']),
-        listedAt: DateTime.tryParse(json['listed_at'] as String? ?? ''),
+        listedAt: parseApiDateTime(json['listed_at'] as String? ?? ''),
         isWorn: json['is_worn'] as bool? ?? false,
         displayOrder: _paidJsonInt(json['display_order'], 0),
         sellerName: json['seller_name'] as String?,
@@ -1418,8 +1419,8 @@ class UserStarGift {
         upgradeStars: _paidJsonInt(json['upgrade_stars'], 0),
         transferStars: _paidJsonInt(json['transfer_stars'], 0),
         totalSupply: _paidJsonIntOrNull(json['total_supply']),
-        convertedAt: DateTime.tryParse(json['converted_at'] as String? ?? ''),
-        createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
+        convertedAt: parseApiDateTime(json['converted_at'] as String? ?? ''),
+        createdAt: parseApiDateTime(json['created_at'] as String? ?? ''),
       );
 }
 
@@ -1465,7 +1466,7 @@ class ChannelSubscriptionInfo {
         channelId: _paidJsonInt(json['channel_id'], 0),
         status: json['status'] as String? ?? 'none',
         amountStars: _paidJsonInt(json['amount_stars'], 0),
-        expiresAt: DateTime.tryParse(json['expires_at'] as String? ?? ''),
+        expiresAt: parseApiDateTime(json['expires_at'] as String? ?? ''),
         autoRenew: json['auto_renew'] as bool? ?? false,
         isActive: json['is_active'] as bool? ?? false,
         monthlyPriceStars: _paidJsonInt(json['monthly_price_stars'], 0),
@@ -1552,13 +1553,13 @@ class StarGiveaway {
         winnersCount: _paidJsonInt(json['winners_count'], 0),
         totalEscrowStars: _paidJsonInt(json['total_escrow_stars'], 0),
         status: json['status'] as String? ?? 'active',
-        endsAt: DateTime.tryParse(json['ends_at'] as String? ?? '') ??
+        endsAt: parseApiDateTime(json['ends_at'] as String? ?? '') ??
             DateTime.fromMillisecondsSinceEpoch(0),
         requireMembership: json['require_membership'] as bool? ?? true,
         participantsCount: _paidJsonInt(json['participants_count'], 0),
         title: json['title'] as String?,
-        completedAt: DateTime.tryParse(json['completed_at'] as String? ?? ''),
-        createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
+        completedAt: parseApiDateTime(json['completed_at'] as String? ?? ''),
+        createdAt: parseApiDateTime(json['created_at'] as String? ?? ''),
         joinedByMe: json['joined_by_me'] as bool? ?? false,
         isWinner: json['is_winner'] as bool? ?? false,
         prizeType: json['prize_type'] as String? ?? 'stars',
@@ -1611,7 +1612,7 @@ class ChannelSuggestedPost {
         status: json['status'] as String? ?? 'pending',
         mediaUrl: json['media_url'] as String?,
         postId: _paidJsonIntOrNull(json['post_id']),
-        createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
+        createdAt: parseApiDateTime(json['created_at'] as String? ?? ''),
         authorName: json['author_name'] as String?,
         authorUsername: json['author_username'] as String?,
       );
@@ -1722,9 +1723,9 @@ class StarInvoice {
         amountStars: _paidJsonInt(json['amount_stars'], 0),
         payload: json['payload'] as String?,
         status: json['status'] as String? ?? 'pending',
-        expiresAt: DateTime.tryParse(json['expires_at'] as String? ?? ''),
-        paidAt: DateTime.tryParse(json['paid_at'] as String? ?? ''),
-        createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
+        expiresAt: parseApiDateTime(json['expires_at'] as String? ?? ''),
+        paidAt: parseApiDateTime(json['paid_at'] as String? ?? ''),
+        createdAt: parseApiDateTime(json['created_at'] as String? ?? ''),
         botUsername: json['bot_username'] as String?,
         botName: json['bot_name'] as String?,
       );
