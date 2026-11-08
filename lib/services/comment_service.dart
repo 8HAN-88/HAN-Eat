@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../core/network/haneat_http_client.dart';
+import '../utils/api_datetime.dart';
 import '../utils/api_error_parser.dart';
 import 'auth_service.dart';
 import 'server_config.dart';
@@ -256,8 +257,7 @@ class Comment {
       text: rawText.toString(),
       rating: json['rating'] != null ? toInt(json['rating']) : null,
       parentId: json['parent_id'] != null ? toInt(json['parent_id']) : null,
-      createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
-          DateTime.now(),
+      createdAt: parseApiDateTime(json['created_at']) ?? DateTime.now(),
       authorName: json['author_name'] as String?,
       authorAvatar: json['author_avatar'] as String?,
     );

@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/post.dart' show PollData, PollVotersResponse;
+import '../utils/api_datetime.dart';
 import '../utils/api_error_parser.dart';
 import 'auth_service.dart';
 import 'server_config.dart';
@@ -395,7 +396,8 @@ class Post {
       title: json['title'] as String?,
       description: json['description'] as String?,
       status: json['status'] as String,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      createdAt: parseApiDateTime(json['created_at']) ??
+          DateTime.parse(json['created_at'] as String),
       userId: json['user_id'] as int,
       communityId: json['community_id'] as int? ?? json['channel_id'] as int?,
       body: json['body'] as Map<String, dynamic>?,

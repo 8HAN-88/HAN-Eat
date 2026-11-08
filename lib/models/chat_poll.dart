@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import '../utils/api_datetime.dart';
+
 /// Настройки опроса в чате (как в Telegram).
 class ChatPollSettings {
   const ChatPollSettings({
@@ -163,7 +165,7 @@ class ChatPollMessage {
     DateTime? closesAt;
     final rawCloses = json['closes_at'];
     if (rawCloses is String && rawCloses.isNotEmpty) {
-      closesAt = DateTime.tryParse(rawCloses)?.toUtc();
+      closesAt = parseApiDateTime(rawCloses);
     }
     return ChatPollMessage(
       question: json['question'] as String? ?? '',

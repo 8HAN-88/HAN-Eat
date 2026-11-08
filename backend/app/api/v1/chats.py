@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user_required
 from app.core.config import settings
+from app.core.time_iso import utc_iso
 from app.core.database import SessionLocal, get_db
 from app.models.user import User
 from app.schemas.chat import (
@@ -188,8 +189,8 @@ def _message_payload(
         "forwarded_from_message_id": getattr(msg, "forwarded_from_message_id", None),
         "forwarded_from_conversation_id": None,
         "inline_keyboard": inline_keyboard,
-        "created_at": msg.created_at.isoformat() if msg.created_at else None,
-        "edited_at": msg.edited_at.isoformat() if getattr(msg, "edited_at", None) else None,
+        "created_at": utc_iso(msg.created_at),
+        "edited_at": utc_iso(getattr(msg, "edited_at", None)),
         "disable_webpage_preview": bool(
             getattr(msg, "disable_webpage_preview", False)
         ),
@@ -1132,7 +1133,7 @@ async def upsert_chat_draft(
             "conversation_id": row.conversation_id,
             "text": row.text or "",
             "reply_to_message_id": row.reply_to_message_id,
-            "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+            "updated_at": utc_iso(row.updated_at),
             "cleared": False,
         },
     )
@@ -4152,14 +4153,14 @@ async def mute_chat(
             "event": "chat.mute",
             "conversation_id": conversation_id,
             "muted": body.muted,
-            "muted_until": until.isoformat() if until is not None else None,
+            "muted_until": utc_iso(until),
             "notify_mode": notify_mode,
         },
     )
     return {
         "ok": True,
         "muted": body.muted,
-        "muted_until": until.isoformat() if until is not None else None,
+        "muted_until": utc_iso(until),
         "notify_mode": notify_mode,
     }
 

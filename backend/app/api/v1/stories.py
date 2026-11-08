@@ -11,6 +11,7 @@ from sqlalchemy import and_, func, or_
 
 from app.api.dependencies import get_current_user_required
 from app.core.database import get_db
+from app.core.time_iso import utc_iso
 from app.models.close_friend import CloseFriend
 from app.models.follower import Follower
 from app.models.story import Story, StoryReaction, StoryView
@@ -148,8 +149,8 @@ def _to_response(
         caption=story.caption,
         visibility=story.visibility,
         views_count=story.views_count or 0,
-        created_at=created.isoformat(),
-        expires_at=expires.isoformat(),
+        created_at=utc_iso(created) or created.isoformat(),
+        expires_at=utc_iso(expires) or expires.isoformat(),
         author=_author_response(user, fallback_id=int(story.user_id or 0)),
         reactions=reactions,
         my_reaction=my_reaction,
@@ -387,7 +388,7 @@ async def list_story_viewers(
     items = [
         StoryViewerItem(
             user=_author_response(view.user),
-            viewed_at=view.viewed_at.isoformat(),
+            viewed_at=utc_iso(view.viewed_at) or view.viewed_at.isoformat(),
             reaction=reaction_by_user.get(view.user_id),
         )
         for view in views

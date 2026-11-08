@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import func, or_, and_, exists, case
 from typing import Optional
 from app.core.database import get_db
+from app.core.time_iso import utc_iso
 from app.api.dependencies import get_current_user, get_current_user_required
 from app.models.user import User
 from app.services.chat_service import ChatService
@@ -172,13 +173,13 @@ async def ping_presence(
             payload = {
                 "event": "user.presence",
                 "user_id": current_user.id,
-                "last_seen_at": now.isoformat(),
+                "last_seen_at": utc_iso(now),
                 "online": True,
             }
             for peer_id in peer_ids:
                 publish_user_event(peer_id, payload)
 
-    return {"ok": True, "last_seen_at": now.isoformat()}
+    return {"ok": True, "last_seen_at": utc_iso(now)}
 
 
 @router.get("/search", response_model=UserSearchResponse)
@@ -674,7 +675,7 @@ def _user_list_item(user: User) -> dict:
         "avatar_url": user.avatar_url,
         "bio": user.bio,
         "is_private": user.is_private,
-        "created_at": user.created_at.isoformat() if user.created_at else None,
+        "created_at": utc_iso(user.created_at),
     }
 
 

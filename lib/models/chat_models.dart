@@ -1,3 +1,4 @@
+import '../utils/api_datetime.dart';
 import 'chat_poll.dart';
 
 export 'chat_poll.dart'
@@ -27,10 +28,7 @@ Map<String, dynamic>? _jsonMap(Object? raw) {
 }
 
 DateTime _parseDate(dynamic v) {
-  if (v is String && v.isNotEmpty) {
-    return DateTime.tryParse(v)?.toLocal() ?? DateTime.now();
-  }
-  return DateTime.now();
+  return parseApiDateTime(v) ?? DateTime.now();
 }
 
 class ChatUserBrief {
@@ -95,7 +93,7 @@ class ChatUserBrief {
     DateTime? lastSeen;
     final raw = data['last_seen_at'];
     if (raw is String && raw.isNotEmpty) {
-      lastSeen = DateTime.tryParse(raw);
+      lastSeen = parseApiDateTime(raw);
     }
     return ChatUserBrief(
       id: _parseInt(data['id']),
@@ -116,7 +114,7 @@ class ChatUserBrief {
       canManageVideoChats: data['can_manage_video_chats'] as bool? ?? false,
       sendRestricted: data['send_restricted'] as bool? ?? false,
       sendRestrictedUntil: data['send_restricted_until'] is String
-          ? DateTime.tryParse(data['send_restricted_until'] as String)
+          ? parseApiDateTime(data['send_restricted_until'] as String)
           : null,
       sendRestrictionReason: data['send_restriction_reason'] as String?,
       paidMessageStars: _parseInt(data['paid_message_stars']),
@@ -378,7 +376,7 @@ class ChatMessage {
     DateTime? editedAt;
     final editedRaw = data['edited_at'];
     if (editedRaw is String && editedRaw.isNotEmpty) {
-      editedAt = DateTime.tryParse(editedRaw);
+      editedAt = parseApiDateTime(editedRaw);
     }
     final reactionsRaw = data['reactions'] as List<dynamic>? ?? [];
     final reactions = <ChatReactionSummary>[];
@@ -734,7 +732,7 @@ class ChatConversation {
       archived: data['archived'] as bool? ?? false,
       muted: data['muted'] as bool? ?? false,
       mutedUntil: data['muted_until'] is String
-          ? DateTime.tryParse(data['muted_until'] as String)
+          ? parseApiDateTime(data['muted_until'] as String)
           : null,
       notifyMode: () {
         final raw = (data['notify_mode'] as String?)?.trim().toLowerCase();
@@ -774,7 +772,7 @@ class ChatConversation {
           data['am_i_can_manage_video_chats'] as bool? ?? false,
       amISendRestricted: data['am_i_send_restricted'] as bool? ?? false,
       amISendRestrictedUntil: data['am_i_send_restricted_until'] is String
-          ? DateTime.tryParse(data['am_i_send_restricted_until'] as String)
+          ? parseApiDateTime(data['am_i_send_restricted_until'] as String)
           : null,
       amISendRestrictionReason: data['am_i_send_restriction_reason'] as String?,
       peerBlockedByMe: data['peer_blocked_by_me'] as bool? ?? false,
@@ -943,7 +941,7 @@ class ChatGroupBanEntry {
       bannedAt: _parseDate(json['banned_at']),
       reason: json['reason'] as String?,
       bannedUntil: json['banned_until'] is String
-          ? DateTime.tryParse(json['banned_until'] as String)
+          ? parseApiDateTime(json['banned_until'] as String)
           : null,
     );
   }
@@ -982,12 +980,12 @@ class ChatGroupInviteLink {
       inviteLink: json['invite_link'] as String? ?? '',
       createdAt: _parseDate(json['created_at']),
       expiresAt: json['expires_at'] is String
-          ? DateTime.tryParse(json['expires_at'] as String)
+          ? parseApiDateTime(json['expires_at'] as String)
           : null,
       maxUses: json['max_uses'] != null ? _parseInt(json['max_uses']) : null,
       usesCount: _parseInt(json['uses_count']),
       revokedAt: json['revoked_at'] is String
-          ? DateTime.tryParse(json['revoked_at'] as String)
+          ? parseApiDateTime(json['revoked_at'] as String)
           : null,
     );
   }

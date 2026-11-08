@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../core/network/haneat_http_client.dart';
+import '../utils/api_datetime.dart';
 import '../core/network/api_rate_limit_backoff.dart';
 import '../core/platform/web_page_visibility.dart';
 import '../features/chat/application/chat_realtime_signals.dart';
@@ -95,10 +96,7 @@ class UserRealtimeEvent {
       if (v is String) return int.tryParse(v);
       return null;
     }
-    DateTime? asDate(dynamic v) {
-      if (v is String && v.isNotEmpty) return DateTime.tryParse(v);
-      return null;
-    }
+    DateTime? asDate(dynamic v) => parseApiDateTime(v);
     final rawActivity = json['activity'] as String?;
     final activity = rawActivity == 'recording' ? 'recording' : rawActivity;
     Map<String, dynamic>? signalPayload;

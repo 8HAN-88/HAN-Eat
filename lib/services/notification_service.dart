@@ -6,6 +6,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
+import '../utils/api_datetime.dart';
 import 'auth_service.dart';
 import 'notification_cache_service.dart';
 import 'server_config.dart';
@@ -421,12 +422,8 @@ class NotificationItem {
       entityId: entityId,
       actor: NotificationActor.maybeFromJson(json['actor']),
       isRead: json['is_read'] == true,
-      readAt: json['read_at'] != null
-          ? DateTime.tryParse(json['read_at'] as String)
-          : null,
-      createdAt: json['created_at'] != null
-          ? DateTime.tryParse(json['created_at'] as String)
-          : null,
+      readAt: parseApiDateTime(json['read_at']),
+      createdAt: parseApiDateTime(json['created_at']),
       data: _asStringKeyedMap(json['data']),
       thumbnailUrl: json['thumbnail_url'] as String?,
       postType: json['post_type'] as String?,
