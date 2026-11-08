@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../models/chat_models.dart';
+import '../../../../utils/api_datetime.dart';
+import '../../../../utils/chat_time_format.dart';
 import '../../../../services/channel_service.dart';
 import '../../../../widgets/app_avatar.dart';
 import '../../../../widgets/telegram_ui.dart';
@@ -608,14 +610,7 @@ String chatHubBodyPreview(ChatMessage? msg, {bool isSaved = false}) {
   return content.isEmpty ? 'Сообщение' : content;
 }
 
-String chatHubFormatInboxTime(DateTime dt) {
-  final local = dt.toLocal();
-  final now = DateTime.now();
-  if (now.difference(local).inDays == 0) {
-    return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
-  }
-  return '${local.day.toString().padLeft(2, '0')}.${local.month.toString().padLeft(2, '0')}';
-}
+String chatHubFormatInboxTime(DateTime dt) => formatChatMessageTime(dt);
 
 String? _giftEmojiFromContent(String content) {
   final raw = content.trim();
@@ -738,9 +733,7 @@ class _ChannelInboxTileState extends State<ChannelInboxTile> {
       );
       if (response.posts.isEmpty || !mounted) return;
       final post = response.posts.first;
-      final createdAt = DateTime.tryParse(
-        post['created_at']?.toString() ?? '',
-      )?.toLocal();
+      final createdAt = parseApiDateTime(post['created_at']);
       setState(() {
         _preview = _postPreview(post);
         _lastPostAt = createdAt;

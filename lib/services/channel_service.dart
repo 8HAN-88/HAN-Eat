@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../utils/api_datetime.dart';
 import '../utils/api_error_parser.dart';
 import 'auth_service.dart';
 import 'server_config.dart';
@@ -1218,14 +1219,13 @@ class Channel {
       category: json['category'] as String?,
       membersCount: json['members_count'] as int,
       postsCount: json['posts_count'] as int,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      createdAt: parseApiDateTime(json['created_at']) ??
+          DateTime.parse(json['created_at'] as String),
       autoPublishReels: json['auto_publish_reels'] as bool? ?? true,
       membershipStatus: json['membership_status'] as String? ?? 'none',
       pendingJoinRequestsCount: json['pending_join_requests_count'] as int?,
       lastPostPreview: json['last_post_preview'] as String?,
-      lastPostAt: json['last_post_at'] != null
-          ? DateTime.tryParse(json['last_post_at'] as String)?.toLocal()
-          : null,
+      lastPostAt: parseApiDateTime(json['last_post_at']),
       seenPostsCount: json['seen_posts_count'] as int?,
       showInFeed: json['show_in_feed'] as bool? ?? true,
     );
@@ -1307,7 +1307,8 @@ class ChannelDetail extends Channel {
       category: json['category'] as String?,
       membersCount: json['members_count'] as int,
       postsCount: json['posts_count'] as int,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      createdAt: parseApiDateTime(json['created_at']) ??
+          DateTime.parse(json['created_at'] as String),
       autoPublishReels: json['auto_publish_reels'] as bool? ?? true,
       adminUser: json['admin_user'] as Map<String, dynamic>?,
       isMember: json['is_member'] as bool? ?? false,

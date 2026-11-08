@@ -1,3 +1,5 @@
+import '../../../utils/api_datetime.dart';
+
 int _storyJsonInt(Object? raw) {
   if (raw is int) return raw;
   if (raw is num) return raw.toInt();
@@ -13,13 +15,7 @@ String? _storyJsonString(Object? raw) {
   return null;
 }
 
-DateTime? _storyJsonDate(Object? raw) {
-  if (raw is DateTime) return raw.toLocal();
-  if (raw is String && raw.trim().isNotEmpty) {
-    return DateTime.tryParse(raw.trim())?.toLocal();
-  }
-  return null;
-}
+DateTime? _storyJsonDate(Object? raw) => parseApiDateTime(raw);
 
 Map<String, dynamic>? _storyJsonMap(Object? raw) {
   if (raw is Map<String, dynamic>) return raw;
