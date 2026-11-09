@@ -16,13 +16,13 @@ DateTime? parseApiDateTime(Object? raw) {
   return DateTime.tryParse(trimmed)?.toLocal();
 }
 
-/// Inclusive UTC instant for the start or end of [day]'s local calendar day.
-///
-/// Search stores naive UTC. A bare `YYYY-MM-DD` is that UTC day, so in
-/// Moscow the first three hours of the picked day never match.
-String searchDayBoundIso(DateTime day, {required bool end}) {
-  final local = end
-      ? DateTime(day.year, day.month, day.day, 23, 59, 59, 999, 999)
-      : DateTime(day.year, day.month, day.day);
-  return local.toUtc().toIso8601String();
+/// Local calendar day as `YYYY-MM-DD`. Sent with [searchTzOffsetMinutes]
+/// so the server can place that day on the UTC clock messages are stored in.
+String searchDayKey(DateTime day) {
+  final d = DateTime(day.year, day.month, day.day);
+  String pad(int n) => n.toString().padLeft(2, '0');
+  return '${d.year}-${pad(d.month)}-${pad(d.day)}';
 }
+
+/// `DateTime.timeZoneOffset` in minutes. Moscow is 180.
+int searchTzOffsetMinutes() => DateTime.now().timeZoneOffset.inMinutes;

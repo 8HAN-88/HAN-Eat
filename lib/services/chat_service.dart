@@ -2287,9 +2287,10 @@ class ChatService {
         'kind': kind,
         if (cursor != null) 'cursor': '$cursor',
         if (senderId != null) 'sender_id': '$senderId',
-        if (dateFrom != null)
-          'date_from': searchDayBoundIso(dateFrom, end: false),
-        if (dateTo != null) 'date_to': searchDayBoundIso(dateTo, end: true),
+        if (dateFrom != null) 'date_from': searchDayKey(dateFrom),
+        if (dateTo != null) 'date_to': searchDayKey(dateTo),
+        if (dateFrom != null || dateTo != null)
+          'tz_offset_minutes': '${searchTzOffsetMinutes()}',
         'limit': '$limit',
       },
     );
@@ -2313,9 +2314,8 @@ class ChatService {
     int limit = 40,
   }) async {
     final q = query.trim();
-    final fromKey =
-        dateFrom == null ? null : searchDayBoundIso(dateFrom, end: false);
-    final toKey = dateTo == null ? null : searchDayBoundIso(dateTo, end: true);
+    final fromKey = dateFrom == null ? null : searchDayKey(dateFrom);
+    final toKey = dateTo == null ? null : searchDayKey(dateTo);
     if (q.length < 2 && fromKey == null && toKey == null) return const [];
     final params = <String, String>{
       if (q.length >= 2) 'q': q,
@@ -2323,6 +2323,8 @@ class ChatService {
       if (senderId != null) 'sender_id': '$senderId',
       if (fromKey != null) 'date_from': fromKey,
       if (toKey != null) 'date_to': toKey,
+      if (fromKey != null || toKey != null)
+        'tz_offset_minutes': '${searchTzOffsetMinutes()}',
       'limit': '$limit',
     };
     final uri = conversationId == null

@@ -33,9 +33,10 @@ class SearchService {
       if (authorId != null) 'author_id': authorId.toString(),
       if (channelId != null) 'channel_id': channelId.toString(),
       if (tags != null && tags.isNotEmpty) 'tags': tags.join(','),
-      if (dateFrom != null)
-        'date_from': searchDayBoundIso(dateFrom, end: false),
-      if (dateTo != null) 'date_to': searchDayBoundIso(dateTo, end: true),
+      if (dateFrom != null) 'date_from': searchDayKey(dateFrom),
+      if (dateTo != null) 'date_to': searchDayKey(dateTo),
+      if (dateFrom != null || dateTo != null)
+        'tz_offset_minutes': '${searchTzOffsetMinutes()}',
       if (minLikes != null) 'min_likes': minLikes.toString(),
       if (minComments != null) 'min_comments': minComments.toString(),
       'sort_by': sortBy,

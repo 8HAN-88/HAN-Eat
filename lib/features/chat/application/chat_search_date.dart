@@ -9,12 +9,10 @@ bool messageMatchesSearchDate(DateTime createdAt, DateTime? day) {
   return local.year == d.year && local.month == d.month && local.day == d.day;
 }
 
-/// Inclusive bounds of the local calendar day, as UTC instants.
+/// Local calendar day for `date_from` / `date_to`. The offset is separate.
 ({String dateFrom, String dateTo}) searchDateQueryBounds(DateTime day) {
-  return (
-    dateFrom: searchDayBoundIso(day, end: false),
-    dateTo: searchDayBoundIso(day, end: true),
-  );
+  final key = searchDayKey(day);
+  return (dateFrom: key, dateTo: key);
 }
 
 String searchDateChipLabel(DateTime day) {

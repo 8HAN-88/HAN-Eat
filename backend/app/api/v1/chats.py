@@ -20,7 +20,12 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user_required
 from app.core.config import settings
-from app.core.time_iso import parse_search_bound, utc_iso
+from app.core.time_iso import (
+    is_search_date_only,
+    parse_search_bound,
+    shift_local_search_day,
+    utc_iso,
+)
 from app.core.database import SessionLocal, get_db
 from app.models.user import User
 from app.schemas.chat import (
@@ -1837,6 +1842,12 @@ async def list_chat_media(
     sender_id: Optional[int] = Query(None, ge=1),
     date_from: Optional[str] = Query(None, description="YYYY-MM-DD or ISO instant"),
     date_to: Optional[str] = Query(None, description="YYYY-MM-DD or ISO instant"),
+    tz_offset_minutes: Optional[int] = Query(
+        None,
+        ge=-840,
+        le=840,
+        description="Phone offset from UTC. Shifts a YYYY-MM-DD onto that local day.",
+    ),
     limit: int = Query(60, ge=1, le=100),
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
@@ -1851,8 +1862,12 @@ async def list_chat_media(
             cursor=cursor,
             limit=limit,
             sender_id=sender_id,
-            date_from=_parse_search_date(date_from),
-            date_to=_parse_search_date(date_to, end_of_day=True),
+            date_from=_parse_search_date(date_from, tz_offset_minutes=tz_offset_minutes),
+            date_to=_parse_search_date(
+                date_to,
+                end_of_day=True,
+                tz_offset_minutes=tz_offset_minutes,
+            ),
         )
     except ValueError:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
@@ -1930,14 +1945,24 @@ async def list_chat_media(
     )
 
 
-def _parse_search_date(value: Optional[str], *, end_of_day: bool = False) -> Optional[datetime]:
+def _parse_search_date(
+    value: Optional[str],
+    *,
+    end_of_day: bool = False,
+    tz_offset_minutes: Optional[int] = None,
+) -> Optional[datetime]:
     try:
-        return parse_search_bound(value, end_of_day=end_of_day)
+        bound = parse_search_bound(value, end_of_day=end_of_day)
     except ValueError as exc:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             detail="Неверный формат даты. Используйте ГГГГ-ММ-ДД",
         ) from exc
+    return shift_local_search_day(
+        bound,
+        tz_offset_minutes,
+        date_only=is_search_date_only(value),
+    )
 
 
 @router.get("/chats/messages/search", response_model=MessageSearchResponse)
@@ -1950,13 +1975,18 @@ async def search_messages_global(
     sender_id: Optional[int] = Query(None, ge=1),
     date_from: Optional[str] = Query(None, description="YYYY-MM-DD"),
     date_to: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    tz_offset_minutes: Optional[int] = Query(None, ge=-840, le=840),
     limit: int = Query(40, ge=1, le=100),
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
     term = (q or "").strip()
-    date_from_obj = _parse_search_date(date_from)
-    date_to_obj = _parse_search_date(date_to, end_of_day=True)
+    date_from_obj = _parse_search_date(date_from, tz_offset_minutes=tz_offset_minutes)
+    date_to_obj = _parse_search_date(
+        date_to,
+        end_of_day=True,
+        tz_offset_minutes=tz_offset_minutes,
+    )
     if len(term) < 2 and date_from_obj is None and date_to_obj is None:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
@@ -1997,13 +2027,18 @@ async def search_messages_in_chat(
     sender_id: Optional[int] = Query(None, ge=1),
     date_from: Optional[str] = Query(None, description="YYYY-MM-DD"),
     date_to: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    tz_offset_minutes: Optional[int] = Query(None, ge=-840, le=840),
     limit: int = Query(40, ge=1, le=100),
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
     term = (q or "").strip()
-    date_from_obj = _parse_search_date(date_from)
-    date_to_obj = _parse_search_date(date_to, end_of_day=True)
+    date_from_obj = _parse_search_date(date_from, tz_offset_minutes=tz_offset_minutes)
+    date_to_obj = _parse_search_date(
+        date_to,
+        end_of_day=True,
+        tz_offset_minutes=tz_offset_minutes,
+    )
     if len(term) < 2 and date_from_obj is None and date_to_obj is None:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
