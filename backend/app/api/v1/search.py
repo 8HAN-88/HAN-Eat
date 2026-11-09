@@ -5,7 +5,11 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from app.core.database import get_db
-from app.core.time_iso import parse_search_bound
+from app.core.time_iso import (
+    is_search_date_only,
+    parse_search_bound,
+    shift_local_search_day,
+)
 from app.core.retired import KITCHEN_GONE_DETAIL
 from app.api.dependencies import get_current_user, get_current_user_required
 from app.models.user import User
@@ -23,6 +27,12 @@ async def search_posts(
     tags: Optional[str] = Query(None, description="Теги (через запятую)"),
     date_from: Optional[str] = Query(None, description="Начальная дата (YYYY-MM-DD)"),
     date_to: Optional[str] = Query(None, description="Конечная дата (YYYY-MM-DD)"),
+    tz_offset_minutes: Optional[int] = Query(
+        None,
+        ge=-840,
+        le=840,
+        description="Смещение телефона от UTC в минутах",
+    ),
     min_likes: Optional[int] = Query(None, ge=0, description="Минимальное количество лайков"),
     min_comments: Optional[int] = Query(None, ge=0, description="Минимальное количество комментариев"),
     sort_by: str = Query("relevance", description="Сортировка (relevance, date, popularity)"),
@@ -51,8 +61,16 @@ async def search_posts(
             tags_list = [tag.strip() for tag in tags.split(',') if tag.strip()]
         
         try:
-            date_from_obj = parse_search_bound(date_from)
-            date_to_obj = parse_search_bound(date_to, end_of_day=True)
+            date_from_obj = shift_local_search_day(
+                parse_search_bound(date_from),
+                tz_offset_minutes,
+                date_only=is_search_date_only(date_from),
+            )
+            date_to_obj = shift_local_search_day(
+                parse_search_bound(date_to, end_of_day=True),
+                tz_offset_minutes,
+                date_only=is_search_date_only(date_to),
+            )
         except ValueError as exc:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

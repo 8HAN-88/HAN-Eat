@@ -1,6 +1,11 @@
 from datetime import datetime, timezone
 
-from app.core.time_iso import parse_search_bound, utc_iso
+from app.core.time_iso import (
+    is_search_date_only,
+    parse_search_bound,
+    shift_local_search_day,
+    utc_iso,
+)
 
 
 def test_naive_utc_gains_z():
@@ -39,4 +44,24 @@ def test_offset_search_bound_is_naive_utc():
 def test_zulu_search_bound():
     assert parse_search_bound("2026-11-08T21:00:00.000Z") == datetime(
         2026, 11, 8, 21, 0, 0
+    )
+
+
+def test_moscow_offset_moves_the_calendar_day():
+    start = shift_local_search_day(
+        parse_search_bound("2026-11-09"),
+        180,
+        date_only=is_search_date_only("2026-11-09"),
+    )
+    end = shift_local_search_day(
+        parse_search_bound("2026-11-09", end_of_day=True),
+        180,
+        date_only=True,
+    )
+    assert start == datetime(2026, 11, 8, 21, 0, 0)
+    assert end == datetime(2026, 11, 9, 20, 59, 59)
+    # An absolute instant is not shifted again.
+    instant = parse_search_bound("2026-11-08T21:00:00Z")
+    assert (
+        shift_local_search_day(instant, 180, date_only=False) == instant
     )

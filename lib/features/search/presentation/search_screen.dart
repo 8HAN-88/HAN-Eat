@@ -219,10 +219,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       tags: _selectedTags.isNotEmpty ? _selectedTags.join(',') : null,
       dateFrom: _dateFrom == null
           ? null
-          : searchDayBoundIso(_dateFrom!, end: false),
+          : '${searchDayKey(_dateFrom!)}@${searchTzOffsetMinutes()}',
       dateTo: _dateTo == null
           ? null
-          : searchDayBoundIso(_dateTo!, end: true),
+          : '${searchDayKey(_dateTo!)}@${searchTzOffsetMinutes()}',
       minLikes: _minLikes,
       minComments: _minComments,
     );
