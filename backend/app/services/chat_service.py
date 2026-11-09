@@ -555,19 +555,47 @@ class ChatService:
         ordered = [by_id[uid] for uid in reader_ids if uid in by_id]
         return ordered, other_count
 
-    def other_member_read_cursors(
+    def other_member_read_rows(
         self, conversation_id: int, exclude_user_id: int
     ) -> list:
-        """last_read_message_id for every member except exclude_user_id."""
-        others = (
-            self.db.query(ConversationMember.last_read_message_id)
+        """(user_id, last_read_message_id) for every other member.
+
+        A missing cursor stays None so the member still counts as unread.
+        """
+        return (
+            self.db.query(
+                ConversationMember.user_id,
+                ConversationMember.last_read_message_id,
+            )
             .filter(
                 ConversationMember.conversation_id == conversation_id,
                 ConversationMember.user_id != exclude_user_id,
             )
             .all()
         )
-        return [row[0] for row in others]
+
+    def other_member_read_cursors(
+        self, conversation_id: int, exclude_user_id: int
+    ) -> list:
+        """last_read_message_id for every member except exclude_user_id."""
+        return [
+            cursor
+            for _, cursor in self.other_member_read_rows(
+                conversation_id, exclude_user_id
+            )
+        ]
+
+    def other_member_read_cursor_map(
+        self, conversation_id: int, exclude_user_id: int
+    ) -> dict:
+        """user_id -> last read id. Members who never opened the chat are omitted."""
+        return {
+            int(uid): int(cursor)
+            for uid, cursor in self.other_member_read_rows(
+                conversation_id, exclude_user_id
+            )
+            if cursor is not None
+        }
 
     def group_read_count(
         self, conversation_id: int, message_id: int, sender_id: int

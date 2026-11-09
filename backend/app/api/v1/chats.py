@@ -1720,11 +1720,16 @@ async def list_messages(
     from app.services.chat_poll_service import enrich_messages_poll_batch
 
     poll_cache = enrich_messages_poll_batch(db, messages, current_user.id)
-    group_read_cursors = (
-        svc.other_member_read_cursors(conversation_id, current_user.id)
-        if conv is not None and conv.type == "group"
-        else None
-    )
+    group_read_cursors = None
+    group_read_cursor_by_user: Dict[int, int] = {}
+    if conv is not None and conv.type == "group":
+        read_rows = svc.other_member_read_rows(conversation_id, current_user.id)
+        group_read_cursors = [cursor for _, cursor in read_rows]
+        group_read_cursor_by_user = {
+            int(uid): int(cursor)
+            for uid, cursor in read_rows
+            if cursor is not None
+        }
     fwd_ids = [
         int(m.forwarded_from_message_id)
         for m in messages
@@ -1825,6 +1830,7 @@ async def list_messages(
         next_cursor=next_cursor,
         pinned_message=pinned_resp if after_id is None else None,
         pinned_messages=pinned_resps if after_id is None else [],
+        group_read_cursors=group_read_cursor_by_user,
     )
 
 

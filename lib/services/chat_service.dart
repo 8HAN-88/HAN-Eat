@@ -376,12 +376,25 @@ class ChatService {
     return out;
   }
 
+  static Map<int, int> parseGroupReadCursors(Object? raw) {
+    if (raw is! Map) return const {};
+    final out = <int, int>{};
+    raw.forEach((key, value) {
+      final id = _chatJsonIntOrNull(key);
+      final cursor = _chatJsonIntOrNull(value);
+      if (id == null || id <= 0 || cursor == null || cursor <= 0) return;
+      out[id] = cursor;
+    });
+    return out;
+  }
+
   static ({
     List<ChatMessage> items,
     bool hasMore,
     int? nextCursor,
     ChatMessage? pinnedMessage,
     List<ChatMessage> pinnedMessages,
+    Map<int, int> groupReadCursors,
   }) parseMessagePage(Object? raw) {
     final data = _chatJsonMap(raw) ?? const <String, dynamic>{};
     final items = parseMessageList(data);
@@ -419,6 +432,7 @@ class ChatService {
       nextCursor: _chatJsonIntOrNull(data['next_cursor']),
       pinnedMessage: pinnedMessage,
       pinnedMessages: pinnedMessages,
+      groupReadCursors: parseGroupReadCursors(data['group_read_cursors']),
     );
   }
 
@@ -542,6 +556,7 @@ class ChatService {
         int? nextCursor,
         ChatMessage? pinnedMessage,
         List<ChatMessage> pinnedMessages,
+        Map<int, int> groupReadCursors,
       })> listMessages({
     required int conversationId,
     int? cursor,
