@@ -29,10 +29,17 @@ void main() {
   });
 
   group('searchDateQueryBounds', () {
-    test('formats YYYY-MM-DD for same day', () {
+    test('covers the local calendar day in UTC', () {
       final bounds = searchDateQueryBounds(DateTime(2026, 8, 8, 15));
-      expect(bounds.dateFrom, '2026-08-08');
-      expect(bounds.dateTo, '2026-08-08');
+      final from = DateTime.parse(bounds.dateFrom).toLocal();
+      final to = DateTime.parse(bounds.dateTo).toLocal();
+      expect(from, DateTime(2026, 8, 8));
+      expect(to.year, 2026);
+      expect(to.month, 8);
+      expect(to.day, 8);
+      expect(to.hour, 23);
+      expect(to.minute, 59);
+      expect(to.second, 59);
     });
   });
 

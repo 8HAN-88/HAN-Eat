@@ -1,3 +1,5 @@
+import '../../../utils/api_datetime.dart';
+
 // Helpers for Telegram-like date filter in in-chat search.
 
 bool messageMatchesSearchDate(DateTime createdAt, DateTime? day) {
@@ -7,12 +9,12 @@ bool messageMatchesSearchDate(DateTime createdAt, DateTime? day) {
   return local.year == d.year && local.month == d.month && local.day == d.day;
 }
 
-/// Inclusive calendar-day bounds as `YYYY-MM-DD` query params.
+/// Inclusive bounds of the local calendar day, as UTC instants.
 ({String dateFrom, String dateTo}) searchDateQueryBounds(DateTime day) {
-  final d = DateTime(day.year, day.month, day.day);
-  String pad(int n) => n.toString().padLeft(2, '0');
-  final key = '${d.year}-${pad(d.month)}-${pad(d.day)}';
-  return (dateFrom: key, dateTo: key);
+  return (
+    dateFrom: searchDayBoundIso(day, end: false),
+    dateTo: searchDayBoundIso(day, end: true),
+  );
 }
 
 String searchDateChipLabel(DateTime day) {
