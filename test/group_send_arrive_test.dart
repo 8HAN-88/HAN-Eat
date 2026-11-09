@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:han_eat/features/chat/application/group_read_cursors.dart';
 import 'package:han_eat/services/chat_service.dart';
 import 'package:han_eat/services/chat_stream_service.dart';
 
@@ -67,6 +68,7 @@ void main() {
     expect(page.nextCursor, 80);
     expect(page.pinnedMessage?.id, 70);
     expect(page.pinnedMessages.single.content, 'Закреп');
+    expect(page.groupReadCursors, isEmpty);
 
     final fresh = ChatService.parseMessageList({
       'items': [
@@ -132,5 +134,40 @@ void main() {
     expect(incoming.id, 94);
     expect(incoming.content, 'Моё');
     expect(incoming.readCount, 2);
+  });
+
+  test('group read cursors stop a later event from counting the same member twice', () {
+    final page = ChatService.parseMessagePage({
+      'items': const [],
+      'group_read_cursors': {'4': 100, '5': 0, 'bad': 'x'},
+    });
+    expect(page.groupReadCursors, {4: 100});
+    final seeded = mergeGroupReadCursors(const {}, page.groupReadCursors);
+    expect(
+      groupReadReceiptCovers(
+        messageId: 100,
+        previousCursor: seeded[4]!,
+        readUpTo: 105,
+      ),
+      isFalse,
+    );
+    expect(
+      groupReadReceiptCovers(
+        messageId: 105,
+        previousCursor: seeded[4]!,
+        readUpTo: 105,
+      ),
+      isTrue,
+    );
+    expect(
+      groupReadReceiptCovers(
+        messageId: 10,
+        previousCursor: 0,
+        readUpTo: 10,
+      ),
+      isTrue,
+    );
+    final kept = mergeGroupReadCursors({4: 105}, {4: 100});
+    expect(kept[4], 105);
   });
 }

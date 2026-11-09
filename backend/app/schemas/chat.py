@@ -1,6 +1,6 @@
 """Схемы API чатов и контактов."""
 from datetime import datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -179,6 +179,9 @@ class MessageListResponse(BaseModel):
     next_cursor: Optional[int] = None
     pinned_message: Optional[MessageResponse] = None
     pinned_messages: List[MessageResponse] = []
+    # Other members' read cursors. The client uses these so a later
+    # read event does not count a member who was already included.
+    group_read_cursors: Dict[int, int] = Field(default_factory=dict)
 
 
 class ConversationDraftRequest(BaseModel):

@@ -75,6 +75,7 @@ import '../application/chat_reaction_jumps.dart';
 import '../application/chat_reaction_optimistic.dart';
 import '../application/chat_search_date.dart';
 import '../application/chat_message_integrate.dart';
+import '../application/group_read_cursors.dart';
 import '../application/chat_inbox_optimistic.dart';
 import '../application/chat_media_precache.dart';
 import '../application/chat_open_anchor.dart';
@@ -6278,19 +6279,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   void _applyReadReceipt(int readUpToId, {int? readerId}) {
     if (_conversation.isGroup) {
-      final prev =
-          (readerId != null) ? (_peerGroupReadCursors[readerId] ?? 0) : 0;
-      if (readerId != null) {
-        final known = _peerGroupReadCursors[readerId] ?? 0;
-        if (readUpToId <= known) return;
-        _peerGroupReadCursors[readerId] = readUpToId;
+      if (readerId == null) {
+        _applyDeliveredReceipt(readUpToId);
+        return;
       }
+      final prev = _peerGroupReadCursors[readerId] ?? 0;
+      if (readUpToId <= prev) return;
+      _peerGroupReadCursors[readerId] = readUpToId;
       final others = math.max(0, _conversation.memberCount - 1);
       setState(() {
         for (var i = 0; i < _messages.length; i++) {
           final m = _messages[i];
           if (!m.isMine || m.id <= 0) continue;
-          if (m.id <= prev || m.id > readUpToId) {
+          if (!groupReadReceiptCovers(
+            messageId: m.id,
+            previousCursor: prev,
+            readUpTo: readUpToId,
+          )) {
             if (m.id <= readUpToId && !m.isDelivered) {
               _messages[i] = m.copyWith(isDelivered: true);
             }
@@ -11993,6 +11998,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         int? nextCursor,
         ChatMessage? pinnedMessage,
         List<ChatMessage> pinnedMessages,
+        Map<int, int> groupReadCursors,
       }) result;
       final reusePrefetch = refresh &&
           _activeTopicIdForSend == null &&
@@ -12006,6 +12012,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             nextCursor: page.nextCursor,
             pinnedMessage: page.pinnedMessage,
             pinnedMessages: page.pinnedMessages,
+            groupReadCursors: page.groupReadCursors,
           );
         } else {
           result = await ChatService.listMessages(
@@ -12022,7 +12029,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         );
       }
       if (!mounted || seq != _messageLoadSeq) return;
+      final seededCursors = result.groupReadCursors.isEmpty
+          ? null
+          : mergeGroupReadCursors(
+              _peerGroupReadCursors,
+              result.groupReadCursors,
+            );
       setState(() {
+        if (seededCursors != null) {
+          _peerGroupReadCursors
+            ..clear()
+            ..addAll(seededCursors);
+        }
         if (refresh) {
           final closedPolls = <int, ChatMessage>{
             for (final m in _messages)
