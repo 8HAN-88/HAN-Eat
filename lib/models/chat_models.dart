@@ -1,4 +1,5 @@
 import '../utils/api_datetime.dart';
+import '../utils/presence_format.dart';
 import 'chat_poll.dart';
 
 export 'chat_poll.dart'
@@ -74,11 +75,7 @@ class ChatUserBrief {
   final String? sendRestrictionReason;
   final int paidMessageStars;
 
-  bool get isOnline {
-    final seen = lastSeenAt;
-    if (seen == null) return false;
-    return DateTime.now().difference(seen.toLocal()).inMinutes < 3;
-  }
+  bool get isOnline => isRecentlyOnline(lastSeenAt);
 
   String get displayName {
     final n = name?.trim();

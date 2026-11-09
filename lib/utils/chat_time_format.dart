@@ -51,6 +51,23 @@ String formatRelativeTime(
   return _formatRelativeDay(local, withYear: withYear);
 }
 
+/// 21:00 today, or 21:00 tomorrow once that slot is less than 30 seconds away.
+/// The label follows that calendar day, so after 21:00 it is not
+/// «Сегодня вечером».
+({DateTime at, String label}) scheduleEveningPreset(DateTime now) {
+  final clock = now.toLocal();
+  var at = DateTime(clock.year, clock.month, clock.day, 21);
+  if (!at.isAfter(clock.add(const Duration(seconds: 30)))) {
+    at = DateTime(clock.year, clock.month, clock.day + 1, 21);
+  }
+  final sameDay =
+      at.year == clock.year && at.month == clock.month && at.day == clock.day;
+  return (
+    at: at,
+    label: sameDay ? 'Сегодня вечером' : 'Завтра вечером',
+  );
+}
+
 String _formatRelativeDay(DateTime local, {required bool withYear}) {
   final pattern = withYear ? 'd MMM yyyy' : 'd MMM';
   try {

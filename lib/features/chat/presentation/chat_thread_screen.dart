@@ -12670,16 +12670,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final initial = initialDateTime != null && initialDateTime.isAfter(now)
         ? initialDateTime
         : now.add(const Duration(minutes: 10));
-    DateTime atOrNextDay(int hour, int minute) {
-      var dt = DateTime(now.year, now.month, now.day, hour, minute);
-      if (!dt.isAfter(now.add(const Duration(seconds: 30)))) {
-        dt = dt.add(const Duration(days: 1));
-      }
-      return dt;
-    }
-
     final inOneHour = now.add(const Duration(hours: 1));
-    final tonight = atOrNextDay(21, 0);
+    final evening = scheduleEveningPreset(now);
+    final tonight = evening.at;
     final tomorrowMorning = DateTime(
       now.year,
       now.month,
@@ -12704,7 +12697,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               ),
               ListTile(
                 leading: const Icon(Icons.nights_stay_outlined),
-                title: const Text('Сегодня вечером'),
+                title: Text(evening.label),
                 subtitle: Text(presetFmt.format(tonight)),
                 onTap: () => Navigator.pop(ctx, 'tonight'),
               ),
