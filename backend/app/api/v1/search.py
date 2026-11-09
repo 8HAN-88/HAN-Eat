@@ -4,8 +4,8 @@ API endpoints для поиска
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import Optional, List
-from datetime import datetime
 from app.core.database import get_db
+from app.core.time_iso import parse_search_bound
 from app.core.retired import KITCHEN_GONE_DETAIL
 from app.api.dependencies import get_current_user, get_current_user_required
 from app.models.user import User
@@ -50,28 +50,14 @@ async def search_posts(
         if tags:
             tags_list = [tag.strip() for tag in tags.split(',') if tag.strip()]
         
-        # Парсим даты
-        date_from_obj = None
-        if date_from:
-            try:
-                date_from_obj = datetime.strptime(date_from, "%Y-%m-%d")
-            except ValueError:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Неверный формат даты. Используйте ГГГГ-ММ-ДД"
-                )
-        
-        date_to_obj = None
-        if date_to:
-            try:
-                date_to_obj = datetime.strptime(date_to, "%Y-%m-%d")
-                # Добавляем время конца дня
-                date_to_obj = date_to_obj.replace(hour=23, minute=59, second=59)
-            except ValueError:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Неверный формат даты. Используйте ГГГГ-ММ-ДД"
-                )
+        try:
+            date_from_obj = parse_search_bound(date_from)
+            date_to_obj = parse_search_bound(date_to, end_of_day=True)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Неверный формат даты. Используйте ГГГГ-ММ-ДД",
+            ) from exc
         
         # Валидация sort_by
         if sort_by not in ["relevance", "date", "popularity"]:
@@ -104,7 +90,9 @@ async def search_posts(
         )
         
         return results
-    except Exception as e:
+    except HTTPException:
+        raise
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Не удалось выполнить поиск"

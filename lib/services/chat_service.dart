@@ -9,6 +9,7 @@ import '../core/network/api_rate_limit_backoff.dart';
 import '../core/network/haneat_http_client.dart';
 import '../core/network/weak_net_policy.dart';
 import '../models/chat_models.dart';
+import '../utils/api_datetime.dart';
 import '../utils/api_error_parser.dart';
 import 'auth_service.dart';
 import 'chat_cache_service.dart';
@@ -2277,6 +2278,8 @@ class ChatService {
     String kind = 'all',
     int? cursor,
     int? senderId,
+    DateTime? dateFrom,
+    DateTime? dateTo,
     int limit = 60,
   }) async {
     final uri = Uri.parse('$_base/chats/$conversationId/media').replace(
@@ -2284,6 +2287,9 @@ class ChatService {
         'kind': kind,
         if (cursor != null) 'cursor': '$cursor',
         if (senderId != null) 'sender_id': '$senderId',
+        if (dateFrom != null)
+          'date_from': searchDayBoundIso(dateFrom, end: false),
+        if (dateTo != null) 'date_to': searchDayBoundIso(dateTo, end: true),
         'limit': '$limit',
       },
     );
@@ -2307,15 +2313,9 @@ class ChatService {
     int limit = 40,
   }) async {
     final q = query.trim();
-    String? fmt(DateTime? d) {
-      if (d == null) return null;
-      final local = DateTime(d.year, d.month, d.day);
-      String pad(int n) => n.toString().padLeft(2, '0');
-      return '${local.year}-${pad(local.month)}-${pad(local.day)}';
-    }
-
-    final fromKey = fmt(dateFrom);
-    final toKey = fmt(dateTo);
+    final fromKey =
+        dateFrom == null ? null : searchDayBoundIso(dateFrom, end: false);
+    final toKey = dateTo == null ? null : searchDayBoundIso(dateTo, end: true);
     if (q.length < 2 && fromKey == null && toKey == null) return const [];
     final params = <String, String>{
       if (q.length >= 2) 'q': q,

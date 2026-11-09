@@ -19,6 +19,7 @@ import 'package:han_eat/widgets/post_card_skeleton.dart';
 import 'package:han_eat/widgets/highlighted_text.dart';
 import 'package:han_eat/widgets/app_gradient_background.dart';
 import 'package:han_eat/app/app_router.dart';
+import '../../../utils/api_datetime.dart';
 import '../../../utils/api_error_parser.dart';
 import '../application/search_scope.dart';
 
@@ -216,8 +217,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       postType: _selectedPostType,
       sortBy: _selectedSortBy,
       tags: _selectedTags.isNotEmpty ? _selectedTags.join(',') : null,
-      dateFrom: _dateFrom?.toIso8601String().split('T').first,
-      dateTo: _dateTo?.toIso8601String().split('T').first,
+      dateFrom: _dateFrom == null
+          ? null
+          : searchDayBoundIso(_dateFrom!, end: false),
+      dateTo: _dateTo == null
+          ? null
+          : searchDayBoundIso(_dateTo!, end: true),
       minLikes: _minLikes,
       minComments: _minComments,
     );

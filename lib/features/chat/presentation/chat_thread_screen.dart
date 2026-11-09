@@ -7633,6 +7633,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             conversationId: widget.conversationId,
             kind: kind,
             senderId: senderId,
+            dateFrom: dateDay,
+            dateTo: dateDay,
             limit: 60,
           );
           if (!mounted || seq != _serverSearchSeq) return;
@@ -7680,6 +7682,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             conversationId: widget.conversationId,
             kind: kind,
             senderId: senderId,
+            dateFrom: dateDay,
+            dateTo: dateDay,
             limit: 60,
           );
           if (!mounted || seq != _serverSearchSeq) return;

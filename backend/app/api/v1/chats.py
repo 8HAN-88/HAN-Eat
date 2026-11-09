@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user_required
 from app.core.config import settings
-from app.core.time_iso import utc_iso
+from app.core.time_iso import parse_search_bound, utc_iso
 from app.core.database import SessionLocal, get_db
 from app.models.user import User
 from app.schemas.chat import (
@@ -1835,6 +1835,8 @@ async def list_chat_media(
     ),
     cursor: Optional[int] = Query(None),
     sender_id: Optional[int] = Query(None, ge=1),
+    date_from: Optional[str] = Query(None, description="YYYY-MM-DD or ISO instant"),
+    date_to: Optional[str] = Query(None, description="YYYY-MM-DD or ISO instant"),
     limit: int = Query(60, ge=1, le=100),
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
@@ -1849,6 +1851,8 @@ async def list_chat_media(
             cursor=cursor,
             limit=limit,
             sender_id=sender_id,
+            date_from=_parse_search_date(date_from),
+            date_to=_parse_search_date(date_to, end_of_day=True),
         )
     except ValueError:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
@@ -1927,18 +1931,13 @@ async def list_chat_media(
 
 
 def _parse_search_date(value: Optional[str], *, end_of_day: bool = False) -> Optional[datetime]:
-    if not value:
-        return None
     try:
-        parsed = datetime.strptime(value, "%Y-%m-%d")
+        return parse_search_bound(value, end_of_day=end_of_day)
     except ValueError as exc:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             detail="Неверный формат даты. Используйте ГГГГ-ММ-ДД",
         ) from exc
-    if end_of_day:
-        return parsed.replace(hour=23, minute=59, second=59)
-    return parsed
 
 
 @router.get("/chats/messages/search", response_model=MessageSearchResponse)

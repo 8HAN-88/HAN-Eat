@@ -2650,6 +2650,8 @@ class ChatService:
         cursor: Optional[int] = None,
         limit: int = 60,
         sender_id: Optional[int] = None,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
     ) -> Tuple[List[Message], bool]:
         """Shared media / links for a chat (Telegram-style gallery source)."""
         if not self._is_member(conversation_id, user_id):
@@ -2676,6 +2678,10 @@ class ChatService:
             q = q.filter(Message.id < cursor)
         if sender_id is not None:
             q = q.filter(Message.sender_id == int(sender_id))
+        if date_from is not None:
+            q = q.filter(Message.created_at >= date_from)
+        if date_to is not None:
+            q = q.filter(Message.created_at <= date_to)
 
         kind_norm = (kind or "all").strip().lower()
         if kind_norm == "photos":

@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'auth_service.dart';
 import 'api_service.dart';
 import '../models/post_model.dart';
+import '../utils/api_datetime.dart';
 
 /// Сервис для полнотекстового поиска постов
 class SearchService {
@@ -32,8 +33,9 @@ class SearchService {
       if (authorId != null) 'author_id': authorId.toString(),
       if (channelId != null) 'channel_id': channelId.toString(),
       if (tags != null && tags.isNotEmpty) 'tags': tags.join(','),
-      if (dateFrom != null) 'date_from': dateFrom.toIso8601String().split('T')[0],
-      if (dateTo != null) 'date_to': dateTo.toIso8601String().split('T')[0],
+      if (dateFrom != null)
+        'date_from': searchDayBoundIso(dateFrom, end: false),
+      if (dateTo != null) 'date_to': searchDayBoundIso(dateTo, end: true),
       if (minLikes != null) 'min_likes': minLikes.toString(),
       if (minComments != null) 'min_comments': minComments.toString(),
       'sort_by': sortBy,
