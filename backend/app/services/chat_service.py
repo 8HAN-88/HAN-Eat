@@ -562,10 +562,22 @@ class ChatService:
 
         A missing cursor stays None so the member still counts as unread.
         """
+        return [
+            (uid, read_id)
+            for uid, read_id, _delivered in self.other_member_receipt_rows(
+                conversation_id, exclude_user_id
+            )
+        ]
+
+    def other_member_receipt_rows(
+        self, conversation_id: int, exclude_user_id: int
+    ) -> list:
+        """(user_id, last_read_message_id, last_delivered_message_id)."""
         return (
             self.db.query(
                 ConversationMember.user_id,
                 ConversationMember.last_read_message_id,
+                ConversationMember.last_delivered_message_id,
             )
             .filter(
                 ConversationMember.conversation_id == conversation_id,
@@ -573,6 +585,24 @@ class ChatService:
             )
             .all()
         )
+
+    def other_member_delivery_cursor_map(
+        self, conversation_id: int, exclude_user_id: int
+    ) -> dict:
+        """user_id -> furthest delivered or read id. Never-seen members are omitted."""
+        out = {}
+        for uid, read_id, delivered_id in self.other_member_receipt_rows(
+            conversation_id, exclude_user_id
+        ):
+            values = [
+                int(value)
+                for value in (read_id, delivered_id)
+                if value is not None
+            ]
+            if not values:
+                continue
+            out[int(uid)] = max(values)
+        return out
 
     def other_member_read_cursors(
         self, conversation_id: int, exclude_user_id: int

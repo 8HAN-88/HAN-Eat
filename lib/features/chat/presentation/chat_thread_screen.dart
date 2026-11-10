@@ -609,6 +609,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   final Map<int, String> _typingActivityByUser = <int, String>{};
   /// Group: peer userId → last_read_message_id seen via SSE (for read_count).
   final Map<int, int> _peerGroupReadCursors = <int, int>{};
+  /// Group: peer userId → furthest delivered or read id.
+  final Map<int, int> _peerGroupDeliveryCursors = <int, int>{};
   bool _selectionMode = false;
   final _selectedMessageIds = <int>{};
   final _votingPollIds = <int>{};
@@ -3202,7 +3204,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (delivererId == myId) return;
       final deliveredId =
           ChatService.parseEventInt(event['last_delivered_message_id']);
-      if (deliveredId != null) _applyDeliveredReceipt(deliveredId);
+      if (deliveredId != null) {
+        _applyDeliveredReceipt(deliveredId, userId: delivererId);
+      }
       return;
     }
     if (type == 'message.read') {
@@ -6266,7 +6270,35 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
-  void _applyDeliveredReceipt(int deliveredUpToId) {
+  void _noteGroupDelivery(int userId, int upTo) {
+    if (userId <= 0 || upTo <= 0) return;
+    final known = _peerGroupDeliveryCursors[userId] ?? 0;
+    if (upTo > known) _peerGroupDeliveryCursors[userId] = upTo;
+  }
+
+  bool _groupMessageDeliveredToAll(int messageId) {
+    return groupDeliveredToAll(
+      messageId: messageId,
+      cursors: _peerGroupDeliveryCursors,
+      otherMemberCount: math.max(0, _conversation.memberCount - 1),
+    );
+  }
+
+  void _applyDeliveredReceipt(int deliveredUpToId, {int? userId}) {
+    if (_conversation.isGroup) {
+      if (userId == null) return;
+      _noteGroupDelivery(userId, deliveredUpToId);
+      setState(() {
+        for (var i = 0; i < _messages.length; i++) {
+          final m = _messages[i];
+          if (!m.isMine || m.id <= 0 || m.isDelivered) continue;
+          if (_groupMessageDeliveredToAll(m.id)) {
+            _messages[i] = m.copyWith(isDelivered: true);
+          }
+        }
+      });
+      return;
+    }
     setState(() {
       for (var i = 0; i < _messages.length; i++) {
         final m = _messages[i];
@@ -6279,13 +6311,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   void _applyReadReceipt(int readUpToId, {int? readerId}) {
     if (_conversation.isGroup) {
-      if (readerId == null) {
-        _applyDeliveredReceipt(readUpToId);
-        return;
-      }
+      if (readerId == null) return;
       final prev = _peerGroupReadCursors[readerId] ?? 0;
       if (readUpToId <= prev) return;
       _peerGroupReadCursors[readerId] = readUpToId;
+      _noteGroupDelivery(readerId, readUpToId);
       final others = math.max(0, _conversation.memberCount - 1);
       setState(() {
         for (var i = 0; i < _messages.length; i++) {
@@ -6296,7 +6326,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             previousCursor: prev,
             readUpTo: readUpToId,
           )) {
-            if (m.id <= readUpToId && !m.isDelivered) {
+            if (!m.isDelivered && _groupMessageDeliveredToAll(m.id)) {
               _messages[i] = m.copyWith(isDelivered: true);
             }
             continue;
@@ -6305,7 +6335,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           final allRead = others > 0 && nextCount >= others;
           _messages[i] = m.copyWith(
             readCount: nextCount,
-            isDelivered: true,
+            isDelivered: m.isDelivered || _groupMessageDeliveredToAll(m.id),
             isRead: allRead || m.isRead,
           );
         }
@@ -11999,6 +12029,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         ChatMessage? pinnedMessage,
         List<ChatMessage> pinnedMessages,
         Map<int, int> groupReadCursors,
+        Map<int, int> groupDeliveryCursors,
       }) result;
       final reusePrefetch = refresh &&
           _activeTopicIdForSend == null &&
@@ -12013,6 +12044,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             pinnedMessage: page.pinnedMessage,
             pinnedMessages: page.pinnedMessages,
             groupReadCursors: page.groupReadCursors,
+            groupDeliveryCursors: page.groupDeliveryCursors,
           );
         } else {
           result = await ChatService.listMessages(
@@ -12035,11 +12067,22 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               _peerGroupReadCursors,
               result.groupReadCursors,
             );
+      final seededDelivery = result.groupDeliveryCursors.isEmpty
+          ? null
+          : adoptGroupCursors(
+              _peerGroupDeliveryCursors,
+              result.groupDeliveryCursors,
+            );
       setState(() {
         if (seededCursors != null) {
           _peerGroupReadCursors
             ..clear()
             ..addAll(seededCursors);
+        }
+        if (seededDelivery != null) {
+          _peerGroupDeliveryCursors
+            ..clear()
+            ..addAll(seededDelivery);
         }
         if (refresh) {
           final closedPolls = <int, ChatMessage>{

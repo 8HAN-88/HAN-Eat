@@ -1722,14 +1722,25 @@ async def list_messages(
     poll_cache = enrich_messages_poll_batch(db, messages, current_user.id)
     group_read_cursors = None
     group_read_cursor_by_user: Dict[int, int] = {}
+    group_delivery_cursor_by_user: Dict[int, int] = {}
     if conv is not None and conv.type == "group":
-        read_rows = svc.other_member_read_rows(conversation_id, current_user.id)
-        group_read_cursors = [cursor for _, cursor in read_rows]
+        receipt_rows = svc.other_member_receipt_rows(
+            conversation_id, current_user.id
+        )
+        group_read_cursors = [read_id for _, read_id, _delivered in receipt_rows]
         group_read_cursor_by_user = {
-            int(uid): int(cursor)
-            for uid, cursor in read_rows
-            if cursor is not None
+            int(uid): int(read_id)
+            for uid, read_id, _delivered in receipt_rows
+            if read_id is not None
         }
+        for uid, read_id, delivered_id in receipt_rows:
+            reached = [
+                int(value)
+                for value in (read_id, delivered_id)
+                if value is not None
+            ]
+            if reached:
+                group_delivery_cursor_by_user[int(uid)] = max(reached)
     fwd_ids = [
         int(m.forwarded_from_message_id)
         for m in messages
@@ -1831,6 +1842,7 @@ async def list_messages(
         pinned_message=pinned_resp if after_id is None else None,
         pinned_messages=pinned_resps if after_id is None else [],
         group_read_cursors=group_read_cursor_by_user,
+        group_delivery_cursors=group_delivery_cursor_by_user,
     )
 
 

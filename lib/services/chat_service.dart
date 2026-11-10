@@ -395,6 +395,7 @@ class ChatService {
     ChatMessage? pinnedMessage,
     List<ChatMessage> pinnedMessages,
     Map<int, int> groupReadCursors,
+    Map<int, int> groupDeliveryCursors,
   }) parseMessagePage(Object? raw) {
     final data = _chatJsonMap(raw) ?? const <String, dynamic>{};
     final items = parseMessageList(data);
@@ -433,6 +434,8 @@ class ChatService {
       pinnedMessage: pinnedMessage,
       pinnedMessages: pinnedMessages,
       groupReadCursors: parseGroupReadCursors(data['group_read_cursors']),
+      groupDeliveryCursors:
+          parseGroupReadCursors(data['group_delivery_cursors']),
     );
   }
 
@@ -557,6 +560,7 @@ class ChatService {
         ChatMessage? pinnedMessage,
         List<ChatMessage> pinnedMessages,
         Map<int, int> groupReadCursors,
+        Map<int, int> groupDeliveryCursors,
       })> listMessages({
     required int conversationId,
     int? cursor,

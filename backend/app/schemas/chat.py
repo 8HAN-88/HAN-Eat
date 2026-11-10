@@ -182,6 +182,9 @@ class MessageListResponse(BaseModel):
     # Other members' read cursors. The client uses these so a later
     # read event does not count a member who was already included.
     group_read_cursors: Dict[int, int] = Field(default_factory=dict)
+    # Furthest delivered or read id per other member. Double ticks in a
+    # group mean every other member has the message, not just the first one.
+    group_delivery_cursors: Dict[int, int] = Field(default_factory=dict)
 
 
 class ConversationDraftRequest(BaseModel):
