@@ -206,7 +206,7 @@ class ChatHubTile extends StatelessWidget {
                           ],
                         ],
                         Text(
-                          chatHubFormatInboxTime(chat.updatedAt),
+                          chatHubFormatInboxTime(chat.activityAt),
                           style:
                               Theme.of(context).textTheme.labelSmall?.copyWith(
                                     color: scheme.onSurfaceVariant,

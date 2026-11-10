@@ -672,6 +672,10 @@ class ChatConversation {
 
   bool get isGroup => type == 'group';
 
+  /// Clock and inbox order follow the last message. Renaming a group or
+  /// editing an older message bumps [updatedAt] without a new preview.
+  DateTime get activityAt => lastMessage?.createdAt ?? updatedAt;
+
   bool get isSaved => type == 'saved';
 
   String get displayTitle {

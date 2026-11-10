@@ -27,6 +27,27 @@ ChatConversation _chat({
 }
 
 void main() {
+  test('inbox time follows the last message, not a settings bump', () {
+    final sent = DateTime(2026, 8, 16, 12);
+    final bumped = DateTime(2026, 8, 16, 18);
+    final chat = ChatConversation(
+      id: 7,
+      type: 'group',
+      title: 'Кухня',
+      updatedAt: bumped,
+      lastMessage: ChatMessage(
+        id: 4,
+        conversationId: 7,
+        senderId: 3,
+        type: 'text',
+        content: 'старое',
+        createdAt: sent,
+      ),
+    );
+    expect(chat.activityAt, sent);
+    expect(_chat().activityAt, DateTime(2026, 8, 16, 12));
+  });
+
   test('applyMute sets timed mute and notify mode', () {
     final until = DateTime(2026, 8, 17, 9);
     final next = ChatInboxOptimistic.applyMute(
