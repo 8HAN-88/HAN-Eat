@@ -13,6 +13,7 @@ class ChatThreadPrefetchPage {
     this.pinnedMessage,
     this.pinnedMessages = const [],
     this.groupReadCursors = const {},
+    this.groupDeliveryCursors = const {},
     required this.fetchedAt,
   });
 
@@ -22,6 +23,7 @@ class ChatThreadPrefetchPage {
   final ChatMessage? pinnedMessage;
   final List<ChatMessage> pinnedMessages;
   final Map<int, int> groupReadCursors;
+  final Map<int, int> groupDeliveryCursors;
   final DateTime fetchedAt;
 
   bool isFresh([Duration maxAge = ChatThreadPrefetch.freshnessWindow]) {
@@ -83,6 +85,7 @@ class ChatThreadPrefetch {
         pinnedMessage: result.pinnedMessage,
         pinnedMessages: result.pinnedMessages,
         groupReadCursors: result.groupReadCursors,
+        groupDeliveryCursors: result.groupDeliveryCursors,
         fetchedAt: DateTime.now(),
       );
       _fresh[conversationId] = fetched;

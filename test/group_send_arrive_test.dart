@@ -170,4 +170,38 @@ void main() {
     final kept = mergeGroupReadCursors({4: 105}, {4: 100});
     expect(kept[4], 105);
   });
+
+  test('group double tick waits until every other member has the message', () {
+    expect(
+      groupDeliveredToAll(
+        messageId: 40,
+        cursors: const {4: 40},
+        otherMemberCount: 2,
+      ),
+      isFalse,
+    );
+    expect(
+      groupDeliveredToAll(
+        messageId: 40,
+        cursors: const {4: 40, 5: 12},
+        otherMemberCount: 2,
+      ),
+      isFalse,
+    );
+    expect(
+      groupDeliveredToAll(
+        messageId: 40,
+        cursors: const {4: 40, 5: 40},
+        otherMemberCount: 2,
+      ),
+      isTrue,
+    );
+    final adopted = adoptGroupCursors(
+      const {4: 80, 9: 20},
+      const {4: 50, 5: 30},
+    );
+    expect(adopted.containsKey(9), isFalse);
+    expect(adopted[4], 80);
+    expect(adopted[5], 30);
+  });
 }
