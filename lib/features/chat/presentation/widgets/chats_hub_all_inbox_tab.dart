@@ -1237,6 +1237,8 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         return b.sortAt.compareTo(a.sortAt);
       });
 
+    archivedChats = [...archivedChats]
+      ..sort((a, b) => b.activityAt.compareTo(a.activityAt));
     final archivedPreview = archivedChats.isEmpty
         ? null
         : () {

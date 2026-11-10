@@ -11,7 +11,7 @@ class ChatInboxEntry extends InboxHubEntry {
   final ChatConversation chat;
 
   @override
-  DateTime get sortAt => chat.updatedAt;
+  DateTime get sortAt => chat.activityAt;
 }
 
 class ChannelInboxEntry extends InboxHubEntry {

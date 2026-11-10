@@ -235,6 +235,7 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
           failedChannels++;
         }
       }
+      chatItems.sort((a, b) => b.activityAt.compareTo(a.activityAt));
       channels.sort(
         (a, b) => (b.lastPostAt ?? b.createdAt)
             .compareTo(a.lastPostAt ?? a.createdAt),
@@ -857,9 +858,7 @@ class _ArchivedChatTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  chatHubFormatInboxTime(
-                    last?.createdAt ?? chat.updatedAt,
-                  ),
+                  chatHubFormatInboxTime(chat.activityAt),
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         color: scheme.onSurfaceVariant,
                       ),
