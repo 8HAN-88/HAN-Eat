@@ -70,39 +70,67 @@ String notificationSectionLabel(String sectionKey) {
   }
 }
 
-String notificationSectionKey(DateTime createdAt, {required bool isUnread}) {
+String notificationSectionKey(
+  DateTime createdAt, {
+  required bool isUnread,
+  DateTime? now,
+}) {
   if (isUnread) return 'new';
 
-  final now = DateTime.now();
-  final local = createdAt.toLocal();
-  final today = DateTime(now.year, now.month, now.day);
-  final createdDay = DateTime(local.year, local.month, local.day);
-  final diffDays = today.difference(createdDay).inDays;
-
-  if (diffDays == 0) return 'today';
-  if (diffDays == 1) return 'yesterday';
-  if (diffDays < 7) return 'week';
-  if (diffDays < 30) return 'month';
+  final days = _notificationCalendarDays(createdAt, now ?? DateTime.now());
+  // A timestamp a few hours ahead is clock skew, not «последние 7 дней».
+  if (days <= 0) return 'today';
+  if (days == 1) return 'yesterday';
+  if (days < 7) return 'week';
+  if (days < 30) return 'month';
   return 'older';
+}
+
+int _notificationCalendarDays(DateTime createdAt, DateTime now) {
+  final local = createdAt.toLocal();
+  final clock = now.toLocal();
+  final today = DateTime(clock.year, clock.month, clock.day);
+  final createdDay = DateTime(local.year, local.month, local.day);
+  return today.difference(createdDay).inDays;
 }
 
 const _sectionOrder = ['new', 'today', 'yesterday', 'week', 'month', 'older'];
 
 /// Короткое время: «18 ч.», «1 дн.», «15 июн.».
-String formatNotificationTime(DateTime? date) {
+///
+/// Day labels follow the calendar, same as the section headers. A 24-hour
+/// [Duration.inDays] check left yesterday's evening as «5 ч.» under «Вчера»,
+/// and a future timestamp as «сейчас».
+String formatNotificationTime(DateTime? date, {DateTime? now}) {
   if (date == null) return '';
+  final clock = (now ?? DateTime.now()).toLocal();
   final local = date.toLocal();
-  final now = DateTime.now();
-  final diff = now.difference(local);
+  final days = _notificationCalendarDays(local, clock);
+  if (days < 0) return _notificationCalendarDate(local, clock);
+  if (days == 0) {
+    final diff = clock.difference(local);
+    if (diff.isNegative) {
+      if (diff.abs() < const Duration(minutes: 3)) return 'сейчас';
+      return _notificationClock(local);
+    }
+    if (diff.inMinutes < 1) return 'сейчас';
+    if (diff.inHours < 1) return '${diff.inMinutes} мин.';
+    return '${diff.inHours} ч.';
+  }
+  if (days == 1) return '1 дн.';
+  if (days < 7) return '$days дн.';
+  if (days < 14) return '1 нед.';
+  if (days < 30) return '${(days / 7).floor()} нед.';
+  return _notificationCalendarDate(local, clock);
+}
 
-  if (diff.inMinutes < 1) return 'сейчас';
-  if (diff.inHours < 1) return '${diff.inMinutes} мин.';
-  if (diff.inHours < 24) return '${diff.inHours} ч.';
-  if (diff.inDays == 1) return '1 дн.';
-  if (diff.inDays < 7) return '${diff.inDays} дн.';
-  if (diff.inDays < 14) return '1 нед.';
-  if (diff.inDays < 30) return '${(diff.inDays / 7).floor()} нед.';
+String _notificationClock(DateTime local) {
+  final h = local.hour.toString().padLeft(2, '0');
+  final m = local.minute.toString().padLeft(2, '0');
+  return '$h:$m';
+}
 
+String _notificationCalendarDate(DateTime local, DateTime now) {
   const months = [
     'янв.',
     'февр.',
