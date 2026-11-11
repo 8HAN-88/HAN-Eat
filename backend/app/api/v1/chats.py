@@ -123,7 +123,7 @@ from app.models.conversation import (
 )
 from app.services.chat_event_bus import publish as publish_chat_event
 from app.services.chat_event_bus import subscribe as subscribe_chat_events
-from app.services.chat_service import ChatService
+from app.services.chat_service import ChatService, edit_changes_inbox_preview
 from app.services.user_event_bus import publish_user_event
 from app.services.analytics_service import AnalyticsService
 from app.services.bot_webhook_queue_service import enqueue_webhook_task
@@ -2945,6 +2945,11 @@ async def stop_live_location(
         conversation_id,
         {"type": "message.edited", "message": response.model_dump(mode="json")},
     )
+    # «Трансляция геопозиции» becomes «Геопозиция (завершена)» in the list.
+    if edit_changes_inbox_preview(
+        msg.id, svc.latest_visible_message_id(conversation_id)
+    ):
+        _notify_chat_inbox(db, conversation_id, sender_id=-1)
     return response
 
 
@@ -3335,6 +3340,12 @@ async def edit_message(
             ),
         },
     )
+    # People looking at the chat list still have the old last line until the
+    # next poll unless we tell every member to refresh, same as delete.
+    if edit_changes_inbox_preview(
+        msg.id, svc.latest_visible_message_id(conversation_id)
+    ):
+        _notify_chat_inbox(db, conversation_id, sender_id=-1)
     conv = (
         db.query(Conversation)
         .filter(Conversation.id == conversation_id)
