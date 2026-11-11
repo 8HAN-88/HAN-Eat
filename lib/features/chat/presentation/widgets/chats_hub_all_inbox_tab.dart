@@ -668,7 +668,10 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         return;
       }
 
-      if (!ShellTabVisibility.chatsActive || _loading) return;
+      // The list stays mounted on other tabs. Refresh it there too, or a
+      // message that arrived while the feed was open is still the old line
+      // when the user comes back. _load coalesces overlapping fetches.
+      if (!_started) return;
       if (event.event == 'chat.inbox' ||
           event.event == 'chat.message_hidden' ||
           event.event == 'chat.history_cleared' ||
@@ -709,7 +712,12 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
   }
 
   void _onShellTabChanged() {
+    final alreadyStarted = _started;
     _maybeStartLoading();
+    // Polling pauses off this tab, and a dropped socket event is not replayed.
+    if (alreadyStarted && ShellTabVisibility.chatsActive) {
+      unawaited(_load(silent: true));
+    }
   }
 
   void _maybeStartLoading() {

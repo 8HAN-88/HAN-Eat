@@ -31,6 +31,19 @@ from app.models.user_block import UserBlock
 from app.services.notification_service import NotificationService
 
 
+def edit_changes_inbox_preview(
+    message_id: int, latest_visible_id: Optional[int]
+) -> bool:
+    """The inbox line is the newest message still in the chat.
+
+    Editing an older message leaves that line alone. A newer message that
+    was deleted does not count, so the previous one becomes the preview.
+    """
+    if latest_visible_id is None:
+        return False
+    return int(message_id) == int(latest_visible_id)
+
+
 class ChatService:
     def __init__(self, db: Session):
         self.db = db
@@ -4006,6 +4019,21 @@ class ChatService:
         if not msg:
             raise ValueError("not_found")
         return msg
+
+    def latest_visible_message_id(self, conversation_id: int) -> Optional[int]:
+        latest = (
+            self.db.query(Message.id)
+            .filter(
+                Message.conversation_id == conversation_id,
+                Message.deleted_at.is_(None),
+            )
+            .order_by(Message.id.desc())
+            .limit(1)
+            .scalar()
+        )
+        if latest is None:
+            return None
+        return int(latest)
 
     def edit_message(
         self, conversation_id: int, message_id: int, user_id: int, content: str
