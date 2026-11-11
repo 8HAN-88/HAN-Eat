@@ -82,6 +82,38 @@ void main() {
     );
   });
 
+  test('yesterday evening is one day, not leftover hours', () {
+    final now = DateTime(2026, 11, 12, 0, 20);
+    final created = DateTime(2026, 11, 11, 23, 40);
+    expect(formatNotificationTime(created, now: now), '1 дн.');
+    expect(
+      notificationSectionKey(created, isUnread: false, now: now),
+      'yesterday',
+    );
+  });
+
+  test('a future timestamp is not filed under the last week', () {
+    final now = DateTime(2026, 11, 11, 23, 40);
+    final created = DateTime(2026, 11, 12, 2, 30);
+    expect(
+      notificationSectionKey(created, isUnread: false, now: now),
+      'today',
+    );
+    expect(formatNotificationTime(created, now: now), '12 нояб.');
+  });
+
+  test('same calendar day still uses hours and minutes', () {
+    final now = DateTime(2026, 11, 12, 15, 0);
+    expect(
+      formatNotificationTime(DateTime(2026, 11, 12, 12, 10), now: now),
+      '2 ч.',
+    );
+    expect(
+      formatNotificationTime(DateTime(2026, 11, 12, 14, 40), now: now),
+      '20 мин.',
+    );
+  });
+
   test('hides scheduled publish notifications', () {
     final entries = buildNotificationSections([
       _item(id: 1, type: 'post_scheduled_published'),
