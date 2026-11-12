@@ -42,6 +42,15 @@ class ChatBotCommandsResponse(BaseModel):
     items: List[ChatBotCommandItem] = []
 
 
+class MessageReplySnippet(BaseModel):
+    """Quote for a reply whose original is outside the loaded page."""
+
+    sender_name: Optional[str] = None
+    preview: str = ""
+    deleted: bool = False
+    is_mine: bool = False
+
+
 class MessageResponse(BaseModel):
     id: int
     conversation_id: int
@@ -51,6 +60,7 @@ class MessageResponse(BaseModel):
     content: str
     media_url: Optional[str] = None
     reply_to_message_id: Optional[int] = None
+    reply: Optional[MessageReplySnippet] = None
     forward_from_user_id: Optional[int] = None
     forward_from_name: Optional[str] = None
     forwarded_from_message_id: Optional[int] = None

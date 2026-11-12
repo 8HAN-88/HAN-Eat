@@ -285,6 +285,10 @@ class ChatMessage {
     required this.content,
     this.mediaUrl,
     this.replyToMessageId,
+    this.replyPreview,
+    this.replySenderName,
+    this.replyDeleted = false,
+    this.replyIsMine = false,
     this.forwardFromUserId,
     this.forwardFromName,
     this.forwardedFromMessageId,
@@ -318,6 +322,11 @@ class ChatMessage {
   final String content;
   final String? mediaUrl;
   final int? replyToMessageId;
+  /// Quote text when the original message is not in the loaded page.
+  final String? replyPreview;
+  final String? replySenderName;
+  final bool replyDeleted;
+  final bool replyIsMine;
   final int? forwardFromUserId;
   final String? forwardFromName;
   final int? forwardedFromMessageId;
@@ -407,6 +416,22 @@ class ChatMessage {
       replyToMessageId: data['reply_to_message_id'] != null
           ? _parseInt(data['reply_to_message_id'])
           : null,
+      replyPreview: () {
+        final reply = _jsonMap(data['reply']);
+        final preview = reply?['preview'];
+        if (preview is! String) return null;
+        final trimmed = preview.trim();
+        return trimmed.isEmpty ? null : trimmed;
+      }(),
+      replySenderName: () {
+        final reply = _jsonMap(data['reply']);
+        final name = reply?['sender_name'];
+        if (name is! String) return null;
+        final trimmed = name.trim();
+        return trimmed.isEmpty ? null : trimmed;
+      }(),
+      replyDeleted: _jsonMap(data['reply'])?['deleted'] as bool? ?? false,
+      replyIsMine: _jsonMap(data['reply'])?['is_mine'] as bool? ?? false,
       forwardFromUserId: data['forward_from_user_id'] != null
           ? _parseInt(data['forward_from_user_id'])
           : null,
@@ -480,6 +505,10 @@ class ChatMessage {
       content: content ?? this.content,
       mediaUrl: mediaUrl ?? this.mediaUrl,
       replyToMessageId: replyToMessageId,
+      replyPreview: replyPreview,
+      replySenderName: replySenderName,
+      replyDeleted: replyDeleted,
+      replyIsMine: replyIsMine,
       forwardFromUserId: forwardFromUserId,
       forwardFromName: forwardFromName,
       forwardedFromMessageId: forwardedFromMessageId,
