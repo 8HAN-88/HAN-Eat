@@ -9060,6 +9060,33 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return null;
   }
 
+  /// Loaded original wins. Otherwise the server quote, so a reply to a
+  /// message above this page is not a blank «Сообщение».
+  ({String? quote, String? author}) _replyQuoteFor(ChatMessage msg) {
+    final target = _replyTargetFor(msg);
+    if (target != null) {
+      final author = target.isMine
+          ? 'Вы'
+          : (target.senderName ??
+              _senderNames[target.senderId] ??
+              'Сообщение');
+      return (quote: _messagePreview(target), author: author);
+    }
+    if (msg.replyToMessageId == null) {
+      return (quote: null, author: null);
+    }
+    if (msg.replyDeleted) {
+      return (quote: 'Сообщение удалено', author: null);
+    }
+    final preview = msg.replyPreview?.trim() ?? '';
+    if (preview.isEmpty) return (quote: 'Сообщение', author: null);
+    final name = msg.replySenderName?.trim() ?? '';
+    return (
+      quote: preview,
+      author: msg.replyIsMine ? 'Вы' : (name.isEmpty ? null : name),
+    );
+  }
+
   String _messagePreview(ChatMessage msg) {
     if (msg.type == 'call') {
       return CallMessageLabels.preview(msg.content, mine: msg.isMine);
@@ -11490,17 +11517,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final isPinned = _isMessagePinned(msg.id);
     final scheme = Theme.of(context).colorScheme;
     final searching = _threadSearchQuery.trim().isNotEmpty;
-    final replyTarget = _replyTargetFor(msg);
-    final replyQuote = replyTarget != null
-        ? _messagePreview(replyTarget)
-        : (msg.replyToMessageId != null ? 'Сообщение' : null);
-    final replyAuthor = replyTarget == null
-        ? null
-        : (replyTarget.isMine
-            ? 'Вы'
-            : (replyTarget.senderName ??
-                _senderNames[replyTarget.senderId] ??
-                'Сообщение'));
+    final replyBits = _replyQuoteFor(msg);
+    final replyQuote = replyBits.quote;
+    final replyAuthor = replyBits.author;
 
     final protectContent = _conversation.protectContent;
     final copyable = _copyableText(msg).isNotEmpty;
@@ -15853,20 +15872,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                   final msgIndex =
                                       visibleMessages.length - 1 - index;
                                   final msg = visibleMessages[msgIndex];
-                                  final replyTarget = _replyTargetFor(msg);
-                                  final replyQuote = replyTarget != null
-                                      ? _messagePreview(replyTarget)
-                                      : (msg.replyToMessageId != null
-                                          ? 'Сообщение'
-                                          : null);
-                                  final replyAuthor = replyTarget == null
-                                      ? null
-                                      : (replyTarget.isMine
-                                          ? 'Вы'
-                                          : (replyTarget.senderName ??
-                                              _senderNames[
-                                                  replyTarget.senderId] ??
-                                              'Сообщение'));
+                                  final replyBits = _replyQuoteFor(msg);
+                                  final replyQuote = replyBits.quote;
+                                  final replyAuthor = replyBits.author;
                                   final selected =
                                       _selectedMessageIds.contains(msg.id);
                                   final failed =

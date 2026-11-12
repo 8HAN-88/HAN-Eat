@@ -28,6 +28,8 @@ from app.models.forum_topic import ForumTopic
 from app.models.chat_folder import ChatFolder, ChatFolderItem
 from app.models.user import User
 from app.models.user_block import UserBlock
+from app.services.anonymous_admin import resolve_anonymous_sender_display
+from app.services.chat_reply_preview import reply_preview_text
 from app.services.notification_service import NotificationService
 
 
@@ -4019,6 +4021,87 @@ class ChatService:
         if not msg:
             raise ValueError("not_found")
         return msg
+
+    def reply_snippets(
+        self,
+        conversation_id: int,
+        reply_ids: List[int],
+        viewer_id: int,
+        *,
+        viewer_is_admin: bool = False,
+        cleared_before_id: int = 0,
+        group_title: Optional[str] = None,
+    ) -> Dict[int, dict]:
+        """Quote text for replies whose original is not on the loaded page."""
+        wanted = {int(mid) for mid in reply_ids if mid}
+        if not wanted:
+            return {}
+        rows = (
+            self.db.query(Message)
+            .filter(Message.id.in_(wanted))
+            .all()
+        )
+        by_id = {int(row.id): row for row in rows}
+        hidden = {
+            int(mid)
+            for (mid,) in self.db.query(MessageHide.message_id)
+            .filter(
+                MessageHide.user_id == viewer_id,
+                MessageHide.message_id.in_(wanted),
+            )
+            .all()
+        }
+        sender_ids = {row.sender_id for row in rows}
+        users = (
+            {
+                u.id: u
+                for u in self.db.query(User).filter(User.id.in_(sender_ids)).all()
+            }
+            if sender_ids
+            else {}
+        )
+        cleared = int(cleared_before_id or 0)
+        out: Dict[int, dict] = {}
+        for mid in wanted:
+            row = by_id.get(mid)
+            if (
+                row is None
+                or int(row.conversation_id) != int(conversation_id)
+            ):
+                out[mid] = {
+                    "sender_name": None,
+                    "preview": "Сообщение",
+                    "deleted": False,
+                    "is_mine": False,
+                }
+                continue
+            gone = bool(
+                row.deleted_at is not None
+                or mid in hidden
+                or (cleared > 0 and mid <= cleared)
+            )
+            sender = users.get(row.sender_id)
+            real_name = None
+            if sender is not None:
+                real_name = sender.name or sender.username
+            display_name, _anon = resolve_anonymous_sender_display(
+                is_anonymous=bool(getattr(row, "is_anonymous", False)),
+                group_title=group_title,
+                real_sender_name=real_name,
+                viewer_is_sender=int(row.sender_id) == int(viewer_id),
+                viewer_is_admin=viewer_is_admin,
+            )
+            out[mid] = {
+                "sender_name": None if gone else display_name,
+                "preview": reply_preview_text(
+                    row.type,
+                    row.content,
+                    deleted=gone,
+                ),
+                "deleted": gone,
+                "is_mine": (not gone) and int(row.sender_id) == int(viewer_id),
+            }
+        return out
 
     def latest_visible_message_id(self, conversation_id: int) -> Optional[int]:
         latest = (

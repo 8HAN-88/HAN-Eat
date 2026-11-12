@@ -518,6 +518,14 @@ class ChatCacheService {
       'content': m.content,
       'media_url': m.mediaUrl,
       'reply_to_message_id': m.replyToMessageId,
+      if (m.replyToMessageId != null &&
+          (m.replyPreview != null || m.replyDeleted))
+        'reply': {
+          if (m.replyPreview != null) 'preview': m.replyPreview,
+          if (m.replySenderName != null) 'sender_name': m.replySenderName,
+          'deleted': m.replyDeleted,
+          'is_mine': m.replyIsMine,
+        },
       'created_at': m.createdAt.toUtc().toIso8601String(),
       if (m.editedAt != null)
         'edited_at': m.editedAt!.toUtc().toIso8601String(),

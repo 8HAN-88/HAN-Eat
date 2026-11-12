@@ -99,6 +99,7 @@ from app.schemas.chat import (
     GroupModerationLogResponse,
     UpdateChatFolderRequest,
     MessageListResponse,
+    MessageReplySnippet,
     MessageResponse,
     PhoneContactMatchItem,
     PinMessageRequest,
@@ -696,6 +697,7 @@ def _message_response(
     group_read_cursors: Optional[List] = None,
     forward_source_conv_map: Optional[Dict[int, int]] = None,
     unlocked_message_ids: Optional[set] = None,
+    reply_snippets: Optional[Dict[int, dict]] = None,
 ) -> MessageResponse:
     is_mine = msg.sender_id == current_user_id
     read_count = 0
@@ -745,6 +747,13 @@ def _message_response(
         )
     else:
         is_delivered = False
+
+    reply_snippet = None
+    reply_id = getattr(msg, "reply_to_message_id", None)
+    if reply_id and reply_snippets:
+        raw_reply = reply_snippets.get(int(reply_id))
+        if raw_reply is not None:
+            reply_snippet = MessageReplySnippet(**raw_reply)
 
     content = msg.content
     if db is not None and getattr(msg, "type", None) == "poll":
@@ -812,6 +821,7 @@ def _message_response(
         content=content,
         media_url=media_url,
         reply_to_message_id=msg.reply_to_message_id,
+        reply=reply_snippet,
         forward_from_user_id=getattr(msg, "forward_from_user_id", None),
         forward_from_name=getattr(msg, "forward_from_name", None),
         forwarded_from_message_id=fwd_src_id,
@@ -1775,6 +1785,44 @@ async def list_messages(
             .all()
         }
 
+    pinned_resps: List[MessageResponse] = []
+    pinned_msgs = []
+    if after_id is None:
+        try:
+            pinned_msgs = svc.list_pinned_messages(
+                conversation_id, current_user.id
+            )
+        except ValueError:
+            pinned_msgs = []
+        pinned_ids = [m.id for m in pinned_msgs]
+        pinned_reactions_map = (
+            _reaction_summaries(svc, pinned_ids, current_user.id)
+            if pinned_ids
+            else {}
+        )
+    reply_ids = [
+        int(m.reply_to_message_id)
+        for m in list(messages) + list(pinned_msgs)
+        if getattr(m, "reply_to_message_id", None)
+    ]
+    viewer_is_admin = bool(
+        conv is not None
+        and conv.type == "group"
+        and (
+            conv.created_by_user_id == current_user.id
+            or (member is not None and member.is_admin)
+        )
+    )
+    reply_snippets = svc.reply_snippets(
+        conversation_id,
+        reply_ids,
+        current_user.id,
+        viewer_is_admin=viewer_is_admin,
+        cleared_before_id=int(
+            getattr(member, "history_cleared_before_id", 0) or 0
+        ),
+        group_title=getattr(conv, "title", None) if conv is not None else None,
+    )
     items = [
         _message_response(
             m,
@@ -1791,23 +1839,11 @@ async def list_messages(
             group_read_cursors=group_read_cursors,
             forward_source_conv_map=forward_source_conv_map,
             unlocked_message_ids=unlocked_message_ids,
+            reply_snippets=reply_snippets,
         )
         for m in messages
     ]
-    pinned_resps: List[MessageResponse] = []
-    if after_id is None:
-        try:
-            pinned_msgs = svc.list_pinned_messages(
-                conversation_id, current_user.id
-            )
-        except ValueError:
-            pinned_msgs = []
-        pinned_ids = [m.id for m in pinned_msgs]
-        pinned_reactions_map = (
-            _reaction_summaries(svc, pinned_ids, current_user.id)
-            if pinned_ids
-            else {}
-        )
+    if pinned_msgs:
         for pinned_msg in pinned_msgs:
             pinned_sender = senders.get(pinned_msg.sender_id)
             if pinned_sender is None:
@@ -1829,6 +1865,7 @@ async def list_messages(
                     peer_last_delivered_id=peer_delivered,
                     group_read_cursors=group_read_cursors,
                     forward_source_conv_map=forward_source_conv_map,
+                    reply_snippets=reply_snippets,
                 )
             )
     pinned_resp = pinned_resps[0] if pinned_resps else None
