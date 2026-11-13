@@ -13,6 +13,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/app_router.dart';
 import '../../../../core/haptics/app_haptics.dart';
+import '../../../../core/media/web_chat_capture.dart';
 import '../../../../core/platform/device_location.dart';
 import '../../../../core/theme/color_schemes.dart';
 import '../../../../models/chat_models.dart';
@@ -1968,9 +1969,7 @@ class _VideoNotePickPanel extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          kIsWeb
-              ? 'Выберите короткое видео из галереи — оно отправится кружком.'
-              : 'Запишите короткое видео — оно отправится кружком.',
+          'Запишите короткое видео — оно отправится кружком.',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: scheme.onSurfaceVariant,
@@ -1978,11 +1977,12 @@ class _VideoNotePickPanel extends StatelessWidget {
         ),
         const SizedBox(height: 28),
         FilledButton.icon(
-          onPressed: onRecord,
-          icon: Icon(
-            kIsWeb ? Icons.video_library_outlined : Icons.fiber_manual_record,
-          ),
-          label: Text(kIsWeb ? 'Выбрать видео' : 'Записать кружок'),
+          onPressed: () {
+            if (kIsWeb) armWebVideoNote();
+            onRecord();
+          },
+          icon: const Icon(Icons.fiber_manual_record),
+          label: const Text('Записать кружок'),
         ),
       ],
     );

@@ -21,6 +21,7 @@ import 'package:record/record.dart';
 import 'package:video_player/video_player.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/media/web_chat_capture.dart';
 import '../../../core/share/system_share.dart';
 
 import '../../bots/data/bot_inline_service.dart';
@@ -431,6 +432,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   final ChatVoiceHoldSession _voiceHold = ChatVoiceHoldSession();
   bool _recordCancelled = false;
   bool _voiceLocked = false;
+  bool _lockVoiceWhenLive = false;
   /// Empty-composer mode: false = voice hold, true = video note (tap).
   bool _videoNoteComposerMode = false;
   bool _stickerPanelOpen = false;
@@ -9162,6 +9164,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (lower.endsWith('.ogg') || lower.endsWith('.opus')) {
       return 'audio/ogg';
     }
+    if (lower.endsWith('.wav')) return 'audio/wav';
     return 'audio/webm';
   }
 
@@ -9174,6 +9177,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (lower.endsWith('.ogg') || lower.endsWith('.opus')) {
       return 'voice_$stamp.ogg';
     }
+    if (lower.endsWith('.wav')) return 'voice_$stamp.wav';
     return 'voice_$stamp.webm';
   }
 
@@ -9181,6 +9185,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _voiceHold.beginHold();
     _holdActive = true;
     _voiceLocked = false;
+    _lockVoiceWhenLive = false;
+    if (kIsWeb) armWebVoice();
     unawaited(_startRecording());
   }
 
@@ -9204,6 +9210,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   void _onHoldEnd() {
+    // Mobile browsers often drop the hold before the mic is ready.
+    // Keep the take and show send / delete instead of throwing it away.
+    if (kIsWeb && !_recordCancelled) {
+      _voiceHold.holdActive = false;
+      _voiceHold.pending = ChatVoiceHoldAction.none;
+      _holdActive = false;
+      if (_recording) {
+        if (mounted) setState(() => _voiceLocked = true);
+      } else {
+        _lockVoiceWhenLive = true;
+      }
+      return;
+    }
     final action = _voiceHold.release(
       cancelled: _recordCancelled,
       locked: _voiceLocked,
@@ -9229,9 +9248,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _recordTimer?.cancel();
     _amplitudeSub?.cancel();
     _amplitudeSub = null;
-    try {
-      await _audioRecorder.stop();
-    } catch (_) {}
+    _lockVoiceWhenLive = false;
+    if (kIsWeb) {
+      await cancelWebVoice();
+    } else {
+      try {
+        await _audioRecorder.stop();
+      } catch (_) {}
+    }
   }
 
   Future<void> _startVoiceRecorder(String? path) async {
@@ -9273,7 +9297,46 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Future<void> _startRecording() async {
     if (_sending || _recording) return;
-    final ok = await _audioRecorder.hasPermission();
+    if (kIsWeb) {
+      try {
+        await awaitWebVoice();
+      } catch (e) {
+        if (!mounted) return;
+        _voiceHold.reset();
+        _holdActive = false;
+        _lockVoiceWhenLive = false;
+        showErrorSnackBar(
+          context,
+          e,
+          fallback: 'Разрешите доступ к микрофону',
+          onRetry: () {
+            _voiceHold.beginHold();
+            _lockVoiceWhenLive = true;
+            armWebVoice();
+            unawaited(_startRecording());
+          },
+        );
+        return;
+      }
+      if (!mounted) {
+        await cancelWebVoice();
+        return;
+      }
+      if (!_voiceHold.shouldStartAfterPermission && !_lockVoiceWhenLive) {
+        await cancelWebVoice();
+        _voiceHold.reset();
+        _holdActive = false;
+        return;
+      }
+      _beginRecordingUi(lock: true);
+      return;
+    }
+    bool ok = false;
+    try {
+      ok = await _audioRecorder.hasPermission();
+    } catch (_) {
+      ok = false;
+    }
     if (!mounted) return;
     if (!ok) {
       _voiceHold.reset();
@@ -9316,28 +9379,44 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _applyVoiceHoldAction(startedAction);
       return;
     }
+    _beginRecordingUi(lock: false);
+  }
+
+  void _beginRecordingUi({required bool lock}) {
     _amplitudeSub?.cancel();
     _waveLevels.clear();
-    _amplitudeSub = _audioRecorder
-        .onAmplitudeChanged(const Duration(milliseconds: 80))
-        .listen((amp) {
-      if (!mounted) return;
-      final norm = ((amp.current + 45) / 45).clamp(0.08, 1.0).toDouble();
-      setState(() {
-        _waveLevels.add(norm);
-        if (_waveLevels.length > 40) _waveLevels.removeAt(0);
+    if (!kIsWeb) {
+      _amplitudeSub = _audioRecorder
+          .onAmplitudeChanged(const Duration(milliseconds: 80))
+          .listen((amp) {
+        if (!mounted) return;
+        final norm = ((amp.current + 45) / 45).clamp(0.08, 1.0).toDouble();
+        setState(() {
+          _waveLevels.add(norm);
+          if (_waveLevels.length > 40) _waveLevels.removeAt(0);
+        });
       });
-    });
+    }
+    _lockVoiceWhenLive = false;
+    _voiceHold.recording = true;
     setState(() {
       _recording = true;
       _recordCancelled = false;
       _recordDuration = Duration.zero;
+      if (lock) _voiceLocked = true;
     });
     _startRecordingPresence();
     _recordTimer?.cancel();
     _recordTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
-      setState(() => _recordDuration += const Duration(seconds: 1));
+      setState(() {
+        _recordDuration += const Duration(seconds: 1);
+        if (kIsWeb) {
+          final level = 0.28 + (DateTime.now().millisecond % 500) / 700;
+          _waveLevels.add(level);
+          if (_waveLevels.length > 40) _waveLevels.removeAt(0);
+        }
+      });
       if (_recordDuration.inSeconds >= 90) {
         unawaited(_stopAndSendVoice());
       }
@@ -9349,9 +9428,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _recordTimer?.cancel();
     _amplitudeSub?.cancel();
     _amplitudeSub = null;
-    try {
-      await _audioRecorder.stop();
-    } catch (_) {}
+    _lockVoiceWhenLive = false;
+    if (kIsWeb) {
+      await cancelWebVoice();
+    } else {
+      try {
+        await _audioRecorder.stop();
+      } catch (_) {}
+    }
     if (!mounted) return;
     _voiceHold.reset();
     _holdActive = false;
@@ -9376,10 +9460,29 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final clientMessageId = const Uuid().v4();
     try {
       String? path;
-      try {
-        path = await _audioRecorder.stop();
-      } catch (_) {}
-      final durationSec = math.max(1, _recordDuration.inSeconds);
+      CapturedClip? webClip;
+      if (kIsWeb) {
+        try {
+          webClip = await stopWebVoice();
+        } catch (e) {
+          if (mounted) {
+            showErrorSnackBar(
+              context,
+              e,
+              fallback: 'Не удалось отправить голосовое',
+            );
+          }
+          return;
+        }
+      } else {
+        try {
+          path = await _audioRecorder.stop();
+        } catch (_) {}
+      }
+      final durationSec = math.max(
+        1,
+        webClip?.durationSec ?? _recordDuration.inSeconds,
+      );
       if (!mounted) return;
       _voiceHold.reset();
       _holdActive = false;
@@ -9395,15 +9498,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
       final XFile file;
       if (kIsWeb) {
-        if (path == null || path.isEmpty) {
+        final clip = webClip;
+        if (clip == null || clip.bytes.isEmpty) {
           throw Exception('Не удалось сохранить запись');
         }
-        final bytes = await XFile(path).readAsBytes();
-        if (bytes.isEmpty) throw Exception('Пустая запись');
         file = XFile.fromData(
-          bytes,
-          name: _voiceFileNameForPath(path),
-          mimeType: _voiceMimeForPath(path),
+          clip.bytes,
+          name: clip.filename,
+          mimeType: clip.mimeType,
         );
       } else {
         file = XFile(path!);
@@ -14084,6 +14186,27 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Future<void> _recordAndSendVideoNote() async {
     try {
+      if (kIsWeb) {
+        final clip = await finishWebVideoNote();
+        if (clip == null || !mounted) return;
+        final file = XFile.fromData(
+          clip.bytes,
+          name: clip.filename,
+          mimeType: clip.mimeType,
+        );
+        _enqueueMediaSend(_PendingMediaSend(
+          tempId: _newLocalTempId(),
+          kind: _PendingMediaKind.videoNote,
+          file: file,
+          clientMessageId: const Uuid().v4(),
+          voiceDurationSec: clip.durationSec < 1 ? 1 : clip.durationSec,
+          replyToMessageId: _replyTo?.id,
+          totalBytes: clip.bytes.length,
+          topicId: _activeTopicIdForSend,
+          anonymous: _effectiveSendAnonymous,
+        ));
+        return;
+      }
       final picker = ImagePicker();
       XFile? file = await picker.pickVideo(
         source: kIsWeb ? ImageSource.gallery : ImageSource.camera,
@@ -17183,9 +17306,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                               onHoldEnd: _onHoldEnd,
                                               onHoldDrag: _onHoldDrag,
                                               onTap: _videoNoteComposerMode
-                                                  ? () => unawaited(
+                                                  ? () {
+                                                      if (kIsWeb) {
+                                                        armWebVideoNote();
+                                                      }
+                                                      unawaited(
                                                         _recordAndSendVideoNote(),
-                                                      )
+                                                      );
+                                                    }
                                                   : null,
                                             ),
                                           ],
