@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
+import '../core/network/connection_type.dart';
 import '../models/post.dart';
 import '../models/post_types.dart';
 import 'api_service.dart';
@@ -72,14 +73,13 @@ class FeedSyncService {
     }
   }
 
-  final Connectivity _connectivity = Connectivity();
   final ValueNotifier<bool> isOnline = ValueNotifier(true);
 
   void _initConnectivity() {
-    _connectivity.onConnectivityChanged.listen((result) {
+    watchConnectivity((result) {
       final online = !result.contains(ConnectivityResult.none);
       isOnline.value = online;
-      
+
       if (kDebugMode) {
         debugPrint('Connectivity changed: ${online ? "online" : "offline"}');
       }
@@ -98,10 +98,10 @@ class FeedSyncService {
       }
     });
 
-    // Проверяем текущее состояние
-    _connectivity.checkConnectivity().then((result) {
+    unawaited(readConnectivity().then((result) {
+      if (result == null) return;
       isOnline.value = !result.contains(ConnectivityResult.none);
-    });
+    }));
 
     ApiReachabilityService.instance.isApiReachable.addListener(() {
       if (ApiReachabilityService.instance.isApiReachable.value &&

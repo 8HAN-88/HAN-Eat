@@ -9,6 +9,7 @@ import '../../../models/post_model.dart';
 import '../../../services/saved_posts_service.dart';
 import '../../../services/auth_service.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import '../../../core/network/connection_type.dart';
 import '../../feed/presentation/new_post_card.dart';
 import '../../../widgets/post_card_skeleton.dart';
 import '../../../core/layout/long_label_tab_bar.dart';
@@ -55,7 +56,7 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
     _loadPosts();
     
     // Слушаем изменения подключения
-    Connectivity().onConnectivityChanged.listen((result) {
+    watchConnectivity((result) {
       final isOffline = result.contains(ConnectivityResult.none);
       if (mounted) {
         setState(() => _isOffline = isOffline);
@@ -84,11 +85,9 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
   }
   
   Future<void> _checkConnectivity() async {
-    final connectivity = Connectivity();
-    final result = await connectivity.checkConnectivity();
-    if (mounted) {
-      setState(() => _isOffline = result.contains(ConnectivityResult.none));
-    }
+    final result = await readConnectivity();
+    if (result == null || !mounted) return;
+    setState(() => _isOffline = result.contains(ConnectivityResult.none));
   }
   
   Future<void> _syncWithServer() async {

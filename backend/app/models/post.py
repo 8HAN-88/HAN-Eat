@@ -1,7 +1,8 @@
 """
 Модель публикации
 """
-from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, ForeignKey, ARRAY, JSON
+from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, ForeignKey, JSON
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -21,8 +22,8 @@ class Post(Base):
     visibility = Column(String(20), default="public")  # public | followers | private
     is_global_visible = Column(Boolean, default=True, nullable=False, index=True)
     is_indexed = Column(Boolean, default=True, nullable=False, index=True)
-    publish_to = Column(ARRAY(String), default=[])  # ['feed', 'community:5']
-    tags = Column(ARRAY(String), default=[])
+    publish_to = Column(ARRAY(String).with_variant(JSON, "sqlite"), default=[])  # ['feed', 'community:5']
+    tags = Column(ARRAY(String).with_variant(JSON, "sqlite"), default=[])
     location_name = Column(String(255), nullable=True)
     location_lat = Column(String, nullable=True)
     location_lng = Column(String, nullable=True)

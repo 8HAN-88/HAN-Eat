@@ -13,6 +13,7 @@ import 'package:han_eat/app/startup_shell.dart';
 import 'package:han_eat/app/router_keys.dart';
 import 'package:han_eat/features/subscription/subscription_copy.dart';
 import 'package:han_eat/services/auth_service.dart';
+import 'helpers/e2e_session.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// E2E на симуляторе: ТЗ подписки + Creator V2 (нужен backend :5001).
@@ -49,6 +50,11 @@ void main() {
         if (res.statusCode >= 400) {
           throw Exception('register failed ${res.statusCode}: $body');
         }
+        await E2eSession.confirmDevEmailCode(
+          baseUrl: baseUrl,
+          email: email,
+          body: body,
+        );
       } finally {
         client.close();
       }
@@ -99,7 +105,7 @@ void main() {
       router.push(SubscriptionRoute.path);
       await tester.pumpAndSettle(const Duration(seconds: 15));
       expect(find.text(SubscriptionCopy.screenTitle), findsWidgets);
-      expect(find.textContaining('HanWe'), findsWidgets);
+      expect(find.textContaining('Одна подписка'), findsWidgets);
 
       // Trial via API then Creator tools
       final token = await _loginToken(baseUrl, email, password);
@@ -125,7 +131,13 @@ void main() {
 
       router.push(SettingsRoute.path);
       await tester.pumpAndSettle(const Duration(seconds: 10));
-      expect(find.text(SubscriptionCopy.screenTitle), findsWidgets);
+      final subscriptionTile = find.text(SubscriptionCopy.screenTitle);
+      await tester.scrollUntilVisible(
+        subscriptionTile,
+        400,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(subscriptionTile, findsWidgets);
     });
   });
 }

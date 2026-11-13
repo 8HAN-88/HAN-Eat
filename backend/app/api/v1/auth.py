@@ -63,7 +63,10 @@ from app.services.auth_email_service import (
     send_password_reset_email,
     send_verify_email,
 )
-from app.services.email_delivery_service import EmailDeliveryError
+from app.services.email_delivery_service import (
+    EmailDeliveryError,
+    email_delivery_configured,
+)
 from app.services.yandex_oauth_service import (
     build_authorize_url,
     exchange_code_and_fetch_profile,
@@ -288,6 +291,19 @@ async def _resolve_google_claims(id_token: str) -> dict:
     return claims
 
 
+def _register_without_email(db: Session, user) -> str:
+    """Письмо не ушло. Без настроенной почты не запираем вход."""
+    if not email_delivery_configured():
+        mark_email_verified(user)
+        db.commit()
+        return "Аккаунт создан. Можно входить."
+    db.commit()
+    return (
+        "Аккаунт создан, но письмо не удалось отправить. "
+        "Нажмите «Отправить письмо ещё раз» или обратитесь в поддержку."
+    )
+
+
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 async def register(
     request: RegisterRequest,
@@ -361,26 +377,28 @@ async def register(
 
     verify_msg = None
     try:
-        send_verify_email(db, user)
+        raw_code = send_verify_email(db, user)
         db.commit()
-        verify_msg = (
-            "На вашу почту отправлено письмо с кодом. "
-            "Проверьте также папку «Спам»."
-        )
+        if (
+            raw_code
+            and settings.APP_ENV != "production"
+            and not email_delivery_configured()
+        ):
+            verify_msg = (
+                "Почта на сервере не настроена. "
+                f"Код подтверждения: {raw_code}"
+            )
+        else:
+            verify_msg = (
+                "На вашу почту отправлено письмо с кодом. "
+                "Проверьте также папку «Спам»."
+            )
     except EmailDeliveryError as mail_err:
         logger.error("verify email send failed for %s: %s", user.email, mail_err)
-        db.commit()
-        verify_msg = (
-            "Аккаунт создан, но письмо не удалось отправить. "
-            "Нажмите «Отправить письмо ещё раз» или обратитесь в поддержку."
-        )
+        verify_msg = _register_without_email(db, user)
     except Exception as mail_err:
         logger.warning("verify email send failed for %s: %s", user.email, mail_err)
-        db.commit()
-        verify_msg = (
-            "Аккаунт создан, но письмо не удалось отправить. "
-            "Попробуйте «Отправить письмо ещё раз»."
-        )
+        verify_msg = _register_without_email(db, user)
 
     try:
         return _auth_response(user, access_token, refresh_token, verify_msg, session_id)

@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
+import '../core/network/connection_type.dart';
 import '../core/storage/hive_bootstrap.dart';
 import 'auth_service.dart';
 import 'api_service.dart';
@@ -123,8 +124,8 @@ class SavedPostsService {
   
   /// Проверить подключение к интернету
   static Future<bool> _isOnline() async {
-    final connectivity = Connectivity();
-    final result = await connectivity.checkConnectivity();
+    final result = await readConnectivity();
+    if (result == null) return true;
     return !result.contains(ConnectivityResult.none);
   }
   

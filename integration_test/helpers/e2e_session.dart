@@ -47,10 +47,40 @@ class E2eSession {
       if (res.statusCode >= 400) {
         throw Exception('register failed ${res.statusCode}: $body');
       }
+      await confirmDevEmailCode(baseUrl: baseUrl, email: email, body: body);
     } finally {
       client.close();
     }
     return E2eSession(baseUrl: baseUrl, email: email, password: password);
+  }
+
+  /// Локальный API без SMTP кладёт код в message ответа регистрации.
+  static Future<void> confirmDevEmailCode({
+    required String baseUrl,
+    required String email,
+    required String body,
+  }) async {
+    final decoded = jsonDecode(body);
+    final message = decoded is Map ? decoded['message'] as String? : null;
+    final code = message == null
+        ? null
+        : RegExp(r'\b(\d{6})\b').firstMatch(message)?.group(1);
+    if (code == null) return;
+    final client = HttpClient();
+    try {
+      final req = await client.postUrl(
+        Uri.parse('$baseUrl/api/v1/auth/verify-email'),
+      );
+      req.headers.set('Content-Type', 'application/json');
+      req.write(jsonEncode({'token': code, 'email': email}));
+      final res = await req.close();
+      final text = await res.transform(utf8.decoder).join();
+      if (res.statusCode >= 400) {
+        throw Exception('verify failed ${res.statusCode}: $text');
+      }
+    } finally {
+      client.close();
+    }
   }
 
   Future<void> pumpStartup(WidgetTester tester) async {

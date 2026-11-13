@@ -2338,7 +2338,8 @@ String? resourcePathAlias(String path, [String query = '']) {
         'video-id' ||
         'file-id' ||
         'voice-id' ||
-        'doc-id' ||
+        'doc-id' =>
+          '/post/$id$q',
         'sticker-id' =>
           '/stickers/$id$q',
         'edit-bot' || 'bot-settings' => '/bots/$id$q',
@@ -2348,7 +2349,8 @@ String? resourcePathAlias(String path, [String query = '']) {
         'videoid' ||
         'fileid' ||
         'voiceid' ||
-        'docid' ||
+        'docid' =>
+          '/post/$id$q',
         'stickerid' =>
           '/stickers/$id$q',
         'cid' => '/chats/thread/$id$q',
@@ -5946,6 +5948,11 @@ String? parseDeepLinkToGoPath(String raw) {
           return query == null ? '/invite' : '/invite?$query';
         }
         if (path.isNotEmpty && path != '/') {
+          // /flex is its own route (it redirects to the subscription screen).
+          // Do not rewrite the deep link to /subscription/flex first.
+          if (path == '/flex') {
+            return query == null ? '/flex' : '/flex?$query';
+          }
           path = unwrapGoOpenPath(path);
           final reelPath = ReelByIdRoute.goPathFromBrowserPath(path);
           if (reelPath != null) {
