@@ -138,9 +138,11 @@ Future<CapturedClip?> finishWebVideoNote() async {
     videoMimeCandidates,
     html.MediaRecorder.isTypeSupported,
   );
-  final recorder = mime == null
-      ? html.MediaRecorder(stream)
-      : html.MediaRecorder(stream, <String, dynamic>{'mimeType': mime});
+  final recorder = html.MediaRecorder(stream, <String, dynamic>{
+    if (mime != null) 'mimeType': mime,
+    'videoBitsPerSecond': 900000,
+    'audioBitsPerSecond': 64000,
+  });
   final chunks = <html.Blob>[];
   recorder.addEventListener('dataavailable', (html.Event event) {
     if (event is html.BlobEvent) {

@@ -1,6 +1,7 @@
 """
 API endpoints для загрузки медиа
 """
+import asyncio
 import json
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
@@ -517,7 +518,10 @@ async def mock_upload(
 
             if media_service.s3_client:
                 try:
-                    media_service.s3_client.upload_file(
+                    # Кружок больше голосового. Синхронный upload_file блокирует
+                    # цикл и держит ответ, пока клиент стоит на последнем проценте.
+                    await asyncio.to_thread(
+                        media_service.s3_client.upload_file,
                         tmp_path,
                         media_service.bucket,
                         file_key,

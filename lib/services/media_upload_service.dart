@@ -1,6 +1,7 @@
 // Сервис для загрузки медиа файлов
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import '../core/network/api_endpoint_resolver.dart';
@@ -9,6 +10,9 @@ import '../core/network/haneat_http_client.dart';
 import '../core/network/weak_net_policy.dart';
 import 'auth_service.dart';
 import 'server_config.dart';
+import 'upload_byte_progress.dart';
+import 'upload_put_stub.dart'
+    if (dart.library.html) 'upload_put_web.dart' as web_put;
 
 class MediaUploadService {
   /// URL API — на эмуляторе Android используется 10.0.2.2 (см. ServerConfig)
@@ -190,6 +194,16 @@ class MediaUploadService {
     required int contentLength,
     void Function(int sentBytes, int totalBytes)? onUploadProgress,
   }) async {
+    if (kIsWeb) {
+      final bytes = await file.readAsBytes();
+      return web_put.putUploadBytes(
+        uri: uri,
+        headers: headers,
+        bytes: bytes,
+        onUploadProgress: onUploadProgress,
+      );
+    }
+
     final client = HanEatHttpClient.createUploadClient();
     try {
       final request = http.StreamedRequest('PUT', uri);
@@ -387,13 +401,11 @@ class MediaUploadService {
       file: file,
       contentType: contentType,
       onUploadProgress: (sentBytes, totalBytes) {
-        final safeTotal = totalBytes <= 0 ? 1 : totalBytes;
-        final ratio = (sentBytes / safeTotal).clamp(0.0, 1.0).toDouble();
-        onProgress?.call(0.02 + ratio * 0.86);
+        onProgress?.call(mediaUploadFraction(sentBytes, totalBytes));
       },
     );
 
-    onProgress?.call(0.9);
+    onProgress?.call(0.96);
 
     final completeResponse = await completeUpload(
       uploadId: initResponse.uploadId,
@@ -401,7 +413,7 @@ class MediaUploadService {
       fileType: fileType,
     );
 
-    onProgress?.call(0.94);
+    onProgress?.call(0.98);
 
     if (waitForProcessing &&
         fileType == 'video' &&
@@ -468,7 +480,7 @@ class MediaUploadService {
     while (DateTime.now().isBefore(deadline)) {
       final status = await getUploadStatus(uploadId);
       final progress = status.progress.clamp(0, 100) / 100.0;
-      onProgress?.call(0.94 + progress * 0.06);
+      onProgress?.call(0.96 + progress * 0.04);
 
       if (status.status == 'completed') {
         final url = status.url ?? status.mp4_720pUrl ?? fallbackUrl;
