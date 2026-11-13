@@ -1,4 +1,5 @@
 // Сервис для загрузки медиа файлов
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
@@ -201,7 +202,9 @@ class MediaUploadService {
         sentBytes += chunk.length;
         onUploadProgress?.call(sentBytes, contentLength);
       }
-      await request.sink.close();
+      // close() завершается только когда клиент прочитает тело. Ждать его
+      // до send() нельзя: слушателя ещё нет, и загрузка навсегда стоит на 88%.
+      unawaited(request.sink.close());
       final streamed = await client.send(request).timeout(
             const Duration(seconds: 120),
           );
