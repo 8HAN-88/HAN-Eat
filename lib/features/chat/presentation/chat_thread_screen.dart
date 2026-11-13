@@ -1914,6 +1914,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   static const Duration _voiceUploadTimeout = Duration(seconds: 75);
+  static const Duration _videoNoteUploadTimeout = Duration(seconds: 120);
+
+  bool _isShortMedia(_PendingMediaKind kind) =>
+      kind == _PendingMediaKind.voice || kind == _PendingMediaKind.videoNote;
 
   String _mediaStatusLabel(_PendingMediaSend pending) {
     return switch (pending.kind) {
@@ -2106,9 +2110,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             continue;
           }
           pending.attempts++;
-          final maxAttempts = pending.kind == _PendingMediaKind.voice ? 3 : 8;
+          final maxAttempts = _isShortMedia(pending.kind) ? 3 : 8;
           if (_isRetryableSendError(e) && pending.attempts < maxAttempts) {
-            final waitSec = pending.kind == _PendingMediaKind.voice
+            final waitSec = _isShortMedia(pending.kind)
                 ? (pending.attempts * 2).clamp(2, 8)
                 : (2 * pending.attempts).clamp(2, 45);
             if (mounted) {
@@ -2195,9 +2199,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             );
           },
         );
-        final uploaded = pending.kind == _PendingMediaKind.voice
-            ? await uploadFuture.timeout(_voiceUploadTimeout)
-            : await uploadFuture;
+        final uploaded = switch (pending.kind) {
+          _PendingMediaKind.voice =>
+            await uploadFuture.timeout(_voiceUploadTimeout),
+          _PendingMediaKind.videoNote =>
+            await uploadFuture.timeout(_videoNoteUploadTimeout),
+          _ => await uploadFuture,
+        };
         if (_cancelledPendingMediaClientIds.contains(pending.clientMessageId)) {
           throw _CancelledPendingMediaException();
         }

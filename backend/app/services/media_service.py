@@ -63,7 +63,10 @@ class MediaService:
         """Инициализация S3 клиента; при неверных ключах — загрузка через API (mock)."""
         config = Config(
             region_name=settings.S3_REGION,
-            signature_version='s3v4'
+            signature_version="s3v4",
+            connect_timeout=10,
+            read_timeout=120,
+            retries={"max_attempts": 2, "mode": "standard"},
         )
         
         if not settings.S3_ACCESS_KEY or not settings.S3_SECRET_KEY:

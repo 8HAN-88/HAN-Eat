@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:han_eat/services/media_upload_service.dart';
+import 'package:han_eat/services/upload_byte_progress.dart';
 import 'package:image_picker/image_picker.dart';
 
 void main() {
@@ -33,5 +34,12 @@ void main() {
     ).timeout(const Duration(seconds: 5));
 
     expect(received, payload);
+  });
+
+  test('a fully sent circle is past the old 88 percent plateau', () {
+    expect(mediaUploadFraction(0, 1000), closeTo(0.05, 0.001));
+    expect(mediaUploadFraction(500, 1000), closeTo(0.50, 0.001));
+    expect(mediaUploadFraction(1000, 1000), closeTo(0.95, 0.001));
+    expect(mediaUploadFraction(1000, 1000), greaterThan(0.88));
   });
 }
