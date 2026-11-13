@@ -572,9 +572,7 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
       case ChatAttachTab.location:
         return 'Отправьте текущее местоположение';
       case ChatAttachTab.videoNote:
-        return kIsWeb
-            ? 'Короткое круглое видео из галереи (до 60 сек)'
-            : 'Короткое круглое видеосообщение (до 60 сек)';
+        return 'Короткое круглое видеосообщение (до 60 сек)';
       case ChatAttachTab.sticker:
         return 'Паки, избранные и недавние';
     }
