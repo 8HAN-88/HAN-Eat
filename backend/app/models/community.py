@@ -1,7 +1,8 @@
 """
 Модель канала
 """
-from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, ForeignKey, ARRAY, JSON
+from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, ForeignKey, JSON
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.sql import func
 from app.core.database import Base
 
@@ -20,7 +21,7 @@ class Channel(Base):
     # public | private | mixed — дефолт видимости рецептов в канале
     recipe_visibility_mode = Column(String(20), default="mixed", nullable=False)
     category = Column(String(50), nullable=True, index=True)  # Категория канала (итальянская, азиатская, веган и т.д.)
-    tags = Column(ARRAY(String), nullable=True)  # Теги канала (#выпечка, #здоровое)
+    tags = Column(ARRAY(String).with_variant(JSON, "sqlite"), nullable=True)  # Теги канала (#выпечка, #здоровое)
     rules = Column(Text, nullable=True)  # Правила канала
     members_count = Column(Integer, default=0)
     posts_count = Column(Integer, default=0)

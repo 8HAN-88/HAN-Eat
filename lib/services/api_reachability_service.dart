@@ -4,6 +4,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 
 import '../core/network/api_endpoint_resolver.dart';
+import '../core/network/connection_type.dart';
 import '../core/network/haneat_http_client.dart';
 import '../core/network/weak_net_policy.dart';
 import '../core/platform/web_page_visibility.dart';
@@ -31,7 +32,7 @@ class ApiReachabilityService {
     unawaited(svc.checkNow());
     svc._schedulePeriodicCheck();
 
-    Connectivity().onConnectivityChanged.listen((result) {
+    watchConnectivity((result) {
       final online = !result.contains(ConnectivityResult.none);
       if (online) {
         unawaited(svc.warmUp());

@@ -317,10 +317,10 @@ def _otp_expiry_note() -> str:
     return f"Код действует {_otp_minutes()} мин."
 
 
-def send_verify_email(db: Session, user: User) -> None:
+def send_verify_email(db: Session, user: User) -> Optional[str]:
     if recently_sent_otp(db, user.id, PURPOSE_VERIFY_EMAIL):
         logger.info("verify email skipped, cooldown user_id=%s", user.id)
-        return
+        return None
     raw = create_auth_otp(db, user.id, PURPOSE_VERIFY_EMAIL)
     link = email_web_link("verify-email", raw, email=user.email)
     subject = "Код подтверждения — HanWe"
@@ -338,6 +338,7 @@ def send_verify_email(db: Session, user: User) -> None:
             expiry_note=_otp_expiry_note(),
         )
         send_transactional_email_or_raise(user.email, subject, text, html)
+        return raw
     except Exception:
         _invalidate_active_tokens(db, user.id, PURPOSE_VERIFY_EMAIL)
         raise

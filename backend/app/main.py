@@ -194,13 +194,12 @@ async def startup_event():
     # Локально / SQLite: полный create_all может упасть (например ARRAY в PostgreSQL-моделях).
     # Postgres: обычно создаёт все таблицы. В любом случае гарантируем notification_preferences.
     if settings.APP_ENV == "development":
-        try:
-            Base.metadata.create_all(bind=engine)
-        except Exception as e:
-            logger.warning(
-                "create_all incomplete (частичная схема или SQLite): %s",
-                e,
-            )
+        # По одной таблице: ARRAY/ENUM на SQLite не должен обрывать остальные.
+        for table in Base.metadata.sorted_tables:
+            try:
+                table.create(bind=engine, checkfirst=True)
+            except Exception as e:
+                logger.warning("create_all skip %s: %s", table.name, e)
     try:
         from app.models.notification_preferences import NotificationPreferences
 

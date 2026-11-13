@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:app_links/app_links.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -15,12 +16,17 @@ import '../services/server_config.dart';
 /// Начальная глубокая ссылка (haneat://...) при запуске приложения.
 String? initialDeepLink;
 
+/// В widget-тестах нет asset `.env`. Загрузка кидает FlutterError уже после
+/// await, и тест падает, хотя ошибка поймана.
+bool get _widgetTestBinding =>
+    WidgetsBinding.instance.runtimeType.toString().contains('Test');
+
 /// Лёгкая часть до первого кадра UI. Без Firebase / push / Hive / caches —
 /// чтобы web cold-start не тащил полный [app_router] в первый JS-чанк.
 Future<void> bootstrapEarly() async {
-  if (!kIsWeb) {
+  if (!kIsWeb && !_widgetTestBinding) {
     try {
-      await dotenv.load(fileName: '.env');
+      await dotenv.load(fileName: '.env', isOptional: true);
     } catch (e) {
       debugPrint('dotenv load error (continuing): $e');
     }
