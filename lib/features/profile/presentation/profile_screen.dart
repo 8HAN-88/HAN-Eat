@@ -64,7 +64,15 @@ class ProfileScreen extends ConsumerStatefulWidget {
   final int? userId; // Если null, показываем текущего пользователя
   final String? initialCallMedia;
 
-  const ProfileScreen({super.key, this.userId, this.initialCallMedia});
+  /// Вкладка оболочки не ходит в сеть, пока её не открыли.
+  final bool deferUntilTab;
+
+  const ProfileScreen({
+    super.key,
+    this.userId,
+    this.initialCallMedia,
+    this.deferUntilTab = false,
+  });
 
   @override
   ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
@@ -194,7 +202,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       _loadProfile();
       return;
     }
-    if (!ShellTabVisibility.profileActive) return;
+    if (widget.userId == null &&
+        widget.deferUntilTab &&
+        !ShellTabVisibility.profileActive) {
+      return;
+    }
     if (_profileDataStarted) return;
     _profileDataStarted = true;
     _loadProfile();
@@ -647,6 +659,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     }
   }
 
+  Widget? _profileBackButton(BuildContext context) {
+    if (widget.userId == null && !context.canPop()) return null;
+    return IconButton(
+      icon: const Icon(Icons.arrow_back),
+      tooltip: 'Назад',
+      onPressed: () {
+        if (context.canPop()) {
+          context.pop();
+        } else {
+          context.go(FeedRoute.path);
+        }
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -655,19 +682,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           title: widget.userId == null
               ? const TelegramConnectionAwareTitle(fallback: 'Профиль')
               : const Text('Профиль'),
-          leading: widget.userId == null
-              ? null
-              : IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  tooltip: 'Назад',
-                  onPressed: () {
-                    if (context.canPop()) {
-                      context.pop();
-                    } else {
-                      context.go(FeedRoute.path);
-                    }
-                  },
-                ),
+          leading: _profileBackButton(context),
         ),
         body: const Center(child: CircularProgressIndicator()),
       );
@@ -677,7 +692,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       final currentUser = AuthService.instance.currentUser;
 
       if (currentUser == null && widget.userId == null) {
-        return const SizedBox.shrink();
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Профиль'),
+            leading: _profileBackButton(context),
+          ),
+          body: AppEmptyState(
+            icon: Icons.person_outline,
+            title: 'Войдите в аккаунт',
+            subtitle: 'Профиль, посты и настройки доступны после входа.',
+            action: FilledButton.icon(
+              onPressed: () => context.go(LoginRoute.path),
+              icon: const Icon(Icons.login),
+              label: const Text('Войти'),
+            ),
+          ),
+        );
       }
       if (widget.userId != null) {
         if (_profileLoadError != null) {

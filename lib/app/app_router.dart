@@ -6278,7 +6278,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                       name: ProfileTabRoute.name,
                       pageBuilder: (context, state) => NoTransitionPage(
                         key: const ValueKey('profile_branch'),
-                        child: const ProfileScreen(),
+                        child: const ProfileScreen(deferUntilTab: true),
                       ),
                     ),
                   ],

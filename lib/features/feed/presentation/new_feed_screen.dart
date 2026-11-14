@@ -274,7 +274,7 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
         if (requestId != _loadGeneration) return;
         if (FeedLoadHelper.isSessionError(e)) {
           await FeedLoadHelper.clearSessionIfExpired(e);
-          return;
+          if (!mounted || requestId != _loadGeneration) return;
         }
         final cached = await FeedApiCache.load(requestedCacheVariant);
         if (!mounted) return;
@@ -413,15 +413,22 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
                                 : 'Пока нет постов',
                             subtitle: _lastLoadError ??
                                 'Обновите ленту или смените фильтр в меню выше.',
-                            action: FilledButton.icon(
-                              onPressed: () => unawaited(_refreshAll()),
-                              icon: const Icon(Icons.refresh),
-                              label: Text(
-                                _lastLoadError != null
-                                    ? 'Повторить'
-                                    : 'Обновить',
-                              ),
-                            ),
+                            action: FeedLoadHelper.asksToSignIn(_lastLoadError)
+                                ? FilledButton.icon(
+                                    onPressed: () =>
+                                        context.go(LoginRoute.path),
+                                    icon: const Icon(Icons.login),
+                                    label: const Text('Войти'),
+                                  )
+                                : FilledButton.icon(
+                                    onPressed: () => unawaited(_refreshAll()),
+                                    icon: const Icon(Icons.refresh),
+                                    label: Text(
+                                      _lastLoadError != null
+                                          ? 'Повторить'
+                                          : 'Обновить',
+                                    ),
+                                  ),
                           ),
                         ),
                       ),

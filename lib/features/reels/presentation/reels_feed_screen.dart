@@ -1,6 +1,5 @@
 // Экран Reels Feed с вертикальной прокруткой (как TikTok/Instagram Reels)
 import 'dart:async';
-import '../../../utils/api_error_parser.dart';
 import '../../../utils/session_snackbar.dart';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
@@ -577,7 +576,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
       if (mounted && requestId == _loadGeneration) {
         if (FeedLoadHelper.isSessionError(e)) {
           await FeedLoadHelper.clearSessionIfExpired(e);
-          return;
+          if (!mounted || requestId != _loadGeneration) return;
         }
         final cached = await FeedApiCache.load(_cacheVariant);
         if (!mounted || requestId != _loadGeneration) return;
@@ -611,9 +610,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
             ),
           );
         } else {
-          final short = e is TimeoutException
-              ? 'Сервер не ответил вовремя. Проверьте подключение и попробуйте снова.'
-              : userVisibleError(e, fallback: 'Не удалось загрузить рилсы');
+          final short = FeedLoadHelper.feedLoadErrorMessage(e);
           setState(() => _lastLoadError = short);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -769,17 +766,23 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
                   : 'Пока нет рилсов',
               subtitle: _lastLoadError ??
                   'Рилсы публикуются из каналов — откройте канал и нажмите «+».',
-              action: _lastLoadError != null
+              action: FeedLoadHelper.asksToSignIn(_lastLoadError)
                   ? FilledButton.icon(
-                      onPressed: () => _loadReels(refresh: true),
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Повторить'),
+                      onPressed: () => context.go(LoginRoute.path),
+                      icon: const Icon(Icons.login),
+                      label: const Text('Войти'),
                     )
-                  : FilledButton.icon(
-                      onPressed: () => context.push(CreateReelRoute.path),
-                      icon: const Icon(Icons.videocam_outlined),
-                      label: const Text('Снять рилс'),
-                    ),
+                  : _lastLoadError != null
+                      ? FilledButton.icon(
+                          onPressed: () => _loadReels(refresh: true),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Повторить'),
+                        )
+                      : FilledButton.icon(
+                          onPressed: () => context.push(CreateReelRoute.path),
+                          icon: const Icon(Icons.videocam_outlined),
+                          label: const Text('Снять рилс'),
+                        ),
             ),
           ),
         ],
