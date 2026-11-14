@@ -574,6 +574,12 @@ String userVisibleError(Object e, {String fallback = 'Произошла оши�
   }
   final raw = e.toString().replaceAll('Exception: ', '').trim();
   if (raw.isEmpty) return fallback;
+  final lowerRaw = raw.toLowerCase();
+  if (lowerRaw.contains('missingplugin') ||
+      lowerRaw.contains('platformexception') ||
+      lowerRaw.contains('no implementation found')) {
+    return fallback;
+  }
   final known = localizeKnownEnglishDetail(raw);
   if (known != null) return known;
   if (raw == 'Not authenticated' ||
