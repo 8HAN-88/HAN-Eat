@@ -92,7 +92,7 @@ class _AdvertiserHubScreenState extends State<AdvertiserHubScreen> {
             if (context.canPop()) {
               context.pop();
             } else {
-              context.go(AdsHubRoute.path);
+              context.go(SettingsRoute.path);
             }
           },
         ),

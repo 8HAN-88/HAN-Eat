@@ -271,10 +271,14 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
   Future<void> _logoutEverywhere() async {
     setState(() => _busy = true);
     try {
-      try {
-        await AuthSessionsService.revokeAll();
-      } catch (_) {
-        // Still clear local session even if API fails.
+      final token = await AuthService.getAccessToken();
+      if (token != null && token.isNotEmpty) {
+        // Сеть не должна держать локальный выход.
+        unawaited(
+          AuthSessionsService.revokeAll()
+              .timeout(const Duration(seconds: 8))
+              .catchError((_) {}),
+        );
       }
       await AuthService.logout();
       if (!mounted) return;

@@ -22,13 +22,26 @@ class _BackupPageState extends State<BackupPage> {
 
   Future<Map<String, dynamic>> _buildExport() async {
     return {
-      'profile': UserService.instance.exportToJson(),
+      'profile': await UserService.instance.exportToJson(),
       'app': {'exportedAt': DateTime.now().toIso8601String()},
     };
   }
 
   Future<void> _showExportDialog() async {
-    final map = await _buildExport();
+    final Map<String, dynamic> map;
+    try {
+      map = await _buildExport();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось собрать копию'),
+          ),
+        ),
+      );
+      return;
+    }
     if (!mounted) return;
     final jsonStr = const JsonEncoder.withIndent('  ').convert(map);
     await showDialog(
@@ -43,11 +56,24 @@ class _BackupPageState extends State<BackupPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: jsonStr));
-              Navigator.pop(ctx);
+            onPressed: () async {
+              var copied = false;
+              try {
+                await Clipboard.setData(ClipboardData(text: jsonStr));
+                copied = true;
+              } catch (_) {
+                copied = false;
+              }
+              if (ctx.mounted) Navigator.pop(ctx);
+              if (!context.mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Скопировано в буфер')),
+                SnackBar(
+                  content: Text(
+                    copied
+                        ? 'Скопировано в буфер'
+                        : 'Не удалось скопировать',
+                  ),
+                ),
               );
             },
             child: const Text('Копировать'),

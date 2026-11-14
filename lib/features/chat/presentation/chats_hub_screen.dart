@@ -7,9 +7,9 @@ import 'package:go_router/go_router.dart';
 import '../../../app/app_bootstrap_state.dart';
 import '../../../app/app_router.dart';
 import '../../../core/haptics/app_haptics.dart';
-import '../../../core/theme/color_schemes.dart';
 import '../../../core/web/boot_ready_signal.dart';
 import '../../../services/auth_service.dart';
+import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/telegram_connection_chrome.dart';
 import '../../../widgets/telegram_ui.dart';
@@ -46,11 +46,16 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
     _lastTabIndex = _tabs.index;
     _tabs.addListener(_onTabChanged);
     chatsHubRequestedTab.addListener(_applyRequestedTab);
+    AuthService.registerSessionListener(_onSession);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AppBootstrapState.primaryUiReady.value = true;
       notifyPrimaryUiReady();
       _applyRequestedTab();
     });
+  }
+
+  void _onSession(User? _) {
+    if (mounted) setState(() {});
   }
 
   void _applyRequestedTab() {
@@ -72,6 +77,7 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
 
   @override
   void dispose() {
+    AuthService.unregisterSessionListener(_onSession);
     chatsHubRequestedTab.removeListener(_applyRequestedTab);
     _tabs.removeListener(_onTabChanged);
     _tabs.dispose();
@@ -131,9 +137,16 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
   Widget build(BuildContext context) {
     if (AuthService.instance.currentUser == null) {
       return Scaffold(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        body: const Center(
-          child: CircularProgressIndicator(color: AppColors.primary),
+        appBar: AppBar(title: const Text('Сообщения')),
+        body: AppEmptyState(
+          icon: Icons.forum_outlined,
+          title: 'Войдите в аккаунт',
+          subtitle: 'Чаты и контакты доступны после входа.',
+          action: FilledButton.icon(
+            onPressed: () => context.go(LoginRoute.path),
+            icon: const Icon(Icons.login),
+            label: const Text('Войти'),
+          ),
         ),
       );
     }

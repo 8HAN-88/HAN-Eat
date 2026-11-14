@@ -71,7 +71,10 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
   }
 
   void _refresh() {
-    setState(() => _future = _load());
+    final next = _load();
+    setState(() {
+      _future = next;
+    });
   }
 
   Future<void> _refreshAndWait() async {
