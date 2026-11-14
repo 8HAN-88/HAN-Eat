@@ -35,30 +35,50 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
   ];
 
   Future<void> _pickImage(ImageSource source) async {
-    final XFile? photo = await _picker.pickImage(
-      source: source,
-      maxWidth: 1920,
-      imageQuality: 92,
-    );
-    if (photo == null) return;
-
-    setState(() {
-      _selectedFile = photo;
-      _isVideo = false;
-    });
+    try {
+      final XFile? photo = await _picker.pickImage(
+        source: source,
+        maxWidth: 1920,
+        imageQuality: 92,
+      );
+      if (photo == null || !mounted) return;
+      setState(() {
+        _selectedFile = photo;
+        _isVideo = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось открыть галерею'),
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _pickVideo(ImageSource source) async {
-    final XFile? video = await _picker.pickVideo(
-      source: source,
-      maxDuration: const Duration(seconds: 30),
-    );
-    if (video == null) return;
-
-    setState(() {
-      _selectedFile = video;
-      _isVideo = true;
-    });
+    try {
+      final XFile? video = await _picker.pickVideo(
+        source: source,
+        maxDuration: const Duration(seconds: 30),
+      );
+      if (video == null || !mounted) return;
+      setState(() {
+        _selectedFile = video;
+        _isVideo = true;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось открыть галерею'),
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _publish() async {

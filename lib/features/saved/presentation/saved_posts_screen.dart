@@ -40,6 +40,7 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
   bool _hasMore = true;
   int _offset = 0;
   int? _currentUserId;
+  bool _userLookupDone = false;
   bool _isOffline = false;
   bool _loadedFromCache = false;
   late TabController _tabController;
@@ -120,9 +121,11 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
   
   Future<void> _loadCurrentUserId() async {
     final user = await AuthService.getCurrentUser();
-    if (user != null) {
-      setState(() => _currentUserId = user.id);
-    }
+    if (!mounted) return;
+    setState(() {
+      _currentUserId = user?.id;
+      _userLookupDone = true;
+    });
   }
   
   bool _canViewSavedPosts() {
@@ -311,7 +314,34 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
     final userId = widget.userId ?? _currentUserId;
     
     if (userId == null) {
-      return const Center(child: CircularProgressIndicator());
+      final body = !_userLookupDone
+          ? const Center(child: CircularProgressIndicator())
+          : AppEmptyState(
+              icon: Icons.bookmark_border,
+              title: 'Войдите в аккаунт',
+              subtitle: 'Сохранённые посты доступны после входа.',
+              action: FilledButton.icon(
+                onPressed: () => context.go(LoginRoute.path),
+                icon: const Icon(Icons.login),
+                label: const Text('Войти'),
+              ),
+            );
+      if (widget.embedded) return body;
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Сохранённые'),
+          leading: BackButton(
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(FeedRoute.path);
+              }
+            },
+          ),
+        ),
+        body: body,
+      );
     }
     if (!_canViewSavedPosts()) {
       return AppEmptyState(

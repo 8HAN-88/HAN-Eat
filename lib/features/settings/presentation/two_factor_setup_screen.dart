@@ -269,13 +269,22 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
                       const SizedBox(height: 8),
                       OutlinedButton.icon(
                         onPressed: () async {
-                          await Clipboard.setData(
-                            ClipboardData(text: _setup!.secret),
-                          );
-                          if (!context.mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Ключ скопирован')),
-                          );
+                          try {
+                            await Clipboard.setData(
+                              ClipboardData(text: _setup!.secret),
+                            );
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Ключ скопирован')),
+                            );
+                          } catch (_) {
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Не удалось скопировать ключ'),
+                              ),
+                            );
+                          }
                         },
                         icon: const Icon(Icons.copy),
                         label: const Text('Скопировать ключ'),
