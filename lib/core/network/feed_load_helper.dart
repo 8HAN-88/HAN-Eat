@@ -53,6 +53,10 @@ class FeedLoadHelper {
     return 'Не удалось обновить ленту. Показан сохранённый кеш.';
   }
 
+  /// Пустое состояние просит войти, а не повторять тот же запрос.
+  static bool asksToSignIn(String? message) =>
+      message != null && message.contains('Войдите');
+
   /// Короткое сообщение для пустого состояния ленты (без кеша).
   static String feedLoadErrorMessage(Object e) {
     if (isSessionError(e)) {

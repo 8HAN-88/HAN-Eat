@@ -240,7 +240,7 @@ class _SubscriptionsFeedScreenState
       if (mounted) {
         if (FeedLoadHelper.isSessionError(e)) {
           await FeedLoadHelper.clearSessionIfExpired(e);
-          return;
+          if (!mounted) return;
         }
         final cached = await FeedApiCache.load(_cacheVariant);
         if (!mounted) return;
@@ -337,7 +337,13 @@ class _SubscriptionsFeedScreenState
                             : 'Подписки',
                         subtitle: _lastLoadError ??
                             'Подпишитесь на авторов, чтобы видеть их посты здесь.',
-                        action: _lastLoadError != null
+                        action: FeedLoadHelper.asksToSignIn(_lastLoadError)
+                            ? FilledButton.icon(
+                                onPressed: () => context.go(LoginRoute.path),
+                                icon: const Icon(Icons.login),
+                                label: const Text('Войти'),
+                              )
+                            : _lastLoadError != null
                             ? FilledButton.icon(
                                 onPressed: () => unawaited(_refreshAll()),
                                 icon: const Icon(Icons.refresh),

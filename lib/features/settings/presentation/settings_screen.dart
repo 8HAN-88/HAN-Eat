@@ -306,7 +306,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _openLegal(BuildContext context, String url) async {
     final uri = Uri.parse(url);
-    if (await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
+    try {
+      if (await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
+    } catch (_) {
+      // Плагин ссылок недоступен — показываем ту же подсказку, что и при отказе.
+    }
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

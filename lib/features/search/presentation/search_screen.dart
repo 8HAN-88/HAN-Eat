@@ -177,6 +177,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   void _onSearchChanged() {
     final query = _searchController.text.trim();
     if (query.length >= 2) {
+      // Перерисовать суффикс «очистить» сразу, не дожидаясь подсказок.
+      setState(() {});
       _loadSuggestions(query);
     } else {
       setState(() {
