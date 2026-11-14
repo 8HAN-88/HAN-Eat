@@ -574,12 +574,6 @@ String userVisibleError(Object e, {String fallback = 'Произошла оши�
   }
   final raw = e.toString().replaceAll('Exception: ', '').trim();
   if (raw.isEmpty) return fallback;
-  final lowerRaw = raw.toLowerCase();
-  if (lowerRaw.contains('missingplugin') ||
-      lowerRaw.contains('platformexception') ||
-      lowerRaw.contains('no implementation found')) {
-    return fallback;
-  }
   final known = localizeKnownEnglishDetail(raw);
   if (known != null) return known;
   if (raw == 'Not authenticated' ||
@@ -662,6 +656,11 @@ String userVisibleError(Object e, {String fallback = 'Произошла оши�
   if (lower.contains('notfounderror') ||
       lower.contains('requested device not found')) {
     return 'Микрофон или камера не найдены. Проверьте, что они не заняты.';
+  }
+  if (lower.contains('missingplugin') ||
+      lower.contains('platformexception') ||
+      lower.contains('no implementation found')) {
+    return fallback;
   }
   final statusMatch = RegExp(r'\((\d{3})\)\s*$').firstMatch(raw);
   if (statusMatch != null) {
