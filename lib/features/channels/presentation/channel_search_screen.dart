@@ -36,12 +36,15 @@ class _ChannelSearchScreenState extends ConsumerState<ChannelSearchScreen> {
   String? _error;
   Timer? _searchDebounce;
   ChannelDetail? _channel;
+  bool _channelLoading = false;
+  String? _channelError;
 
   @override
   void initState() {
     super.initState();
     _channel = widget.channel;
     if (_channel == null) {
+      _channelLoading = true;
       unawaited(_hydrateChannel());
     }
     _searchController.text = widget.initialQuery;
@@ -54,11 +57,31 @@ class _ChannelSearchScreenState extends ConsumerState<ChannelSearchScreen> {
   }
 
   Future<void> _hydrateChannel() async {
+    if (_channel != null) return;
+    if (!_channelLoading && mounted) {
+      setState(() {
+        _channelLoading = true;
+        _channelError = null;
+      });
+    }
     try {
       final channel = await ChannelService.getChannel(widget.channelId);
       if (!mounted) return;
-      setState(() => _channel = channel);
-    } catch (_) {}
+      setState(() {
+        _channel = channel;
+        _channelLoading = false;
+        _channelError = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _channelLoading = false;
+        _channelError = userVisibleError(
+          e,
+          fallback: 'Не удалось загрузить канал',
+        );
+      });
+    }
   }
 
   @override
@@ -221,7 +244,18 @@ class _ChannelSearchScreenState extends ConsumerState<ChannelSearchScreen> {
 
         final channel = _channel;
         if (channel == null) {
-          return const Center(child: CircularProgressIndicator());
+          if (_channelLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          return AppEmptyState(
+            icon: Icons.cloud_off_rounded,
+            title: 'Не удалось загрузить канал',
+            subtitle: _channelError ?? 'Попробуйте ещё раз',
+            action: FilledButton(
+              onPressed: () => unawaited(_hydrateChannel()),
+              child: const Text('Повторить'),
+            ),
+          );
         }
 
         if (_posts.isEmpty) {
