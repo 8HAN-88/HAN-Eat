@@ -16,6 +16,67 @@ import 'package:go_router/go_router.dart';
 import '../../../app/app_router.dart';
 import '../../settings/application/subscription_status_provider.dart';
 
+const _cyrillicToLatin = <String, String>{
+  'а': 'a',
+  'б': 'b',
+  'в': 'v',
+  'г': 'g',
+  'д': 'd',
+  'е': 'e',
+  'ё': 'e',
+  'ж': 'zh',
+  'з': 'z',
+  'и': 'i',
+  'й': 'y',
+  'к': 'k',
+  'л': 'l',
+  'м': 'm',
+  'н': 'n',
+  'о': 'o',
+  'п': 'p',
+  'р': 'r',
+  'с': 's',
+  'т': 't',
+  'у': 'u',
+  'ф': 'f',
+  'х': 'h',
+  'ц': 'ts',
+  'ч': 'ch',
+  'ш': 'sh',
+  'щ': 'sch',
+  'ъ': '',
+  'ы': 'y',
+  'ь': '',
+  'э': 'e',
+  'ю': 'yu',
+  'я': 'ya',
+};
+
+/// Latin address for a channel name. Cyrillic is transliterated and the
+/// result is capped at 50 characters.
+String channelSlugFromName(String name) {
+  final buffer = StringBuffer();
+  for (final rune in name.toLowerCase().runes) {
+    final char = String.fromCharCode(rune);
+    final mapped = _cyrillicToLatin[char];
+    if (mapped != null) {
+      buffer.write(mapped);
+      continue;
+    }
+    if (RegExp(r'[a-z0-9]').hasMatch(char)) {
+      buffer.write(char);
+    } else if (char == ' ' || char == '-' || char == '_') {
+      buffer.write('_');
+    }
+  }
+  var slug = buffer.toString().replaceAll(RegExp(r'_+'), '_');
+  slug = slug.replaceAll(RegExp(r'^_|_$'), '');
+  if (slug.length > 50) {
+    slug = slug.substring(0, 50).replaceAll(RegExp(r'_$'), '');
+  }
+  return slug;
+}
+
 class CreateChannelScreen extends ConsumerStatefulWidget {
   const CreateChannelScreen({super.key});
 
@@ -71,14 +132,7 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
     super.dispose();
   }
 
-  String _generateSlug(String name) {
-    return name
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9\s-]'), '')
-        .replaceAll(RegExp(r'\s+'), '_')
-        .replaceAll(RegExp(r'-+'), '_')
-        .substring(0, name.length > 50 ? 50 : name.length);
-  }
+  String _generateSlug(String name) => channelSlugFromName(name);
 
   void _updateSlug() {
     if (_nameController.text.isNotEmpty) {
