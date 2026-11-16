@@ -278,19 +278,24 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
   }
 
   Future<void> _shareChannel() async {
-    await Clipboard.setData(ClipboardData(text: _publicLink));
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Ссылка скопирована в буфер обмена')),
-      );
-    }
+    await _copyPublicLink('Ссылка скопирована в буфер обмена');
   }
 
   Future<void> _copyChannelLink() async {
-    await Clipboard.setData(ClipboardData(text: _publicLink));
-    if (mounted) {
+    await _copyPublicLink('Ссылка скопирована');
+  }
+
+  Future<void> _copyPublicLink(String success) async {
+    try {
+      await Clipboard.setData(ClipboardData(text: _publicLink));
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Ссылка скопирована')),
+        SnackBar(content: Text(success)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось скопировать ссылку')),
       );
     }
   }
@@ -346,7 +351,7 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading || _tabController == null) {
+    if (_isLoading) {
       return Scaffold(
         appBar: AppBar(
           title: const Text('Канал'),

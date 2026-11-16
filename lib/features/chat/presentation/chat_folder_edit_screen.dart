@@ -9,6 +9,7 @@ import '../../../services/channel_service.dart';
 import '../../../services/chat_folder_store.dart';
 import '../../../services/chat_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/app_empty_state.dart';
 
 enum _FolderPickTab { all, chats, channels }
 
@@ -69,6 +70,7 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
 
   ChatFolder? _folder;
   bool _folderMissing = false;
+  Object? _folderLoadError;
 
   bool get _isEdit => _folder != null;
 
@@ -95,9 +97,32 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
     unawaited(_loadPickList());
   }
 
+  void _applyFolder(ChatFolder match) {
+    setState(() {
+      _folder = match;
+      _folderMissing = false;
+      _folderLoadError = null;
+      _nameController.text = match.name;
+      if (match.icon != null) _iconController.text = match.icon!;
+      _selectedConv
+        ..clear()
+        ..addAll(match.conversationIds);
+      _selectedCh
+        ..clear()
+        ..addAll(match.channelIds);
+      _filters = match.filters;
+    });
+  }
+
   Future<void> _hydrateFolder(int folderId) async {
+    if (mounted && (_folderLoadError != null || _folderMissing)) {
+      setState(() {
+        _folderLoadError = null;
+        _folderMissing = false;
+      });
+    }
     try {
-      final folders = await ChatFolderStore.listFolders();
+      final folders = await ChatService.listFolders();
       if (!mounted) return;
       ChatFolder? found;
       for (final item in folders) {
@@ -111,21 +136,24 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
         setState(() => _folderMissing = true);
         return;
       }
-      setState(() {
-        _folder = match;
-        _nameController.text = match.name;
-        if (match.icon != null) _iconController.text = match.icon!;
-        _selectedConv
-          ..clear()
-          ..addAll(match.conversationIds);
-        _selectedCh
-          ..clear()
-          ..addAll(match.channelIds);
-        _filters = match.filters;
-      });
+      _applyFolder(match);
     } catch (e) {
+      ChatFolder? cached;
+      try {
+        final local = await ChatFolderStore.loadLocal();
+        for (final item in local) {
+          if (item.id == folderId) {
+            cached = item;
+            break;
+          }
+        }
+      } catch (_) {}
       if (!mounted) return;
-      setState(() => _folderMissing = true);
+      if (cached != null) {
+        _applyFolder(cached);
+        return;
+      }
+      setState(() => _folderLoadError = e);
     }
   }
 
@@ -375,6 +403,50 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_folderLoadError != null && widget.folderId != null && !_isEdit) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Папка'),
+          leading: BackButton(
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(ChatsRoute.path);
+              }
+            },
+          ),
+        ),
+        body: AppEmptyState(
+          icon: Icons.cloud_off_outlined,
+          title: 'Не удалось открыть папку',
+          subtitle: userVisibleError(
+            _folderLoadError!,
+            fallback: 'Проверьте сеть',
+          ),
+          action: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FilledButton(
+                onPressed: () => unawaited(_hydrateFolder(widget.folderId!)),
+                child: const Text('Повторить'),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go(ChatsRoute.path);
+                  }
+                },
+                child: const Text('К чатам'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     if (_folderMissing) {
       return Scaffold(
         appBar: AppBar(
