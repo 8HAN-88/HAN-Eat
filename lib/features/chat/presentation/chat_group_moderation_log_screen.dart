@@ -40,6 +40,7 @@ class _ChatGroupModerationLogScreenState
   bool _loading = true;
   bool _missing = false;
   Object? _error;
+  Object? _hydrateError;
   List<ChatGroupModerationLogItem> _items = [];
   ChatConversation? _conversation;
 
@@ -66,15 +67,27 @@ class _ChatGroupModerationLogScreenState
       });
       return;
     }
+    if (mounted && _hydrateError != null) {
+      setState(() {
+        _hydrateError = null;
+        _loading = true;
+      });
+    }
     try {
       final conv = await ChatService.getConversation(id);
       if (!mounted) return;
-      setState(() => _conversation = conv);
-      await _load();
-    } catch (_) {
-      if (!mounted) return;
       setState(() {
-        _missing = true;
+        _conversation = conv;
+        _hydrateError = null;
+        _missing = false;
+      });
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      final missing = e is ApiClientException && e.statusCode == 404;
+      setState(() {
+        _missing = missing;
+        _hydrateError = missing ? null : e;
         _loading = false;
       });
     }
@@ -108,6 +121,36 @@ class _ChatGroupModerationLogScreenState
 
   @override
   Widget build(BuildContext context) {
+    if (_hydrateError != null && _conversation == null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('История модерации'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            tooltip: 'Назад',
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(ChatsRoute.path);
+              }
+            },
+          ),
+        ),
+        body: AppEmptyState(
+          icon: Icons.cloud_off_outlined,
+          title: 'Не удалось загрузить',
+          subtitle: userVisibleError(
+            _hydrateError!,
+            fallback: 'Проверьте сеть',
+          ),
+          action: FilledButton(
+            onPressed: () => unawaited(_hydrate()),
+            child: const Text('Повторить'),
+          ),
+        ),
+      );
+    }
     if (_missing && _conversation == null) {
       return Scaffold(
         appBar: AppBar(
