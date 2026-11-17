@@ -35,8 +35,8 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
   @override
   void initState() {
     super.initState();
-    _future = _load();
-    _payoutsFuture = _loadPayouts();
+    _future = _observed(_load());
+    _payoutsFuture = _observed(_loadPayouts());
     _restoreRevenuePrefs();
   }
 
@@ -124,6 +124,11 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
     );
   }
 
+  Future<T> _observed<T>(Future<T> future) {
+    future.then<void>((_) {}, onError: (_) {});
+    return future;
+  }
+
   Future<List<StarTransaction>> _load() {
     return PaidFeaturesService.getTransactions(limit: 200);
   }
@@ -134,8 +139,8 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
 
   void _refresh() {
     setState(() {
-      _future = _load();
-      _payoutsFuture = _loadPayouts();
+      _future = _observed(_load());
+      _payoutsFuture = _observed(_loadPayouts());
     });
   }
 
@@ -271,7 +276,7 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
         recipientName: payload.name,
       );
       if (!mounted) return;
-      setState(() => _payoutsFuture = _loadPayouts());
+      setState(() => _payoutsFuture = _observed(_loadPayouts()));
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -501,6 +506,10 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
                       FilledButton(
                         onPressed: _refresh,
                         child: const Text('Повторить'),
+                      ),
+                      FutureBuilder<List<CreatorPayoutRequest>>(
+                        future: _payoutsFuture,
+                        builder: (_, __) => const SizedBox.shrink(),
                       ),
                     ],
                   ),

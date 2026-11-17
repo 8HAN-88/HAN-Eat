@@ -32,7 +32,10 @@ class _ChatInviteJoinScreenState extends State<ChatInviteJoinScreen> {
   @override
   void initState() {
     super.initState();
-    _join();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_join());
+    });
   }
 
   Future<void> _join() async {
