@@ -27,6 +27,7 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
   StickerPack? _pack;
   bool _loading = true;
   bool _busy = false;
+  Object? _error;
 
   @override
   void initState() {
@@ -35,26 +36,35 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final pack = await StickerService.getPackBySlug(widget.slug);
       if (!mounted) return;
       setState(() {
         _pack = pack;
         _loading = false;
+        _error = null;
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(userVisibleError(e)),
-          action: SnackBarAction(
-            label: 'Повторить',
-            onPressed: () => unawaited(_load()),
+      setState(() {
+        _loading = false;
+        _error = e;
+      });
+      if (_pack != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(userVisibleError(e)),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: () => unawaited(_load()),
+            ),
           ),
-        ),
-      );
+        );
+      }
     }
   }
 
@@ -107,9 +117,20 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
           ? const Center(child: CircularProgressIndicator())
           : (pack == null
               ? AppEmptyState(
-                  icon: Icons.sticky_note_2_outlined,
-                  title: 'Пак не найден',
-                  subtitle: 'Ссылка устарела или пак удалили',
+                  icon: _error is ApiClientException &&
+                          (_error as ApiClientException).statusCode == 404
+                      ? Icons.sticky_note_2_outlined
+                      : Icons.cloud_off_outlined,
+                  title: _error is ApiClientException &&
+                          (_error as ApiClientException).statusCode == 404
+                      ? 'Пак не найден'
+                      : 'Не удалось открыть стикерпак',
+                  subtitle: _error is ApiClientException &&
+                          (_error as ApiClientException).statusCode == 404
+                      ? 'Ссылка устарела или пак удалили'
+                      : userVisibleError(
+                          _error ?? 'Не удалось открыть стикерпак',
+                        ),
                   action: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [

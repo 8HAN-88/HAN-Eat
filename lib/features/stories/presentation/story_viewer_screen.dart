@@ -112,17 +112,21 @@ class _StoryViewerLoaderScreenState extends State<StoryViewerLoaderScreen> {
   }
 
   Future<void> _hydrate() async {
-    if (_stories.isEmpty) {
+    if (_stories.isEmpty && !_loading) {
       setState(() {
         _loading = true;
         _error = null;
       });
     }
     try {
-      List<StoryDto> live;
+      var catalogOk = false;
+      Object? failure;
+      List<StoryDto> live = const [];
       try {
         live = await StoryService.fetchActiveStories();
-      } catch (_) {
+        catalogOk = true;
+      } catch (e) {
+        failure = e;
         live = StoryFeedCache.peek();
       }
       if (!mounted) return;
@@ -133,16 +137,20 @@ class _StoryViewerLoaderScreenState extends State<StoryViewerLoaderScreen> {
           break;
         }
       }
+      var mineOk = false;
       if (match == null) {
         try {
           final mine = await StoryService.fetchMyStories();
+          mineOk = true;
           for (final story in mine) {
             if (story.id == widget.storyId) {
               match = story;
               break;
             }
           }
-        } catch (_) {}
+        } catch (e) {
+          failure ??= e;
+        }
       }
       if (!mounted) return;
       if (match == null) {
@@ -150,9 +158,10 @@ class _StoryViewerLoaderScreenState extends State<StoryViewerLoaderScreen> {
           setState(() => _loading = false);
           return;
         }
+        final confirmedMissing = (catalogOk || live.isNotEmpty) && mineOk;
         setState(() {
           _loading = false;
-          _error = 'missing';
+          _error = confirmedMissing ? 'missing' : (failure ?? 'missing');
         });
         return;
       }
@@ -195,6 +204,7 @@ class _StoryViewerLoaderScreenState extends State<StoryViewerLoaderScreen> {
       );
     }
     final err = _error;
+    final missing = err == null || err == 'missing';
     return Scaffold(
       appBar: AppBar(
         title: const Text('Момент'),
@@ -213,14 +223,32 @@ class _StoryViewerLoaderScreenState extends State<StoryViewerLoaderScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : AppEmptyState(
-              icon: Icons.auto_awesome_outlined,
-              title: 'Сторис не найдена',
-              subtitle: err == null || err == 'missing'
+              icon: missing
+                  ? Icons.auto_awesome_outlined
+                  : Icons.cloud_off_outlined,
+              title: missing ? 'Сторис не найдена' : 'Не удалось открыть момент',
+              subtitle: missing
                   ? 'Ссылка устарела или момент уже истёк'
                   : userVisibleError(err),
-              action: FilledButton(
-                onPressed: () => context.go(StoriesRoute.path),
-                child: const Text('К моментам'),
+              action: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!missing)
+                    FilledButton(
+                      onPressed: () => unawaited(_hydrate()),
+                      child: const Text('Повторить'),
+                    ),
+                  if (!missing) const SizedBox(height: 8),
+                  missing
+                      ? FilledButton(
+                          onPressed: () => context.go(StoriesRoute.path),
+                          child: const Text('К моментам'),
+                        )
+                      : TextButton(
+                          onPressed: () => context.go(StoriesRoute.path),
+                          child: const Text('К моментам'),
+                        ),
+                ],
               ),
             ),
     );
