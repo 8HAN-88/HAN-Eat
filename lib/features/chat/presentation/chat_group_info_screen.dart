@@ -105,14 +105,31 @@ class _ChatGroupInfoLoaderScreenState extends State<ChatGroupInfoLoaderScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : AppEmptyState(
-              icon: Icons.group_off_outlined,
-              title: 'Чат не найден',
+              icon: err == null ||
+                      (err is ApiClientException && err.statusCode == 404)
+                  ? Icons.group_off_outlined
+                  : Icons.cloud_off_outlined,
+              title: err == null ||
+                      (err is ApiClientException && err.statusCode == 404)
+                  ? 'Чат не найден'
+                  : 'Не удалось открыть чат',
               subtitle: err == null
                   ? 'Ссылка устарела или диалог недоступен'
                   : userVisibleError(err),
-              action: FilledButton(
-                onPressed: () => context.go(ChatsRoute.path),
-                child: const Text('К чатам'),
+              action: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (err != null)
+                    FilledButton(
+                      onPressed: () => unawaited(_hydrate()),
+                      child: const Text('Повторить'),
+                    ),
+                  if (err != null) const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: () => context.go(ChatsRoute.path),
+                    child: const Text('К чатам'),
+                  ),
+                ],
               ),
             ),
     );
