@@ -285,7 +285,7 @@ class _ChatThreadLoaderScreenState
       ),
       body: AppEmptyState(
         icon: Icons.chat_bubble_outline,
-        title: 'Чат не найден',
+        title: _error != null ? 'Не удалось открыть чат' : 'Чат не найден',
         subtitle: _error != null
             ? userVisibleError(_error!)
             : 'Нет доступа к диалогу',
