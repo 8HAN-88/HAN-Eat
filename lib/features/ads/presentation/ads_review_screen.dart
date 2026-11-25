@@ -135,6 +135,7 @@ class _AdsReviewScreenState extends State<AdsReviewScreen> {
         actions: [
           IconButton(
             onPressed: _loading ? null : _load,
+            tooltip: 'Обновить',
             icon: const Icon(Icons.refresh),
           ),
         ],

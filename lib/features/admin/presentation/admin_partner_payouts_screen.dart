@@ -116,6 +116,7 @@ class _AdminPartnerPayoutsScreenState extends State<AdminPartnerPayoutsScreen> {
         actions: [
           IconButton(
             onPressed: _loading ? null : _load,
+            tooltip: 'Обновить',
             icon: const Icon(Icons.refresh),
           ),
         ],

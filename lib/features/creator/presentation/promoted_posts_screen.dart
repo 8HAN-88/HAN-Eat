@@ -100,6 +100,7 @@ class _PromotedPostsScreenState extends State<PromotedPostsScreen> {
         actions: [
           IconButton(
             onPressed: _loading ? null : _load,
+            tooltip: 'Обновить',
             icon: const Icon(Icons.refresh),
           ),
         ],

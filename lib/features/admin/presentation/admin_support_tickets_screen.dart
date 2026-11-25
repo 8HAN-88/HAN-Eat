@@ -125,6 +125,7 @@ class _AdminSupportTicketsScreenState extends State<AdminSupportTicketsScreen> {
         actions: [
           IconButton(
             onPressed: _loading ? null : _load,
+            tooltip: 'Обновить',
             icon: const Icon(Icons.refresh),
           ),
         ],
