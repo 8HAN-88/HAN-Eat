@@ -164,6 +164,7 @@ class _AdminRefundQueueScreenState extends State<AdminRefundQueueScreen> {
         actions: [
           IconButton(
             onPressed: _loading ? null : _load,
+            tooltip: 'Обновить',
             icon: const Icon(Icons.refresh),
           ),
         ],

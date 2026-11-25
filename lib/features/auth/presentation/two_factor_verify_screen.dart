@@ -121,6 +121,7 @@ class _TwoFactorVerifyScreenState extends State<TwoFactorVerifyScreen> {
         title: const Text('Код подтверждения'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
+          tooltip: 'Назад',
           onPressed: _loading ? null : () => context.go(AuthPaths.login),
         ),
       ),

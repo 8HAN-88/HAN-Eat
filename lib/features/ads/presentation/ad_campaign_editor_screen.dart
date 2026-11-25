@@ -75,8 +75,9 @@ class _AdCampaignEditorScreenState extends State<AdCampaignEditorScreen> {
       _loading = true;
       _error = null;
     });
+    final channelsFuture = ChannelService.listChannels(mine: true, limit: 50);
+    unawaited(channelsFuture.then<void>((_) {}, onError: (_) {}));
     try {
-      final channelsFuture = ChannelService.listChannels(mine: true, limit: 50);
       if (widget.campaignId != null) {
         final campaign = await AdsService.getCampaign(widget.campaignId!);
         _applyCampaign(campaign);

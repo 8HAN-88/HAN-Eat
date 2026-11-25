@@ -104,6 +104,7 @@ class _AdvertiserHubScreenState extends State<AdvertiserHubScreen> {
           ),
           IconButton(
             onPressed: _loading ? null : _load,
+            tooltip: 'Обновить',
             icon: const Icon(Icons.refresh),
           ),
         ],

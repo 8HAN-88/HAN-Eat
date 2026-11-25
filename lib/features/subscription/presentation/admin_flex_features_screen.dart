@@ -249,10 +249,13 @@ class _AdminFlexFeaturesScreenState extends State<AdminFlexFeaturesScreen> {
           },
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _edit(null),
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: _catalog == null
+          ? null
+          : FloatingActionButton(
+              onPressed: () => _edit(null),
+              tooltip: 'Новая функция',
+              child: const Icon(Icons.add),
+            ),
       body: AppGradientBackground(
         child: _loading
             ? const Center(child: CircularProgressIndicator())
