@@ -123,9 +123,19 @@ class _MiniAppOpenLoaderScreenState extends State<MiniAppOpenLoaderScreen> {
               subtitle: err == null
                   ? 'Ссылка устарела или приложение недоступно'
                   : userVisibleError(err),
-              action: FilledButton(
-                onPressed: () => context.go(MiniAppsRoute.path),
-                child: const Text('В каталог'),
+              action: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FilledButton(
+                    onPressed: () => unawaited(_hydrate()),
+                    child: const Text('Повторить'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: () => context.go(MiniAppsRoute.path),
+                    child: const Text('В каталог'),
+                  ),
+                ],
               ),
             ),
     );

@@ -14,6 +14,7 @@ import 'package:video_player/video_player.dart';
 
 import '../../../app/app_router.dart';
 import '../../../services/auth_service.dart';
+import '../../../utils/api_error_parser.dart';
 import '../application/community_controller.dart';
 import '../application/community_upload_controller.dart';
 
@@ -101,13 +102,33 @@ class _CommunityUploadScreenState extends ConsumerState<CommunityUploadScreen> {
     super.dispose();
   }
 
-  Future<void> _pickVideo({ImageSource? source}) async {
-    final picked = await _picker.pickVideo(
-      source: source ?? ImageSource.gallery,
-      maxDuration: const Duration(minutes: 3), // До 3 минут как в TikTok
+  void _showPickError(Object error, String fallback) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(userVisibleError(error, fallback: fallback))),
     );
-    if (picked == null) return;
-    final bytes = await picked.readAsBytes();
+  }
+
+  Future<void> _pickVideo({ImageSource? source}) async {
+    final XFile? picked;
+    final Uint8List bytes;
+    try {
+      picked = await _picker.pickVideo(
+        source: source ?? ImageSource.gallery,
+        maxDuration: const Duration(minutes: 3), // До 3 минут как в TikTok
+      );
+      if (picked == null) return;
+      bytes = await picked.readAsBytes();
+    } catch (e) {
+      _showPickError(
+        e,
+        source == ImageSource.camera
+            ? 'Не удалось открыть камеру'
+            : 'Не удалось открыть галерею',
+      );
+      return;
+    }
+    if (!mounted) return;
     setState(() {
       _videoFile = picked;
       _videoBytes = bytes;
@@ -163,12 +184,20 @@ class _CommunityUploadScreenState extends ConsumerState<CommunityUploadScreen> {
   }
 
   Future<void> _pickThumbnail() async {
-    final picked = await _picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 80,
-    );
-    if (picked == null) return;
-    final bytes = await picked.readAsBytes();
+    final XFile? picked;
+    final Uint8List bytes;
+    try {
+      picked = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+      );
+      if (picked == null) return;
+      bytes = await picked.readAsBytes();
+    } catch (e) {
+      _showPickError(e, 'Не удалось открыть галерею');
+      return;
+    }
+    if (!mounted) return;
     setState(() {
       _thumbnailFile = picked;
       _thumbnailBytes = bytes;
