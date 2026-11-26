@@ -34,6 +34,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
   bool _isLoadingPrices = false;
   bool _loadingPayments = false;
   SubscriptionPricesResponse? _prices;
+  Object? _pricesError;
   List<PaymentHistoryItem> _payments = [];
   late String _selectedProduct;
 
@@ -174,7 +175,10 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
   }
 
   Future<void> _loadPrices() async {
-    setState(() => _isLoadingPrices = true);
+    setState(() {
+      _isLoadingPrices = true;
+      _pricesError = null;
+    });
     try {
       final prices = await PaymentService.getPrices();
       if (mounted) {
@@ -182,15 +186,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
       }
     } catch (e) {
       if (mounted) {
-        final scheme = Theme.of(context).colorScheme;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              userVisibleError(e, fallback: 'Не удалось загрузить цены'),
-            ),
-            backgroundColor: scheme.primary,
-          ),
-        );
+        setState(() => _pricesError = e);
       }
     } finally {
       if (mounted) {
@@ -578,7 +574,50 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
               ),
               const SizedBox(height: 12),
             ],
-            if (!_checkoutAvailable) ...[
+            if (_prices == null && _pricesError != null && !_isLoadingPrices) ...[
+              Card(
+                color: Theme.of(context)
+                    .colorScheme
+                    .errorContainer
+                    .withValues(alpha: 0.5),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Не удалось загрузить цены',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        userVisibleError(
+                          _pricesError!,
+                          fallback: 'Проверьте сеть и попробуйте снова',
+                        ),
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: FilledButton(
+                          onPressed: () => unawaited(_loadPrices()),
+                          child: const Text('Повторить'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () => context.push(SupportContactRoute.path),
+                child: const Text('Написать в поддержку'),
+              ),
+              const SizedBox(height: 12),
+            ] else if (!_checkoutAvailable) ...[
               Card(
                 color: Theme.of(context)
                     .colorScheme

@@ -24,6 +24,7 @@ class _SubscriptionSuccessScreenState
     extends ConsumerState<SubscriptionSuccessScreen> {
   bool _isLoading = true;
   bool _subscriptionActive = false;
+  bool _statusUnreachable = false;
   int _attemptsDone = 0;
   static const int _maxAttempts = 10;
   static const Duration _delayBetweenAttempts = Duration(seconds: 2);
@@ -31,17 +32,22 @@ class _SubscriptionSuccessScreenState
   @override
   void initState() {
     super.initState();
-    _checkSubscriptionStatus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _checkSubscriptionStatus();
+    });
   }
 
   Future<void> _checkSubscriptionStatus() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
+      _statusUnreachable = false;
     });
 
     refreshSubscriptionStatus(ref);
     await Future<void>.delayed(const Duration(seconds: 1));
 
+    var answered = false;
     for (var i = 0; i < _maxAttempts; i++) {
       if (i > 0) {
         await Future<void>.delayed(_delayBetweenAttempts);
@@ -50,6 +56,7 @@ class _SubscriptionSuccessScreenState
 
       try {
         final status = await SubscriptionService.getSubscriptionStatus();
+        answered = true;
         if (mounted) {
           setState(() {
             _attemptsDone = i + 1;
@@ -78,6 +85,7 @@ class _SubscriptionSuccessScreenState
     if (mounted) {
       setState(() {
         _subscriptionActive = false;
+        _statusUnreachable = !answered;
         _isLoading = false;
       });
     }
@@ -146,21 +154,30 @@ class _SubscriptionSuccessScreenState
                 ),
               ] else ...[
                 Icon(
-                  Icons.hourglass_empty,
+                  _statusUnreachable
+                      ? Icons.cloud_off_rounded
+                      : Icons.hourglass_empty,
                   size: 80,
-                  color: Colors.orange,
+                  color: _statusUnreachable
+                      ? Theme.of(context).colorScheme.error
+                      : Colors.orange,
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  'Обработка платежа',
+                  _statusUnreachable
+                      ? 'Не удалось проверить оплату'
+                      : 'Обработка платежа',
+                  textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
                 ),
                 const SizedBox(height: 16),
-                const Text(
-                  'Ваш платеж обрабатывается. Подписка будет активирована в течение нескольких минут. '
-                  'Если подписка не активировалась, обратитесь в поддержку.',
+                Text(
+                  _statusUnreachable
+                      ? 'Сеть не ответила. Если деньги списались, подписка включится сама — проверьте ещё раз чуть позже.'
+                      : 'Ваш платеж обрабатывается. Подписка будет активирована в течение нескольких минут. '
+                          'Если подписка не активировалась, обратитесь в поддержку.',
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 32),
