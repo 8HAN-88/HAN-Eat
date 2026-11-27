@@ -49,6 +49,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
           postId: widget.postId!,
           days: _selectedDays,
         );
+        if (!mounted) return;
         setState(() => _postAnalytics = analytics);
       } else {
         final analytics = await AnalyticsService.getProfileAnalytics(
@@ -57,6 +58,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
         final chatChannel = await AnalyticsService.getChatChannelInsights(
           days: _selectedDays,
         );
+        if (!mounted) return;
         setState(() {
           _profileAnalytics = analytics;
           _chatChannelInsights = chatChannel;
@@ -348,9 +350,16 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
         icon: Icons.cloud_off_rounded,
         title: 'Не удалось загрузить',
         subtitle: userVisibleError(_loadError!, fallback: 'Проверьте сеть'),
-        action: FilledButton(
-          onPressed: _loadAnalytics,
-          child: const Text('Повторить'),
+        action: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FilledButton(
+              onPressed: _loadAnalytics,
+              child: const Text('Повторить'),
+            ),
+            const SizedBox(height: 8),
+            _leaveAnalyticsButton(),
+          ],
         ),
       );
     }
@@ -359,9 +368,16 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
         icon: Icons.analytics_outlined,
         title: 'Нет данных',
         subtitle: 'За выбранный период статистика пока пуста',
-        action: FilledButton(
-          onPressed: _loadAnalytics,
-          child: const Text('Обновить'),
+        action: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FilledButton(
+              onPressed: _loadAnalytics,
+              child: const Text('Обновить'),
+            ),
+            const SizedBox(height: 8),
+            _leaveAnalyticsButton(),
+          ],
         ),
       );
     }
