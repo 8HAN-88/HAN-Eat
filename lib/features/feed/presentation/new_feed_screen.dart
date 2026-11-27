@@ -628,6 +628,7 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
             tooltip: 'Поиск',
           ),
           PopupMenuButton<String>(
+            tooltip: 'Фильтр',
             onSelected: (value) {
               setState(() {
                 _feedType = value;
@@ -671,6 +672,7 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
       ),
       body: bodyContent,
       floatingActionButton: FloatingActionButton(
+        tooltip: 'Создать',
         onPressed: () =>
             showCreateContentSheet(context, ref: ref, includeReel: true),
         child: const Icon(Icons.add),

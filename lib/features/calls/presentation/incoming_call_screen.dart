@@ -163,24 +163,33 @@ class _RoundAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Material(
-          color: color,
-          shape: const CircleBorder(),
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: onTap,
-            child: SizedBox(
-              width: 72,
-              height: 72,
-              child: Icon(icon, color: Colors.white, size: 32),
+    return Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Column(
+          children: [
+            Material(
+              color: color,
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: onTap,
+                child: SizedBox(
+                  width: 72,
+                  height: 72,
+                  child: Icon(icon, color: Colors.white, size: 32),
+                ),
+              ),
             ),
-          ),
+            const SizedBox(height: 10),
+            Text(label, style: const TextStyle(color: Colors.white70)),
+          ],
         ),
-        const SizedBox(height: 10),
-        Text(label, style: const TextStyle(color: Colors.white70)),
-      ],
+      ),
     );
   }
 }
